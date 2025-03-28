@@ -5,186 +5,51 @@
     <title>SUCH IS LIFE - Kelly Gang Survival</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
+        /* --- (Keep your existing CSS rules - they define the look) --- */
         :root {
-            --bg-color: #3E2723; /* Dark Brown */
-            --primary-color: #D2691E; /* Chocolate */
-            --secondary-color: #8B4513; /* Saddle Brown */
-            --accent-color: #FFD700; /* Gold */
-            --text-color: #FFF8DC; /* Cornsilk */
-            --player-color: #DC143C; /* Crimson Red */
-            --other-player-color: #4682B4; /* Steel Blue */
-            --enemy-color: #2E8B57; /* Sea Green */
-            --bullet-player-color: #FFEB3B; /* Yellow */
-            --bullet-enemy-color: #FFFFFF;
-            --health-bar-bg: #555;
-            --health-bar-high: #4CAF50; /* Green */
-            --health-bar-medium: #FFC107; /* Amber */
-            --health-bar-low: #F44336; /* Red */
-            --powerup-health: #00FF00; /* Lime */
-            --powerup-gun: #FF00FF; /* Fuchsia */
-            --powerup-speed: #00FFFF; /* Aqua */
-            --powerup-armor: #C0C0C0; /* Silver */
-            --night-overlay: rgba(0, 0, 50, 0.4);
-            --font-family: 'Courier New', monospace;
+            --bg-color: #3E2723; --primary-color: #D2691E; --secondary-color: #8B4513;
+            --accent-color: #FFD700; --text-color: #FFF8DC; --player-color: #DC143C;
+            --other-player-color: #4682B4; --enemy-color: #2E8B57; --bullet-player-color: #FFEB3B;
+            --bullet-enemy-color: #FFFFFF; --health-bar-bg: #555; --health-bar-high: #4CAF50;
+            --health-bar-medium: #FFC107; --health-bar-low: #F44336; --powerup-health: #00FF00;
+            --powerup-gun: #FF00FF; --powerup-speed: #00FFFF; --powerup-armor: #C0C0C0;
+            --night-overlay: rgba(0, 0, 50, 0.4); --font-family: 'Courier New', monospace;
         }
-
-        body {
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background-color: var(--bg-color);
-            font-family: var(--font-family);
-            color: var(--text-color);
-        }
-
-        #game-container {
-            background-color: var(--secondary-color);
-            border: 5px solid var(--primary-color);
-            border-radius: 15px;
-            padding: 20px;
-            text-align: center;
-            max-width: 900px;
-            width: calc(100% - 40px); /* Responsive width */
-            position: relative;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
-        }
-
+        body { margin: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; background-color: var(--bg-color); font-family: var(--font-family); color: var(--text-color); }
+        #game-container { background-color: var(--secondary-color); border: 5px solid var(--primary-color); border-radius: 15px; padding: 20px; text-align: center; max-width: 900px; width: calc(100% - 40px); position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
         h1 { color: var(--player-color); margin-top: 0; text-shadow: 2px 2px 4px black; }
 
-        #connection-section, #game-area, #game-over-screen { display: block; } /* Control visibility via JS */
-        #game-area, #game-over-screen { display: none; }
+        /* --- Visibility Control --- */
+        #mode-selection-section, #join-code-section, #waiting-section, #game-area, #game-over-screen {
+            display: none; /* Hide all sections by default */
+        }
+        /* JS will set display: 'block' or 'flex' for the active section */
 
         #game-status { min-height: 25px; color: var(--accent-color); font-weight: bold; margin-bottom: 15px; }
+        button { background-color: var(--primary-color); color: white; border: 2px solid var(--bg-color); padding: 10px 20px; margin: 10px 5px; cursor: pointer; font-family: var(--font-family); font-size: 1rem; transition: background-color 0.2s ease; border-radius: 5px; }
+        button:hover:not(:disabled) { background-color: #FF4500; } button:disabled { background-color: #777; cursor: not-allowed; }
+        input[type="text"] { padding: 10px; margin: 10px 5px; width: 180px; font-family: var(--font-family); font-size: 1rem; border: 2px solid var(--primary-color); border-radius: 5px; background-color: var(--text-color); color: var(--bg-color); text-transform: uppercase; } /* Uppercase for game code */
 
-        button {
-            background-color: var(--primary-color);
-            color: white;
-            border: 2px solid var(--bg-color);
-            padding: 10px 20px;
-            margin: 10px 5px;
-            cursor: pointer;
-            font-family: var(--font-family);
-            font-size: 1rem;
-            transition: background-color 0.2s ease;
-            border-radius: 5px;
-        }
-        button:hover:not(:disabled) { background-color: #FF4500; /* OrangeRed */ }
-        button:disabled { background-color: #777; cursor: not-allowed; }
-
-        input[type="text"] {
-            padding: 10px;
-            margin: 10px 5px;
-            width: 180px;
-            font-family: var(--font-family);
-            font-size: 1rem;
-            border: 2px solid var(--primary-color);
-            border-radius: 5px;
-            background-color: var(--text-color);
-            color: var(--bg-color);
-        }
-
-        #game-canvas {
-            border: 3px solid var(--primary-color);
-            background-color: #A0522D; /* Sienna (Day background) */
-            display: block; /* Prevent extra space below canvas */
-            margin: 20px auto 10px; /* Center canvas */
-            max-width: 100%; /* Make canvas responsive */
-            height: auto; /* Maintain aspect ratio */
-        }
-
+        #game-canvas { border: 3px solid var(--primary-color); background-color: #A0522D; display: block; margin: 10px auto 10px; max-width: 100%; height: auto; } /* Adjusted margin */
         #hud { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 5px; padding: 0 10px; }
-
-        #player-stats {
-            color: var(--text-color);
-            font-size: 14px;
-            background: rgba(0, 0, 0, 0.6);
-            padding: 8px 12px;
-            border-radius: 5px;
-            text-align: left;
-            border: 1px solid var(--accent-color);
-        }
+        #player-stats { color: var(--text-color); font-size: 14px; background: rgba(0, 0, 0, 0.6); padding: 8px 12px; border-radius: 5px; text-align: left; border: 1px solid var(--accent-color); }
         #player-stats span { display: inline-block; min-width: 50px; font-weight: bold; }
-
-        #game-info {
-             color: var(--text-color);
-             font-size: 18px;
-             background: rgba(0, 0, 0, 0.6);
-             padding: 8px 12px;
-             border-radius: 5px;
-             text-align: right;
-             border: 1px solid var(--accent-color);
-         }
-
-        #chat-section {
-            display: flex; /* Corrected from display:flex before it was visible */
-            margin-top: 10px;
-            align-items: center;
-        }
-        #chatInput { flex-grow: 1; margin-right: 5px; }
-        #chat-log {
-            height: 80px;
-            overflow-y: scroll;
-            border: 1px solid var(--primary-color);
-            margin-top: 5px;
-            padding: 5px;
-            text-align: left;
-            background: rgba(0,0,0,0.3);
-            font-size: 13px;
-            border-radius: 5px;
-            flex-basis: 100%; /* Take full width below input/button */
-            margin-top: 5px;
-        }
+        #game-info { color: var(--text-color); font-size: 18px; background: rgba(0, 0, 0, 0.6); padding: 8px 12px; border-radius: 5px; text-align: right; border: 1px solid var(--accent-color); }
+        #chat-section { display: flex; margin-top: 10px; align-items: center; flex-wrap: wrap; } /* Allow wrap */
+        #chatInput { flex-grow: 1; margin-right: 5px; min-width: 200px; } /* Min width for input */
+        #chat-log { height: 80px; overflow-y: scroll; border: 1px solid var(--primary-color); margin-top: 5px; padding: 5px; text-align: left; background: rgba(0,0,0,0.3); font-size: 13px; border-radius: 5px; flex-basis: 100%; order: 3; } /* Full width, below input */
         #chat-log div { margin-bottom: 3px; }
-        #chat-log .my-message { color: var(--bullet-player-color); }
-        #chat-log .other-message { color: var(--text-color); }
-        #chat-log .system-message { color: var(--accent-color); font-style: italic; }
-
-        #countdown {
-            position: absolute;
-            top: 45%; /* Adjusted position */
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 72px;
-            color: var(--player-color);
-            text-shadow: 3px 3px 6px black;
-            z-index: 10;
-            pointer-events: none; /* Allow clicks through */
-            display: none; /* Hidden initially */
-        }
-         #day-night-indicator {
-             position: absolute;
-             top: 10px;
-             right: 10px;
-             font-size: 18px;
-             color: var(--text-color);
-             background: rgba(0,0,0,0.5);
-             padding: 5px 10px;
-             border-radius: 5px;
-             z-index: 5;
-             display: none; /* Hidden initially */
-         }
-
-        #game-over-screen {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: rgba(0, 0, 0, 0.85);
-            padding: 30px;
-            border: 3px solid var(--player-color);
-            border-radius: 10px;
-            color: var(--accent-color);
-            text-align: center;
-            z-index: 20;
-            width: 80%;
-            max-width: 500px;
-        }
+        #chat-log .my-message { color: var(--bullet-player-color); } #chat-log .other-message { color: var(--text-color); } #chat-log .system-message { color: var(--accent-color); font-style: italic; }
+        #countdown { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); font-size: 72px; color: var(--player-color); text-shadow: 3px 3px 6px black; z-index: 10; pointer-events: none; display: none; }
+        #day-night-indicator { position: absolute; top: 10px; right: 10px; font-size: 18px; color: var(--text-color); background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 5px; z-index: 5; display: none; }
+        #game-over-screen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0, 0, 0, 0.85); padding: 30px; border: 3px solid var(--player-color); border-radius: 10px; color: var(--accent-color); text-align: center; z-index: 20; width: 80%; max-width: 500px; display: none; } /* Ensure initially hidden */
         #game-over-screen h2 { color: var(--player-color); margin-top: 0;}
-        #final-stats { margin-bottom: 20px; text-align: left; }
-        #final-stats strong { color: white; }
+        #final-stats { margin-bottom: 20px; text-align: left; } #final-stats strong { color: white; }
+
+        /* --- NEW Waiting Section Styles --- */
+        #waiting-section { padding: 20px; border: 2px dashed var(--primary-color); margin-top: 15px; background-color: rgba(0,0,0,0.2); border-radius: 8px; }
+        #waiting-section p { font-size: 1.1rem; margin-bottom: 10px;}
+        #game-code-display { font-size: 1.8rem; font-weight: bold; color: var(--accent-color); background-color: var(--bg-color); padding: 5px 15px; border-radius: 5px; display: inline-block; margin: 10px 0; user-select: all; /* Allow easy copying */ }
 
     </style>
 </head>
@@ -192,21 +57,38 @@
     <div id="game-container">
         <h1>SUCH IS LIFE</h1>
 
-        <div id="game-status">Connecting...</div>
+        <div id="game-status">Initializing...</div>
 
-        <!-- Connection Screen -->
-        <div id="connection-section">
-            <button id="createGameBtn" onclick="createGame()">Create Game</button>
-            <hr>
-            <div>
-                <input type="text" id="gameIdInput" placeholder="Enter Game ID" maxlength="6">
-                <button id="joinGameBtn" onclick="joinGame()">Join Game</button>
-            </div>
+        <!-- NEW: Mode Selection -->
+        <div id="mode-selection-section">
+            <p>How do you want to play?</p>
+            <button id="playFriendBtn" onclick="createFriendGame()">Play a Friend (Get Code)</button>
+            <button id="showJoinCodeBtn" onclick="showJoinUI()">Join Friend's Game (Enter Code)</button>
+            <!-- <button disabled>Play Computer (Soon!)</button> -->
+            <!-- <button disabled>Random Match (Soon!)</button> -->
         </div>
 
-        <!-- Game Area -->
+        <!-- NEW: Join Code Input -->
+        <div id="join-code-section">
+             <p>Enter the 6-character game code:</p>
+             <input type="text" id="gameIdInput" placeholder="ABCDEF" maxlength="6">
+             <button id="joinGameBtn" onclick="joinGame()">Join Game</button>
+             <button onclick="showModeSelection()">Back</button>
+        </div>
+
+        <!-- NEW: Waiting for Opponent -->
+        <div id="waiting-section">
+             <p>Game created! Share this code with your friend:</p>
+             <div id="game-code-display">------</div>
+             <p id="waiting-message">Waiting for opponent to join...</p>
+             <button onclick="resetToConnection(true)">Cancel Game</button>
+             <!-- Game canvas might be shown here eventually -->
+             <canvas id="waitingCanvas" width="800" height="600" style="display: none; border: 3px solid var(--primary-color); background-color: #A0522D; margin: 10px auto;"></canvas>
+        </div>
+
+        <!-- Main Game Area -->
         <div id="game-area">
-            <div style="position: relative;"> <!-- Container for canvas and overlays -->
+            <div style="position: relative;">
                 <canvas id="gameCanvas" width="800" height="600"></canvas>
                 <div id="countdown"></div>
                 <div id="day-night-indicator">Day</div>
@@ -218,59 +100,52 @@
              <div id="chat-section">
                  <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="50">
                  <button id="sendChatBtn" onclick="sendChatMessage()">Send</button>
+                 <div id="chat-log"></div>
              </div>
-             <div id="chat-log"></div>
+             <!-- Optional button to leave game? -->
+             <button onclick="resetToConnection(true)">Leave Game</button>
         </div>
 
         <!-- Game Over Screen -->
         <div id="game-over-screen">
             <h2>Game Over, Mate!</h2>
             <div id="final-stats"></div>
-            <button onclick="resetToConnection()">Back to Menu</button>
+            <button onclick="resetToConnection(false)">Back to Menu</button> <!-- Don't force close socket here -->
         </div>
 
     </div>
 
     <script>
         // --- Constants ---
-        const WEBSOCKET_URL = 'wss://such-is-life.glitch.me/ws';
-        const CANVAS_WIDTH = 800;
-        const CANVAS_HEIGHT = 600;
-        const PLAYER_WIDTH = 20;
-        const PLAYER_HEIGHT = 20;
-        const ENEMY_WIDTH = 25; // Smaller enemy visuals
-        const ENEMY_HEIGHT = 25;
-        const BULLET_RADIUS = 4;
-        const POWERUP_SIZE = 12;
-        const SHOOT_COOLDOWN = 200; // ms - Matches server (or ideally get from server)
-        const CHAT_MESSAGE_DURATION = 8; // seconds to show chat above player
+        const WEBSOCKET_URL = 'wss://such-is-life.glitch.me/ws'; // CORRECT PATH
+        // --- (Keep other constants: CANVAS_WIDTH, PLAYER_WIDTH, COLORS etc.) ---
+        const CANVAS_WIDTH = 800; const CANVAS_HEIGHT = 600; const PLAYER_WIDTH = 20; const PLAYER_HEIGHT = 20;
+        const ENEMY_WIDTH = 25; const ENEMY_HEIGHT = 25; const BULLET_RADIUS = 4; const POWERUP_SIZE = 12;
+        const SHOOT_COOLDOWN = 200; const CHAT_MESSAGE_DURATION = 8;
 
-        // --- Colors (from CSS variables, or define here if needed) ---
+        // --- Colors ---
         const COLOR_PLAYER_SELF = getCssVar('--player-color') || 'red';
-        const COLOR_PLAYER_OTHER = getCssVar('--other-player-color') || 'blue';
-        const COLOR_ENEMY = getCssVar('--enemy-color') || 'green';
-        const COLOR_BULLET_PLAYER = getCssVar('--bullet-player-color') || 'yellow';
-        const COLOR_BULLET_ENEMY = getCssVar('--bullet-enemy-color') || 'white';
-        const COLOR_NIGHT_OVERLAY = getCssVar('--night-overlay') || 'rgba(0, 0, 50, 0.4)';
-        const COLOR_TEXT = getCssVar('--text-color') || 'white';
-        const POWERUP_COLORS = {
-            'health': getCssVar('--powerup-health') || 'lime',
-            'gun_upgrade': getCssVar('--powerup-gun') || 'fuchsia',
-            'speed_boost': getCssVar('--powerup-speed') || 'aqua',
-            'armor': getCssVar('--powerup-armor') || 'silver',
-        };
+        // --- (Keep other color constants) ---
+        const COLOR_PLAYER_OTHER = getCssVar('--other-player-color') || 'blue'; const COLOR_ENEMY = getCssVar('--enemy-color') || 'green'; const COLOR_BULLET_PLAYER = getCssVar('--bullet-player-color') || 'yellow'; const COLOR_BULLET_ENEMY = getCssVar('--bullet-enemy-color') || 'white'; const COLOR_NIGHT_OVERLAY = getCssVar('--night-overlay') || 'rgba(0, 0, 50, 0.4)'; const COLOR_TEXT = getCssVar('--text-color') || 'white'; const POWERUP_COLORS = {'health': getCssVar('--powerup-health') || 'lime','gun_upgrade': getCssVar('--powerup-gun') || 'fuchsia','speed_boost': getCssVar('--powerup-speed') || 'aqua','armor': getCssVar('--powerup-armor') || 'silver',};
 
         // --- DOM Elements ---
         const gameContainer = document.getElementById('game-container');
-        const connectionSection = document.getElementById('connection-section');
+        // NEW Sections
+        const modeSelectionSection = document.getElementById('mode-selection-section');
+        const joinCodeSection = document.getElementById('join-code-section');
+        const waitingSection = document.getElementById('waiting-section');
+        const gameCodeDisplay = document.getElementById('game-code-display');
+        const waitingMessage = document.getElementById('waiting-message');
+        // Existing Sections/Elements
         const gameArea = document.getElementById('game-area');
         const gameOverScreen = document.getElementById('game-over-screen');
         const gameStatus = document.getElementById('game-status');
-        const createGameBtn = document.getElementById('createGameBtn');
-        const joinGameBtn = document.getElementById('joinGameBtn');
-        const gameIdInput = document.getElementById('gameIdInput');
+        const gameIdInput = document.getElementById('gameIdInput'); // Now used for joining
+        const joinGameBtn = document.getElementById('joinGameBtn'); // Button in join section
         const canvas = document.getElementById('gameCanvas');
+        const waitingCanvas = document.getElementById('waitingCanvas'); // Canvas for waiting screen
         const ctx = canvas.getContext('2d');
+        const waitingCtx = waitingCanvas.getContext('2d'); // Context for waiting screen
         const playerStatsDiv = document.getElementById('player-stats');
         const gameInfoDiv = document.getElementById('game-info');
         const countdownDiv = document.getElementById('countdown');
@@ -280,234 +155,298 @@
         const chatInput = document.getElementById('chatInput');
         const sendChatBtn = document.getElementById('sendChatBtn');
         const chatLog = document.getElementById('chat-log');
+        // Buttons
+        const playFriendBtn = document.getElementById('playFriendBtn');
+        const showJoinCodeBtn = document.getElementById('showJoinCodeBtn');
+
 
         // --- Game State ---
         let socket;
-        let gameState = null; // Full state from server
+        let gameState = null; // Full state from server { status: 'waiting'|'countdown'|'active'|'finished', ... }
         let localPlayerId = null;
-        let keys = {}; // For movement input
+        let currentGameId = null; // Store the current game ID locally
+        let keys = {};
         let lastShotTime = 0;
-        let animationFrameId = null; // For cancelling game loop
-        let playerMessages = {}; // player_id -> { message: string, time: number } for drawing above player
+        let animationFrameId = null;
+        let playerMessages = {};
 
         // --- Utility ---
         function getCssVar(varName) {
             return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
         }
 
+        // --- UI Section Management ---
+        function showSection(sectionId) {
+             // Hide all main sections first
+             modeSelectionSection.style.display = 'none';
+             joinCodeSection.style.display = 'none';
+             waitingSection.style.display = 'none';
+             gameArea.style.display = 'none';
+             gameOverScreen.style.display = 'none';
+
+             // Show the requested section
+             const sectionToShow = document.getElementById(sectionId);
+             if (sectionToShow) {
+                 sectionToShow.style.display = 'block'; // Or 'flex' if needed
+             } else {
+                 console.error("Tried to show non-existent section:", sectionId);
+             }
+             // Reset game status message unless specifically updated later
+             // updateStatus(" ");
+        }
+
         // --- WebSocket Logic ---
         function connectWebSocket(onOpenCallback) {
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                 console.warn("WebSocket already open.");
-                 if(onOpenCallback) onOpenCallback();
-                 return;
-            }
-            if (socket && socket.readyState === WebSocket.CONNECTING) {
-                 console.warn("WebSocket already connecting.");
-                 return;
-            }
-
+            // --- (Keep existing connectWebSocket function - checks state, sets handlers) ---
+            if (socket && socket.readyState === WebSocket.OPEN) { console.warn("WS already open."); if(onOpenCallback) onOpenCallback(); return; }
+            if (socket && socket.readyState === WebSocket.CONNECTING) { console.warn("WS already connecting."); return; }
             updateStatus('Connecting...');
-            disableConnectionUI();
+            disableAllButtons(); // Disable buttons while connecting
 
             socket = new WebSocket(WEBSOCKET_URL);
 
             socket.onopen = () => {
                 console.log('WebSocket connection established.');
-                updateStatus('Connected.');
-                if (onOpenCallback) {
-                    onOpenCallback();
-                } else {
-                     enableConnectionUI(); // Enable UI if no specific action on open
-                }
+                updateStatus('Connected.'); // Status: Connected
+                enableModeSelectionButtons(); // Re-enable mode buttons on connect
+                if (onOpenCallback) { onOpenCallback(); }
             };
 
             socket.onmessage = handleServerMessage;
-
-            socket.onerror = (error) => {
-                console.error('WebSocket Error:', error);
-                updateStatus('Connection error. Please refresh.');
-                showErrorStateUI(); // Reset UI to connection screen on error
-            };
-
+            socket.onerror = (error) => { console.error('WebSocket Error:', error); updateStatus('Connection error. Please refresh.'); showErrorStateUI(); };
             socket.onclose = (event) => {
                 console.log(`WebSocket Closed: Code=${event.code}, Reason=${event.reason}`);
                 let message = 'Disconnected.';
-                if (event.code !== 1000 && event.reason) { // 1000 is normal closure
-                    message += ` Reason: ${event.reason}`;
-                } else if (event.code === 1006) {
-                     message = 'Connection lost. Please refresh.';
-                }
+                if (event.code !== 1000 && event.reason) { message += ` Reason: ${event.reason}`; }
+                else if (event.code === 1006) { message = 'Connection lost. Please refresh.'; }
                 updateStatus(message);
-                showErrorStateUI(); // Reset UI to connection screen on close
-                gameState = null; // Clear game state
-                localPlayerId = null;
-                playerMessages = {};
-                if (animationFrameId) {
-                    cancelAnimationFrame(animationFrameId);
-                    animationFrameId = null;
-                }
+                showErrorStateUI();
+                gameState = null; localPlayerId = null; currentGameId = null; playerMessages = {};
+                if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
             };
         }
 
         function handleServerMessage(event) {
-            try {
-                const data = JSON.parse(event.data);
-                // console.debug("Message received:", data); // DEBUG
+            // --- (Keep existing JSON parsing and error handling) ---
+             try {
+                 const data = JSON.parse(event.data);
+                 console.debug("Message received:", data); // DEBUG
 
-                switch (data.type) {
-                    case 'game_created':
-                    case 'game_joined':
-                        localPlayerId = data.player_id;
-                        gameState = data.initial_state; // Use initial state sent by server
-                        playerMessages = {}; // Reset messages on join/create
-                        updateStatus(`Game ${data.type === 'game_created' ? 'created' : 'joined'}: ${data.game_id}`);
-                        gameIdInput.value = data.game_id; // Display the ID
-                        showGameArea();
-                        if (!animationFrameId) startGameLoop(); // Start loop if not already running
-                        addSystemMessageToLog(`You ${data.type === 'game_created' ? 'created' : 'joined'} game ${data.game_id}.`);
-                        break;
-
-                    case 'game_state':
-                        if (gameState && gameState.game_over) return; // Don't update if locally marked as game over
-
-                        gameState = data.state;
-                        updateUI();
-
-                        if (gameState.game_over) {
-                            showGameOver();
-                        }
-                        break;
-
-                    case 'chat_message':
-                         handleChatMessage(data.sender_id, data.message);
+                 switch (data.type) {
+                     case 'game_created':
+                         localPlayerId = data.player_id;
+                         currentGameId = data.game_id; // Store game ID
+                         gameState = data.initial_state;
+                         playerMessages = {};
+                         gameCodeDisplay.textContent = currentGameId; // Show code
+                         updateStatus(`Game created. Code: ${currentGameId}`);
+                         showSection('waiting-section'); // Show waiting UI
+                         addSystemMessageToLog(`Game ${currentGameId} created. Waiting for opponent...`);
+                         // Optionally start drawing the waiting screen canvas
+                         // drawWaitingScreen();
                          break;
 
-                    case 'error':
-                        console.error('Server Error:', data.message);
-                        updateStatus(`Error: ${data.message}`);
-                        // If error prevents joining/creating, go back to connection screen
-                        if (data.message.includes('Game not found') || data.message.includes('already started')) {
-                            resetToConnection();
-                        } else {
-                            enableConnectionUI(); // Re-enable buttons if it was a less critical error
-                        }
-                        break;
+                     case 'game_joined':
+                         localPlayerId = data.player_id;
+                         currentGameId = data.game_id; // Store game ID
+                         gameState = data.initial_state;
+                         playerMessages = {};
+                         updateStatus(`Joined game: ${currentGameId}`);
+                         showSection('game-area'); // Show main game area
+                         // Server should now start countdown & send state updates
+                         if (!animationFrameId) startGameLoop(); // Start loop if not running
+                         addSystemMessageToLog(`Joined game ${currentGameId}. Get ready!`);
+                         break;
 
-                    default:
-                        console.warn('Unknown message type:', data.type);
-                }
-            } catch (error) {
-                console.error('Error processing server message:', error, event.data);
-            }
+                     case 'game_state':
+                         const previousStatus = gameState ? gameState.status : null;
+                         gameState = data.state; // Update local state
+                         currentGameId = currentGameId || findMyGameId(); // Try to find game ID if missing
+
+                         // --- Handle Transitions based on Status ---
+                         if (gameState.status === 'waiting' && previousStatus !== 'waiting') {
+                             // This might happen if host reconnects or state syncs weirdly
+                             showSection('waiting-section');
+                             gameCodeDisplay.textContent = currentGameId || '???';
+                             updateStatus(`Waiting for opponent... Code: ${currentGameId || '???'}`);
+                         } else if (gameState.status === 'countdown' && previousStatus === 'waiting') {
+                             // Opponent joined, transition from waiting to countdown!
+                             addSystemMessageToLog("Opponent joined! Countdown starting...");
+                             showSection('game-area'); // Ensure game area is visible
+                             if (!animationFrameId) startGameLoop(); // Ensure loop is running
+                         } else if (gameState.status === 'active' && previousStatus === 'countdown') {
+                              addSystemMessageToLog("Game active!");
+                              // No UI section change needed here, just update normally
+                         }
+
+                         // Normal state update processing
+                         if (gameState.status === 'active' || gameState.status === 'countdown' || gameState.status === 'waiting') {
+                            updateUI(); // Update HUD, countdown etc. based on new state
+                         }
+
+                         if (gameState.game_over) {
+                             showGameOver(); // Handle game over state
+                         }
+                         break;
+
+                     case 'chat_message':
+                          handleChatMessage(data.sender_id, data.message);
+                          break;
+
+                     case 'error':
+                         console.error('Server Error:', data.message);
+                         updateStatus(`Error: ${data.message}`);
+                         // If game not found during join, reset to allow trying again
+                         if (data.message.includes('Game not found') || data.message.includes('Game is full') || data.message.includes('not waiting')) {
+                             showJoinUI(); // Go back to join input screen
+                             enableJoinButton();
+                         } else {
+                             // For other errors, might go back to mode selection
+                             // showModeSelection();
+                             enableModeSelectionButtons();
+                         }
+                         break;
+
+                     default:
+                         console.warn('Unknown message type:', data.type);
+                 }
+             } catch (error) {
+                 console.error('Error processing server message:', error, event.data);
+             }
         }
 
         function sendMessage(payload) {
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify(payload));
-            } else {
-                console.error('Cannot send message, WebSocket is not open.');
-                updateStatus('Connection issue. Please wait or refresh.');
-                 showErrorStateUI(); // Or attempt reconnect?
-            }
+            // --- (Keep existing sendMessage function) ---
+            if (socket && socket.readyState === WebSocket.OPEN) { socket.send(JSON.stringify(payload)); }
+            else { console.error('Cannot send message, WS not open.'); updateStatus('Connection issue.'); showErrorStateUI(); }
         }
 
         // --- Game Actions ---
-        function createGame() {
-            connectWebSocket(() => {
+        function createFriendGame() { // Renamed from createGame
+            updateStatus("Creating game...");
+            disableAllButtons();
+            connectWebSocket(() => { // Ensure connected before sending
                 sendMessage({ type: 'create_game' });
             });
         }
 
-        function joinGame() {
+        function joinGame() { // Now specifically joins using the code
             const gameId = gameIdInput.value.trim().toUpperCase();
             if (!gameId || gameId.length !== 6) {
                 updateStatus('Please enter a valid 6-character Game ID.');
+                gameIdInput.focus();
                 return;
             }
-            connectWebSocket(() => {
+            updateStatus(`Joining game ${gameId}...`);
+            disableAllButtons();
+            connectWebSocket(() => { // Ensure connected
                 sendMessage({ type: 'join_game', game_id: gameId });
             });
         }
 
-        function sendChatMessage() {
-            const message = chatInput.value.trim();
-            if (message && gameState && localPlayerId) {
-                sendMessage({
-                    type: 'player_chat',
-                    // game_id and player_id implicitly known by server via connection_info
-                    message: message
-                });
-                chatInput.value = ''; // Clear input field
-            }
-        }
+        function sendChatMessage() { /* Keep existing */ }
 
         // --- UI Management ---
-        function updateStatus(message) {
-            gameStatus.textContent = message;
+        function updateStatus(message) { /* Keep existing */ }
+
+        // --- NEW UI Show/Hide ---
+        function showModeSelection() {
+             showSection('mode-selection-section');
+             updateStatus("Select a game mode.");
+             enableModeSelectionButtons();
+             gameIdInput.value = ''; // Clear join input
+        }
+        function showJoinUI() {
+             showSection('join-code-section');
+             updateStatus("Enter your friend's game code.");
+             enableJoinButton();
+             gameIdInput.focus();
         }
 
-        function disableConnectionUI() {
-            createGameBtn.disabled = true;
-            joinGameBtn.disabled = true;
-            gameIdInput.disabled = true;
+        // --- NEW Button Disabling/Enabling ---
+        function disableAllButtons() {
+            const buttons = document.querySelectorAll('button');
+            buttons.forEach(button => button.disabled = true);
+        }
+        function enableModeSelectionButtons() {
+             playFriendBtn.disabled = false;
+             showJoinCodeBtn.disabled = false;
+             // Keep others disabled until needed
+             joinGameBtn.disabled = true;
+             sendChatBtn.disabled = true; // Assume chat disabled initially
+        }
+         function enableJoinButton() {
+             joinGameBtn.disabled = false;
+             // Disable others
+             playFriendBtn.disabled = true;
+             showJoinCodeBtn.disabled = true;
+             sendChatBtn.disabled = true;
+         }
+         function enableWaitingCancelButton() {
+              const cancelBtn = waitingSection.querySelector('button');
+              if (cancelBtn) cancelBtn.disabled = false;
+              // Disable others
+              playFriendBtn.disabled = true;
+              showJoinCodeBtn.disabled = true;
+              joinGameBtn.disabled = true;
+              sendChatBtn.disabled = true;
+         }
+          function enableGamePlayButtons() {
+               // Only enables chat send during gameplay for now
+               sendChatBtn.disabled = false;
+               // Leave game button?
+               const leaveBtn = gameArea.querySelector('button'); // Assumes only one button for now
+               if(leaveBtn) leaveBtn.disabled = false;
+               // Disable mode selection etc.
+               playFriendBtn.disabled = true;
+              showJoinCodeBtn.disabled = true;
+              joinGameBtn.disabled = true;
+          }
+
+        function showGameArea() { // Combined waiting/active game UI show
+             showSection('game-area');
+             enableGamePlayButtons();
+             dayNightIndicator.style.display = 'block';
         }
 
-        function enableConnectionUI() {
-            createGameBtn.disabled = false;
-            joinGameBtn.disabled = false;
-            gameIdInput.disabled = false;
+        function showErrorStateUI() { // Reset UI on error/disconnect
+             showModeSelection(); // Go back to mode select screen
+             if (socket && socket.readyState !== WebSocket.CLOSED) { socket.close(); }
+             socket = null;
+             if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
         }
 
-        function showConnectionArea() {
-            connectionSection.style.display = 'block';
-            gameArea.style.display = 'none';
-            gameOverScreen.style.display = 'none';
-            enableConnectionUI();
-        }
-
-        function showGameArea() {
-            connectionSection.style.display = 'none';
-            gameArea.style.display = 'block';
-            gameOverScreen.style.display = 'none';
-             dayNightIndicator.style.display = 'block'; // Show day/night indicator
-        }
-
-        function showErrorStateUI() {
-             showConnectionArea(); // Go back to connection screen
-             if (socket && socket.readyState !== WebSocket.CLOSED) {
-                 socket.close(); // Close the socket if it's not already closed
+        function resetToConnection(closeSocket = true) { // Added flag to control socket close
+             showModeSelection(); // Go back to mode selection
+             updateStatus('Ready to start or join a game.');
+             gameState = null; localPlayerId = null; currentGameId = null; playerMessages = {};
+             chatLog.innerHTML = '';
+             if (socket && closeSocket && socket.readyState === WebSocket.OPEN) {
+                  socket.close(1000, "Returning to menu");
+                  socket = null;
+             } else if (!closeSocket && socket && socket.readyState !== WebSocket.OPEN) {
+                  // If we chose not to close, but it's already closed/closing, clear ref
+                  socket = null;
              }
-             socket = null; // Clear socket reference
-             if (animationFrameId) {
-                 cancelAnimationFrame(animationFrameId);
-                 animationFrameId = null;
-             }
+             if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
         }
 
-        function resetToConnection() {
-            showConnectionArea();
-            updateStatus('Ready to start or join a game.');
-            gameState = null;
-            localPlayerId = null;
-            playerMessages = {};
-            chatLog.innerHTML = ''; // Clear chat log
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                 // Decide if we keep the connection or close it? Let's close for a clean start.
-                 socket.close(1000, "Returning to menu");
-                 socket = null;
-            }
-            if (animationFrameId) {
-                cancelAnimationFrame(animationFrameId);
-                animationFrameId = null;
-            }
-        }
-
-        function updateUI() {
+        function updateUI() { // Handles HUD, countdown etc based on gameState
             if (!gameState) return;
 
-            // Update HUD Stats
+            // --- Update based on Status ---
             const player = gameState.players[localPlayerId];
+            const isHost = localPlayerId === gameState.host_id;
+
+             if(gameState.status === 'waiting') {
+                waitingMessage.textContent = `Waiting for opponent... (${Object.keys(gameState.players).length}/${MAX_PLAYERS})`;
+                // Update waiting canvas if needed
+                // drawWaitingScreen();
+                return; // Don't process active game UI updates yet
+             }
+
+            // --- Active or Countdown ---
+            // Update HUD Stats
             if (player) {
                 playerStatsDiv.innerHTML = `
                     <span>HP:</span> ${player.health}/${player.max_health}<br>
@@ -516,324 +455,92 @@
                     <span>Speed:</span> ${player.speed}<br>
                     <span>Kills:</span> ${player.kills} | <span>Score:</span> ${player.score}
                 `;
-            } else {
-                 playerStatsDiv.textContent = "Waiting for player data...";
-            }
+            } else { playerStatsDiv.textContent = "Spectating? / Error"; }
 
             // Update Game Info
             gameInfoDiv.innerHTML = `Score: ${gameState.score} | Level: ${gameState.level}`;
 
             // Update Countdown Timer
-            if (gameState.countdown > 0) {
+            if (gameState.status === 'countdown' && gameState.countdown >= 0) {
                 countdownDiv.textContent = Math.ceil(gameState.countdown);
                 countdownDiv.style.display = 'block';
-                dayNightIndicator.style.display = 'none'; // Hide day/night during countdown
+                dayNightIndicator.style.display = 'none';
             } else {
                 countdownDiv.style.display = 'none';
-                 dayNightIndicator.style.display = 'block'; // Show day/night after countdown
+                dayNightIndicator.style.display = 'block';
             }
 
-             // Update Day/Night Indicator Text & Canvas Background
+            // Update Day/Night Indicator Text & Canvas Background
             const isNight = gameState.is_night;
             dayNightIndicator.textContent = isNight ? 'Night' : 'Day';
-            canvas.style.backgroundColor = isNight ? '#5D4037' : '#A0522D'; // Darker background at night
-
+            canvas.style.backgroundColor = isNight ? getCssVar('--bg-color') : '#A0522D'; // Use bg-color for night?
         }
 
-        function showGameOver() {
-             if (animationFrameId) {
-                 cancelAnimationFrame(animationFrameId);
-                 animationFrameId = null;
-             }
-             console.log("Game Over!");
-             const stats = gameState.final_stats;
-             if (stats) {
-                  let playerKillList = 'No kill data available.';
-                  if (stats.player_kills) {
-                      playerKillList = Object.entries(stats.player_kills)
-                           .map(([id, kills]) => {
-                                const name = id === localPlayerId ? 'You' : `Player ${id.substring(0, 4)}`;
-                                return `<li>${name}: ${kills} kills</li>`;
-                            })
-                           .join('');
-                      if (!playerKillList) playerKillList = "No players recorded kills.";
-                      else playerKillList = `<ul>${playerKillList}</ul>`;
-                  }
-
-                  finalStatsDiv.innerHTML = `
-                     <strong>Final Score:</strong> ${stats.score}<br>
-                     <strong>Level Reached:</strong> ${stats.level}<br>
-                     <strong>Time Survived:</strong> ${stats.time_survived} seconds<br>
-                     <strong>Player Kills:</strong><br>
-                     ${playerKillList}
-                  `;
-             } else {
-                 finalStatsDiv.textContent = "Final stats not available.";
-             }
-             gameOverScreen.style.display = 'block';
-             gameArea.style.display = 'none'; // Hide game area behind game over screen
-             addSystemMessageToLog("--- GAME OVER ---");
-        }
-
-        // --- Chat Handling ---
-         function handleChatMessage(senderId, message) {
-             // Add to chat log
-             const senderName = senderId === localPlayerId ? 'You' : `Player ${senderId.substring(0, 4)}`;
-             addMessageToLog(senderName, message, senderId === localPlayerId);
-
-             // Store for drawing above player head
-             playerMessages[senderId] = { message: message, time: Date.now() };
-         }
-
-         function addMessageToLog(sender, message, isSelf) {
-             const messageElement = document.createElement('div');
-             messageElement.innerHTML = `<strong>${sender}:</strong> `; // Use innerHTML to make sender bold
-             messageElement.appendChild(document.createTextNode(message)); // Append message as text node for safety
-             messageElement.classList.add(isSelf ? 'my-message' : 'other-message');
-             chatLog.appendChild(messageElement);
-             chatLog.scrollTop = chatLog.scrollHeight; // Scroll to bottom
-         }
-
-         function addSystemMessageToLog(message) {
-             const messageElement = document.createElement('div');
-             messageElement.textContent = message;
-             messageElement.classList.add('system-message');
-             chatLog.appendChild(messageElement);
-             chatLog.scrollTop = chatLog.scrollHeight;
-         }
+        function showGameOver() { /* Keep existing */ }
+        function handleChatMessage(senderId, message) { /* Keep existing */ }
+        function addMessageToLog(sender, message, isSelf) { /* Keep existing */ }
+        function addSystemMessageToLog(message) { /* Keep existing */ }
 
         // --- Game Loop and Drawing ---
-        function setupGameControls() {
-            keys = {}; // Reset keys on setup
-            document.addEventListener('keydown', handleKeyDown);
-            document.addEventListener('keyup', handleKeyUp);
-            chatInput.addEventListener('keypress', handleChatEnter);
-            // Prevent arrow keys from scrolling page when canvas has focus (or is active)
-            window.addEventListener("keydown", function(e) {
-                if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].indexOf(e.code) > -1) {
-                     if (document.activeElement !== chatInput && gameArea.style.display === 'block') {
-                          e.preventDefault();
-                     }
-                }
-            }, false);
-        }
-
-        function removeGameControls() {
-             document.removeEventListener('keydown', handleKeyDown);
-             document.removeEventListener('keyup', handleKeyUp);
-             chatInput.removeEventListener('keypress', handleChatEnter);
-             // Consider removing the window listener if needed, though it's generally safe
-        }
-
-         function handleKeyDown(e) {
-             // Ignore movement keys if chat input is focused
-             if (document.activeElement === chatInput) return;
-             // Allow chat sending via Enter even if game not started/over
-             // if (e.key === 'Enter') { sendChatMessage(); return; }
-
-             if (gameState && !gameState.game_over && gameState.countdown <= 0) {
-                 keys[e.key.toLowerCase()] = true; // Use lower case for consistency (w vs W)
-                 // Handle shooting immediately on keydown for responsiveness?
-                 // handleShooting(); // Moved to game loop for consistent timing
-             }
-         }
-         function handleKeyUp(e) {
-              keys[e.key.toLowerCase()] = false;
-         }
-         function handleChatEnter(e) {
-             if (e.key === 'Enter') {
-                 sendChatMessage();
-             }
-         }
-
-        function handlePlayerMovement() {
-            if (!localPlayerId || !gameState || gameState.game_over || gameState.countdown > 0) return;
-            const player = gameState.players[localPlayerId];
-            if (!player) return;
-
-            const speed = player.speed; // Use speed from server state
-            let dx = 0;
-            let dy = 0;
-
-            if (keys['w'] || keys['arrowup']) dy -= 1;
-            if (keys['s'] || keys['arrowdown']) dy += 1;
-            if (keys['a'] || keys['arrowleft']) dx -= 1;
-            if (keys['d'] || keys['arrowright']) dx += 1;
-
-            if (dx !== 0 || dy !== 0) {
-                 // Normalize diagonal movement
-                 const magnitude = Math.sqrt(dx * dx + dy * dy);
-                 const moveX = player.position.x + (dx / magnitude) * speed;
-                 const moveY = player.position.y + (dy / magnitude) * speed;
-
-                 // Boundary checks
-                 const boundedX = Math.max(0, Math.min(CANVAS_WIDTH - PLAYER_WIDTH, moveX));
-                 const boundedY = Math.max(0, Math.min(CANVAS_HEIGHT - PLAYER_HEIGHT, moveY));
-
-                // Only send if position actually changed
-                if (boundedX !== player.position.x || boundedY !== player.position.y) {
-                    // Client-side prediction (optional but smoother)
-                    player.position.x = boundedX;
-                    player.position.y = boundedY;
-                    sendMessage({ type: 'player_move', position: { x: boundedX, y: boundedY } });
-                }
+        function setupGameControls() { /* Keep existing */ }
+        function removeGameControls() { /* Keep existing */ }
+        function handleKeyDown(e) { /* Keep existing, check gameState.status === 'active' */
+            if (document.activeElement === chatInput) return;
+            // Only allow movement/shooting if game is active
+            if (gameState && gameState.status === 'active' && !gameState.game_over) {
+                 keys[e.key.toLowerCase()] = true;
             }
         }
-
-         function handleShooting() {
-             if (!localPlayerId || !gameState || gameState.game_over || gameState.countdown > 0) return;
-
-             const currentTime = Date.now();
-             if (currentTime - lastShotTime < SHOOT_COOLDOWN) return; // Respect cooldown
-
-             let direction = null;
-             // Prioritize arrows for shooting if movement keys are also pressed? Or vice versa?
-             // Let's prioritize Arrows for shooting.
-             if (keys['arrowup']) direction = 'up';
-             else if (keys['arrowdown']) direction = 'down';
-             else if (keys['arrowleft']) direction = 'left';
-             else if (keys['arrowright']) direction = 'right';
-
-             // Add diagonals? Requires backend support for diagonal vectors
-             // if (keys['arrowup'] && keys['arrowleft']) direction = 'up-left';
-             // ... etc
-
-             if (direction) {
-                 sendMessage({ type: 'player_shoot', direction: direction });
-                 lastShotTime = currentTime;
-             }
-         }
+        function handleKeyUp(e) { /* Keep existing */ }
+        function handleChatEnter(e) { /* Keep existing */ }
+        function handlePlayerMovement() { /* Keep existing, maybe add status check? */
+            if (gameState && gameState.status !== 'active') return; // Only move when active
+            // ... rest of movement logic ...
+        }
+        function handleShooting() { /* Keep existing, maybe add status check? */
+            if (gameState && gameState.status !== 'active') return; // Only shoot when active
+            // ... rest of shooting logic ...
+        }
 
         function startGameLoop() {
-            if (animationFrameId) cancelAnimationFrame(animationFrameId); // Prevent multiple loops
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
             setupGameControls();
-
             function gameLoop() {
                  if (!gameState || gameState.game_over) {
-                     // Optional: Draw faded background or specific game over visual on canvas
-                     removeGameControls(); // Clean up listeners when loop stops
-                     animationFrameId = null;
-                     return;
+                     removeGameControls(); animationFrameId = null; return;
                  }
-
-                 // --- Input ---
-                 handlePlayerMovement(); // Handle WASD movement
-                 handleShooting();     // Handle Arrow key shooting
-
-                 // --- Drawing ---
-                 drawGame();
-
+                 // Only run input/drawing if NOT waiting
+                 if (gameState.status === 'active' || gameState.status === 'countdown') {
+                    handlePlayerMovement();
+                    handleShooting();
+                    drawGame(); // Draw the main game canvas
+                 } else if (gameState.status === 'waiting') {
+                     // Optionally draw a simplified waiting screen on the waitingCanvas
+                     // drawWaitingScreen();
+                 }
                  animationFrameId = requestAnimationFrame(gameLoop);
             }
             animationFrameId = requestAnimationFrame(gameLoop);
         }
 
-        function drawGame() {
-             ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        // --- Drawing Functions --- (Keep drawGame, drawHealthBar, drawPlayerChatMessage)
+        function drawGame() { /* Keep existing - draws on main canvas */ }
+        function drawHealthBar(ctx, x, y, width, currentHealth, maxHealth) { /* Keep existing */ }
+        function drawPlayerChatMessage(ctx, player, playerId) { /* Keep existing */ }
 
-             if (!gameState) {
-                  ctx.fillStyle = COLOR_TEXT;
-                  ctx.font = '24px ' + getCssVar('--font-family');
-                  ctx.textAlign = 'center';
-                  ctx.fillText("Waiting for game state...", CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
-                  ctx.textAlign = 'left';
-                  return;
-             }
-
-             // Draw Night Overlay first if it's night
-             if (gameState.is_night) {
-                 ctx.fillStyle = COLOR_NIGHT_OVERLAY;
-                 ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-             }
-
-             // Draw Power-ups
-             gameState.power_ups.forEach(power_up => {
-                 ctx.fillStyle = POWERUP_COLORS[power_up.type] || 'grey';
-                 // Simple pulsing effect?
-                 const pulse = Math.sin(Date.now() * 0.005) * 2;
-                 const size = POWERUP_SIZE + pulse;
-                 ctx.fillRect(power_up.position.x - size / 2, power_up.position.y - size / 2, size, size);
-                  // Draw letter?
-                 // ctx.fillStyle = 'black'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
-                 // ctx.fillText(power_up.type.substring(0,1).toUpperCase(), power_up.position.x, power_up.position.y + 4);
-                 // ctx.textAlign = 'left';
-             });
-
-             // Draw Enemies
-             gameState.enemies.forEach(enemy => {
-                 ctx.fillStyle = COLOR_ENEMY; // Could vary based on enemy.type
-                 ctx.fillRect(enemy.position.x, enemy.position.y, ENEMY_WIDTH, ENEMY_HEIGHT);
-                 drawHealthBar(ctx, enemy.position.x, enemy.position.y, ENEMY_WIDTH, enemy.health, enemy.max_health);
-             });
-
-             // Draw Players
-             Object.entries(gameState.players).forEach(([id, player]) => {
-                 const isSelf = id === localPlayerId;
-                 ctx.fillStyle = isSelf ? COLOR_PLAYER_SELF : COLOR_PLAYER_OTHER;
-                 ctx.fillRect(player.position.x, player.position.y, PLAYER_WIDTH, PLAYER_HEIGHT);
-                 drawHealthBar(ctx, player.position.x, player.position.y, PLAYER_WIDTH, player.health, player.max_health);
-                 drawPlayerChatMessage(ctx, player, id);
-             });
-
-             // Draw Bullets
-             gameState.bullets.forEach(bullet => {
-                 ctx.fillStyle = bullet.source === 'player' ? COLOR_BULLET_PLAYER : COLOR_BULLET_ENEMY;
-                 ctx.beginPath();
-                 ctx.arc(bullet.position.x, bullet.position.y, bullet.is_crit ? BULLET_RADIUS * 1.5 : BULLET_RADIUS, 0, Math.PI * 2); // Larger crit bullets
-                 ctx.fill();
-                 if (bullet.is_crit) { // Add outline to crit
-                      ctx.strokeStyle = 'orange';
-                      ctx.lineWidth = 1;
-                      ctx.stroke();
-                 }
-             });
+        // --- NEW: Helper to find game ID from state if needed ---
+        function findMyGameId() {
+             // This is tricky if not received directly. Could try iterating gameState.players?
+             // For now, rely on currentGameId being set correctly on create/join.
+             return null;
         }
 
-         function drawHealthBar(ctx, x, y, width, currentHealth, maxHealth) {
-             if (currentHealth >= maxHealth) return; // Don't draw if full health
-
-             const barWidth = width * 1.2; // Slightly wider than the entity
-             const barHeight = 5;
-             const barX = x + (width / 2) - (barWidth / 2);
-             const barY = y - barHeight - 3; // Position above entity
-             const healthPercent = Math.max(0, currentHealth / maxHealth);
-
-             ctx.fillStyle = getCssVar('--health-bar-bg'); // Background of bar
-             ctx.fillRect(barX, barY, barWidth, barHeight);
-
-             let barColor = getCssVar('--health-bar-low');
-             if (healthPercent > 0.6) barColor = getCssVar('--health-bar-high');
-             else if (healthPercent > 0.3) barColor = getCssVar('--health-bar-medium');
-
-             ctx.fillStyle = barColor;
-             ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
-         }
-
-        function drawPlayerChatMessage(ctx, player, playerId) {
-             const messageData = playerMessages[playerId];
-             if (messageData) {
-                  const elapsed = (Date.now() - messageData.time) / 1000;
-                  if (elapsed < CHAT_MESSAGE_DURATION) {
-                       const alpha = 1.0 - (elapsed / CHAT_MESSAGE_DURATION); // Fade out
-                       ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`; // White, fading
-                       ctx.font = '12px ' + getCssVar('--font-family');
-                       ctx.textAlign = 'center';
-                       // Position above health bar
-                       const textY = player.position.y - 12; // Adjust Y pos as needed
-                       ctx.fillText(messageData.message, player.position.x + PLAYER_WIDTH / 2, textY);
-                       ctx.textAlign = 'left'; // Reset alignment
-                  } else {
-                       // Clean up old message
-                       delete playerMessages[playerId];
-                  }
-             }
-        }
 
         // --- Initialization ---
         window.onload = () => {
-             resetToConnection(); // Start at the connection screen
-             // Attempt initial connection? Or wait for user action? Wait for user.
-             updateStatus("Ready to create or join a game.");
+             showModeSelection(); // Start at the mode selection screen
+             connectWebSocket(); // Connect automatically on load
+             // updateStatus("Ready to play!"); // Status updated by connectWebSocket
         };
 
     </script>
