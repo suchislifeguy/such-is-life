@@ -1396,7 +1396,7 @@
             function drawHealthBar(x, y, width, currentHealth, maxHealth) {
                 if (maxHealth <= 0) return;
                 const barHeight = 5;
-                const yOffset = -( (width/2) + 10 ); // Position above the entity's top edge
+                const yOffset = -( (width/2) + 20); // Position above the entity's top edge
                 const barWidth = Math.max(20, width * 0.8);
                 const currentWidth = Math.max(0, (currentHealth / maxHealth) * barWidth);
                 const healthPercentage = currentHealth / maxHealth;
@@ -1423,7 +1423,7 @@
 
                 // --- Calculate position relative to HEALTH bar ---
                 // 1. Find the health bar's vertical offset (negative = upwards)
-                const healthBarYOffset = -( (width / 2) + 5 );
+                const healthBarYOffset = -( (width / 2) + 20);
                 // 2. Find the absolute Y coordinate of the health bar's TOP edge
                 const healthBarTopY = y + healthBarYOffset; // Note: No '- healthBarHeight' here, offset defines top
                 // 3. Find the absolute Y coordinate of the health bar's BOTTOM edge
