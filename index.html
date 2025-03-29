@@ -16,6 +16,10 @@
             --night-overlay: rgba(0, 0, 50, 0.4); --font-family: 'Courier New', monospace;
             --reconciliation-threshold: 15; /* Pixels difference before snapping */
             --lerp-factor: 0.1; /* Smoothing factor for reconciliation/interpolation */
+            --damage-text-color: #FFFFFF;        /* White for normal damage */
+            --damage-text-crit-color: #FFD700; /* Gold/Yellow for crits */
+            --damage-text-font-size: 14px;
+            --damage-text-crit-font-size: 18px;
         }
         /* --- General Body/Container --- */
         body {
@@ -858,6 +862,49 @@
             const ENEMY_TYPE_SHOOTER = 'shooter';
             const BULLET_TYPE_STANDARD = 'standard';
             const BULLET_TYPE_STANDARD_ENEMY = 'standard_enemy';
+
+
+            // <<< --- ADD THIS NEW FUNCTION --- >>>
+            function drawDamageTexts(damageTexts) {
+                if (!damageTexts) return; // Nothing to draw if data is missing
+
+                const normalColor = getCssVar('--damage-text-color') || '#FFFFFF';
+                const critColor = getCssVar('--damage-text-crit-color') || '#FFD700';
+                const normalFontSize = getCssVar('--damage-text-font-size') || '14px';
+                const critFontSize = getCssVar('--damage-text-crit-font-size') || '18px';
+                const fontFamily = getCssVar('--font-family') || 'monospace';
+
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom'; // Draw text upward from the x,y point
+
+                Object.values(damageTexts).forEach(dmgText => {
+                    if (!dmgText) return;
+
+                    const x = dmgText.x ?? 0;
+                    const y = dmgText.y ?? 0; // Server already updated Y for floating
+                    const text = dmgText.text ?? '?';
+                    const isCrit = dmgText.is_crit ?? false;
+
+                    // Set style based on whether it's a crit
+                    ctx.fillStyle = isCrit ? critColor : normalColor;
+                    ctx.font = `bold ${isCrit ? critFontSize : normalFontSize} ${fontFamily}`;
+
+                    // Optional: Add a subtle shadow for better readability
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+                    ctx.shadowBlur = 3;
+                    ctx.shadowOffsetX = 1;
+                    ctx.shadowOffsetY = 1;
+
+                    // Draw the text
+                    ctx.fillText(text, x, y);
+
+                    // Reset shadow for other drawings
+                    ctx.shadowColor = 'transparent';
+                    ctx.shadowBlur = 0;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+                });
+            }
 
             function drawGame() {
                  // Background color is now set via CSS based on day/night state changes
