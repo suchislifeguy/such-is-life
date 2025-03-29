@@ -1283,7 +1283,7 @@
                 const bodyHeight = h * bodyHeightRatio;
                 const headRadius = h * headRadiusRatio / 1;
                 const bodyY = y + (h / 2) - (bodyHeight / 2); // Center body vertically within lower part
-                const headY = y - (h / 2) + (headRadius + 10); // Head sits just above center line
+                const headY = y - (h / 2) + (headRadius - 10); // Head sits just above center line
 
                 // 1. Draw Body (Torso)
                 const bodyColor = isSelf ? (getCssVar('--player-color') || 'red') : (getCssVar('--other-player-color') || 'blue');
