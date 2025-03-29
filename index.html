@@ -2025,70 +2025,84 @@
                         break;
 
                     case 'game_state':
+                        // 1. Store previous state info before overwriting
                         const previousStatus = appState.serverState?.status;
                         const wasGameOver = appState.serverState?.game_over;
 
+                        // 2. Update state timing variables
                         appState.previousServerState = appState.lastServerState;
                         appState.lastServerState = appState.serverState;
-                        appState.serverState = data.state; 
 
-                        const speakerId = appState.serverState.enemy_speaker_id;
-                        const speechText = appState.serverState.enemy_speech_text;
+                        // 3. *** Update the core server state ***
+                        appState.serverState = data.state;
+                        const newState = appState.serverState; // Use a shorter reference for the new state
 
-                        if (appState.serverState.status !== previousStatus) {
-                            log(`Game state changed from ${previousStatus} to ${appState.serverState.status}`);
-                            if (appState.serverState.status === 'waiting' && appState.mode === 'multiplayer-host') {
-                                UI.updateStatus("Teammate left. Waiting...", true); // Changed text
+                        // 4. Handle Game Status Changes (Waiting, Countdown, Active)
+                        if (newState.status !== previousStatus) {
+                            log(`Game state changed from ${previousStatus} to ${newState.status}`);
+                            if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') {
+                                UI.updateStatus("Teammate left. Waiting...", true);
                                 UI.showSection('host-wait-section');
-                                // Update player count on wait screen when someone leaves
-                                const hostPlayerCount = Object.keys(appState.serverState.players || {}).length;
+                                const hostPlayerCount = Object.keys(newState.players || {}).length;
                                 DOM.waitingMessage.textContent = `Waiting for Team Mate... (${hostPlayerCount}/${MAX_PLAYERS})`;
-
-                            } else if (appState.serverState.status === 'countdown') {
+                            } else if (newState.status === 'countdown') {
                                 UI.updateStatus("Countdown starting...");
                                 UI.showSection('game-area');
-                                if (!appState.animationFrameId) Game.startGameLoop(); // Start loop if not running
-                            } else if (appState.serverState.status === 'active') {
+                                // Ensure loop starts if it wasn't running (e.g., after waiting)
+                                if (!appState.animationFrameId) Game.startGameLoop();
+                            } else if (newState.status === 'active') {
                                 UI.updateStatus("Game active!");
                                 UI.showSection('game-area');
-                                if (!appState.animationFrameId) Game.startGameLoop(); // Start loop if not running
+                                // Ensure loop starts if it wasn't running
+                                if (!appState.animationFrameId) Game.startGameLoop();
                             }
                         }
 
-                        // Update HUD etc. only if game is running (not finished/waiting)
-                        if (appState.serverState.status === 'countdown' || appState.serverState.status === 'active') {
-                             const player = appState.serverState.players?.[appState.localPlayerId];
-                             UI.updateHUD(player, appState.serverState);
-                             UI.updateCountdown(appState.serverState);
-                             UI.updateDayNight(appState.serverState);
+                        // 5. Update HUD and Timers if Game is Running
+                        if (newState.status === 'countdown' || newState.status === 'active') {
+                            const player = newState.players?.[appState.localPlayerId];
+                            UI.updateHUD(player, newState); // Pass the whole newState
+                            UI.updateCountdown(newState);
+                            UI.updateDayNight(newState);
                         }
-                         // Update waiting message player count even if status didn't change
-                         else if (appState.serverState.status === 'waiting' && appState.mode === 'multiplayer-host') {
-                             const playerCount = Object.keys(appState.serverState.players || {}).length;
-                             DOM.waitingMessage.textContent = `Waiting for Team Mate... (${playerCount}/${MAX_PLAYERS})`;
-                         }
+                        // Update waiting message count even if status didn't change
+                        else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') {
+                            const playerCount = Object.keys(newState.players || {}).length;
+                            DOM.waitingMessage.textContent = `Waiting for Team Mate... (${playerCount}/${MAX_PLAYERS})`;
+                        }
 
-
-                        if (appState.serverState.game_over && !wasGameOver) {
+                        // 6. Check for Game Over Transition
+                        if (newState.game_over && !wasGameOver) {
                             log("Game Over signal received from server.");
-                            // Loop should stop itself, then show screen
-                            // UI.showGameOver is called inside gameLoop's stop condition check
+                            // The game loop should detect appState.serverState.game_over and stop itself.
                         }
 
+                        // 7. *** Handle Enemy Speech Bubble Data ***
+                        // Declare variables to hold potential speech data from THIS state update
+                        const serverSpeakerId = newState.enemy_speaker_id;
+                        const serverSpeechText = newState.enemy_speech_text;
+
+                        // Log what was received in this specific state packet
+                        // console.log(`[handleServerMessage] State Received. Enemy Speaker: ${serverSpeakerId}, Speech: "${serverSpeechText}"`); // Optional: Less verbose log
+
+                        // *** Only update bubble data if NEW speech info arrived in THIS packet ***
                         if (serverSpeakerId && serverSpeechText) {
-                            console.log(`[handleServerMessage] Received NEW enemy speech. ID: ${serverSpeakerId}, Text: "${serverSpeechText}"`); // Keep this log for now
+                            log(`---> Processing NEW enemy speech. ID: ${serverSpeakerId}, Text: "${serverSpeechText}"`); // Log when adding/updating
                             const bubbleText = serverSpeechText.substring(0, 50); // Limit length
 
-                            // Add or update the bubble in the global object
+                            // Add or update the bubble in the global activeEnemyBubbles object
                             activeEnemyBubbles[serverSpeakerId] = {
                                 text: bubbleText,
-                                // Set the expiration time based on when WE RECEIVED the message
-                                endTime: performance.now() + 3000 // Bubble lasts 3 seconds FROM NOW
+                                // Set expiration based on when THIS message was received
+                                endTime: performance.now() + 3000 // Bubble lasts 3 seconds from now
                             };
-                            // console.log(`---> Updated activeEnemyBubbles:`, JSON.stringify(activeEnemyBubbles)); // Optional log
+                            // console.log(`---> Active Enemy Bubbles Updated:`, JSON.stringify(activeEnemyBubbles)); // Optional debug
                         }
+                        // Note: We DO NOT clear bubbles here if speakerId/speechText are null.
+                        // The drawEnemySpeechBubbles function handles removing bubbles when their endTime expires.
 
-                        break; // End of game_state case
+                        // 8. End the case
+                        break;
 
                     case 'chat_message':
                         const senderId = data.sender_id;
