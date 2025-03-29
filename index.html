@@ -377,6 +377,7 @@
         };
         let localPlayerMuzzleFlash = { active: false, endTime: 0, aimDx: 0, aimDy: 0 };
         let activeSpeechBubbles = {}; // { playerId: { text: "Hi!", endTime: 123456789 } }
+        let activeEnemyBubbles = {};  // { enemyId: { text: "Grrr!", endTime: 123456789 } }
         let socket = null; // Single WebSocket connection reference
 
         // --- Logging Wrapper ---
