@@ -472,6 +472,7 @@
         })();
         
         // --- Input Handling "Module" ---
+        // --- Input Handling "Module" ---
         const Input = (() => {
              let keys = {};
              let lastShotTime = 0;
@@ -631,7 +632,6 @@
              // Expose only functions needed externally
              return { setup, cleanup, getMovementInputVector };
         })(); // End Input module IIFE
-                 // --- *** END MODIFICATION *** ---
 
                  const now = Date.now();
                  if (now - lastShotTime >= SHOOT_COOLDOWN) {
