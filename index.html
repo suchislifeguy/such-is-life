@@ -1019,7 +1019,7 @@
                 const bubbleColor = getCssVar('--text-color') || '#FFF8DC';
                 const bubbleBgColor = 'rgba(0, 0, 0, 0.6)'; // Semi-transparent black background
                 const textPadding = 4;
-                const bubbleOffset = 15; // How far above the player's head
+                const bubbleOffset = 30; // How far above the player's head
 
                 ctx.font = bubbleFont;
                 ctx.textAlign = 'center';
@@ -1226,10 +1226,10 @@
                 // Use playerState for gun level, hit flash etc.
                 // Use aimDx, aimDy for indicator direction
 
-                const bodyHeightRatio = 0.65; // Body is 65% of total height
-                const headRadiusRatio = 0.35; // Head is 35%
+                const bodyHeightRatio = 0.5; // Body is 65% of total height
+                const headRadiusRatio = 0.5; // Head is 50%
                 const bodyHeight = h * bodyHeightRatio;
-                const headRadius = h * headRadiusRatio / 2;
+                const headRadius = h * headRadiusRatio / 1;
                 const bodyY = y + (h / 2) - (bodyHeight / 2); // Center body vertically within lower part
                 const headY = y - (h / 2) + headRadius;       // Head sits just above center line
 
