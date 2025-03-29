@@ -362,7 +362,22 @@
                 DOM.joinCodeSection.style.display = 'none';
                 DOM.gameArea.style.display = 'none'; // Hide game area
                 DOM.gameOverScreen.style.display = 'block'; // Show game over
-            }
+            } // <--- Closes showGameOver function
+
+            // *** ADD THIS RETURN STATEMENT ***
+            // Expose necessary UI functions
+            return {
+                showSection,
+                updateStatus,
+                updateHUD,
+                addChatMessage,
+                updateCountdown,
+                updateDayNight,
+                showGameOver
+            };
+            // *** ADD THIS CLOSING IIFE PART ***
+        })(); // <-- This closes the UI IIFE
+
 
         // --- Network "Module" ---
         const Network = (() => {
@@ -1282,6 +1297,7 @@
         function showSection(sectionId) { UI.showSection(sectionId); }
 
         window.onload = () => {
+            log("Window loaded.");
             log("Window loaded.");
             UI.updateStatus("Initializing...");
 
