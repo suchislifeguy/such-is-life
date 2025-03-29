@@ -946,24 +946,30 @@
 
 
             function startGameLoop() {
+                // --- Initial Checks ---
+                // Don't start if explicitly in menu mode
                 if (appState.mode === 'menu') {
                     log("StartGameLoop called but client is in menu mode.");
                     return;
                 }
+                // Don't start if loop is already running
                 if (appState.animationFrameId) {
                     log("StartGameLoop called but loop already running.");
                     return;
                 }
+                // Don't start multiplayer if initial state hasn't arrived
+                // (SP gets state immediately with sp_game_started)
                 if (!appState.serverState && appState.mode !== 'singleplayer') {
                      log("StartGameLoop: Waiting for initial server state in multiplayer... (Loop will start via state update)");
                      return;
                 }
 
-                log("Starting game loop...");
-                appState.lastLoopTime = null; // Reset last time for accurate delta
-                Input.setup(); // Activate input listeners
+                // --- Setup & Start ---
+                Input.setup(); // <<< SETUP INPUT LISTENERS FIRST
+                log("Starting game loop..."); // <<< THEN LOG
+                appState.lastLoopTime = null; // Reset last time for accurate delta calculation on the first frame
 
-                // Make the initial call to start the loop
+                // Make the initial call to request the first frame of the game loop
                 appState.animationFrameId = requestAnimationFrame(gameLoop);
             }
 
