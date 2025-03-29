@@ -1073,7 +1073,6 @@
                 return iState; // Return the interpolated state object
             }
 
-
             // --- Specific Drawing Functions ---
             function drawPlayers(players) {
                 if (!players) return;
@@ -1089,14 +1088,65 @@
                     const height = player.height ?? PLAYER_DEFAULTS.height;
                     const maxHealth = player.max_health ?? PLAYER_DEFAULTS.max_health;
 
-                    drawPlayerRect(drawX, drawY, width, height, isSelf); // Pass dimensions
+                    drawPlayerCharacter(drawX, drawY, width, height, isSelf, player, aimDx, aimDy);
                     drawHealthBar(drawX, drawY, width, player.health, maxHealth); // Use actual width
                 });
             }
 
-            function drawPlayerRect(x, y, w, h, isSelf) {
-                 ctx.fillStyle = isSelf ? (getCssVar('--player-color') || 'red') : (getCssVar('--other-player-color') || 'blue');
-                 ctx.fillRect(x - w / 2, y - h / 2, w, h);
+            function drawPlayerCharacter(x, y, w, h, isSelf, playerState, aimDx, aimDy) {
+                // Use playerState for gun level, hit flash etc.
+                // Use aimDx, aimDy for indicator direction
+
+                const bodyHeightRatio = 0.65; // Body is 65% of total height
+                const headRadiusRatio = 0.35; // Head is 35%
+                const bodyHeight = h * bodyHeightRatio;
+                const headRadius = h * headRadiusRatio / 2;
+                const bodyY = y + (h / 2) - (bodyHeight / 2); // Center body vertically within lower part
+                const headY = y - (h / 2) + headRadius;       // Head sits just above center line
+
+                // 1. Draw Body (Torso)
+                const bodyColor = isSelf ? (getCssVar('--player-color') || 'red') : (getCssVar('--other-player-color') || 'blue');
+                ctx.fillStyle = bodyColor;
+                ctx.fillRect(x - w / 2, bodyY - bodyHeight / 2, w, bodyHeight);
+
+                // 2. Draw Head (Circle)
+                ctx.beginPath();
+                ctx.arc(x, headY, headRadius, 0, Math.PI * 2);
+                ctx.fill(); // Use same color as body
+
+                // 3. Draw Aiming Indicator/Gun Barrel (Only for local player)
+                if (isSelf) {
+                    const gunLevel = playerState?.gun ?? 1;
+                    const gunLengthBase = 12; // Slightly shorter base
+                    const gunLengthBonus = (gunLevel - 1) * 3;
+                    const gunLength = gunLengthBase + gunLengthBonus;
+                    const gunThickness = 4; // Slightly thicker
+
+                    ctx.save();
+                    // Rotate around the center of the BODY part for a better pivot feel
+                    ctx.translate(x, bodyY);
+                    const angle = Math.atan2(aimDy, aimDx);
+                    ctx.rotate(angle);
+
+                    // Draw the gun line/rect extending from the body center
+                    ctx.fillStyle = '#444'; // Dark grey gun
+                    // Start drawing slightly in front of the body center along the rotated x-axis
+                    ctx.fillRect(w * 0.1, -gunThickness / 2, gunLength, gunThickness);
+
+                    ctx.restore();
+                }
+
+                // 4. Hit Flash (If you implemented it - using the version from previous steps)
+                if (playerState?.hit_flash_this_tick) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'; // White flash
+                    const flashMargin = 2;
+                    ctx.fillRect(
+                        x - w / 2 - flashMargin,
+                        y - h / 2 - flashMargin, // Flash covers whole original height
+                        w + flashMargin * 2,
+                        h + flashMargin * 2
+                    );
+                }
             }
 
             function drawEnemies(enemies) {
