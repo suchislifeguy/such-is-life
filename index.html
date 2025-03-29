@@ -374,6 +374,7 @@
 
         };
         let localPlayerMuzzleFlash = { active: false, endTime: 0, aimDx: 0, aimDy: 0 };
+        let activeSpeechBubbles = {}; // { playerId: { text: "Hi!", endTime: 123456789 } }
         let socket = null; // Single WebSocket connection reference
 
         // --- Logging Wrapper ---
@@ -951,6 +952,65 @@
                 ctx.fill();
             }
 
+            function drawSpeechBubbles(playersToRender) {
+                const now = performance.now();
+                const bubbleFont = 'bold 12px ' + (getCssVar('--font-family') || 'monospace');
+                // Use the standard text color directly
+                const bubbleColor = getCssVar('--text-color') || '#FFF8DC';
+                const bubbleBgColor = 'rgba(0, 0, 0, 0.6)'; // Semi-transparent black background
+                const textPadding = 4;
+                const bubbleOffset = 15; // How far above the player's head
+
+                ctx.font = bubbleFont;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom'; // Text draws upwards from y position
+
+                const playerIdsToRemove = []; // Keep track of expired bubbles
+
+                for (const playerId in activeSpeechBubbles) {
+                    const bubble = activeSpeechBubbles[playerId];
+
+                    if (now >= bubble.endTime) {
+                        playerIdsToRemove.push(playerId); // Mark for removal
+                        continue; // Skip drawing expired bubble
+                    }
+
+                    // Find the player's current rendered position from the passed state
+                    const player = playersToRender?.[playerId];
+
+                    // Only draw if player exists and is alive
+                    if (player && player.health > 0) {
+                        // Use player's draw position
+                        const playerDrawX = (playerId === appState.localPlayerId) ? appState.renderedPlayerPos.x : player.x;
+                        const playerDrawY = (playerId === appState.localPlayerId) ? appState.renderedPlayerPos.y : player.y;
+                        const playerHeight = player.height ?? PLAYER_DEFAULTS.height;
+
+                        const bubbleY = playerDrawY - (playerHeight / 2) - bubbleOffset; // Position above head
+
+                        // Measure text for background box
+                        const textMetrics = ctx.measureText(bubble.text);
+                        const textWidth = textMetrics.width;
+                        const boxWidth = textWidth + textPadding * 2;
+                        const approxFontHeight = 12; // Rough height based on font size
+                        const boxHeight = approxFontHeight + textPadding * 2;
+                        const boxX = playerDrawX - boxWidth / 2; // Center the box
+
+                        // Draw background box
+                        ctx.fillStyle = bubbleBgColor;
+                        ctx.fillRect(boxX, bubbleY - boxHeight, boxWidth, boxHeight);
+
+                        // Draw text using the standard color
+                        ctx.fillStyle = bubbleColor;
+                        ctx.fillText(bubble.text, playerDrawX, bubbleY - textPadding); // Y adjusted for padding
+                    }
+                }
+
+                // Clean up expired bubbles
+                playerIdsToRemove.forEach(id => {
+                    delete activeSpeechBubbles[id];
+                });
+            }
+
             function drawGame() {
                 // 1. Preparation
                 ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -1008,6 +1068,7 @@
                 drawBullets(stateToRender.bullets);
                 drawEnemies(stateToRender.enemies);
                 drawPlayers(stateToRender.players); // Assumes drawPlayers checks internally
+                drawSpeechBubbles(stateToRender.players); 
                 drawDamageTexts(stateToRender.damage_texts); // Draw damage text last (on top)
 
                 // 8. Future Placeholders
@@ -1731,7 +1792,21 @@
                         break;
 
                     case 'chat_message':
-                        UI.addChatMessage(data.sender_id, data.message, data.sender_id === appState.localPlayerId);
+                        const senderId = data.sender_id;
+                        const messageText = data.message;
+                        const isSelf = senderId === appState.localPlayerId;
+
+                        UI.addChatMessage(senderId, messageText, isSelf);
+
+                        if (senderId && messageText) { // Ensure we have valid data
+                            const bubbleText = messageText.substring(0, 50); // Limit length to 50 chars
+                            activeSpeechBubbles[senderId] = {
+                                text: bubbleText,
+                                endTime: performance.now() + 4000 // Bubble lasts 4 seconds
+                            };
+                            // log(`Speech bubble set for ${senderId}`); // Optional log
+                        }
+
                         break;
 
                     case 'error':
