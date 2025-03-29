@@ -20,6 +20,8 @@
             --damage-text-crit-color: #FFD700; /* Gold/Yellow for crits */
             --damage-text-font-size: 14px;
             --damage-text-crit-font-size: 18px;
+            --campfire-aura-color: rgba(255, 255, 0, 0.15); 
+
         }
         /* --- General Body/Container --- */
         body {
@@ -863,8 +865,6 @@
             const BULLET_TYPE_STANDARD = 'standard';
             const BULLET_TYPE_STANDARD_ENEMY = 'standard_enemy';
 
-
-            // <<< --- ADD THIS NEW FUNCTION --- >>>
             function drawDamageTexts(damageTexts) {
                 if (!damageTexts) return; // Nothing to draw if data is missing
 
@@ -906,6 +906,28 @@
                 });
             }
 
+            function drawCampfireAura(campfireData) {
+                // Only draw if campfire data exists and it's active (night time)
+                if (!campfireData || !campfireData.active) {
+                    return;
+                }
+
+                const x = campfireData.x ?? CANVAS_WIDTH / 2; // Default to center if missing
+                const y = campfireData.y ?? CANVAS_HEIGHT / 2;
+                const radius = campfireData.radius ?? 0; // Default to 0 if missing
+
+                if (radius <= 0) return; // Don't draw if radius is invalid
+
+                // Get the color from CSS variable or use fallback
+                const auraColor = getCssVar('--campfire-aura-color') || 'rgba(255, 255, 0, 0.15)';
+
+                // Draw the semi-transparent circle
+                ctx.fillStyle = auraColor;
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI * 2); // Full circle
+                ctx.fill();
+            }
+
             function drawGame() {
                  // Background color is now set via CSS based on day/night state changes
                  ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -936,6 +958,7 @@
                  }
 
                  // --- Draw Game Elements ---
+                 drawCampfireAura(stateToRender.campfire);
                  drawPowerups(stateToRender.powerups);
                  drawBullets(stateToRender.bullets); // <-- Uses updated drawing
                  drawEnemies(stateToRender.enemies); // <-- Uses updated drawing
