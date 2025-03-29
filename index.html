@@ -1283,7 +1283,7 @@
                 const bodyHeight = h * bodyHeightRatio;
                 const headRadius = h * headRadiusRatio / 1;
                 const bodyY = y + (h / 2) - (bodyHeight / 2); // Center body vertically within lower part
-                const headY = y - (h / 2) + headRadius;       // Head sits just above center line
+                const headY = y - (h / 2) + (headRadius * 1.5); // Head sits just above center line
 
                 // 1. Draw Body (Torso)
                 const bodyColor = isSelf ? (getCssVar('--player-color') || 'red') : (getCssVar('--other-player-color') || 'blue');
@@ -1478,7 +1478,7 @@
             function drawHealthBar(x, y, width, currentHealth, maxHealth) {
                 if (maxHealth <= 0) return;
                 const barHeight = 5;
-                const yOffset = -( (width/2) + 20); // Position above the entity's top edge
+                const yOffset = -( (width/2) + 18); // Position above the entity's top edge
                 const barWidth = Math.max(20, width * 0.8);
                 const currentWidth = Math.max(0, (currentHealth / maxHealth) * barWidth);
                 const healthPercentage = currentHealth / maxHealth;
@@ -1501,7 +1501,7 @@
 
                 const armorBarHeight = 4; // Armor bar height
                 const healthBarHeight = 5; // Height of the health bar above it
-                const barSpacing = 2;      // Desired gap in pixels
+                const barSpacing = 1;      // Desired gap in pixels
 
                 // --- Calculate position relative to HEALTH bar ---
                 // 1. Find the health bar's vertical offset (negative = upwards)
