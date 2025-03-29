@@ -1087,6 +1087,63 @@
                 ctx.restore(); // Restore context settings
             }
 
+            let activeEnemyBubbles = {}; 
+
+            function drawEnemySpeechBubbles(enemiesToRender) {
+                const now = performance.now();
+                const bubbleFont = 'italic 11px ' + (getCssVar('--font-family') || 'monospace'); // Slightly different?
+                const bubbleColor = '#FFAAAA'; // Pale Red / Pink?
+                const bubbleBgColor = 'rgba(50, 0, 0, 0.6)'; // Dark red transparent background?
+                const textPadding = 3;
+                const bubbleOffset = 12;
+
+                ctx.font = bubbleFont;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+
+                const enemyIdsToRemove = [];
+
+                for (const enemyId in activeEnemyBubbles) {
+                    const bubble = activeEnemyBubbles[enemyId];
+
+                    if (now >= bubble.endTime) {
+                        enemyIdsToRemove.push(enemyId);
+                        continue;
+                    }
+
+                    const enemy = enemiesToRender?.[enemyId]; // Find enemy in current render state
+
+                    if (enemy && enemy.health > 0) { // Check enemy exists and is alive
+                        const enemyDrawX = enemy.x; // Use interpolated/current enemy X
+                        const enemyDrawY = enemy.y; // Use interpolated/current enemy Y
+                        const enemyHeight = enemy.height ?? ENEMY_DEFAULTS.height;
+
+                        const bubbleY = enemyDrawY - (enemyHeight / 2) - bubbleOffset; // Position above head
+
+                        const textMetrics = ctx.measureText(bubble.text);
+                        const textWidth = textMetrics.width;
+                        const boxWidth = textWidth + textPadding * 2;
+                        const approxFontHeight = 11;
+                        const boxHeight = approxFontHeight + textPadding * 2;
+                        const boxX = enemyDrawX - boxWidth / 2;
+
+                        ctx.fillStyle = bubbleBgColor;
+                        ctx.fillRect(boxX, bubbleY - boxHeight, boxWidth, boxHeight);
+
+                        ctx.fillStyle = bubbleColor;
+                        ctx.fillText(bubble.text, enemyDrawX, bubbleY - textPadding);
+                    } else {
+                        // Enemy might have died while bubble was active, mark for removal
+                        enemyIdsToRemove.push(enemyId);
+                    }
+                }
+
+                // Clean up expired/invalid bubbles
+                enemyIdsToRemove.forEach(id => {
+                    delete activeEnemyBubbles[id];
+                });
+            }
+
             function drawSpeechBubbles(playersToRender) {
                 const now = performance.now();
                 const bubbleFont = 'bold 12px ' + (getCssVar('--font-family') || 'monospace');
@@ -1203,7 +1260,8 @@
                 drawBullets(stateToRender.bullets);
                 drawEnemies(stateToRender.enemies);
                 drawPlayers(stateToRender.players); // Assumes drawPlayers checks internally
-                drawSpeechBubbles(stateToRender.players); // Add if you implemented speech bubbles
+                drawSpeechBubbles(stateToRender.players); // 
+                drawEnemySpeechBubbles(stateToRender.enemies); 
                 drawDamageTexts(stateToRender.damage_texts); // Draw damage text last (on top)
 
                 // --- DRAW VIGNETTE OVERLAY LAST (Based on Health %) ---
@@ -1970,6 +2028,8 @@
                     case 'game_state':
                         const previousStatus = appState.serverState?.status;
                         const wasGameOver = appState.serverState?.game_over;
+                        const speakerId = appState.serverState.enemy_speaker_id;
+                        const speechText = appState.serverState.enemy_speech_text;
 
                         appState.previousServerState = appState.lastServerState;
                         appState.lastServerState = appState.serverState;
@@ -2014,6 +2074,17 @@
                             // Loop should stop itself, then show screen
                             // UI.showGameOver is called inside gameLoop's stop condition check
                         }
+
+                        if (speakerId && speechText) {
+                            // An enemy spoke this tick according to the server
+                            const bubbleText = speechText.substring(0, 50); // Limit length
+                            activeEnemyBubbles[speakerId] = {
+                                text: bubbleText,
+                                endTime: performance.now() + 3000 // Bubble lasts 3 seconds
+                            };
+                            // log(`Enemy speech bubble set for ${speakerId}`); // Optional log
+                        }
+
                         break;
 
                     case 'chat_message':
