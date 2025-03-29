@@ -1372,7 +1372,7 @@
             function drawHealthBar(x, y, width, currentHealth, maxHealth) {
                 if (maxHealth <= 0) return;
                 const barHeight = 5;
-                const yOffset = -( (width/2) + 5 ); // Position above the entity's top edge
+                const yOffset = -( (width/2) + 10 ); // Position above the entity's top edge
                 const barWidth = Math.max(20, width * 0.8);
                 const currentWidth = Math.max(0, (currentHealth / maxHealth) * barWidth);
                 const healthPercentage = currentHealth / maxHealth;
@@ -1390,27 +1390,36 @@
             }
 
             function drawArmorBar(x, y, width, currentArmor) {
-                const maxArmor = 100; // Define the maximum possible armor value
-                if (currentArmor <= 0) return; // Don't draw if no armor
+                const maxArmor = 100;
+                if (currentArmor <= 0) return;
 
-                const barHeight = 4; // Slightly thinner than health bar?
-                const healthBarHeight = 5; // Assuming health bar height is 5 for positioning
-                const barSpacing = 2; // Space between health and armor bar
+                const armorBarHeight = 4; // Armor bar height
+                const healthBarHeight = 5; // Height of the health bar above it
+                const barSpacing = 2;      // Desired gap in pixels
 
-                // Position below the health bar
-                const yOffset = -( (width / 2) + healthBarHeight + barSpacing); // Below player + health bar height + spacing
-                const barWidth = Math.max(20, width * 0.8); // Same width as health bar
+                // --- Calculate position relative to HEALTH bar ---
+                // 1. Find the health bar's vertical offset (negative = upwards)
+                const healthBarYOffset = -( (width / 2) + 5 );
+                // 2. Find the absolute Y coordinate of the health bar's TOP edge
+                const healthBarTopY = y + healthBarYOffset; // Note: No '- healthBarHeight' here, offset defines top
+                // 3. Find the absolute Y coordinate of the health bar's BOTTOM edge
+                const healthBarBottomY = healthBarTopY + healthBarHeight;
+                // 4. Calculate the armor bar's TOP edge Y coordinate
+                const armorBarTopY = healthBarBottomY + barSpacing;
+                // ----------------------------------------------
+
+                const barWidth = Math.max(20, width * 0.8);
                 const currentWidth = Math.max(0, (currentArmor / maxArmor) * barWidth);
                 const barX = x - barWidth / 2;
-                const barY = y + yOffset - barHeight; // Align top of armor bar
+                const barY = armorBarTopY; // Use the correctly calculated top Y for drawing
 
-                // Optional: Background for the armor bar
+                // Optional: Background
                 ctx.fillStyle = getCssVar('--health-bar-bg') || '#555';
-                ctx.fillRect(barX, barY, barWidth, barHeight);
+                ctx.fillRect(barX, barY, barWidth, armorBarHeight); // Use armorBarHeight
 
                 // Armor Bar Fill
-                ctx.fillStyle = getCssVar('--powerup-armor') || '#C0C0C0'; // Silver/grey color
-                ctx.fillRect(barX, barY, currentWidth, barHeight);
+                ctx.fillStyle = getCssVar('--powerup-armor') || '#C0C0C0';
+                ctx.fillRect(barX, barY, currentWidth, armorBarHeight); // Use armorBarHeight
             }
 
             // Expose only the main drawing function from the Renderer module
