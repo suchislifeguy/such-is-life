@@ -1087,8 +1087,6 @@
                 ctx.restore(); // Restore context settings
             }
 
-            let activeEnemyBubbles = {}; 
-
             function drawEnemySpeechBubbles(enemiesToRender) {
                 const now = performance.now();
                 const bubbleFont = 'italic 11px ' + (getCssVar('--font-family') || 'monospace'); // Slightly different?
@@ -2028,12 +2026,13 @@
                     case 'game_state':
                         const previousStatus = appState.serverState?.status;
                         const wasGameOver = appState.serverState?.game_over;
-                        const speakerId = appState.serverState.enemy_speaker_id;
-                        const speechText = appState.serverState.enemy_speech_text;
 
                         appState.previousServerState = appState.lastServerState;
                         appState.lastServerState = appState.serverState;
-                        appState.serverState = data.state;
+                        appState.serverState = data.state; 
+
+                        const speakerId = appState.serverState.enemy_speaker_id;
+                        const speechText = appState.serverState.enemy_speech_text;
 
                         if (appState.serverState.status !== previousStatus) {
                             log(`Game state changed from ${previousStatus} to ${appState.serverState.status}`);
