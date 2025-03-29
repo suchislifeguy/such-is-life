@@ -20,7 +20,9 @@
             --damage-text-crit-color: #FFD700; /* Gold/Yellow for crits */
             --damage-text-font-size: 14px;
             --damage-text-crit-font-size: 18px;
-            --campfire-aura-color: rgba(255, 255, 0, 0.15); 
+            --campfire-aura-color: rgba(255, 255, 0, 0.15);
+            --powerup-armor: #C0C0C0; /* silver - used for the bar color */
+            --health-bar-bg: #555;    /* Background for health/armor bars */ 
 
         }
         /* --- General Body/Container --- */
@@ -1073,11 +1075,10 @@
                 return iState; // Return the interpolated state object
             }
 
-            // --- Specific Drawing Functions ---
             function drawPlayers(players) {
                 if (!players) return;
-                Object.values(players).forEach(player => { // <<< Loop starts here
-                    if (!player || player.health <= 0) return; // Only draw living players
+                Object.values(players).forEach(player => {
+                    if (!player || player.health <= 0) return;
                     const isSelf = player.id === appState.localPlayerId;
 
                     const drawX = isSelf ? appState.renderedPlayerPos.x : player.x;
@@ -1085,22 +1086,19 @@
                     const width = player.width ?? PLAYER_DEFAULTS.width;
                     const height = player.height ?? PLAYER_DEFAULTS.height;
                     const maxHealth = player.max_health ?? PLAYER_DEFAULTS.max_health;
-                    const currentArmor = player.armor ?? 0;
+                    const currentArmor = player.armor ?? 0; // Get current armor value
 
-                    // --- DEFINE aimDx and aimDy HERE ---
-                    // Get aim direction using the GLOBAL muzzle flash state, ONLY if it's the local player
                     const aimDx = isSelf ? localPlayerMuzzleFlash.aimDx : 0;
                     const aimDy = isSelf ? localPlayerMuzzleFlash.aimDy : 0;
-                    // ------------------------------------
 
-                    // Now call the function using the variables defined above
+                    // Draw the character shape
                     drawPlayerCharacter(drawX, drawY, width, height, isSelf, player, aimDx, aimDy);
 
-                    // Draw Bars
+                    // --- DRAW BARS AFTER CHARACTER ---
                     drawHealthBar(drawX, drawY, width, player.health, maxHealth);
-                    drawArmorBar(drawX, drawY, width, currentArmor);
-
-                }); // <<< Loop ends here
+                    drawArmorBar(drawX, drawY, width, currentArmor); // <<< --- ADD THIS LINE --- >>>
+                    // ----------------------------------
+                });
             }
 
             function drawPlayerCharacter(x, y, w, h, isSelf, playerState, aimDx, aimDy) {
@@ -1291,6 +1289,30 @@
                 if (healthPercentage > 0.66) barColor = getCssVar('--health-bar-high') || '#4CAF50';
                 else if (healthPercentage > 0.33) barColor = getCssVar('--health-bar-medium') || '#FFC107';
                 ctx.fillStyle = barColor;
+                ctx.fillRect(barX, barY, currentWidth, barHeight);
+            }
+
+            function drawArmorBar(x, y, width, currentArmor) {
+                const maxArmor = 100; // Define the maximum possible armor value
+                if (currentArmor <= 0) return; // Don't draw if no armor
+
+                const barHeight = 4; // Slightly thinner than health bar?
+                const healthBarHeight = 5; // Assuming health bar height is 5 for positioning
+                const barSpacing = 2; // Space between health and armor bar
+
+                // Position below the health bar
+                const yOffset = -( (width / 2) + healthBarHeight + barSpacing); // Below player + health bar height + spacing
+                const barWidth = Math.max(20, width * 0.8); // Same width as health bar
+                const currentWidth = Math.max(0, (currentArmor / maxArmor) * barWidth);
+                const barX = x - barWidth / 2;
+                const barY = y + yOffset - barHeight; // Align top of armor bar
+
+                // Optional: Background for the armor bar
+                ctx.fillStyle = getCssVar('--health-bar-bg') || '#555';
+                ctx.fillRect(barX, barY, barWidth, barHeight);
+
+                // Armor Bar Fill
+                ctx.fillStyle = getCssVar('--powerup-armor') || '#C0C0C0'; // Silver/grey color
                 ctx.fillRect(barX, barY, currentWidth, barHeight);
             }
 
