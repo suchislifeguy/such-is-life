@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -627,23 +628,6 @@
                  Network.sendMessage({ type: 'player_shoot', direction: aimDirection });
                  // Optional: Play shoot sound locally
                  // Game.playSound('shoot');
-             }
-
-             // Expose only functions needed externally
-             return { setup, cleanup, getMovementInputVector };
-        })(); // End Input module IIFE
-
-                 const now = Date.now();
-                 if (now - lastShotTime >= SHOOT_COOLDOWN) {
-                     lastShotTime = now;
-                     // TODO: Implement aiming based on mouse position relative to player
-                     // Calculate aim direction vector here
-                     // Example: Placeholder shooting straight up
-                     const aimDirection = { dx: 0, dy: -1 };
-                     log("Sending shoot message. Dir:", aimDirection); // Debug log
-                     Network.sendMessage({ type: 'player_shoot', direction: aimDirection });
-                     // Game.playSound('shoot'); // Placeholder for sound
-                 }
              }
 
              // Expose necessary functions
