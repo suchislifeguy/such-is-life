@@ -43,21 +43,52 @@
             line-height: 1.2; flex-shrink: 0; text-shadow: 2px 2px 4px black;
             font-size: 1.8em; /* Adjust size if needed */
         }
-        #player-stats-container { flex-grow: 1; margin-right: 10px; /* Reduced margin */ }
-        #player-stats {
-            color: var(--text-color); font-size: 13px; background: rgba(0, 0, 0, 0.5);
-            padding: 5px 8px; border-radius: 5px; text-align: left;
-            border: 1px solid var(--accent-color); min-width: 170px; /* Adjusted min-width */
-            margin-top: 4px; /* Align slightly below title baseline */
-            margin-bottom: 0; /* Remove bottom margin */
+        #player-stats-container {
+            flex-grow: 1;
+            margin-right: 10px;
+            /* Add min-width if needed to prevent excessive shrinking */
+            /* min-width: 360px; */
         }
-        #player-stats span { display: inline-block; min-width: 45px; font-weight: bold; }
-        #game-info-container { display: flex; align-items: center; text-align: right; margin-top: 4px; }
-        #game-info {
-            color: var(--text-color); font-size: 15px; /* Slightly smaller */
-            background: rgba(0, 0, 0, 0.6);
-            padding: 6px 10px; border-radius: 5px; border: 1px solid var(--accent-color);
-            margin-right: 10px; margin-bottom: 0; /* Remove bottom margin */
+
+        #mp-stats-display { /* The flex container for the two boxes */
+            display: flex;
+            justify-content: flex-start; /* Align boxes to the start */
+            gap: 10px; /* Space between the two stat boxes */
+            flex-wrap: wrap; /* Allow wrapping on very small screens */
+        }
+
+        .player-stats-box { /* Style for each individual stats box */
+            color: var(--text-color);
+            font-size: 12px; /* Slightly smaller font */
+            background: rgba(0, 0, 0, 0.5);
+            padding: 4px 6px; /* Reduced padding */
+            border-radius: 5px;
+            text-align: left;
+            border: 1px solid var(--accent-color);
+            min-width: 160px; /* Adjust width as needed */
+            box-sizing: border-box;
+            margin-top: 4px;
+        }
+
+        .player-stats-box .stats-header {
+            font-weight: bold;
+            color: var(--accent-color);
+            text-align: center;
+            padding-bottom: 3px;
+            margin-bottom: 3px;
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.2);
+            font-size: 13px;
+        }
+
+        .player-stats-box .stats-content span { /* Labels inside stats */
+            display: inline-block;
+            min-width: 40px; /* Adjusted width */
+            font-weight: bold;
+        }
+
+        /* Hide the old single #player-stats if it wasn't removed */
+        #player-stats {
+            display: none;
         }
         #day-night-indicator {
             /* No longer absolute positioned */
@@ -179,12 +210,25 @@
         <div id="top-bar">
             <h1>SUCH IS LIFE</h1>
             <div id="player-stats-container">
-                <div id="player-stats">Loading...</div>
-            </div>
-            <div id="game-info-container">
-                <div id="game-info">Score: 0 | Level: 1</div>
-                <div id="day-night-indicator">Day</div>
-            </div>
+    <!-- Container for BOTH player stats displays -->
+    <div id="mp-stats-display" style="display: flex; justify-content: flex-start; gap: 15px;">
+        <!-- Stats for Local Player -->
+        <div id="local-player-stats" class="player-stats-box">
+            <div class="stats-header">YOU</div>
+            <div class="stats-content">Loading...</div>
+        </div>
+        <!-- Stats for Teammate -->
+        <div id="mate-player-stats" class="player-stats-box" style="display: none;"> <!-- Start hidden -->
+            <div class="stats-header">MATE</div>
+            <div class="stats-content">Waiting...</div>
+        </div>
+    </div>
+</div>
+<!-- Game Info Container remains the same -->
+<div id="game-info-container">
+    <div id="game-info">Score: 0 | Level: 1</div>
+    <div id="day-night-indicator">Day</div>
+</div>
         </div>
 
         <div id="game-status">Initializing...</div>
@@ -278,7 +322,10 @@
             gameIdInput: document.getElementById('gameIdInput'),
             canvas: document.getElementById('gameCanvas'),
             ctx: document.getElementById('gameCanvas').getContext('2d'),
-            playerStatsDiv: document.getElementById('player-stats'),
+            // playerStatsDiv: document.getElementById('player-stats'), // REMOVED OLD
+            localPlayerStatsBoxContent: document.querySelector('#local-player-stats .stats-content'), // NEW LOCAL CONTENT
+            matePlayerStatsBox: document.getElementById('mate-player-stats'),               // NEW MATE CONTAINER
+            matePlayerStatsBoxContent: document.querySelector('#mate-player-stats .stats-content'), // NEW MATE CONTENT
             gameInfoDiv: document.getElementById('game-info'),
             countdownDiv: document.getElementById('countdown'),
             dayNightIndicator: document.getElementById('day-night-indicator'),
@@ -326,7 +373,8 @@
             ];
 
             function showSection(sectionId) {
-                allSections.forEach(s => { if(s) s.style.display = 'none'; }); // Hide all valid sections
+                // Ensure allSections includes valid DOM elements before hiding
+                allSections.forEach(s => { if(s) s.style.display = 'none'; });
                 const sectionToShow = DOM[sectionId] || document.getElementById(sectionId);
                 if (sectionToShow) {
                     sectionToShow.style.display = 'block';
@@ -337,25 +385,87 @@
             }
 
             function updateStatus(message, isError = false) {
-                 DOM.gameStatus.textContent = message;
-                 DOM.gameStatus.style.color = isError ? (getCssVar('--player-color') || 'red') : (getCssVar('--accent-color') || 'yellow');
-                 if(isError) console.error("Status Update:", message);
-                 else console.log("Status Update:", message);
+                 if (DOM.gameStatus) { // Add check for existence
+                     DOM.gameStatus.textContent = message;
+                     DOM.gameStatus.style.color = isError ? (getCssVar('--player-color') || 'red') : (getCssVar('--accent-color') || 'yellow');
+                     if(isError) console.error("Status Update:", message);
+                     else console.log("Status Update:", message);
+                 } else {
+                     error("DOM.gameStatus not found for update:", message);
+                 }
             }
 
+            // UPDATED updateHUD function for Multiplayer Stats
             function updateHUD(player, serverState) {
-                 if (!player) { DOM.playerStatsDiv.textContent = "Waiting..."; return; }
-                 // Provide default 0s if stats are missing briefly
-                 DOM.playerStatsDiv.innerHTML = `
-                    <span>HP:</span> ${player.health ?? 0}/${player.max_health ?? 100}<br>
-                    <span>Armor:</span> ${player.armor ?? 0}<br>
-                    <span>Gun:</span> ${player.gun ?? 1}<br>
-                    <span>Speed:</span> ${player.speed ?? 150}<br>
-                    <span>Kills:</span> ${player.kills ?? 0} | <span>Score:</span> ${player.score ?? 0}`;
-                 DOM.gameInfoDiv.innerHTML = `Score: ${serverState?.score ?? 0} | Level: ${serverState?.level ?? 1}`;
-             }
+                // Find local player and teammate
+                const localPlayer = player; // 'player' passed in is assumed to be local
+                let matePlayer = null;
+                let mateId = null;
+
+                // Find the teammate ID (only works robustly if exactly 2 players expected)
+                if (serverState?.players && Object.keys(serverState.players).length > 1 && appState.localPlayerId) {
+                     mateId = Object.keys(serverState.players).find(id => id !== appState.localPlayerId);
+                     if (mateId) {
+                         matePlayer = serverState.players[mateId];
+                     }
+                }
+
+                // --- Update Local Player Stats ---
+                // Check if the specific DOM element exists before updating
+                if (DOM.localPlayerStatsBoxContent) {
+                     if (localPlayer) {
+                        // Indicate if local player is dead
+                        const healthDisplay = localPlayer.health <= 0 ? "<span style='color: var(--health-bar-low);'>DEAD</span>" : `${localPlayer.health ?? 0}/${localPlayer.max_health ?? 100}`;
+                        DOM.localPlayerStatsBoxContent.innerHTML = `
+                            <span>HP:</span> ${healthDisplay}<br>
+                            <span>Armor:</span> ${localPlayer.armor ?? 0}<br>
+                            <span>Gun:</span> ${localPlayer.gun ?? 1}<br>
+                            <span>Speed:</span> ${localPlayer.speed ?? 150}<br>
+                            <span>Kills:</span> ${localPlayer.kills ?? 0} | <span>Score:</span> ${localPlayer.score ?? 0}`;
+                    } else {
+                         DOM.localPlayerStatsBoxContent.textContent = "Waiting...";
+                    }
+                } else {
+                    log("DOM.localPlayerStatsBoxContent not found"); // Log error if element missing
+                }
+
+
+                // --- Update Mate Player Stats ---
+                // Check if the specific DOM elements exist before updating
+                if (DOM.matePlayerStatsBox && DOM.matePlayerStatsBoxContent) {
+                    if (matePlayer) {
+                        DOM.matePlayerStatsBox.style.display = 'block'; // Show the mate's box
+                        // Indicate if mate is dead
+                        const mateHealthDisplay = matePlayer.health <= 0 ? "<span style='color: var(--health-bar-low);'>DEAD</span>" : `${matePlayer.health ?? 0}/${matePlayer.max_health ?? 100}`;
+                        DOM.matePlayerStatsBoxContent.innerHTML = `
+                            <span>HP:</span> ${mateHealthDisplay}<br>
+                            <span>Armor:</span> ${matePlayer.armor ?? 0}<br>
+                            <span>Gun:</span> ${matePlayer.gun ?? 1}<br>
+                            <span>Speed:</span> ${matePlayer.speed ?? 150}<br>
+                            <span>Kills:</span> ${matePlayer.kills ?? 0} | <span>Score:</span> ${matePlayer.score ?? 0}`;
+                    } else {
+                        // Hide mate's box if not present or only 1 player
+                        DOM.matePlayerStatsBox.style.display = 'none';
+                        DOM.matePlayerStatsBoxContent.textContent = "Waiting...";
+                    }
+                } else {
+                     log("DOM.matePlayerStatsBox or DOM.matePlayerStatsBoxContent not found"); // Log error if elements missing
+                }
+
+
+                // --- Update General Game Info (Score/Level) ---
+                if (DOM.gameInfoDiv) {
+                     const totalScore = serverState?.score ?? 0; // Use game's total score from server
+                     DOM.gameInfoDiv.innerHTML = `Score: ${totalScore} | Level: ${serverState?.level ?? 1}`;
+                } else {
+                     log("DOM.gameInfoDiv not found"); // Log error if element missing
+                }
+
+             } // End of updateHUD
 
             function addChatMessage(sender, message, isSelf, isSystem = false) {
+                // Add check for DOM.chatLog existence
+                if (!DOM.chatLog) { error("DOM.chatLog not found for chat message."); return; }
                 const div = document.createElement('div');
                 if (isSystem) {
                     div.className = 'system-message'; div.textContent = message;
@@ -369,73 +479,85 @@
             }
 
             function updateCountdown(serverState) {
-                if (serverState?.status === 'countdown' && serverState?.countdown >= 0) {
-                    DOM.countdownDiv.textContent = Math.ceil(serverState.countdown);
-                    DOM.countdownDiv.style.display = 'block';
-                    DOM.dayNightIndicator.style.display = 'none';
+                // Add checks for DOM elements
+                 if (DOM.countdownDiv && DOM.dayNightIndicator) {
+                    if (serverState?.status === 'countdown' && serverState?.countdown >= 0) {
+                        DOM.countdownDiv.textContent = Math.ceil(serverState.countdown);
+                        DOM.countdownDiv.style.display = 'block';
+                        DOM.dayNightIndicator.style.display = 'none';
+                    } else {
+                        DOM.countdownDiv.style.display = 'none';
+                        DOM.dayNightIndicator.style.display = (serverState?.status === 'active') ? 'inline-block' : 'none'; // Use inline-block for day/night
+                    }
                 } else {
-                    DOM.countdownDiv.style.display = 'none';
-                    // Show day/night only if active, otherwise hide
-                    DOM.dayNightIndicator.style.display = (serverState?.status === 'active') ? 'block' : 'none';
+                    error("DOM.countdownDiv or DOM.dayNightIndicator not found.");
                 }
              }
 
             function updateDayNight(serverState) {
-                 if (serverState?.status === 'active') {
-                    const isNight = serverState.is_night;
-                    DOM.dayNightIndicator.textContent = isNight ? 'Night' : 'Day';
-                    DOM.canvas.style.backgroundColor = isNight ? (getCssVar('--bg-color') || '#3E2723') : '#A0522D';
-                    DOM.dayNightIndicator.style.display = 'block';
+                 // Add checks for DOM elements
+                 if (DOM.dayNightIndicator && DOM.canvas && DOM.gameContainer) {
+                     if (serverState?.status === 'active') {
+                        const isNight = serverState.is_night;
+                        DOM.dayNightIndicator.textContent = isNight ? 'Night' : 'Day';
+                        DOM.canvas.style.backgroundColor = isNight ? (getCssVar('--bg-color') || '#3E2723') : '#A0522D';
+                        DOM.dayNightIndicator.style.display = 'inline-block'; // Use inline-block
 
-                    // Toggle night-mode class for text styling
-                    if (isNight) {
-                        DOM.gameContainer.classList.add('night-mode');
-                    } else {
+                        if (isNight) {
+                            DOM.gameContainer.classList.add('night-mode');
+                        } else {
+                            DOM.gameContainer.classList.remove('night-mode');
+                        }
+                     } else {
+                        DOM.dayNightIndicator.style.display = 'none';
                         DOM.gameContainer.classList.remove('night-mode');
-                    }
+                     }
                  } else {
-                    DOM.dayNightIndicator.style.display = 'none';
-                    DOM.gameContainer.classList.remove('night-mode'); // Ensure class is removed if not active
+                      error("DOM.dayNightIndicator, DOM.canvas, or DOM.gameContainer not found for day/night update.");
                  }
              }
 
             function showGameOver(finalState) {
+                // Add checks for DOM elements
+                if (!DOM.finalStatsDiv || !DOM.gameOverScreen) {
+                     error("DOM.finalStatsDiv or DOM.gameOverScreen not found."); return;
+                }
+
                 const player = finalState?.players[appState.localPlayerId];
                 let statsHtml = "Could not load final stats.";
                 if (player) {
                      statsHtml = `<strong>Score:</strong> ${player.score ?? 0}<br>
                                   <strong>Kills:</strong> ${player.kills ?? 0}<br>
                                   <strong>Level:</strong> ${finalState?.level ?? 1}`;
-                     const teammateId = Object.keys(finalState?.players ?? {}).find(id => id !== appState.localPlayerId);
-                     if (teammateId && finalState?.players[teammateId]) {
-                          const teammate = finalState.players[teammateId];
+                     // Find teammate only if players object exists
+                     const players = finalState?.players ?? {};
+                     const teammateId = Object.keys(players).find(id => id !== appState.localPlayerId);
+                     if (teammateId && players[teammateId]) {
+                          const teammate = players[teammateId];
                           statsHtml += `<br><br><strong>Teammate Score:</strong> ${teammate.score ?? 0}<br>
                                         <strong>Teammate Kills:</strong> ${teammate.kills ?? 0}`;
                      }
                 }
                 DOM.finalStatsDiv.innerHTML = statsHtml;
 
-                log("UI: Attempting to show game over screen.");
-                DOM.mainMenuSection.style.display = 'none';
-                DOM.multiplayerMenuSection.style.display = 'none';
-                DOM.hostWaitSection.style.display = 'none';
-                DOM.joinCodeSection.style.display = 'none';
-                DOM.gameArea.style.display = 'none'; // Hide game area
-                DOM.gameOverScreen.style.display = 'block'; // Show game over
-            } // <--- Closes showGameOver function
+                log("UI: Attempting to show game over screen (if enabled).");
+                 // Hide other sections - ensure they exist first
+                 [DOM.mainMenuSection, DOM.multiplayerMenuSection, DOM.hostWaitSection,
+                  DOM.joinCodeSection, DOM.gameArea].forEach(s => { if (s) s.style.display = 'none'; });
 
-            // *** ADD THIS RETURN STATEMENT ***
+                DOM.gameOverScreen.style.display = 'block'; // Show game over
+            } // End showGameOver
+
             // Expose necessary UI functions
             return {
                 showSection,
                 updateStatus,
-                updateHUD,
+                updateHUD, // Now updated
                 addChatMessage,
                 updateCountdown,
                 updateDayNight,
                 showGameOver
             };
-            // *** ADD THIS CLOSING IIFE PART ***
         })(); // <-- This closes the UI IIFE
 
 
@@ -1021,17 +1143,29 @@
              // --- Game Loop Management ---
 
              // Define the main loop function at this scope level
-             function gameLoop(currentTime) {
-                 if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
-                     log(`Stopping game loop. Mode: ${appState.mode}, Connected: ${appState.isConnected}, Game Over: ${appState.serverState?.game_over}`);
-                     const finalStateForDisplay = appState.serverState; // Capture state before cleanup
-                     cleanupLoop(); // Stop input, clear animation frame
-                     if (finalStateForDisplay?.game_over) {
-                         log("Game loop stopping due to game over, showing screen.");
-                         UI.showGameOver(finalStateForDisplay); // Show screen using captured state
-                     }
-                     return;
+            function gameLoop(currentTime) {
+             // --- Game Over Check ---
+             if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
+                 log(`Stopping game loop. Mode: ${appState.mode}, Connected: ${appState.isConnected}, Game Over: ${appState.serverState?.game_over}`);
+                 const finalStateForDisplay = appState.serverState; // Capture state before cleanup
+
+                 // *** ADD STATUS UPDATE HERE ***
+                 if (finalStateForDisplay?.game_over) {
+                     UI.updateStatus("Game Over!"); // Or "Round Over!", "Defeated!", etc.
+                     log("Game loop stopping due to game over, showing screen.");
+                     // UI.showGameOver(finalStateForDisplay); // We decided to skip this for now
+                 } else if (appState.mode === 'menu') {
+                      UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected."); // Reset status if returning to menu normally
                  }
+                 // *** END STATUS UPDATE ***
+
+                 cleanupLoop(); // Stop input, clear animation frame
+                 // Don't call UI.showGameOver if we decided against it
+                 // if (finalStateForDisplay?.game_over) {
+                 //     UI.showGameOver(finalStateForDisplay);
+                 // }
+                 return;
+             }
                  // ... (rest of gameLoop logic: state check, delta time, prediction, rendering, requestAnimationFrame) ...
 
                  if (!appState.serverState && appState.mode !== 'singleplayer') {
