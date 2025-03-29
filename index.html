@@ -324,11 +324,18 @@
                  if (serverState?.status === 'active') {
                     const isNight = serverState.is_night;
                     DOM.dayNightIndicator.textContent = isNight ? 'Night' : 'Day';
-                    // Update canvas background color based on time of day
-                    DOM.canvas.style.backgroundColor = isNight ? (getCssVar('--bg-color') || '#3E2723') : '#A0522D'; // Default brown for day
+                    DOM.canvas.style.backgroundColor = isNight ? (getCssVar('--bg-color') || '#3E2723') : '#A0522D';
                     DOM.dayNightIndicator.style.display = 'block';
+
+                    // Toggle night-mode class for text styling
+                    if (isNight) {
+                        DOM.gameContainer.classList.add('night-mode');
+                    } else {
+                        DOM.gameContainer.classList.remove('night-mode');
+                    }
                  } else {
-                    DOM.dayNightIndicator.style.display = 'none'; // Hide if not active game
+                    DOM.dayNightIndicator.style.display = 'none';
+                    DOM.gameContainer.classList.remove('night-mode'); // Ensure class is removed if not active
                  }
              }
 
@@ -339,7 +346,6 @@
                      statsHtml = `<strong>Score:</strong> ${player.score ?? 0}<br>
                                   <strong>Kills:</strong> ${player.kills ?? 0}<br>
                                   <strong>Level:</strong> ${finalState?.level ?? 1}`;
-                     // Add teammate stats if available
                      const teammateId = Object.keys(finalState?.players ?? {}).find(id => id !== appState.localPlayerId);
                      if (teammateId && finalState?.players[teammateId]) {
                           const teammate = finalState.players[teammateId];
@@ -348,11 +354,15 @@
                      }
                 }
                 DOM.finalStatsDiv.innerHTML = statsHtml;
-                showSection('gameOverScreen'); // Make game over screen visible
-            }
 
-            return { showSection, updateStatus, updateHUD, addChatMessage, updateCountdown, updateDayNight, showGameOver };
-        })();
+                log("UI: Attempting to show game over screen.");
+                DOM.mainMenuSection.style.display = 'none';
+                DOM.multiplayerMenuSection.style.display = 'none';
+                DOM.hostWaitSection.style.display = 'none';
+                DOM.joinCodeSection.style.display = 'none';
+                DOM.gameArea.style.display = 'none'; // Hide game area
+                DOM.gameOverScreen.style.display = 'block'; // Show game over
+            }
 
         // --- Network "Module" ---
         const Network = (() => {
@@ -937,40 +947,34 @@
 
              // Define the main loop function at this scope level
              function gameLoop(currentTime) {
-                  // --- Loop Termination Check ---
-                  if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
-                      log(`Stopping game loop. Mode: ${appState.mode}, Connected: ${appState.isConnected}, Game Over: ${appState.serverState?.game_over}`);
-                      cleanupLoop(); // Ensure cleanup happens
-                      if (appState.serverState?.game_over) {
-                          UI.showGameOver(appState.serverState);
-                      }
-                      return; // Exit the loop function
-                  }
+                 if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
+                     log(`Stopping game loop. Mode: ${appState.mode}, Connected: ${appState.isConnected}, Game Over: ${appState.serverState?.game_over}`);
+                     const finalStateForDisplay = appState.serverState; // Capture state before cleanup
+                     cleanupLoop(); // Stop input, clear animation frame
+                     if (finalStateForDisplay?.game_over) {
+                         log("Game loop stopping due to game over, showing screen.");
+                         UI.showGameOver(finalStateForDisplay); // Show screen using captured state
+                     }
+                     return;
+                 }
+                 // ... (rest of gameLoop logic: state check, delta time, prediction, rendering, requestAnimationFrame) ...
 
-                  // --- State Check (Mostly for initial MP state) ---
-                  if (!appState.serverState && appState.mode !== 'singleplayer') {
-                      log("Loop: Waiting for server state update...");
-                      appState.animationFrameId = requestAnimationFrame(gameLoop);
-                      return;
-                  }
+                 if (!appState.serverState && appState.mode !== 'singleplayer') {
+                     log("Loop: Waiting for server state update...");
+                     appState.animationFrameId = requestAnimationFrame(gameLoop);
+                     return;
+                 }
 
-                  // --- Calculate Delta Time ---
-                  if (appState.lastLoopTime === null) { // Initialize on first valid frame
-                      appState.lastLoopTime = currentTime;
-                  }
-                  const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000);
-                  appState.lastLoopTime = currentTime;
+                 if (appState.lastLoopTime === null) { appState.lastLoopTime = currentTime; }
+                 const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000);
+                 appState.lastLoopTime = currentTime;
 
+                 if (appState.mode !== 'singleplayer' && appState.serverState?.status === 'active') {
+                      updatePredictedPosition(deltaTime);
+                      reconcileWithServer();
+                 }
 
-                  // --- Prediction & Reconciliation (Multiplayer Active) ---
-                  // Use optional chaining for safety when accessing nested properties
-                  if (appState.mode !== 'singleplayer' && appState.serverState?.status === 'active') {
-                       updatePredictedPosition(deltaTime);
-                       reconcileWithServer();
-                  }
-
-                  // --- Rendering ---
-                  Renderer.drawGame();
+                 Renderer.drawGame();
 
                   // --- Continue the Loop ---
                   // Ensure we don't double-request if already stopping
