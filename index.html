@@ -1330,6 +1330,10 @@
                 }
             }
 
+            // Paste these two functions into your Renderer module,
+            // replacing the existing ones with the same names.
+
+            // 1. Updated drawEnemies function (passes the full enemy object)
             function drawEnemies(enemies) {
                 if (!enemies) return;
                 Object.values(enemies).forEach(enemy => {
@@ -1337,49 +1341,70 @@
                     const width = enemy.width ?? ENEMY_DEFAULTS.width;
                     const height = enemy.height ?? ENEMY_DEFAULTS.height;
                     const maxHealth = enemy.max_health ?? ENEMY_DEFAULTS.max_health;
-                    // --- DRAW ENEMY RECT WITH COLOR BASED ON TYPE ---
-                    drawEnemyRect(enemy.x, enemy.y, width, height, enemy.type); // Pass type
+
+                    // Call the modified drawEnemyRect, passing the whole enemy object
+                    // This replaces the old call: drawEnemyRect(enemy.x, enemy.y, width, height, enemy.type);
+                    drawEnemyRect(enemy.x, enemy.y, width, height, enemy.type, enemy); // Pass 'enemy' as enemyState
+
+                    // Keep health bar drawing
                     drawHealthBar(enemy.x, enemy.y, width, enemy.health, maxHealth);
                 });
             }
 
-            // Inside Renderer module...
-            function drawEnemyRect(x, y, w, h, type, enemyState) {
-                let enemyColor;
-                let hasBarrel = false; // Flag to check if we should draw a barrel
+            // 2. Updated drawEnemyRect function (now draws body/head shape)
+            function drawEnemyRect(x, y, w, h, type, enemyState) { // Now accepts enemyState
+                // Define shape ratios (can adjust these if needed)
+                const bodyHeightRatio = 0.6; // Body 60%
+                const headRadiusRatio = 0.4; // Head 40%
+                const bodyHeight = h * bodyHeightRatio;
+                const headRadius = h * headRadiusRatio / 2; // Head radius based on its portion
+                const bodyY = y + (h / 2) - (bodyHeight / 2); // Body's vertical center
+                const headY = y - (h / 2) + headRadius;       // Head sits on top edge of body box
 
+                // Determine Enemy Color & if it has a barrel
+                let bodyColor;
+                let hasBarrel = false;
                 if (type === ENEMY_TYPE_SHOOTER) {
-                    enemyColor = '#FFA500'; // Orange for shooters
-                    hasBarrel = true; // Shooters get a barrel
+                    bodyColor = '#FFA500'; // Orange for shooters
+                    hasBarrel = true;
                 } else { // Default chaser or unknown type
-                    enemyColor = getCssVar('--enemy-color') || 'green'; // Default green
+                    bodyColor = getCssVar('--enemy-color') || 'green'; // Default green
                 }
 
-                // Draw the main body
-                ctx.fillStyle = enemyColor;
-                ctx.fillRect(x - w / 2, y - h / 2, w, h);
+                // Draw Body (Torso Rectangle)
+                ctx.fillStyle = bodyColor;
+                ctx.fillRect(x - w / 2, bodyY - bodyHeight / 2, w, bodyHeight);
 
-                // --- ADD BARREL FOR SHOOTERS ---
+                // Draw Head (Circle)
+                ctx.beginPath();
+                ctx.arc(x, headY, headRadius, 0, Math.PI * 2);
+                ctx.fill(); // Use same color as body
+
+                // Draw Barrel (Only for Shooters)
                 if (hasBarrel) {
                     const barrelLength = 8;
                     const barrelWidth = 4;
-                    // For simplicity, always point barrel right for now? Or base on target?
-                    // Let's just point it right for a simple visual difference.
+                    // Simple right-facing barrel
                     ctx.fillStyle = '#555'; // Dark grey barrel color
                     ctx.fillRect(
                         x + w / 2,              // Start at the right edge of the body
-                        y - barrelWidth / 2,    // Center vertically
-                        barrelLength,           // Length of the barrel
-                        barrelWidth             // Width of the barrel
+                        bodyY - barrelWidth / 2, // Center barrel vertically on the BODY's center Y
+                        barrelLength,
+                        barrelWidth
                     );
                 }
-                // -------------------------------
 
-                // Hit Flash (If you implemented it)
+                // Hit Flash (Uses enemyState passed into the function)
                 if (enemyState?.hit_flash_this_tick) {
                     ctx.fillStyle = 'rgba(255, 100, 100, 0.7)'; // Reddish flash
                     const flashMargin = 2;
-                    ctx.fillRect(x - w / 2 - flashMargin, y - h / 2 - flashMargin, w + flashMargin * 2, h + flashMargin * 2);
+                    // Flash covers the approximate bounding box
+                    ctx.fillRect(
+                        x - w / 2 - flashMargin,
+                        y - h / 2 - flashMargin, // Use total height for flash
+                        w + flashMargin * 2,
+                        h + flashMargin * 2
+                    );
                 }
             }
 
