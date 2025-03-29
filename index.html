@@ -975,26 +975,75 @@
                     });
                 } 
 
-            function drawCampfireAura(campfireData) {
+            function drawCampfire(campfireData) {
                 // Only draw if campfire data exists and it's active (night time)
                 if (!campfireData || !campfireData.active) {
                     return;
                 }
 
-                const x = campfireData.x ?? CANVAS_WIDTH / 2; // Default to center if missing
+                const x = campfireData.x ?? CANVAS_WIDTH / 2;
                 const y = campfireData.y ?? CANVAS_HEIGHT / 2;
-                const radius = campfireData.radius ?? 0; // Default to 0 if missing
+                const radius = campfireData.radius ?? 0; // Aura radius
 
                 if (radius <= 0) return; // Don't draw if radius is invalid
 
-                // Get the color from CSS variable or use fallback
+                // --- Settings for Campfire Elements ---
                 const auraColor = getCssVar('--campfire-aura-color') || 'rgba(255, 255, 0, 0.15)';
+                const stickColor = '#8B4513'; // SaddleBrown
+                const stickWidth = 20;
+                const stickHeight = 4;
+                const flameColorOuter = 'rgba(255, 165, 0, 0.6)'; // Semi-transparent Orange
+                const flameColorInner = 'rgba(255, 255, 0, 0.7)'; // Semi-transparent Yellow
+                const flameWidth = 15;
+                const flameHeight = 25;
+                // --------------------------------------
 
-                // Draw the semi-transparent circle
+                // Use save/restore for rotations and state changes
+                ctx.save();
+
+                // 1. Draw the Aura (Behind everything else)
                 ctx.fillStyle = auraColor;
                 ctx.beginPath();
-                ctx.arc(x, y, radius, 0, Math.PI * 2); // Full circle
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
                 ctx.fill();
+
+                // 2. Draw the Sticks (Centered around x, y but slightly lower)
+                const stickOffsetY = 5; // Move sticks slightly down from exact center
+                ctx.fillStyle = stickColor;
+                ctx.translate(x, y + stickOffsetY); // Move origin to stick center
+
+                // Stick 1 (angled)
+                ctx.rotate(Math.PI / 5); // Rotate ~36 degrees
+                ctx.fillRect(-stickWidth / 2, -stickHeight / 2, stickWidth, stickHeight);
+                ctx.rotate(-Math.PI / 5); // Rotate back
+
+                // Stick 2 (angled other way)
+                ctx.rotate(-Math.PI / 6); // Rotate ~-30 degrees
+                ctx.fillRect(-stickWidth / 2, -stickHeight / 2, stickWidth, stickHeight);
+                ctx.rotate(Math.PI / 6); // Rotate back
+
+                ctx.translate(-x, -(y + stickOffsetY)); // Reset translation
+
+                // 3. Draw the Flame (Above the sticks)
+                const flameOffsetY = -10; // Position flame slightly above center
+                const flameCenterX = x;
+                const flameCenterY = y + flameOffsetY;
+
+                // Draw Outer Flame (Orange Oval)
+                ctx.fillStyle = flameColorOuter;
+                ctx.beginPath();
+                // ellipse(xCenter, yCenter, radiusX, radiusY, rotation, startAngle, endAngle)
+                ctx.ellipse(flameCenterX, flameCenterY, flameWidth / 2, flameHeight / 2, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw Inner Flame (Yellow Oval - slightly smaller and higher)
+                ctx.fillStyle = flameColorInner;
+                ctx.beginPath();
+                ctx.ellipse(flameCenterX, flameCenterY - 3, flameWidth / 3, flameHeight / 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Restore context to prevent affecting other drawings
+                ctx.restore();
             }
 
             function drawMuzzleFlash(playerX, playerY, aimDx, aimDy) {
@@ -1136,7 +1185,7 @@
                 // --- START DRAWING ---
 
                 // 5. Draw Background Elements
-                drawCampfireAura(stateToRender.campfire); // Draw aura first
+                drawCampfire(stateToRender.campfire); // Call the new function name
 
                 // 6. Draw Transient Effects (On top of background, under entities)
                 if (shouldDrawMuzzleFlash) {
