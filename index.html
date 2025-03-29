@@ -1076,21 +1076,31 @@
             // --- Specific Drawing Functions ---
             function drawPlayers(players) {
                 if (!players) return;
-                Object.values(players).forEach(player => {
-                    // Only draw players with positive health
-                    if (!player || player.health <= 0) return;
+                Object.values(players).forEach(player => { // <<< Loop starts here
+                    if (!player || player.health <= 0) return; // Only draw living players
                     const isSelf = player.id === appState.localPlayerId;
-                    // Use dedicated render position for local player, interpolated/latest for others
+
                     const drawX = isSelf ? appState.renderedPlayerPos.x : player.x;
                     const drawY = isSelf ? appState.renderedPlayerPos.y : player.y;
-                    // Use defaults if dimensions/max_health aren't available yet
                     const width = player.width ?? PLAYER_DEFAULTS.width;
                     const height = player.height ?? PLAYER_DEFAULTS.height;
                     const maxHealth = player.max_health ?? PLAYER_DEFAULTS.max_health;
+                    const currentArmor = player.armor ?? 0;
 
+                    // --- DEFINE aimDx and aimDy HERE ---
+                    // Get aim direction using the GLOBAL muzzle flash state, ONLY if it's the local player
+                    const aimDx = isSelf ? localPlayerMuzzleFlash.aimDx : 0;
+                    const aimDy = isSelf ? localPlayerMuzzleFlash.aimDy : 0;
+                    // ------------------------------------
+
+                    // Now call the function using the variables defined above
                     drawPlayerCharacter(drawX, drawY, width, height, isSelf, player, aimDx, aimDy);
-                    drawHealthBar(drawX, drawY, width, player.health, maxHealth); // Use actual width
-                });
+
+                    // Draw Bars
+                    drawHealthBar(drawX, drawY, width, player.health, maxHealth);
+                    drawArmorBar(drawX, drawY, width, currentArmor);
+
+                }); // <<< Loop ends here
             }
 
             function drawPlayerCharacter(x, y, w, h, isSelf, playerState, aimDx, aimDy) {
