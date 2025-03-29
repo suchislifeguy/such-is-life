@@ -2077,7 +2077,7 @@
                         if (speakerId && speechText) {
                             // An enemy spoke this tick according to the server
                             const bubbleText = speechText.substring(0, 50); // Limit length
-                            activeEnemyBubbles[speakerId] = {
+                            activeEnemyBubbles[speakerId] = { // Update the GLOBAL activeEnemyBubbles
                                 text: bubbleText,
                                 endTime: performance.now() + 3000 // Bubble lasts 3 seconds
                             };
