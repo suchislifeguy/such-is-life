@@ -1012,6 +1012,32 @@
                 ctx.fill();
             }
 
+            function drawDamageVignette(intensity) { // Intensity 0 to 1
+                if (intensity <= 0) return; // Don't draw if intensity is zero or less
+                ctx.save(); // Save current context settings
+
+                // Calculate outer radius to cover canvas corners
+                const outerRadius = Math.sqrt(CANVAS_WIDTH * CANVAS_WIDTH + CANVAS_HEIGHT * CANVAS_HEIGHT) / 2;
+
+                // Create gradient from center outwards
+                const gradient = ctx.createRadialGradient(
+                    CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 0, // Inner circle (center, radius 0)
+                    CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, outerRadius // Outer circle (center, covers canvas)
+                );
+
+                // Colors: Transparent center, fading to semi-transparent red at edges
+                const redAlpha = 0.4 * intensity; // Base alpha (max 0.4), scaled by intensity
+                gradient.addColorStop(0, 'rgba(255, 0, 0, 0)');    // Center transparent
+                gradient.addColorStop(0.75, 'rgba(255, 0, 0, 0)'); // Stay transparent until outer part
+                gradient.addColorStop(1, `rgba(255, 0, 0, ${redAlpha.toFixed(2)})`); // Fade to red edge
+
+                // Draw the gradient over the whole canvas
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+                ctx.restore(); // Restore context settings
+            }
+
             function drawSpeechBubbles(playersToRender) {
                 const now = performance.now();
                 const bubbleFont = 'bold 12px ' + (getCssVar('--font-family') || 'monospace');
@@ -1128,14 +1154,40 @@
                 drawBullets(stateToRender.bullets);
                 drawEnemies(stateToRender.enemies);
                 drawPlayers(stateToRender.players); // Assumes drawPlayers checks internally
-                drawSpeechBubbles(stateToRender.players); 
+                drawSpeechBubbles(stateToRender.players); // Add if you implemented speech bubbles
                 drawDamageTexts(stateToRender.damage_texts); // Draw damage text last (on top)
+
+                // --- DRAW VIGNETTE OVERLAY LAST (Based on Health %) ---
+                let vignetteIntensity = 0;
+                // Get local player's data from the state we are rendering
+                const localPlayer = stateToRender?.players?.[appState.localPlayerId];
+
+                if (localPlayer && localPlayer.max_health > 0) { // Check player exists
+                    const healthPercentage = localPlayer.health / localPlayer.max_health;
+
+                    // Set intensity based on health thresholds (matching health bar colors)
+                    if (healthPercentage <= 0.33) { // RED health
+                        // Intensity scales from 0.6 (at 33%) to 1.0 (at 0%)
+                        vignetteIntensity = 0.6 + (0.4 * (1 - (healthPercentage / 0.33)));
+                        vignetteIntensity = Math.min(1.0, Math.max(0, vignetteIntensity)); // Clamp 0-1
+                    } else if (healthPercentage <= 0.66) { // YELLOW health
+                        // Intensity scales from 0 (at 66%) to 0.4 (at 33%)
+                        vignetteIntensity = 0.4 * (1 - ((healthPercentage - 0.33) / (0.66 - 0.33)));
+                        vignetteIntensity = Math.max(0, vignetteIntensity); // Clamp >= 0
+                    }
+                    // No intensity if health is GREEN (> 66%)
+                }
+
+                // Call the drawing function with the calculated intensity
+                drawDamageVignette(vignetteIntensity);
+                // ----------------------------------------------------
+
 
                 // 8. Future Placeholders
                 // drawMapObstacles(stateToRender.map);
 
                 // --- END DRAWING ---
-            }
+            } // End drawGame function
 
             function getInterpolatedState(now) {
                 const { serverState, lastServerState, previousServerState } = appState;
