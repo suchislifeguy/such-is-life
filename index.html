@@ -14,8 +14,8 @@
             --health-bar-medium: #FFC107; --health-bar-low: #F44336; --powerup-health: #00FF00;
             --powerup-gun: #FF00FF; --powerup-speed: #00FFFF; --powerup-armor: #C0C0C0;
             --night-overlay: rgba(0, 0, 50, 0.4); --font-family: 'Courier New', monospace;
-            --reconciliation-threshold: 10; /* Pixels difference before snapping */
-            --lerp-factor: 0.15; /* Smoothing factor for reconciliation/interpolation */
+            --reconciliation-threshold: 15; /* Pixels difference before snapping */
+            --lerp-factor: 0.1; /* Smoothing factor for reconciliation/interpolation */
         }
         /* --- General Body/Container --- */
         body {
@@ -1126,50 +1126,46 @@
                 appState.predictedPlayerPos.y = Math.max(h_half, Math.min(CANVAS_HEIGHT - h_half, appState.predictedPlayerPos.y));
              }
 
-            function reconcileWithServer() {
-                // --- Safety Checks (Keep as is) ---
-                if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return; // Safety check
+             function reconcileWithServer() {
+                // 1. Safety Checks: Ensure necessary data exists
+                if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return;
+
                 const serverPos = appState.serverState.players[appState.localPlayerId];
                 if (typeof serverPos.x !== 'number' || typeof serverPos.y !== 'number') {
                     log("Reconciliation skipped: Invalid server position data.");
                     return;
                 }
 
-                // --- Get Positions & Calculate Difference (Keep as is) ---
+                // 2. Get References & Calculate Difference
                 const predictedPos = appState.predictedPlayerPos;
                 const renderedPos = appState.renderedPlayerPos;
                 const dist = distance(predictedPos.x, predictedPos.y, serverPos.x, serverPos.y);
 
-                // --- Get Tuning Parameters (Keep as is) ---
+                // 3. Get Tuning Parameters (from CSS Vars or defaults)
                 const threshold = parseFloat(getCssVar('--reconciliation-threshold')) || 5;
-                const lerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.2; // Crucial tuning parameter!
+                const lerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.2;
 
-                // --- Reconciliation Logic ---
-                // Option A: Keep the stricter snap condition (threshold * 2)
-                // if (dist > threshold * 2) {
-
-                // Option B: Use the threshold directly for snapping (might snap more often but less distance)
-                if (dist > threshold) {
-                    // SNAP: Prediction is too far from the authoritative server state.
-                    // log(`Reconciliation SNAP! Dist: ${dist.toFixed(1)} > Threshold: ${threshold}`); // Debug log
-
-                    // Set the prediction baseline directly to the server's state
+                // 4. Snapping Logic: If prediction is WAY off server position...
+                if (dist > threshold * 2) { // Note the '* 2' makes this a large distance snap
+                    // log(`Reconciliation SNAP! Dist: ${dist.toFixed(1)}`); // Uncomment for debugging snaps
+                    // Force both predicted and rendered position to match the server immediately
                     predictedPos.x = serverPos.x;
                     predictedPos.y = serverPos.y;
-
-                    // Also move the rendered position immediately to avoid a slow catch-up after a snap
                     renderedPos.x = serverPos.x;
                     renderedPos.y = serverPos.y;
-
                 } else {
-                    // SMOOTH: Prediction is within acceptable bounds.
-                    // Smoothly interpolate the *rendered* position towards the *predicted* position.
-                    // This makes movement feel responsive locally, assuming prediction is mostly accurate.
+                    // 5. Smoothing Logic: If prediction is reasonably close...
+                    // Smoothly move the VISIBLE (rendered) position towards the PREDICTED position
                     renderedPos.x = lerp(renderedPos.x, predictedPos.x, lerpFactor);
                     renderedPos.y = lerp(renderedPos.y, predictedPos.y, lerpFactor);
 
-                    // NOTE: We have removed the "gentle nudge" logic from the original.
-                    // Rely solely on the snap and the main lerp for correction.
+                    // 6. Gentle Nudge (Subtle Correction): If prediction is slightly off (but not snapping)...
+                    if (dist > 2.0) { // Hardcoded small distance check
+                         // Gently pull the PREDICTED position towards the SERVER position
+                         // This uses a very small factor (lerpFactor * 0.1)
+                         predictedPos.x = lerp(predictedPos.x, serverPos.x, lerpFactor * 0.1);
+                         predictedPos.y = lerp(predictedPos.y, serverPos.y, lerpFactor * 0.1);
+                    }
                 }
              }
 
