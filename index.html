@@ -910,46 +910,70 @@
             const BULLET_TYPE_STANDARD = 'standard';
             const BULLET_TYPE_STANDARD_ENEMY = 'standard_enemy';
 
+         // Inside Renderer module IIFE...
+
             function drawDamageTexts(damageTexts) {
-                if (!damageTexts) return; // Nothing to draw if data is missing
+                    if (!damageTexts) return;
 
-                const normalColor = getCssVar('--damage-text-color') || '#FFFFFF';
-                const critColor = getCssVar('--damage-text-crit-color') || '#FFD700';
-                const normalFontSize = getCssVar('--damage-text-font-size') || '14px';
-                const critFontSize = getCssVar('--damage-text-crit-font-size') || '18px';
-                const fontFamily = getCssVar('--font-family') || 'monospace';
+                    const now = performance.now(); // Get current time for animation calc
+                    const normalColor = getCssVar('--damage-text-color') || '#FFFFFF';
+                    const critColor = getCssVar('--damage-text-crit-color') || '#FFD700';
+                    const normalFontSizeBase = 14; // Base size from CSS or default
+                    const critFontSizeBase = 18;   // Base crit size from CSS or default
+                    const fontFamily = getCssVar('--font-family') || 'monospace';
+                    const pulseDuration = 250; // How long the pulse effect lasts (in ms)
+                    const pulseMaxSizeIncrease = 4; // How many extra pixels font size increases at peak
 
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'bottom'; // Draw text upward from the x,y point
+                    // Attempt to parse font sizes from CSS vars, use defaults if failed
+                    const normalFontSize = parseInt(getCssVar('--damage-text-font-size'), 10) || normalFontSizeBase;
+                    const critFontSize = parseInt(getCssVar('--damage-text-crit-font-size'), 10) || critFontSizeBase;
 
-                Object.values(damageTexts).forEach(dmgText => {
-                    if (!dmgText) return;
 
-                    const x = dmgText.x ?? 0;
-                    const y = dmgText.y ?? 0; // Server already updated Y for floating
-                    const text = dmgText.text ?? '?';
-                    const isCrit = dmgText.is_crit ?? false;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
 
-                    // Set style based on whether it's a crit
-                    ctx.fillStyle = isCrit ? critColor : normalColor;
-                    ctx.font = `bold ${isCrit ? critFontSize : normalFontSize} ${fontFamily}`;
+                    Object.values(damageTexts).forEach(dmgText => {
+                        if (!dmgText) return;
 
-                    // Optional: Add a subtle shadow for better readability
-                    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-                    ctx.shadowBlur = 3;
-                    ctx.shadowOffsetX = 1;
-                    ctx.shadowOffsetY = 1;
+                        const x = dmgText.x ?? 0;
+                        const y = dmgText.y ?? 0;
+                        const text = dmgText.text ?? '?';
+                        const isCrit = dmgText.is_crit ?? false;
+                        const spawnTime = dmgText.spawn_time ? dmgText.spawn_time * 1000 : now; // Convert backend seconds to ms
+                        const timeSinceSpawn = now - spawnTime;
 
-                    // Draw the text
-                    ctx.fillText(text, x, y);
+                        let currentFontSize = isCrit ? critFontSize : normalFontSize;
+                        let currentFillColor = isCrit ? critColor : normalColor;
 
-                    // Reset shadow for other drawings
-                    ctx.shadowColor = 'transparent';
-                    ctx.shadowBlur = 0;
-                    ctx.shadowOffsetX = 0;
-                    ctx.shadowOffsetY = 0;
-                });
-            }
+                        // --- Add Pulse Effect for Crits ---
+                        if (isCrit && timeSinceSpawn < pulseDuration) {
+                            // Calculate pulse progress (0 to 1, then back to 0) using sine wave
+                            const pulseProgress = Math.sin((timeSinceSpawn / pulseDuration) * Math.PI); // Goes 0 -> 1 -> 0
+                            // Increase font size based on progress
+                            currentFontSize += pulseProgress * pulseMaxSizeIncrease;
+                            // Optional: Slightly brighten color? (Could lerp towards white)
+                            // Example: Lerp between critColor and white - might be too much
+                            // const white = '#FFFFFF';
+                            // currentFillColor = lerpColor(critColor, white, pulseProgress * 0.5); // Need a lerpColor helper
+                        }
+                        // --- End Pulse Effect ---
+
+                        // Set final font and color
+                        ctx.font = `bold ${Math.round(currentFontSize)}px ${fontFamily}`; // Round size to integer
+                        ctx.fillStyle = currentFillColor;
+
+                        // Optional: Shadow
+                        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+                        ctx.shadowBlur = 3; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 1;
+
+                        // Draw the text
+                        ctx.fillText(text, x, y);
+
+                        // Reset shadow
+                        ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+                        ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+                    });
+                } 
 
             function drawCampfireAura(campfireData) {
                 // Only draw if campfire data exists and it's active (night time)
