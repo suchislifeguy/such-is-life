@@ -2075,17 +2075,20 @@
                             // UI.showGameOver is called inside gameLoop's stop condition check
                         }
 
-                        if (speakerId && speechText) {
-                            // An enemy spoke this tick according to the server
-                            const bubbleText = speechText.substring(0, 50); // Limit length
-                            activeEnemyBubbles[speakerId] = { // Update the GLOBAL activeEnemyBubbles
+                        if (serverSpeakerId && serverSpeechText) {
+                            console.log(`[handleServerMessage] Received NEW enemy speech. ID: ${serverSpeakerId}, Text: "${serverSpeechText}"`); // Keep this log for now
+                            const bubbleText = serverSpeechText.substring(0, 50); // Limit length
+
+                            // Add or update the bubble in the global object
+                            activeEnemyBubbles[serverSpeakerId] = {
                                 text: bubbleText,
-                                endTime: performance.now() + 3000 // Bubble lasts 3 seconds
+                                // Set the expiration time based on when WE RECEIVED the message
+                                endTime: performance.now() + 3000 // Bubble lasts 3 seconds FROM NOW
                             };
-                            // log(`Enemy speech bubble set for ${speakerId}`); // Optional log
+                            // console.log(`---> Updated activeEnemyBubbles:`, JSON.stringify(activeEnemyBubbles)); // Optional log
                         }
 
-                        break;
+                        break; // End of game_state case
 
                     case 'chat_message':
                         const senderId = data.sender_id;
