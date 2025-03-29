@@ -856,32 +856,44 @@
             }
 
             function resetClientState(showMenu = true) {
-                log(`Resetting client state. Show Menu: ${showMenu}`);
-                cleanupLoop(); // Stop game loop if running
+                 log(`Resetting client state. Show Menu: ${showMenu}`);
+                 cleanupLoop(); // Stop game loop if running first
 
-                appState.mode = 'menu';
-                appState.localPlayerId = null;
-                appState.currentGameId = null;
-                appState.serverState = null;
-                appState.lastServerState = null;
-                appState.previousServerState = null;
-                appState.predictedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
-                appState.renderedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
-                appState.lastLoopTime = null; // Reset timer
+                 // --- DO NOT RESET appState.mode here ---
+                 // Mode is set by the initiating action (startSP, hostMP, joinMP)
+                 // or when explicitly returning to menu.
 
-                DOM.chatLog.innerHTML = '';
-                DOM.gameCodeDisplay.textContent = '------';
-                DOM.gameIdInput.value = '';
-                DOM.countdownDiv.style.display = 'none';
-                DOM.dayNightIndicator.style.display = 'none';
-                DOM.gameOverScreen.style.display = 'none';
+                 appState.localPlayerId = null;
+                 appState.currentGameId = null;
+                 appState.serverState = null;
+                 appState.lastServerState = null;
+                 appState.previousServerState = null;
+                 appState.predictedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
+                 appState.renderedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
+                 appState.lastLoopTime = null; // Reset timer
+
+                 // Clear UI elements related to game state
+                 DOM.chatLog.innerHTML = '';
+                 DOM.gameCodeDisplay.textContent = '------';
+                 DOM.gameIdInput.value = '';
+                 DOM.countdownDiv.style.display = 'none';
+                 DOM.dayNightIndicator.style.display = 'none';
+                 DOM.gameOverScreen.style.display = 'none';
+                 // Optional: Clear HUD?
+                 // DOM.playerStatsDiv.textContent = 'Loading...';
+                 // DOM.gameInfoDiv.textContent = 'Score: 0 | Level: 1';
 
 
-                if (showMenu) {
-                    UI.showSection('main-menu-section');
-                    UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
-                }
-            }
+                 // Update UI section and mode only if explicitly returning to menu
+                 if (showMenu) {
+                     appState.mode = 'menu'; // Set mode to 'menu' ONLY when showing the menu
+                     UI.showSection('main-menu-section');
+                     UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
+                 }
+                 // If showMenu is false, we assume we are resetting state *before*
+                 // entering a game, and the correct mode ('singleplayer', 'multiplayer-host', etc.)
+                 // has already been set by the function that called resetClientState(false).
+             }
 
              // --- Game Loop Management ---
 
