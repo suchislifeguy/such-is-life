@@ -473,18 +473,26 @@
         
         // --- Input Handling "Module" ---
         const Input = (() => {
-             let keys = {}; let lastShotTime = 0; let movementInterval = null;
-             // Define constants used within the module if needed, or rely on global ones
-             const SHOOT_COOLDOWN = 200; // Assuming 200ms cooldown
-             const INPUT_SEND_INTERVAL = 50; // ms
+             let keys = {};
+             let lastShotTime = 0;
+             let movementInterval = null;
+             // Store mouse position relative to canvas
+             let mouseCanvasPos = { x: 0, y: 0 };
 
              function setup() {
                 cleanup(); // Ensure no duplicate listeners
                 document.addEventListener('keydown', handleKeyDown);
                 document.addEventListener('keyup', handleKeyUp);
                 DOM.chatInput.addEventListener('keydown', handleChatEnter);
-                // Optional: Add mouse listener for shooting on the canvas
-                // DOM.canvas.addEventListener('mousedown', handleMouseDown);
+
+                // Add mouse listeners to the canvas
+                if (DOM.canvas) { // Ensure canvas exists
+                     DOM.canvas.addEventListener('mousemove', handleMouseMove);
+                     DOM.canvas.addEventListener('mousedown', handleMouseDown); // Use mousedown for responsiveness
+                } else {
+                     error("Input setup failed: Canvas element not found.");
+                }
+
                 movementInterval = setInterval(sendMovementInput, INPUT_SEND_INTERVAL);
                 log("Input listeners setup.");
              }
@@ -493,90 +501,136 @@
                  document.removeEventListener('keydown', handleKeyDown);
                  document.removeEventListener('keyup', handleKeyUp);
                  DOM.chatInput.removeEventListener('keydown', handleChatEnter);
-                 // Optional: Remove mouse listener
-                 // DOM.canvas.removeEventListener('mousedown', handleMouseDown);
+
+                 // Remove mouse listeners
+                 if (DOM.canvas) { // Check if canvas exists before removing
+                      DOM.canvas.removeEventListener('mousemove', handleMouseMove);
+                      DOM.canvas.removeEventListener('mousedown', handleMouseDown);
+                 }
+
                  clearInterval(movementInterval);
                  movementInterval = null;
                  keys = {}; // Reset keys state
-                 log("Input listeners cleaned up."); // Changed log message slightly
+                 mouseCanvasPos = { x: 0, y: 0 }; // Reset mouse pos state
+                 log("Input listeners cleaned up.");
              }
 
+             // Update mouse position relative to canvas
+             function handleMouseMove(event) {
+                 if (!DOM.canvas) return; // Should not happen if listener attached, but safety first
+                 const rect = DOM.canvas.getBoundingClientRect();
+                 mouseCanvasPos.x = event.clientX - rect.left;
+                 mouseCanvasPos.y = event.clientY - rect.top;
+             }
+
+            // Trigger shooting on left mouse click
+            function handleMouseDown(event) {
+                if (document.activeElement === DOM.chatInput) return; // Ignore if typing chat
+                // Check if left mouse button (button === 0)
+                if (event.button === 0) {
+                    handleShooting(); // Trigger shooting logic
+                    event.preventDefault(); // Prevent text selection etc.
+                }
+            }
+
+             // Handle keyboard presses
              function handleKeyDown(e) {
                  if (document.activeElement === DOM.chatInput) return; // Ignore if typing chat
                  const key = e.key.toLowerCase();
-                 // Track relevant keys
+                 // Track movement keys & spacebar
                  if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' '].includes(key)) {
                     keys[key] = true;
                  }
                  // Trigger shooting on spacebar press
                  if (key === ' ') {
-                    handleShooting();
+                    handleShooting(); // Keep spacebar shooting
                  }
-                 // Prevent default actions (scrolling, etc.)
+                 // Prevent default browser actions for game keys
                  if ([' ','w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(key)) {
                     e.preventDefault();
                  }
              }
 
+             // Handle keyboard releases
              function handleKeyUp(e) {
                  const key = e.key.toLowerCase();
-                 // Only update keys we are tracking
                  if (key in keys) {
                      keys[key] = false;
                  }
              }
 
+             // Handle sending chat on Enter
              function handleChatEnter(e) {
                  if (e.key === 'Enter') {
-                     e.preventDefault(); // Prevent default Enter behavior
-                     Game.sendChatMessage(); // Delegate sending
+                     e.preventDefault(); // Prevent default form submission/newline
+                     Game.sendChatMessage(); // Delegate sending to Game module
                  }
              }
 
-             // Optional: Mouse shooting handler
-             // function handleMouseDown(e) {
-             //    if (document.activeElement === DOM.chatInput) return; // Don't shoot if chat focused
-             //    if (e.button === 0) { // 0 = Left mouse button
-             //       handleShooting();
-             //       e.preventDefault(); // Prevent canvas selection/drag behavior
-             //    }
-             // }
-
+             // Calculate current movement vector based on keys pressed
              function getMovementInputVector() {
                  let dx = 0, dy = 0;
                  if (keys['w'] || keys['arrowup']) dy -= 1;
                  if (keys['s'] || keys['arrowdown']) dy += 1;
                  if (keys['a'] || keys['arrowleft']) dx -= 1;
                  if (keys['d'] || keys['arrowright']) dx += 1;
+
                  // Normalize diagonal movement
                  if (dx !== 0 && dy !== 0) {
-                     const factor = 1 / Math.sqrt(2); // More efficient normalization factor
+                     const factor = 1 / Math.sqrt(2);
                      dx *= factor;
                      dy *= factor;
                  }
                  return { dx, dy };
              }
 
-             // Periodically sends the *current* movement input state IF ALLOWED
+             // Periodically send movement input to server if game is active
              function sendMovementInput() {
-                 // --- *** MODIFIED CONDITION *** ---
-                 // Only send if we have received server state AND that state's status is 'active'
                  if (appState.serverState?.status === 'active') {
-                 // --- *** END MODIFICATION *** ---
                     const moveVector = getMovementInputVector();
-                    // Send the current vector (even if 0,0 to signal stopping)
                     Network.sendMessage({ type: 'player_move', direction: moveVector });
                  }
-                 // No longer checks appState.mode directly here
              }
 
+             // Handle shooting logic (triggered by space or mouse click)
              function handleShooting() {
-                 // --- *** MODIFIED CONDITION *** ---
-                 // Check if game state allows shooting (must be 'active')
-                 if (appState.serverState?.status !== 'active') {
-                    // log("Shooting blocked: Game not active."); // Optional debug log
-                    return;
+                 // Check cooldown and game status
+                 if (appState.serverState?.status !== 'active') return;
+                 const now = Date.now();
+                 if (now - lastShotTime < SHOOT_COOLDOWN) return; // Check cooldown early
+
+                 lastShotTime = now;
+
+                 // Calculate Aim Direction based on mouse position relative to player
+                 // Use rendered position for immediate feedback, server validates later
+                 const playerRenderX = appState.renderedPlayerPos.x;
+                 const playerRenderY = appState.renderedPlayerPos.y;
+
+                 let aimDx = mouseCanvasPos.x - playerRenderX;
+                 let aimDy = mouseCanvasPos.y - playerRenderY;
+
+                 // Normalize the direction vector
+                 const magnitude = Math.sqrt(aimDx * aimDx + aimDy * aimDy);
+
+                 let normalizedDx = 0;
+                 let normalizedDy = -1; // Default to UP if magnitude is zero (mouse exactly on player center)
+
+                 if (magnitude > 0.01) { // Avoid division by zero
+                     normalizedDx = aimDx / magnitude;
+                     normalizedDy = aimDy / magnitude;
                  }
+
+                 const aimDirection = { dx: normalizedDx, dy: normalizedDy };
+
+                 log("Sending shoot message. Dir:", aimDirection);
+                 Network.sendMessage({ type: 'player_shoot', direction: aimDirection });
+                 // Optional: Play shoot sound locally
+                 // Game.playSound('shoot');
+             }
+
+             // Expose only functions needed externally
+             return { setup, cleanup, getMovementInputVector };
+        })(); // End Input module IIFE
                  // --- *** END MODIFICATION *** ---
 
                  const now = Date.now();
