@@ -776,7 +776,6 @@
                  ctx.fillStyle = '#000'; ctx.font = `bold ${size * 0.7}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                  ctx.fillText((type?.[0] ?? '?').toUpperCase(), x, y + 1);
             }
-
             function drawHealthBar(x, y, width, currentHealth, maxHealth) {
                 if (maxHealth <= 0) return; // Avoid division by zero
                 const barHeight = 5;
@@ -799,208 +798,219 @@
                 ctx.fillRect(barX, barY, currentWidth, barHeight);
             }
 
+            // Expose only the main drawing function from the Renderer module
             return { drawGame };
-        })();
+        })(); // End Renderer module IIFE
+
 
         // --- Core Game Flow & State "Module" ---
+        // Assumes appState is declared *before* this module definition
         const Game = (() => {
-            // (No local game instance needed if SP uses server)
 
+            // --- Game Actions ---
             function startSinglePlayer() {
                 log("Requesting Single Player game...");
-                appState.mode = 'singleplayer'; // Set mode optimistically
-                resetClientState(false); // Clear previous game state if any
+                appState.mode = 'singleplayer';
+                resetClientState(false);
                 UI.updateStatus("Starting Single Player...");
                 Network.sendMessage({ type: 'start_single_player' });
+                // Loop starts on server confirmation ('sp_game_started')
             }
 
-             function hostMultiplayer() {
-                 log("Requesting to Host Multiplayer game...");
-                 appState.mode = 'multiplayer-host'; // Set mode optimistically
-                 resetClientState(false);
-                 UI.updateStatus("Creating game...");
-                 Network.sendMessage({ type: 'create_game' });
-             }
+            function hostMultiplayer() {
+                log("Requesting to Host Multiplayer game...");
+                appState.mode = 'multiplayer-host';
+                resetClientState(false);
+                UI.updateStatus("Creating game...");
+                Network.sendMessage({ type: 'create_game' });
+                // Loop starts on server confirmation ('game_created')
+            }
 
-             function joinMultiplayer() {
-                 const gameId = DOM.gameIdInput.value.trim().toUpperCase();
-                 if (!gameId || gameId.length !== 6) { UI.updateStatus('Invalid Game ID.', true); return; }
-                 log(`Attempting to join game: ${gameId}`);
-                 appState.mode = 'multiplayer-client'; // Set mode optimistically
-                 resetClientState(false);
-                 UI.updateStatus(`Joining game ${gameId}...`);
-                 Network.sendMessage({ type: 'join_game', game_id: gameId });
-             }
+            function joinMultiplayer() {
+                const gameId = DOM.gameIdInput.value.trim().toUpperCase();
+                if (!gameId || gameId.length !== 6) {
+                    UI.updateStatus('Invalid Game ID format.', true); return;
+                 }
+                log(`Attempting to join game: ${gameId}`);
+                appState.mode = 'multiplayer-client';
+                resetClientState(false);
+                UI.updateStatus(`Joining game ${gameId}...`);
+                Network.sendMessage({ type: 'join_game', game_id: gameId });
+                 // Loop starts on server confirmation ('game_joined')
+            }
 
-             function leaveGame() {
-                 log("Leaving current game / Cancelling host...");
-                 // Close connection, onclose handler will reset UI to main menu
-                 Network.closeConnection(1000, "User action (leave/cancel)");
-                 // Explicitly reset state and show menu immediately for better UX
-                 resetClientState(true);
-             }
+            function leaveGame() {
+                log("Leaving current game / Cancelling host...");
+                Network.closeConnection(1000, "User action (leave/cancel)");
+                resetClientState(true); // Show menu immediately
+            }
 
-             function sendChatMessage() {
+            function sendChatMessage() {
                 const message = DOM.chatInput.value.trim();
-                // Only send if connected, in a game, and have an ID
                 if (message && appState.isConnected && appState.currentGameId && appState.localPlayerId) {
                     Network.sendMessage({ type: 'player_chat', message: message });
-                    // Add locally immediately? Optional, server echo confirms.
-                    // UI.addChatMessage(appState.localPlayerId, message, true);
-                    DOM.chatInput.value = ''; // Clear input field
+                    DOM.chatInput.value = '';
                 } else {
                     log("Cannot send chat: Not connected or not in a game.");
                 }
-             }
+            }
 
-             function resetClientState(showMenu = true) {
-                 log(`Resetting client state. Show Menu: ${showMenu}`);
-                 // Only reset game-specific state, keep connection status
-                 appState.mode = 'menu';
-                 appState.localPlayerId = null;
-                 appState.currentGameId = null;
-                 appState.serverState = null;
-                 appState.lastServerState = null;
-                 appState.previousServerState = null;
-                 // Reset positions for next game start
-                 appState.predictedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
-                 appState.renderedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
+            function resetClientState(showMenu = true) {
+                log(`Resetting client state. Show Menu: ${showMenu}`);
+                cleanupLoop(); // Stop game loop if running
 
-                 DOM.chatLog.innerHTML = ''; // Clear chat log
-                 DOM.gameCodeDisplay.textContent = '------'; // Reset code display
-                 DOM.gameIdInput.value = ''; // Clear join input
+                appState.mode = 'menu';
+                appState.localPlayerId = null;
+                appState.currentGameId = null;
+                appState.serverState = null;
+                appState.lastServerState = null;
+                appState.previousServerState = null;
+                appState.predictedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
+                appState.renderedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
+                appState.lastLoopTime = null; // Reset timer
 
-                 // Stop game loop if running
-                 if (appState.animationFrameId) {
-                     cancelAnimationFrame(appState.animationFrameId);
-                     appState.animationFrameId = null;
-                     log("Game loop stopped during reset.");
-                 }
-                 Input.cleanup(); // Remove input listeners
-
-                 // Update UI
-                 if (showMenu) {
-                     UI.showSection('main-menu-section');
-                     // Set status based on connection state
-                     UI.updateStatus(appState.isConnected ? "Ready." : "Disconnected.");
-                 }
-             }
-
-            function startGameLoop() {
-            // OLD Check: if (appState.mode === 'menu' || (!appState.serverState && appState.mode !== 'singleplayer')) {
-            // --- NEW Check ---
-             if (appState.mode === 'menu') {
-                 log("StartGameLoop called but client is in menu mode.");
-                 return; // Don't start if in menu
-             }
-             // --- End NEW Check ---
-
-             if (appState.animationFrameId) {
-                 log("StartGameLoop called but loop already running.");
-                 return; // Already running
-             }
-             // Ensure serverState exists for multiplayer before starting input/rendering loop
-             // SP starts immediately as state is sent with sp_game_started
-             if (!appState.serverState && appState.mode !== 'singleplayer') {
-                  log("StartGameLoop: Waiting for initial server state in multiplayer...");
-                  // Try again later? Or rely on game_state handler to start it.
-                  // For now, just return and let the game_state handler initiate.
-                  return;
-             }
+                DOM.chatLog.innerHTML = '';
+                DOM.gameCodeDisplay.textContent = '------';
+                DOM.gameIdInput.value = '';
+                DOM.countdownDiv.style.display = 'none';
+                DOM.dayNightIndicator.style.display = 'none';
+                DOM.gameOverScreen.style.display = 'none';
 
 
-             log("Starting game loop...");
-             appState.lastLoopTime = performance.now();
-             Input.setup(); // Activate input listeners for the game
+                if (showMenu) {
+                    UI.showSection('main-menu-section');
+                    UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
+                }
+            }
 
-             function loop(currentTime) {
-                 // Check if loop should stop
-                  if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) { // Simplified check
+             // --- Game Loop Management ---
+
+             // Define the main loop function at this scope level
+             function gameLoop(currentTime) {
+                  // --- Loop Termination Check ---
+                  if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
                       log(`Stopping game loop. Mode: ${appState.mode}, Connected: ${appState.isConnected}, Game Over: ${appState.serverState?.game_over}`);
-                      cleanupLoop();
-                      // If game over, ensure screen is shown (might be handled by message handler too)
-                      if (appState.serverState?.game_over) UI.showGameOver(appState.serverState);
+                      cleanupLoop(); // Ensure cleanup happens
+                      if (appState.serverState?.game_over) {
+                          UI.showGameOver(appState.serverState);
+                      }
+                      return; // Exit the loop function
+                  }
+
+                  // --- State Check (Mostly for initial MP state) ---
+                  if (!appState.serverState && appState.mode !== 'singleplayer') {
+                      log("Loop: Waiting for server state update...");
+                      appState.animationFrameId = requestAnimationFrame(gameLoop);
                       return;
                   }
 
-                 // This check might be redundant now with the initial guard, but harmless
-                 if (!appState.serverState && appState.mode !== 'singleplayer') {
-                     log("Loop: Waiting for server state update...");
-                      appState.animationFrameId = requestAnimationFrame(loop); return;
-                 }
+                  // --- Calculate Delta Time ---
+                  if (appState.lastLoopTime === null) { // Initialize on first valid frame
+                      appState.lastLoopTime = currentTime;
+                  }
+                  const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000);
+                  appState.lastLoopTime = currentTime;
 
-                 const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000);
-                 appState.lastLoopTime = currentTime;
 
-                 if (appState.mode !== 'singleplayer' && appState.serverState?.status === 'active') {
-                      updatePredictedPosition(deltaTime);
-                      reconcileWithServer();
-                 }
+                  // --- Prediction & Reconciliation (Multiplayer Active) ---
+                  // Use optional chaining for safety when accessing nested properties
+                  if (appState.mode !== 'singleplayer' && appState.serverState?.status === 'active') {
+                       updatePredictedPosition(deltaTime);
+                       reconcileWithServer();
+                  }
 
-                 Renderer.drawGame();
-                 appState.animationFrameId = requestAnimationFrame(loop);
+                  // --- Rendering ---
+                  Renderer.drawGame();
+
+                  // --- Continue the Loop ---
+                  // Ensure we don't double-request if already stopping
+                  if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
+                     appState.animationFrameId = requestAnimationFrame(gameLoop);
+                  } else {
+                     // If state changed mid-frame to stop, ensure animationFrameId is cleared
+                     if(appState.animationFrameId) cleanupLoop();
+                  }
              }
-             appState.animationFrameId = requestAnimationFrame(loop);
-         }
 
-                    const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000); // Delta time in seconds, clamp max value
-                    appState.lastLoopTime = currentTime;
 
-                    // Run prediction/reconciliation only in multiplayer active state
-                    if (appState.mode !== 'singleplayer' && appState.serverState?.status === 'active') {
-                         updatePredictedPosition(deltaTime);
-                         reconcileWithServer();
-                    }
-                    // (No local update needed if SP relies on server state)
-
-                    Renderer.drawGame(); // Render the current (or interpolated) state
-                    appState.animationFrameId = requestAnimationFrame(loop); // Continue the loop
+            function startGameLoop() {
+                if (appState.mode === 'menu') {
+                    log("StartGameLoop called but client is in menu mode.");
+                    return;
                 }
-                appState.animationFrameId = requestAnimationFrame(loop);
+                if (appState.animationFrameId) {
+                    log("StartGameLoop called but loop already running.");
+                    return;
+                }
+                if (!appState.serverState && appState.mode !== 'singleplayer') {
+                     log("StartGameLoop: Waiting for initial server state in multiplayer... (Loop will start via state update)");
+                     return;
+                }
+
+                log("Starting game loop...");
+                appState.lastLoopTime = null; // Reset last time for accurate delta
+                Input.setup(); // Activate input listeners
+
+                // Make the initial call to start the loop
+                appState.animationFrameId = requestAnimationFrame(gameLoop);
             }
 
-             function cleanupLoop() {
+            function cleanupLoop() {
                  if (appState.animationFrameId) {
                      cancelAnimationFrame(appState.animationFrameId);
                      appState.animationFrameId = null;
+                     log("Game loop stopped and cleaned up.");
+                 } else {
+                     // log("CleanupLoop called but no active loop found."); // Can be noisy
                  }
                  Input.cleanup(); // Deactivate input listeners
+                 appState.lastLoopTime = null; // Reset timer
              }
 
              // --- Prediction & Reconciliation Functions ---
-             // (Keep updatePredictedPosition and reconcileWithServer as they were,
-             // ensure they are defined within this Game module scope or globally)
              function updatePredictedPosition(deltaTime) {
-                 // ... (existing prediction logic) ...
-                if (!appState.serverState?.players[appState.localPlayerId]) return; // Safety check
+                if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return; // Safety check
+
                 const moveVector = Input.getMovementInputVector();
-                const player = appState.serverState.players[appState.localPlayerId];
-                const playerSpeed = player?.speed || PLAYER_DEFAULTS.base_speed; // Use defaults
+                const playerState = appState.serverState.players[appState.localPlayerId];
+                // Use default speed if player state or speed property is missing
+                const playerSpeed = playerState?.speed ?? PLAYER_DEFAULTS.base_speed;
+
+                // Only update prediction if moving
                 if (moveVector.dx === 0 && moveVector.dy === 0) return;
 
                 appState.predictedPlayerPos.x += moveVector.dx * playerSpeed * deltaTime;
                 appState.predictedPlayerPos.y += moveVector.dy * playerSpeed * deltaTime;
 
-                const w_half = (player?.width ?? PLAYER_DEFAULTS.width) / 2;
-                const h_half = (player?.height ?? PLAYER_DEFAULTS.height) / 2;
+                // Use default dimensions if player state or dimensions are missing
+                const w_half = (playerState?.width ?? PLAYER_DEFAULTS.width) / 2;
+                const h_half = (playerState?.height ?? PLAYER_DEFAULTS.height) / 2;
+
+                // Clamp prediction to canvas bounds
                 appState.predictedPlayerPos.x = Math.max(w_half, Math.min(CANVAS_WIDTH - w_half, appState.predictedPlayerPos.x));
                 appState.predictedPlayerPos.y = Math.max(h_half, Math.min(CANVAS_HEIGHT - h_half, appState.predictedPlayerPos.y));
              }
+
              function reconcileWithServer() {
-                // ... (existing reconciliation logic) ...
-                if (!appState.serverState?.players[appState.localPlayerId]) return;
+                if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return; // Safety check
+
                 const serverPos = appState.serverState.players[appState.localPlayerId];
-                // Ensure serverPos has x,y before proceeding
-                if (serverPos.x === undefined || serverPos.y === undefined) return;
+                // Ensure server provided valid position data
+                if (typeof serverPos.x !== 'number' || typeof serverPos.y !== 'number') {
+                    log("Reconciliation skipped: Invalid server position data.");
+                    return;
+                }
 
                 const predictedPos = appState.predictedPlayerPos;
                 const renderedPos = appState.renderedPlayerPos;
-                const dist = distance(predictedPos.x, predictedPos.y, serverPos.x, serverPos.y);
-                const threshold= parseFloat(getCssVar('--reconciliation-threshold')) || 5;
-                const lerpFactor= parseFloat(getCssVar('--lerp-factor')) || 0.2;
 
-                if (dist > threshold * 2) { // Increase threshold slightly before full snap
-                    // Snap prediction and render position directly to server state
+                const dist = distance(predictedPos.x, predictedPos.y, serverPos.x, serverPos.y);
+                const threshold = parseFloat(getCssVar('--reconciliation-threshold')) || 5;
+                const lerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.2;
+
+                // Increased threshold for snapping to avoid jitter on minor corrections
+                if (dist > threshold * 2) {
+                    // log(`Reconciliation SNAP! Dist: ${dist.toFixed(1)}`);
                     predictedPos.x = serverPos.x;
                     predictedPos.y = serverPos.y;
                     renderedPos.x = serverPos.x;
@@ -1010,104 +1020,73 @@
                     renderedPos.x = lerp(renderedPos.x, predictedPos.x, lerpFactor);
                     renderedPos.y = lerp(renderedPos.y, predictedPos.y, lerpFactor);
 
-                    // Optional: Gently nudge prediction towards server state if diverging slightly
-                    // Only do this if the difference isn't massive (handled by snap)
-                    if (dist > 1.0) { // Adjust this threshold as needed
-                         predictedPos.x = lerp(predictedPos.x, serverPos.x, lerpFactor * 0.1); // Much smaller factor
+                    // Optional: Gently nudge prediction only if significantly off but below snap threshold
+                    if (dist > 2.0) { // Nudge if more than 2 pixels off
+                         predictedPos.x = lerp(predictedPos.x, serverPos.x, lerpFactor * 0.1); // Small nudge factor
                          predictedPos.y = lerp(predictedPos.y, serverPos.y, lerpFactor * 0.1);
                     }
                 }
              }
 
+             // Accessor not strictly needed if SP uses server state directly
+             function getLocalGameState() { return appState.serverState; }
 
-            // --- Expose necessary functions ---
+             // Setup button listeners (called once on load)
+             function initListeners() {
+                 log("Initializing button listeners...");
+                 DOM.singlePlayerBtn.onclick = startSinglePlayer;
+                 DOM.multiplayerBtn.onclick = () => UI.showSection('multiplayer-menu-section');
+                 DOM.hostGameBtn.onclick = hostMultiplayer;
+                 DOM.showJoinUIBtn.onclick = () => UI.showSection('join-code-section');
+                 DOM.cancelHostBtn.onclick = leaveGame;
+                 DOM.joinGameSubmitBtn.onclick = joinMultiplayer;
+                 DOM.sendChatBtn.onclick = sendChatMessage;
+                 DOM.leaveGameBtn.onclick = leaveGame;
+                 DOM.gameOverBackBtn.onclick = () => resetClientState(true);
+
+                 // Back buttons using class
+                 DOM.gameContainer.querySelectorAll('.back-button').forEach(btn => {
+                     const targetSectionMatch = btn.getAttribute('onclick')?.match(/'([^']+)'/);
+                     if (targetSectionMatch && targetSectionMatch[1]) {
+                         const targetSectionId = targetSectionMatch[1];
+                         // Ensure valid section ID before overriding
+                         if (DOM[targetSectionId] || document.getElementById(targetSectionId)) {
+                              btn.onclick = (e) => { e.preventDefault(); UI.showSection(targetSectionId); }; // Override inline
+                         } else {
+                              log(`Warning: Back button target section invalid: ${targetSectionId}`);
+                         }
+                     } else {
+                         log("Warning: Back button found without valid target in onclick:", btn);
+                     }
+                 });
+             }
+
+            // --- Expose necessary functions from Game module ---
             return {
-                 // ... (other exposed functions like resetClientState, sendChatMessage, initListeners) ...
+                 resetClientState,
                  startGameLoop,
-                 cleanupLoop, // Expose cleanup if needed elsewhere (e.g., on disconnect)
-                 getLocalGameState // If needed
+                 cleanupLoop,
+                 sendChatMessage,
+                 getLocalGameState,
+                 initListeners // Expose initListeners to be called on load
             };
         })(); // End Game module IIFE
 
-             // --- Prediction & Reconciliation (Multiplayer - unchanged) ---
-             function updatePredictedPosition(deltaTime) {
-                 const moveVector = Input.getMovementInputVector();
-                 const player = appState.serverState?.players[appState.localPlayerId];
-                 const playerSpeed = player?.speed || 150;
-                 if (moveVector.dx === 0 && moveVector.dy === 0) return;
-                 appState.predictedPlayerPos.x += moveVector.dx * playerSpeed * deltaTime;
-                 appState.predictedPlayerPos.y += moveVector.dy * playerSpeed * deltaTime;
-                 // Basic boundary clamp - server state will ultimately correct this
-                 appState.predictedPlayerPos.x = Math.max((PLAYER_DEFAULTS.width ?? 20)/2, Math.min(CANVAS_WIDTH - (PLAYER_DEFAULTS.width ?? 20)/2, appState.predictedPlayerPos.x));
-                 appState.predictedPlayerPos.y = Math.max((PLAYER_DEFAULTS.height ?? 20)/2, Math.min(CANVAS_HEIGHT - (PLAYER_DEFAULTS.height ?? 20)/2, appState.predictedPlayerPos.y));
-             }
-             function reconcileWithServer() {
-                if (!appState.serverState?.players[appState.localPlayerId]) return; // Ensure player exists
-                const serverPos = appState.serverState.players[appState.localPlayerId];
-                const predictedPos = appState.predictedPlayerPos;
-                const renderedPos = appState.renderedPlayerPos;
-                const dist = distance(predictedPos.x, predictedPos.y, serverPos.x, serverPos.y);
-                const threshold= parseFloat(getCssVar('--reconciliation-threshold')) || 5;
-                const lerpFactor= parseFloat(getCssVar('--lerp-factor')) || 0.2;
-
-                if (dist > threshold) { // Snap if too far off
-                    // log(`Reconciliation SNAP! Dist: ${dist.toFixed(1)}`);
-                    predictedPos.x = serverPos.x; predictedPos.y = serverPos.y;
-                    renderedPos.x = serverPos.x; renderedPos.y = serverPos.y;
-                } else { // Smoothly interpolate rendered position towards prediction
-                      // Gently nudge prediction towards server state if slightly off (optional)
-                      // predictedPos.x = lerp(predictedPos.x, serverPos.x, lerpFactor * 0.1);
-                      // predictedPos.y = lerp(predictedPos.y, serverPos.y, lerpFactor * 0.1);
-                      // Smooth the visual render position towards the current prediction
-                      renderedPos.x = lerp(renderedPos.x, predictedPos.x, lerpFactor);
-                      renderedPos.y = lerp(renderedPos.y, predictedPos.y, lerpFactor);
-                }
-             }
-
-             // Accessor for state if needed (currently SP uses server state)
-             function getLocalGameState() { return appState.serverState; }
-
-             // Setup button listeners on page load
-             function initListeners() {
-                DOM.singlePlayerBtn.onclick = startSinglePlayer;
-                DOM.multiplayerBtn.onclick = () => UI.showSection('multiplayer-menu-section');
-                DOM.hostGameBtn.onclick = hostMultiplayer;
-                DOM.showJoinUIBtn.onclick = () => UI.showSection('join-code-section');
-                DOM.cancelHostBtn.onclick = leaveGame; // Cancel hosting = leave game
-                DOM.joinGameSubmitBtn.onclick = joinMultiplayer;
-                DOM.sendChatBtn.onclick = sendChatMessage;
-                DOM.leaveGameBtn.onclick = leaveGame;
-                DOM.gameOverBackBtn.onclick = () => { resetClientState(true); }; // Go back to menu
-                // Add listeners for back buttons using class
-                DOM.gameContainer.querySelectorAll('.back-button').forEach(btn => {
-                    // Find the target section from the inline onclick attribute
-                    const targetSectionMatch = btn.getAttribute('onclick')?.match(/'([^']+)'/);
-                    if (targetSectionMatch && targetSectionMatch[1]) {
-                        const targetSectionId = targetSectionMatch[1];
-                        btn.onclick = () => UI.showSection(targetSectionId); // Override inline
-                    } else {
-                        log("Warning: Back button found without valid target in onclick:", btn);
-                    }
-                });
-             }
-
-            return { resetClientState, startGameLoop, sendChatMessage, getLocalGameState, initListeners };
-        })();
 
         // --- Global Server Message Handler ---
+        // (Using the cleaned-up version from previous steps)
         function handleServerMessage(event) {
             let data;
             try {
                 data = JSON.parse(event.data);
-                log("Received:", data.type); // Log message type only
-        
+                log("Received:", data.type);
+
             } catch (err) {
-                // Keep error handling for parsing failures
                 console.error("[Client] Failed to parse server message:", err, event.data);
                 UI.updateStatus("Received invalid data from server.", true);
                 return;
             }
-        
+
             try {
                 switch (data.type) {
                     case 'game_created':
@@ -1118,15 +1097,15 @@
                         if (hostPlayer) {
                             appState.predictedPlayerPos = { x: hostPlayer.x, y: hostPlayer.y };
                             appState.renderedPlayerPos = { x: hostPlayer.x, y: hostPlayer.y };
-                        } // No else block for logging needed per request
-        
+                        }
+
                         DOM.gameCodeDisplay.textContent = appState.currentGameId || 'ERROR';
-                        DOM.waitingMessage.textContent = `Waiting for Team Mate... (1/${MAX_PLAYERS})`;
+                        DOM.waitingMessage.textContent = `Waiting for Team Mate... (1/${MAX_PLAYERS})`; // Updated text
                         UI.updateStatus(`Game hosted. Code: ${appState.currentGameId}`);
                         UI.showSection('host-wait-section');
                         Game.startGameLoop(); // Start loop AFTER confirmation
                         break;
-        
+
                     case 'game_joined':
                         appState.localPlayerId = data.player_id;
                         appState.currentGameId = data.game_id;
@@ -1136,12 +1115,12 @@
                             appState.predictedPlayerPos = { x: joinedPlayer.x, y: joinedPlayer.y };
                             appState.renderedPlayerPos = { x: joinedPlayer.x, y: joinedPlayer.y };
                         }
-        
+
                         UI.updateStatus(`Joined game ${appState.currentGameId}. Get ready!`);
                         UI.showSection('game-area');
                         Game.startGameLoop(); // Start loop AFTER confirmation
                         break;
-        
+
                     case 'sp_game_started':
                         appState.localPlayerId = data.player_id;
                         appState.currentGameId = data.game_id;
@@ -1151,83 +1130,87 @@
                             appState.predictedPlayerPos = { x: spPlayer.x, y: spPlayer.y };
                             appState.renderedPlayerPos = { x: spPlayer.x, y: spPlayer.y };
                         }
-        
+
                         UI.updateStatus("Single Player Game Started!");
                         UI.showSection('game-area');
                         Game.startGameLoop(); // Start loop AFTER confirmation
                         break;
-        
+
                     case 'game_state':
                         const previousStatus = appState.serverState?.status;
                         const wasGameOver = appState.serverState?.game_over;
-        
+
                         appState.previousServerState = appState.lastServerState;
                         appState.lastServerState = appState.serverState;
                         appState.serverState = data.state;
-        
+
                         if (appState.serverState.status !== previousStatus) {
                             log(`Game state changed from ${previousStatus} to ${appState.serverState.status}`);
                             if (appState.serverState.status === 'waiting' && appState.mode === 'multiplayer-host') {
-                                UI.updateStatus("Opponent left. Waiting...", true);
+                                UI.updateStatus("Teammate left. Waiting...", true); // Changed text
                                 UI.showSection('host-wait-section');
+                                // Update player count on wait screen when someone leaves
+                                const hostPlayerCount = Object.keys(appState.serverState.players || {}).length;
+                                DOM.waitingMessage.textContent = `Waiting for Team Mate... (${hostPlayerCount}/${MAX_PLAYERS})`;
+
                             } else if (appState.serverState.status === 'countdown') {
                                 UI.updateStatus("Countdown starting...");
                                 UI.showSection('game-area');
-                                // Start loop if not already running (e.g., host waiting -> countdown)
-                                if (!appState.animationFrameId) Game.startGameLoop();
+                                if (!appState.animationFrameId) Game.startGameLoop(); // Start loop if not running
                             } else if (appState.serverState.status === 'active') {
                                 UI.updateStatus("Game active!");
                                 UI.showSection('game-area');
-                                 // Start loop if not already running (can happen in SP or if joining directly to active)
-                                if (!appState.animationFrameId) Game.startGameLoop();
+                                if (!appState.animationFrameId) Game.startGameLoop(); // Start loop if not running
                             }
                         }
-        
-                        if (appState.serverState.status !== 'finished' && !appState.serverState.game_over) {
-                            if (appState.serverState.status === 'waiting' && appState.mode === 'multiplayer-host') {
-                                const playerCount = Object.keys(appState.serverState.players || {}).length;
-                                DOM.waitingMessage.textContent = `Waiting for opponent... (${playerCount}/${MAX_PLAYERS})`;
-                            } else if (appState.serverState.status === 'countdown' || appState.serverState.status === 'active') {
-                                const player = appState.serverState.players?.[appState.localPlayerId];
-                                UI.updateHUD(player, appState.serverState);
-                                UI.updateCountdown(appState.serverState);
-                                UI.updateDayNight(appState.serverState);
-                            }
+
+                        // Update HUD etc. only if game is running (not finished/waiting)
+                        if (appState.serverState.status === 'countdown' || appState.serverState.status === 'active') {
+                             const player = appState.serverState.players?.[appState.localPlayerId];
+                             UI.updateHUD(player, appState.serverState);
+                             UI.updateCountdown(appState.serverState);
+                             UI.updateDayNight(appState.serverState);
                         }
-        
+                         // Update waiting message player count even if status didn't change
+                         else if (appState.serverState.status === 'waiting' && appState.mode === 'multiplayer-host') {
+                             const playerCount = Object.keys(appState.serverState.players || {}).length;
+                             DOM.waitingMessage.textContent = `Waiting for Team Mate... (${playerCount}/${MAX_PLAYERS})`;
+                         }
+
+
                         if (appState.serverState.game_over && !wasGameOver) {
                             log("Game Over signal received from server.");
-                            UI.showGameOver(appState.serverState);
+                            // Loop should stop itself, then show screen
+                            // UI.showGameOver is called inside gameLoop's stop condition check
                         }
                         break;
-        
+
                     case 'chat_message':
                         UI.addChatMessage(data.sender_id, data.message, data.sender_id === appState.localPlayerId);
                         break;
-        
+
                     case 'error':
-                        // Keep logging server errors, but use console.error
                         console.error("[Client] Server Error Message:", data.message);
                         UI.updateStatus(`Server Error: ${data.message}`, true);
-        
-                        if (appState.mode === 'multiplayer-client' && (data.message.includes('not found') || data.message.includes('not waiting') || data.message.includes('full'))) {
+
+                        // Add specific handling for join errors to stay on join screen
+                        if (appState.mode === 'multiplayer-client' && (data.message.includes('not found') || data.message.includes('not waiting') || data.message.includes('full') || data.message.includes('finished'))) {
                             UI.showSection('join-code-section');
-                            appState.mode = 'menu';
-                            Game.resetClientState(false);
+                            appState.mode = 'menu'; // Reset internal mode state
+                            // No full resetClientState, just update status and stay on screen
                         } else if (appState.mode === 'multiplayer-host' && data.message.includes('Creation Error')) {
-                            Game.resetClientState(true);
+                            Game.resetClientState(true); // Back to main menu
                         } else if (data.message === 'Please create or join a game first.') {
-                             // If we somehow still get this error after the changes, reset to menu
                              log("Received 'join first' error unexpectedly, resetting state.");
                              Game.resetClientState(true);
                         }
+                        // Other errors just display the message
                         break;
-        
+
                     default:
                         log('Unknown message type received:', data.type);
                 }
             } catch (handlerError) {
-                // Keep error handling for internal client processing errors
                 console.error("[Client] Error inside handleServerMessage logic:", handlerError);
                 UI.updateStatus("Client error processing message.", true);
             }
@@ -1235,23 +1218,43 @@
 
 
         // --- Global Init ---
-        function showSection(sectionId) { UI.showSection(sectionId); } // Make global for inline buttons
+        // Wrapper for inline HTML button compatibility
+        function showSection(sectionId) { UI.showSection(sectionId); }
 
         window.onload = () => {
+            log("Window loaded.");
             UI.updateStatus("Initializing...");
-            // Ensure DOM elements are ready before assigning listeners
-            if (document.readyState === 'complete' || document.readyState === 'interactive') {
-                 Game.initListeners(); // Setup button clicks
-                 Network.connect(); // Connect automatically
-                 UI.showSection('main-menu-section'); // Start at main menu visually
-                 UI.updateStatus("Connecting..."); // Initial status until WS opens
-            } else {
-                 document.addEventListener('DOMContentLoaded', () => {
-                    Game.initListeners();
-                    Network.connect();
-                    UI.showSection('main-menu-section');
-                    UI.updateStatus("Connecting...");
+
+            // Define appState *before* initializing modules that might use it
+             // --- Global Client State --- <<< IMPORTANT PLACEMENT
+             appState = { // Use global scope assignment since it's used everywhere
+                 mode: 'menu',
+                 localPlayerId: null,
+                 currentGameId: null,
+                 serverState: null,
+                 animationFrameId: null,
+                 isConnected: false,
+                 renderedPlayerPos: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 },
+                 predictedPlayerPos: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 },
+                 lastServerState: null,
+                 previousServerState: null,
+                 lastLoopTime: null, // Initialize as null
+             };
+             socket = null; // Also define socket globally
+
+            // Now safe to initialize listeners and connect
+            try {
+                 Game.initListeners();
+                 Network.connect(() => {
+                     // This callback runs *after* WebSocket opens
+                     UI.updateStatus("Connected. Select Mode.");
+                     // Show main menu only *after* connection is confirmed open
+                     UI.showSection('main-menu-section');
                  });
+                 UI.updateStatus("Connecting..."); // Initial status while connecting
+            } catch (initError) {
+                 console.error("Initialization failed:", initError);
+                 UI.updateStatus("Error initializing game. Please refresh.", true);
             }
         };
 
