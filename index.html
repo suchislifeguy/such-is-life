@@ -1291,14 +1291,44 @@
                 });
             }
 
-            // MODIFIED to accept type and change color
-            function drawEnemyRect(x, y, w, h, type) {
-                 if (type === ENEMY_TYPE_SHOOTER) {
-                     ctx.fillStyle = '#FFA500'; // Orange for shooters
-                 } else { // Default chaser or unknown type
-                     ctx.fillStyle = getCssVar('--enemy-color') || 'green'; // Default green
-                 }
-                 ctx.fillRect(x - w / 2, y - h / 2, w, h);
+            // Inside Renderer module...
+            function drawEnemyRect(x, y, w, h, type, enemyState) {
+                let enemyColor;
+                let hasBarrel = false; // Flag to check if we should draw a barrel
+
+                if (type === ENEMY_TYPE_SHOOTER) {
+                    enemyColor = '#FFA500'; // Orange for shooters
+                    hasBarrel = true; // Shooters get a barrel
+                } else { // Default chaser or unknown type
+                    enemyColor = getCssVar('--enemy-color') || 'green'; // Default green
+                }
+
+                // Draw the main body
+                ctx.fillStyle = enemyColor;
+                ctx.fillRect(x - w / 2, y - h / 2, w, h);
+
+                // --- ADD BARREL FOR SHOOTERS ---
+                if (hasBarrel) {
+                    const barrelLength = 8;
+                    const barrelWidth = 4;
+                    // For simplicity, always point barrel right for now? Or base on target?
+                    // Let's just point it right for a simple visual difference.
+                    ctx.fillStyle = '#555'; // Dark grey barrel color
+                    ctx.fillRect(
+                        x + w / 2,              // Start at the right edge of the body
+                        y - barrelWidth / 2,    // Center vertically
+                        barrelLength,           // Length of the barrel
+                        barrelWidth             // Width of the barrel
+                    );
+                }
+                // -------------------------------
+
+                // Hit Flash (If you implemented it)
+                if (enemyState?.hit_flash_this_tick) {
+                    ctx.fillStyle = 'rgba(255, 100, 100, 0.7)'; // Reddish flash
+                    const flashMargin = 2;
+                    ctx.fillRect(x - w / 2 - flashMargin, y - h / 2 - flashMargin, w + flashMargin * 2, h + flashMargin * 2);
+                }
             }
 
             function drawBullets(bullets) {
