@@ -886,35 +886,62 @@
                  }
              }
 
-            function startGameLoop() {
-                if (appState.animationFrameId) {
-                    log("StartGameLoop called but loop already running.");
-                    return; // Already running
-                }
-                // Ensure we are actually in a game mode before starting loop
-                if (appState.mode === 'menu' || (!appState.serverState && appState.mode !== 'singleplayer')) {
-                     log("StartGameLoop called but not in a valid game state.");
-                     return;
-                }
+         function startGameLoop() {
+            // OLD Check: if (appState.mode === 'menu' || (!appState.serverState && appState.mode !== 'singleplayer')) {
+            // --- NEW Check ---
+             if (appState.mode === 'menu') {
+                 log("StartGameLoop called but client is in menu mode.");
+                 return; // Don't start if in menu
+             }
+             // --- End NEW Check ---
 
-                log("Starting game loop...");
-                appState.lastLoopTime = performance.now();
-                Input.setup(); // Activate input listeners for the game
+             if (appState.animationFrameId) {
+                 log("StartGameLoop called but loop already running.");
+                 return; // Already running
+             }
+             // Ensure serverState exists for multiplayer before starting input/rendering loop
+             // SP starts immediately as state is sent with sp_game_started
+             if (!appState.serverState && appState.mode !== 'singleplayer') {
+                  log("StartGameLoop: Waiting for initial server state in multiplayer...");
+                  // Try again later? Or rely on game_state handler to start it.
+                  // For now, just return and let the game_state handler initiate.
+                  return;
+             }
 
-                function loop(currentTime) {
-                    // Check if loop should stop
-                     if (appState.mode === 'menu' || !appState.isConnected || (appState.serverState?.game_over && appState.mode !== 'menu')) {
-                         log(`Stopping game loop. Mode: ${appState.mode}, Connected: ${appState.isConnected}, Game Over: ${appState.serverState?.game_over}`);
-                         cleanupLoop();
-                         // If game over, ensure screen is shown (might be handled by message handler too)
-                         if (appState.serverState?.game_over) UI.showGameOver(appState.serverState);
-                         return;
-                     }
 
-                    // Wait for first server state in multiplayer before proceeding
-                    if (!appState.serverState && appState.mode !== 'singleplayer') {
-                         appState.animationFrameId = requestAnimationFrame(loop); return;
-                    }
+             log("Starting game loop...");
+             appState.lastLoopTime = performance.now();
+             Input.setup(); // Activate input listeners for the game
+
+             function loop(currentTime) {
+                 // Check if loop should stop
+                  if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) { // Simplified check
+                      log(`Stopping game loop. Mode: ${appState.mode}, Connected: ${appState.isConnected}, Game Over: ${appState.serverState?.game_over}`);
+                      cleanupLoop();
+                      // If game over, ensure screen is shown (might be handled by message handler too)
+                      if (appState.serverState?.game_over) UI.showGameOver(appState.serverState);
+                      return;
+                  }
+
+                 // This check might be redundant now with the initial guard, but harmless
+                 if (!appState.serverState && appState.mode !== 'singleplayer') {
+                     log("Loop: Waiting for server state update...");
+                      appState.animationFrameId = requestAnimationFrame(loop); return;
+                 }
+
+                 const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000);
+                 appState.lastLoopTime = currentTime;
+
+                 if (appState.mode !== 'singleplayer' && appState.serverState?.status === 'active') {
+                      updatePredictedPosition(deltaTime);
+                      reconcileWithServer();
+                 }
+
+                 Renderer.drawGame();
+                 appState.animationFrameId = requestAnimationFrame(loop);
+             }
+             appState.animationFrameId = requestAnimationFrame(loop);
+         }
 
                     const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000); // Delta time in seconds, clamp max value
                     appState.lastLoopTime = currentTime;
@@ -1032,7 +1059,7 @@
                         } // No else block for logging needed per request
         
                         DOM.gameCodeDisplay.textContent = appState.currentGameId || 'ERROR';
-                        DOM.waitingMessage.textContent = `Waiting for opponent... (1/${MAX_PLAYERS})`;
+                        DOM.waitingMessage.textContent = `Waiting for Team Mate... (1/${MAX_PLAYERS})`;
                         UI.updateStatus(`Game hosted. Code: ${appState.currentGameId}`);
                         UI.showSection('host-wait-section');
                         Game.startGameLoop(); // Start loop AFTER confirmation
