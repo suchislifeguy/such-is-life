@@ -234,8 +234,8 @@
 </div>
 <!-- Game Info Container remains the same -->
 <div id="game-info-container">
-    <div id="game-info">Score: 0 | Level: 1</div>
-    <div id="day-night-indicator">Day</div>
+    <div id="game-score">Score: 0</div>
+    <div id="day-night-indicator">Day --:--</div> 
 </div>
         </div>
 
@@ -338,8 +338,9 @@
             localPlayerStatsBoxContent: document.querySelector('#local-player-stats .stats-content'), // NEW LOCAL CONTENT
             matePlayerStatsBox: document.getElementById('mate-player-stats'),               // NEW MATE CONTAINER
             matePlayerStatsBoxContent: document.querySelector('#mate-player-stats .stats-content'), // NEW MATE CONTENT
-            gameInfoDiv: document.getElementById('game-info'),
-            countdownDiv: document.getElementById('countdown'),
+            gameScoreDiv: document.getElementById('game-score'), // Ensure this exists
+    // gameInfoDiv: document.getElementById('game-info'), // REMOVE IF DELETED FROM HTML
+            dayNightIndicator: document.getElementById('day-night-indicator'), // Keep this one            countdownDiv: document.getElementById('countdown'),
             dayNightIndicator: document.getElementById('day-night-indicator'),
             finalStatsDiv: document.getElementById('final-stats'),
             chatInput: document.getElementById('chatInput'),
@@ -411,6 +412,14 @@
                  }
             }
 
+            function formatTime(totalSeconds) {
+                if (totalSeconds < 0) totalSeconds = 0;
+                const minutes = Math.floor(totalSeconds / 60);
+                const seconds = Math.floor(totalSeconds % 60);
+                const paddedSeconds = seconds < 10 ? '0' + seconds : seconds;
+                return `${minutes}:${paddedSeconds}`;
+            }
+
             // UPDATED updateHUD function for Multiplayer Stats
             function updateHUD(player, serverState) {
                 // Find local player and teammate
@@ -469,15 +478,41 @@
                 }
 
 
-                // --- Update General Game Info (Score/Level) ---
-                if (DOM.gameInfoDiv) {
-                     const totalScore = serverState?.score ?? 0; // Use game's total score from server
-                     DOM.gameInfoDiv.innerHTML = `Score: ${totalScore} | Level: ${serverState?.level ?? 1}`;
+                // --- Update General Game Info (Score) ---
+
+                // --- Update Score ---
+                if (DOM.gameScoreDiv) {
+                    const totalScore = serverState?.score ?? 0;
+                    DOM.gameScoreDiv.textContent = `Score: ${totalScore}`;
                 } else {
-                     log("DOM.gameInfoDiv not found"); // Log error if element missing
+                    log("DOM.gameScoreDiv not found");
                 }
 
-             } // End of updateHUD
+                // --- Update Combined Day/Night Indicator & Timer ---
+                if (DOM.dayNightIndicator) {
+                    if (serverState?.status === 'active' && serverState?.day_night_timer_remaining !== undefined) {
+                        const remaining = serverState.day_night_timer_remaining;
+                        const phaseText = serverState.is_night ? "Night" : "Day";
+                        // Combine Phase Text and Formatted Time
+                        DOM.dayNightIndicator.textContent = `${phaseText} ${formatTime(remaining)}`;
+                        DOM.dayNightIndicator.style.display = 'inline-block'; // Show it
+                    } else {
+                        // Hide the indicator when game is not active
+                        DOM.dayNightIndicator.style.display = 'none';
+                        // Optional: Reset text when hidden?
+                        // DOM.dayNightIndicator.textContent = "Day --:--";
+                    }
+                } else {
+                    log("DOM.dayNightIndicator not found");
+                }
+
+                // We also need to update the canvas background color based on is_night
+                // Let's keep the updateDayNight function separate for that responsibility
+                updateDayNight(serverState); // Call the existing function to handle background/container class
+
+            } // End of updateHUD
+
+
 
             function addChatMessage(sender, message, isSelf, isSystem = false) {
                 // Add check for DOM.chatLog existence
