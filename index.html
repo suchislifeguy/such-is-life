@@ -298,6 +298,10 @@
         const PLAYER_DEFAULTS = { width: 20, height: 20, max_health: 100 };
         const ENEMY_DEFAULTS = { width: 25, height: 25, max_health: 50 };
         const BULLET_DEFAULTS = { radius: 4 };
+        const ENEMY_TYPE_CHASER = 'chaser'; 
+        const ENEMY_TYPE_SHOOTER = 'shooter'; 
+        const BULLET_TYPE_STANDARD = 'standard'; 
+        const BULLET_TYPE_STANDARD_ENEMY = 'standard_enemy'; 
         // --- End Constants ---
 
         // --- Utility Functions ---
@@ -844,9 +848,16 @@
         })();
         
         // --- Rendering "Module" ---
+        // --- Rendering "Module" ---
         const Renderer = (() => {
             const ctx = DOM.ctx;
             const lerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.2;
+
+            // Define enemy type constants locally to match backend
+            const ENEMY_TYPE_CHASER = 'chaser';
+            const ENEMY_TYPE_SHOOTER = 'shooter';
+            const BULLET_TYPE_STANDARD = 'standard';
+            const BULLET_TYPE_STANDARD_ENEMY = 'standard_enemy';
 
             function drawGame() {
                  // Background color is now set via CSS based on day/night state changes
@@ -855,19 +866,21 @@
 
                  // Determine which state object to use for rendering
                  let stateToRender;
+                 // Determine which state object to use based on mode
                  if (appState.mode === 'singleplayer') {
-                     // Assuming SP uses server state for now
-                     stateToRender = appState.serverState;
-                     // If purely local SP, would be: stateToRender = Game.getLocalGameState();
-                     // Adjust renderedPlayerPos directly if SP is local
-                     const spPlayer = stateToRender?.players[appState.localPlayerId];
-                     if (spPlayer) {
-                         appState.renderedPlayerPos.x = spPlayer.x;
-                         appState.renderedPlayerPos.y = spPlayer.y;
-                     }
+                      // Use the direct server state for SP for simplicity now
+                      stateToRender = appState.serverState;
+                      // Still update rendered position for local player directly
+                      const spPlayer = stateToRender?.players[appState.localPlayerId];
+                      if (spPlayer) {
+                          // In SP, rendered == predicted == server state (no lerp needed for local)
+                          appState.renderedPlayerPos.x = spPlayer.x;
+                          appState.renderedPlayerPos.y = spPlayer.y;
+                      }
                  } else { // Multiplayer uses interpolated state
                      stateToRender = getInterpolatedState(now);
                  }
+
 
                  // Don't draw if state is missing or essential info isn't ready
                  if (!stateToRender || !appState.localPlayerId || !stateToRender.players) {
@@ -877,8 +890,8 @@
 
                  // --- Draw Game Elements ---
                  drawPowerups(stateToRender.powerups);
-                 drawBullets(stateToRender.bullets);
-                 drawEnemies(stateToRender.enemies);
+                 drawBullets(stateToRender.bullets); // <-- Uses updated drawing
+                 drawEnemies(stateToRender.enemies); // <-- Uses updated drawing
                  drawPlayers(stateToRender.players); // Handles local vs remote rendering inside
                  // drawMapObstacles(stateToRender.map); // Future enhancement
             }
@@ -894,13 +907,13 @@
                     return serverState;
                 }
 
-                const timeBetweenUpdates = lastServerState.timestamp - previousServerState.timestamp;
-                const timeSinceLastUpdate = (now / 1000) - lastServerState.timestamp; // Client time (ms) vs Server time (s)
+                const timeBetweenServerUpdates = lastServerState.timestamp - previousServerState.timestamp;
+                const timeSinceLastServerUpdate = (now / 1000) - lastServerState.timestamp; // Client time (ms) vs Server time (s)
 
                 // Prevent division by zero and handle potential timing issues
                 let factor = 0;
-                if (timeBetweenUpdates > 0.001) { // Avoid division by zero or tiny intervals
-                    factor = timeSinceLastUpdate / timeBetweenUpdates;
+                if (timeBetweenServerUpdates > 0.001) { // Avoid division by zero or tiny intervals
+                    factor = timeSinceLastServerUpdate / timeBetweenServerUpdates;
                 }
 
                 // Clamp factor: Usually 0-1, allow slight extrapolation (e.g., up to 1.5) if needed for smoothness
@@ -920,23 +933,28 @@
 
                         // Check if entity exists in the necessary states for interpolation
                         if (previous && last && current) {
-                            // Don't interpolate the local player - use reconciled render position
-                            if (id === appState.localPlayerId) {
-                                current.x = appState.renderedPlayerPos.x;
-                                current.y = appState.renderedPlayerPos.y;
-                            }
-                            // Interpolate other entities based on *previous* and *last* states
-                            else if (current.x !== undefined && previous.x !== undefined && last.x !== undefined) {
-                                // Lerp between the position in the previous state and the last state
-                                current.x = lerp(previous.x, last.x, factor);
-                                current.y = lerp(previous.y, last.y, factor);
-                            }
+                            // Interpolate position if available in all three relevant states
+                            if (current.x !== undefined && previous.x !== undefined && last.x !== undefined &&
+                                current.y !== undefined && previous.y !== undefined && last.y !== undefined)
+                            {
+                                // Don't interpolate the local player - use reconciled render position
+                                if (key === 'players' && id === appState.localPlayerId) {
+                                    current.x = appState.renderedPlayerPos.x;
+                                    current.y = appState.renderedPlayerPos.y;
+                                }
+                                // Interpolate other entities based on *previous* and *last* states
+                                else {
+                                    current.x = lerp(previous.x, last.x, factor);
+                                    current.y = lerp(previous.y, last.y, factor);
+                                }
+                           }
                         }
                         // If entity wasn't in previous states, just use its current position from serverState
                     });
                 });
                 return iState; // Return the interpolated state object
             }
+
 
             // --- Specific Drawing Functions ---
             function drawPlayers(players) {
@@ -955,16 +973,12 @@
 
                     drawPlayerRect(drawX, drawY, width, height, isSelf); // Pass dimensions
                     drawHealthBar(drawX, drawY, width, player.health, maxHealth); // Use actual width
-                    // Draw player chat message if active (logic needed)
                 });
             }
 
             function drawPlayerRect(x, y, w, h, isSelf) {
-                 // Placeholder: Replace with sprite drawing logic
                  ctx.fillStyle = isSelf ? (getCssVar('--player-color') || 'red') : (getCssVar('--other-player-color') || 'blue');
                  ctx.fillRect(x - w / 2, y - h / 2, w, h);
-                 // Example direction indicator (replace with sprite rotation)
-                 // ctx.fillStyle = '#FFF'; ctx.beginPath(); ctx.moveTo(x, y - h / 2 - 2); ctx.lineTo(x - 3, y - h / 2 + 2); ctx.lineTo(x + 3, y - h / 2 + 2); ctx.fill();
             }
 
             function drawEnemies(enemies) {
@@ -974,33 +988,91 @@
                     const width = enemy.width ?? ENEMY_DEFAULTS.width;
                     const height = enemy.height ?? ENEMY_DEFAULTS.height;
                     const maxHealth = enemy.max_health ?? ENEMY_DEFAULTS.max_health;
-                    drawEnemyRect(enemy.x, enemy.y, width, height);
+                    // --- DRAW ENEMY RECT WITH COLOR BASED ON TYPE ---
+                    drawEnemyRect(enemy.x, enemy.y, width, height, enemy.type); // Pass type
                     drawHealthBar(enemy.x, enemy.y, width, enemy.health, maxHealth);
                 });
             }
 
-            function drawEnemyRect(x, y, w, h) {
-                 // Placeholder: Replace with sprite drawing logic
-                 ctx.fillStyle = getCssVar('--enemy-color') || 'green';
+            // MODIFIED to accept type and change color
+            function drawEnemyRect(x, y, w, h, type) {
+                 if (type === ENEMY_TYPE_SHOOTER) {
+                     ctx.fillStyle = '#FFA500'; // Orange for shooters
+                 } else { // Default chaser or unknown type
+                     ctx.fillStyle = getCssVar('--enemy-color') || 'green'; // Default green
+                 }
                  ctx.fillRect(x - w / 2, y - h / 2, w, h);
             }
 
             function drawBullets(bullets) {
                 if (!bullets) return;
                 Object.values(bullets).forEach(bullet => {
-                     if (!bullet) return;
-                     const radius = bullet.radius ?? BULLET_DEFAULTS.radius;
-                     drawBulletCircle(bullet.x, bullet.y, radius, bullet.owner_type === 'player');
+                    if (!bullet) return;
+                    // Use defaults if values missing (important for interpolated state before full data arrives)
+                    const x = bullet.x ?? 0;
+                    const y = bullet.y ?? 0;
+                    const vx = bullet.vx ?? 0;
+                    const vy = bullet.vy ?? 0;
+                    const radius = bullet.radius ?? BULLET_DEFAULTS.radius;
+                    const bulletType = bullet.bullet_type || BULLET_TYPE_STANDARD; // Default if type missing
+                    const ownerType = bullet.owner_type;
+
+                    // --- CHOOSE DRAW FUNCTION BASED ON TYPE ---
+                    if (bulletType === BULLET_TYPE_STANDARD || bulletType === BULLET_TYPE_STANDARD_ENEMY) {
+                         // Need velocity to draw standard bullet correctly
+                         if (vx === 0 && vy === 0) {
+                              // If velocity is zero (e.g., interpolation issue, or first frame) draw a fallback circle
+                              drawBulletCircle(x, y, radius, ownerType === 'player');
+                         } else {
+                              drawStandardBullet(x, y, vx, vy, ownerType);
+                         }
+                    } else {
+                        // Fallback or for other types (like future shotgun pellets)
+                        drawBulletCircle(x, y, radius, ownerType === 'player');
+                    }
                 });
             }
 
-            function drawBulletCircle(x, y, r, isPlayerBullet) {
-                // Placeholder: Replace with sprite/effect
-                ctx.fillStyle = isPlayerBullet ? (getCssVar('--bullet-player-color') || 'yellow') : (getCssVar('--bullet-enemy-color') || 'white');
-                ctx.beginPath();
-                ctx.arc(x, y, r, 0, Math.PI * 2);
-                ctx.fill();
-             }
+            // OLD function - keep for potential future use (e.g., shotgun pellets) or fallback
+             function drawBulletCircle(x, y, r, isPlayerBullet) {
+                 ctx.fillStyle = isPlayerBullet ? (getCssVar('--bullet-player-color') || 'yellow') : (getCssVar('--bullet-enemy-color') || '#C0C0C0'); // Enemy bullets silver
+                 ctx.beginPath();
+                 ctx.arc(x, y, r, 0, Math.PI * 2);
+                 ctx.fill();
+              }
+
+            // --- NEW FUNCTION TO DRAW SHAPED BULLETS ---
+            function drawStandardBullet(x, y, vx, vy, ownerType) {
+                 const length = 8; // Bullet length
+                 const width = 4;  // Bullet width
+                 // Set color based on owner
+                 const color = (ownerType === 'player')
+                               ? (getCssVar('--bullet-player-color') || 'yellow')
+                               : (getCssVar('--powerup-armor') || '#C0C0C0'); // Silver/Grey for enemy bullets
+
+                 // Calculate angle from velocity vector. Handle vx=0 case for vertical movement.
+                 const angle = Math.atan2(vy, vx);
+
+                 ctx.save(); // Save context state (transformations, styles)
+                 ctx.translate(x, y); // Move origin to bullet position
+                 ctx.rotate(angle); // Rotate context to bullet direction
+
+                 // Draw the bullet body (rectangle) centered on the new origin
+                 // Rect starts at (-length/2, -width/2) to center it
+                 ctx.fillStyle = color;
+                 ctx.fillRect(-length / 2, -width / 2, length, width);
+
+                 // Draw the cone nose (triangle)
+                 // Point starts at the front-center of the rectangle (length/2, 0)
+                 ctx.beginPath();
+                 ctx.moveTo(length / 2, 0);             // Tip of the nose
+                 ctx.lineTo(length / 2 - 3, -width / 2); // Back-left corner of nose base
+                 ctx.lineTo(length / 2 - 3, width / 2);  // Back-right corner of nose base
+                 ctx.closePath();
+                 ctx.fill(); // Use same color as body
+
+                 ctx.restore(); // Restore context state (removes translation and rotation)
+            }
 
             function drawPowerups(powerups) {
                 if (!powerups) return;
@@ -1012,32 +1084,31 @@
             }
 
             function drawPowerupSquare(x, y, size, type) {
-                 // Placeholder: Replace with sprite
-                 const colors = { /* Fetch from CSS vars */
-                     'health': getCssVar('--powerup-health') || 'lime','gun_upgrade': getCssVar('--powerup-gun') || 'fuchsia',
-                     'speed_boost': getCssVar('--powerup-speed') || 'aqua','armor': getCssVar('--powerup-armor') || 'silver',
+                 const colors = {
+                     'health': getCssVar('--powerup-health') || 'lime',
+                     'gun_upgrade': getCssVar('--powerup-gun') || 'fuchsia',
+                     'speed_boost': getCssVar('--powerup-speed') || 'aqua',
+                     'armor': getCssVar('--powerup-armor') || 'silver',
                  };
-                 ctx.fillStyle = colors[type] || '#CCC'; // Default color
+                 ctx.fillStyle = colors[type] || '#CCC';
                  ctx.fillRect(x - size / 2, y - size / 2, size, size);
-                 // Optional: Draw letter indication
                  ctx.fillStyle = '#000'; ctx.font = `bold ${size * 0.7}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                  ctx.fillText((type?.[0] ?? '?').toUpperCase(), x, y + 1);
             }
+
             function drawHealthBar(x, y, width, currentHealth, maxHealth) {
-                if (maxHealth <= 0) return; // Avoid division by zero
+                if (maxHealth <= 0) return;
                 const barHeight = 5;
-                const yOffset = -10; // Position above the entity center
-                const barWidth = Math.max(20, width * 0.8); // Make bar slightly smaller than entity, min width
+                const yOffset = -( (width/2) + 5 ); // Position above the entity's top edge
+                const barWidth = Math.max(20, width * 0.8);
                 const currentWidth = Math.max(0, (currentHealth / maxHealth) * barWidth);
                 const healthPercentage = currentHealth / maxHealth;
-                const barX = x - barWidth / 2; // Center the bar
-                const barY = y + yOffset - barHeight / 2; // Center vertically
+                const barX = x - barWidth / 2;
+                const barY = y + yOffset - barHeight; // Align top of bar with yOffset
 
-                // Background
                 ctx.fillStyle = getCssVar('--health-bar-bg') || '#555';
                 ctx.fillRect(barX, barY, barWidth, barHeight);
 
-                // Health fill based on percentage
                 let barColor = getCssVar('--health-bar-low') || '#F44336';
                 if (healthPercentage > 0.66) barColor = getCssVar('--health-bar-high') || '#4CAF50';
                 else if (healthPercentage > 0.33) barColor = getCssVar('--health-bar-medium') || '#FFC107';
@@ -1049,9 +1120,6 @@
             return { drawGame };
         })(); // End Renderer module IIFE
 
-
-        // --- Core Game Flow & State "Module" ---
-        // Assumes appState is declared *before* this module definition
         const Game = (() => {
 
             // --- Game Actions ---
