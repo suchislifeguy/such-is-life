@@ -371,6 +371,7 @@
             lastStateReceiveTime: performance.now(), // Initialize with current time
 
         };
+        let localPlayerMuzzleFlash = { active: false, endTime: 0, aimDx: 0, aimDy: 0 };
         let socket = null; // Single WebSocket connection reference
 
         // --- Logging Wrapper ---
@@ -843,6 +844,11 @@
 
                  const aimDirection = { dx: normalizedDx, dy: normalizedDy };
 
+                 localPlayerMuzzleFlash.active = true;
+                 localPlayerMuzzleFlash.endTime = performance.now() + 75; // Flash duration (75ms)
+                 localPlayerMuzzleFlash.aimDx = aimDirection.dx; // Store aim for drawing
+                 localPlayerMuzzleFlash.aimDy = aimDirection.dy;
+ 
                  log("Sending shoot message. Dir:", aimDirection);
                  Network.sendMessage({ type: 'player_shoot', direction: aimDirection });
                  // Optional: Play shoot sound locally
@@ -928,43 +934,84 @@
                 ctx.fill();
             }
 
+            function drawMuzzleFlash(playerX, playerY, aimDx, aimDy) {
+                const flashSizeBase = 10;
+                const flashSizeVariation = 5;
+                const flashColor = 'rgba(255, 220, 50, 0.9)'; // Bright yellow/orange
+                const offsetDistance = 12;
+                const flashX = playerX + aimDx * offsetDistance;
+                const flashY = playerY + aimDy * offsetDistance;
+                const flashSize = flashSizeBase + Math.random() * flashSizeVariation;
+
+                ctx.fillStyle = flashColor;
+                ctx.beginPath();
+                ctx.arc(flashX, flashY, flashSize / 2, 0, Math.PI * 2); // Simple circle
+                ctx.fill();
+            }
+
             function drawGame() {
-                 // Background color is now set via CSS based on day/night state changes
-                 ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-                 const now = performance.now();
+                // 1. Preparation
+                ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                const now = performance.now();
 
-                 // Determine which state object to use for rendering
-                 let stateToRender;
-                 // Determine which state object to use based on mode
-                 if (appState.mode === 'singleplayer') {
-                      // Use the direct server state for SP for simplicity now
-                      stateToRender = appState.serverState;
-                      // Still update rendered position for local player directly
-                      const spPlayer = stateToRender?.players[appState.localPlayerId];
-                      if (spPlayer) {
-                          // In SP, rendered == predicted == server state (no lerp needed for local)
-                          appState.renderedPlayerPos.x = spPlayer.x;
-                          appState.renderedPlayerPos.y = spPlayer.y;
-                      }
-                 } else { // Multiplayer uses interpolated state
-                     stateToRender = getInterpolatedState(now);
-                 }
+                // 2. Determine State to Render (SP vs MP/Interpolated)
+                let stateToRender;
+                if (appState.mode === 'singleplayer') {
+                    stateToRender = appState.serverState;
+                    // In SP, prediction/interpolation isn't used for the local player.
+                    // Directly use server position for rendering.
+                    const spPlayer = stateToRender?.players[appState.localPlayerId];
+                    if (spPlayer) {
+                        appState.renderedPlayerPos.x = spPlayer.x;
+                        appState.renderedPlayerPos.y = spPlayer.y;
+                    }
+                } else { // Multiplayer uses interpolated state
+                    stateToRender = getInterpolatedState(now);
+                }
 
-
-                 // Don't draw if state is missing or essential info isn't ready
-                 if (!stateToRender || !appState.localPlayerId || !stateToRender.players) {
-                    // log("Skipping draw: No state, localPlayerId, or players");
+                // 3. Guard Clause: Stop if essential render data is missing
+                if (!stateToRender || !appState.localPlayerId || !stateToRender.players) {
+                    // log("Skipping draw: Missing state, localPlayerId, or players");
                     return;
-                 }
+                }
 
-                 // --- Draw Game Elements ---
-                 drawCampfireAura(stateToRender.campfire);
-                 drawPowerups(stateToRender.powerups);
-                 drawBullets(stateToRender.bullets); // <-- Uses updated drawing
-                 drawEnemies(stateToRender.enemies); // <-- Uses updated drawing
-                 drawPlayers(stateToRender.players); // Handles local vs remote rendering inside
-                 drawDamageTexts(stateToRender.damage_texts);
-                 // drawMapObstacles(stateToRender.map); // Future enhancement
+                // 4. Handle Muzzle Flash State (Decide if it should be drawn)
+                let shouldDrawMuzzleFlash = false;
+                if (localPlayerMuzzleFlash.active) {
+                    if (now < localPlayerMuzzleFlash.endTime) {
+                        shouldDrawMuzzleFlash = true; // Still active, mark for drawing this frame
+                    } else {
+                        localPlayerMuzzleFlash.active = false; // Time expired, deactivate for next frame
+                    }
+                }
+
+                // --- START DRAWING ---
+
+                // 5. Draw Background Elements
+                drawCampfireAura(stateToRender.campfire); // Draw aura first
+
+                // 6. Draw Transient Effects (On top of background, under entities)
+                if (shouldDrawMuzzleFlash) {
+                    drawMuzzleFlash(
+                        appState.renderedPlayerPos.x, // Use local player's rendered position
+                        appState.renderedPlayerPos.y,
+                        localPlayerMuzzleFlash.aimDx, // Use stored aim direction
+                        localPlayerMuzzleFlash.aimDy
+                    );
+                }
+
+                // 7. Draw Core Game Entities (Order matters for layering)
+                // (Individual draw functions should handle null/undefined checks internally)
+                drawPowerups(stateToRender.powerups);
+                drawBullets(stateToRender.bullets);
+                drawEnemies(stateToRender.enemies);
+                drawPlayers(stateToRender.players); // Assumes drawPlayers checks internally
+                drawDamageTexts(stateToRender.damage_texts); // Draw damage text last (on top)
+
+                // 8. Future Placeholders
+                // drawMapObstacles(stateToRender.map);
+
+                // --- END DRAWING ---
             }
 
             function getInterpolatedState(now) {
