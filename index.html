@@ -51,24 +51,23 @@
             --campfire-aura-color: rgba(255, 165, 0, 0.15); /* Orange aura */
         }
 
-        /* --- Add CSS Keyframes for Dripping Effect --- */
-        @keyframes drip {
-            0% {
-                transform: translateY(-100%) scaleY(0.5); /* Start squashed above */
-                opacity: 0;
-            }
-            30% {
-                transform: translateY(0) scaleY(1); /* Appear */
-                opacity: 0.8;
-            }
-            80% {
-                transform: translateY(90%) scaleY(0.8); /* Stretch down */
-                opacity: 0.5;
-            }
-            100% {
-                transform: translateY(120%) scaleY(0); /* Disappear below */
-                opacity: 0;
-            }
+        @keyframes drip-fall {
+          0% {
+            transform: translateY(0) scaleY(0.8) scaleX(1); /* Start slightly squashed at bottom of letter */
+            opacity: 0.8;
+          }
+          20% {
+             transform: translateY(5px) scaleY(1.2) scaleX(0.9); /* Start falling, elongate */
+             opacity: 1;
+          }
+          80% {
+            transform: translateY(20px) scaleY(0.5) scaleX(0.5); /* Fall further, shrink */
+            opacity: 0.6;
+          }
+          100% {
+            transform: translateY(25px) scaleY(0) scaleX(0); /* Disappear further down */
+            opacity: 0;
+          }
         }
 
         /* --- General Body/Container --- */
@@ -107,25 +106,48 @@
             text-shadow: 2px 2px 5px black;
             font-size: 2.2em; /* Make title larger */
             font-weight: bold;
-            position: relative; /* Needed for pseudo-element positioning */
-            overflow: hidden; /* Keep drip contained */
+            /* Remove position:relative and overflow:hidden if they were only for the old animation */
         }
 
-        /* Dripping Effect Pseudo-Element */
-        #top-bar h1::after {
+        /* --- NEW: Style for the spans holding dripping letters --- */
+        #top-bar h1 span {
+            position: relative; /* Crucial for positioning the ::after */
+            display: inline-block; /* Needed for pseudo-element placement */
+        }
+
+        /* --- NEW: Dripping Effect Pseudo-Element for SPANS --- */
+        #top-bar h1 span::after {
             content: '';
             position: absolute;
-            left: 50%; /* Start drip near center */
-            bottom: 0; /* Anchor to bottom of text */
-            width: 6px; /* Width of the drip */
-            height: 100%; /* Cover full height initially */
+            left: 50%; /* Center horizontally under the letter */
+            bottom: -2px; /* Start just below the baseline of the letter */
+            transform: translateX(-50%); /* Fine-tune horizontal centering */
+            width: 5px; /* Width of the drip */
+            height: 8px; /* Initial height of the drip */
             background-color: var(--title-red);
-            border-radius: 0 0 50% 50%; /* Rounded bottom */
-            transform-origin: top center;
+            border-radius: 0 0 50% 50%; /* Rounded bottom like a drop */
             opacity: 0; /* Start hidden */
-            /* Apply animation */
-            animation: drip 3s ease-in-out infinite; /* Adjust duration/timing */
-            animation-delay: 1s; /* Start after a small delay */
+            /* Apply NEW animation */
+            animation: drip-fall 2.5s ease-out infinite; /* Use new keyframes */
+        }
+
+        /* --- NEW: Stagger the animations using delays --- */
+        /* Adjust these delays to your liking */
+        #top-bar h1 span.drip-l:nth-of-type(1)::after { /* First S */
+            animation-delay: 0.5s;
+        }
+        #top-bar h1 span.drip-m:nth-of-type(1)::after { /* First I */
+            animation-delay: 1.2s;
+             width: 3px; /* Make drops from 'I' thinner */
+             height: 6px;
+        }
+        #top-bar h1 span.drip-m:nth-of-type(2)::after { /* Second I */
+             animation-delay: 0.2s;
+             width: 3px; /* Make drops from 'I' thinner */
+             height: 6px;
+        }
+        #top-bar h1 span.drip-l:nth-of-type(2)::after { /* E */
+             animation-delay: 1.8s;
         }
 
         /* Stats Container Alignment */
@@ -186,7 +208,6 @@
              box-sizing: border-box;
              color: var(--text-color); /* Ensure text is light */
         }
-        /* Removed empty #game-score rule */
         #day-night-indicator {
             font-size: 15px;
             color: var(--text-color);
@@ -310,8 +331,6 @@
         #chat-log .system-message { color: var(--accent-color); font-style: italic; } /* Gold system messages */
 
         /* --- Night Mode Chat Styling --- */
-        /* Night mode styling is now handled by JS setting canvas background to --dark-bg */
-        /* We can add specific overrides if needed, but base chat log style is already dark */
         #game-container.night-mode #chat-log {
             background-color: rgba(10, 20, 25, 0.7); /* Slightly darker/more opaque maybe */
             border-color: var(--accent-color); /* Gold border in night */
