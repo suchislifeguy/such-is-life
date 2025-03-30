@@ -299,6 +299,7 @@
         const PLAYER_WIDTH = 20; const PLAYER_HEIGHT = 20;
         const ENEMY_WIDTH = 25; const ENEMY_HEIGHT = 25; const BULLET_RADIUS = 4; const POWERUP_SIZE = 12;
         const SHOOT_COOLDOWN = 200; // ms
+        const RAPID_FIRE_COOLDOWN_MULTIPLIER = 0.4;
         const INPUT_SEND_INTERVAL = 50; // ms
         const MAX_PLAYERS = 2;
         const RECONNECT_DELAY = 3000; // ms
@@ -856,50 +857,65 @@
 
              // Handle shooting logic (triggered by space or mouse click)
              function handleShooting() {
-                 // Check cooldown and game status
-                 if (appState.serverState?.status !== 'active') return;
+                 // 1. Check Game Status
+                 if (appState.serverState?.status !== 'active') return; // Can only shoot if game is active
+
+                 // 2. Calculate Actual Cooldown based on Ammo Type
+                 const playerState = appState.serverState?.players?.[appState.localPlayerId];
+                 // Default to 'standard' if state or ammo type is missing
+                 const currentAmmo = playerState?.active_ammo_type || 'standard';
+                 let actualShootCooldown = SHOOT_COOLDOWN; // Base cooldown (e.g., 200ms)
+
+                 if (currentAmmo === 'ammo_rapid_fire') {
+                     // Apply multiplier if rapid fire is active
+                     actualShootCooldown = SHOOT_COOLDOWN * RAPID_FIRE_COOLDOWN_MULTIPLIER; // e.g., 200 * 0.4 = 80ms
+                     // Optional: log for debugging
+                     // log("Rapid Fire Active! Cooldown:", actualShootCooldown);
+                 }
+
+                 // 3. Check Cooldown Timer
                  const now = Date.now();
-                 if (now - lastShotTime < SHOOT_COOLDOWN) return; // Check cooldown early
+                 if (now - lastShotTime < actualShootCooldown) {
+                     // Cooldown active, prevent firing
+                     return;
+                 }
+                 lastShotTime = now; // Update last shot time ONLY if allowed to fire
 
-                 lastShotTime = now;
-
-                 // Calculate Aim Direction based on mouse position relative to player
-                 // Use rendered position for immediate feedback, server validates later
+                 // 4. Calculate Aim Direction (using mouse relative to player)
                  const playerRenderX = appState.renderedPlayerPos.x;
                  const playerRenderY = appState.renderedPlayerPos.y;
-
                  let aimDx = mouseCanvasPos.x - playerRenderX;
                  let aimDy = mouseCanvasPos.y - playerRenderY;
 
                  // Normalize the direction vector
                  const magnitude = Math.sqrt(aimDx * aimDx + aimDy * aimDy);
-
                  let normalizedDx = 0;
-                 let normalizedDy = -1; // Default to UP if magnitude is zero (mouse exactly on player center)
+                 let normalizedDy = -1; // Default aim UP if magnitude is ~zero
 
-                 if (magnitude > 0.01) { // Avoid division by zero
+                 if (magnitude > 0.01) { // Avoid division by zero/tiny values
                      normalizedDx = aimDx / magnitude;
                      normalizedDy = aimDy / magnitude;
                  }
-
                  const aimDirection = { dx: normalizedDx, dy: normalizedDy };
 
+                 // 5. Trigger Local Effects (Muzzle Flash)
                  localPlayerMuzzleFlash.active = true;
-                 localPlayerMuzzleFlash.endTime = performance.now() + 75; // Flash duration (75ms)
-                 localPlayerMuzzleFlash.aimDx = aimDirection.dx; // Store aim for drawing
+                 localPlayerMuzzleFlash.endTime = performance.now() + 75; // Flash duration
+                 localPlayerMuzzleFlash.aimDx = aimDirection.dx; // Store direction for drawing flash
                  localPlayerMuzzleFlash.aimDy = aimDirection.dy;
- 
-                 log("Sending shoot message. Dir:", aimDirection);
+
+                 // 6. Send Shoot Message to Server
+                 // log("Sending shoot message. Dir:", aimDirection); // Optional log
                  Network.sendMessage({ type: 'player_shoot', direction: aimDirection });
+
                  // Optional: Play shoot sound locally
                  // Game.playSound('shoot');
              }
 
-             // Expose necessary functions
-             return { setup, cleanup, getMovementInputVector };
-        })();
+             // Expose necessary functions (Keep existing exports)
+             return { setup, cleanup, getMovementInputVector }; // Add handleShooting if it wasn't exposed, but likely isn't needed externally
+        })(); // End Input IIFE
         
-        // --- Rendering "Module" ---
         // --- Rendering "Module" ---
         const Renderer = (() => {
             const ctx = DOM.ctx;
@@ -1515,95 +1531,165 @@
             }
 
             function drawBullets(bullets) {
-                if (!bullets) return;
+                if (!bullets) return; // Exit if no bullets data
+
                 Object.values(bullets).forEach(bullet => {
-                    if (!bullet) return;
-                    // Use defaults if values missing (important for interpolated state before full data arrives)
+                    if (!bullet) return; // Skip if bullet data is invalid
+
+                    // Extract bullet properties, providing defaults
                     const x = bullet.x ?? 0;
                     const y = bullet.y ?? 0;
                     const vx = bullet.vx ?? 0;
                     const vy = bullet.vy ?? 0;
+                    // Use the bullet's specific radius if provided by backend, else default
                     const radius = bullet.radius ?? BULLET_DEFAULTS.radius;
-                    const bulletType = bullet.bullet_type || BULLET_TYPE_STANDARD; // Default if type missing
-                    const ownerType = bullet.owner_type;
+                    // Use bullet type string directly ('standard', 'ammo_shotgun', etc.)
+                    const bulletType = bullet.bullet_type || 'standard';
+                    const ownerType = bullet.owner_type; // 'player' or 'enemy'
 
-                    // --- CHOOSE DRAW FUNCTION BASED ON TYPE ---
-                    if (bulletType === BULLET_TYPE_STANDARD || bulletType === BULLET_TYPE_STANDARD_ENEMY) {
-                         // Need velocity to draw standard bullet correctly
-                         if (vx === 0 && vy === 0) {
-                              // If velocity is zero (e.g., interpolation issue, or first frame) draw a fallback circle
-                              drawBulletCircle(x, y, radius, ownerType === 'player');
-                         } else {
-                              drawStandardBullet(x, y, vx, vy, ownerType);
-                         }
-                    } else {
-                        // Fallback or for other types (like future shotgun pellets)
+                    // --- Choose Drawing Style Based on Type ---
+
+                    // Check if velocity is valid for angle calculation
+                    const hasVelocity = Math.abs(vx) > 0.01 || Math.abs(vy) > 0.01;
+
+                    // Heavy slugs and potentially others might use the shaped drawing
+                    if (bulletType === 'ammo_heavy_slug' || bulletType === 'standard' || bulletType === 'ammo_rapid_fire' || bulletType === 'standard_enemy') {
+                        if (hasVelocity) {
+                            // Pass the whole bullet object to use its radius
+                            drawShapedBullet(bullet);
+                        } else {
+                            // Fallback if velocity is zero (draw simple circle)
+                            drawBulletCircle(x, y, radius, ownerType === 'player');
+                        }
+                    }
+                    // Shotgun pellets use the simple circle for now (could customize later)
+                    else if (bulletType === 'ammo_shotgun') {
+                        // Use the potentially smaller radius sent from backend
+                        drawBulletCircle(x, y, radius, ownerType === 'player');
+                    }
+                    // Fallback for any other unknown types
+                    else {
                         drawBulletCircle(x, y, radius, ownerType === 'player');
                     }
                 });
             }
 
-            // OLD function - keep for potential future use (e.g., shotgun pellets) or fallback
-             function drawBulletCircle(x, y, r, isPlayerBullet) {
-                 ctx.fillStyle = isPlayerBullet ? (getCssVar('--bullet-player-color') || 'yellow') : (getCssVar('--bullet-enemy-color') || '#C0C0C0'); // Enemy bullets silver
-                 ctx.beginPath();
-                 ctx.arc(x, y, r, 0, Math.PI * 2);
-                 ctx.fill();
-              }
+            // Draws a simple circle - used as fallback and for shotgun pellets
+            function drawBulletCircle(x, y, r, isPlayerBullet) {
+                // Determine color based on ownership
+                ctx.fillStyle = isPlayerBullet
+                                ? (getCssVar('--bullet-player-color') || 'yellow')
+                                : (getCssVar('--bullet-enemy-color') || '#C0C0C0'); // Enemy bullets silver/grey
 
-            // --- NEW FUNCTION TO DRAW SHAPED BULLETS ---
-            function drawStandardBullet(x, y, vx, vy, ownerType) {
-                 const length = 8; // Bullet length
-                 const width = 4;  // Bullet width
-                 // Set color based on owner
-                 const color = (ownerType === 'player')
-                               ? (getCssVar('--bullet-player-color') || 'yellow')
-                               : (getCssVar('--powerup-armor') || '#C0C0C0'); // Silver/Grey for enemy bullets
+                ctx.beginPath();
+                ctx.arc(x, y, r, 0, Math.PI * 2); // Draw circle with given radius
+                ctx.fill();
+            }
 
-                 // Calculate angle from velocity vector. Handle vx=0 case for vertical movement.
-                 const angle = Math.atan2(vy, vx);
+            // Draws the standard rectangle-with-cone bullet, potentially scaled by radius
+            // Now accepts the whole bullet object
+            function drawShapedBullet(bullet) {
+                // Extract properties from bullet object
+                const x = bullet.x;
+                const y = bullet.y;
+                const vx = bullet.vx;
+                const vy = bullet.vy;
+                const ownerType = bullet.owner_type;
+                // Use the bullet's specific radius for scaling
+                const radius = bullet.radius || BULLET_DEFAULTS.radius;
 
-                 ctx.save(); // Save context state (transformations, styles)
-                 ctx.translate(x, y); // Move origin to bullet position
-                 ctx.rotate(angle); // Rotate context to bullet direction
+                // --- Scaling based on radius ---
+                // Make length and width proportional to the bullet's radius
+                // Adjust these base values and multiplier as needed for visual appeal
+                const baseLength = 8;
+                const baseWidth = 4;
+                const scaleFactor = radius / BULLET_DEFAULTS.radius; // How much bigger/smaller than default
+                const length = baseLength * scaleFactor;
+                const width = baseWidth * scaleFactor;
+                // --- End Scaling ---
 
-                 // Draw the bullet body (rectangle) centered on the new origin
-                 // Rect starts at (-length/2, -width/2) to center it
-                 ctx.fillStyle = color;
-                 ctx.fillRect(-length / 2, -width / 2, length, width);
+                // Determine color based on owner
+                const color = (ownerType === 'player')
+                              ? (getCssVar('--bullet-player-color') || 'yellow')
+                              : (getCssVar('--bullet-enemy-color') || '#C0C0C0'); // Use consistent enemy bullet color
 
-                 // Draw the cone nose (triangle)
-                 // Point starts at the front-center of the rectangle (length/2, 0)
-                 ctx.beginPath();
-                 ctx.moveTo(length / 2, 0);             // Tip of the nose
-                 ctx.lineTo(length / 2 - 3, -width / 2); // Back-left corner of nose base
-                 ctx.lineTo(length / 2 - 3, width / 2);  // Back-right corner of nose base
-                 ctx.closePath();
-                 ctx.fill(); // Use same color as body
+                // Calculate angle from velocity
+                const angle = Math.atan2(vy, vx);
 
-                 ctx.restore(); // Restore context state (removes translation and rotation)
+                ctx.save(); // Save context state
+                ctx.translate(x, y); // Move origin to bullet position
+                ctx.rotate(angle); // Rotate to bullet direction
+
+                // Draw the scaled bullet body (rectangle) centered on the new origin
+                ctx.fillStyle = color;
+                ctx.fillRect(-length / 2, -width / 2, length, width);
+
+                // Draw the scaled cone nose (triangle)
+                const noseLength = length * 0.4; // Make nose proportional to body length
+                ctx.beginPath();
+                ctx.moveTo(length / 2, 0);                 // Tip of the nose
+                ctx.lineTo(length / 2 - noseLength, -width / 2); // Back-left corner of nose base
+                ctx.lineTo(length / 2 - noseLength, width / 2);  // Back-right corner of nose base
+                ctx.closePath();
+                ctx.fill(); // Use same color as body
+
+                ctx.restore(); // Restore context state
             }
 
             function drawPowerups(powerups) {
-                if (!powerups) return;
+                if (!powerups) return; // Exit if no powerups data
                 Object.values(powerups).forEach(powerup => {
-                    if (!powerup) return;
-                    const size = powerup.size ?? POWERUP_SIZE;
-                    drawPowerupSquare(powerup.x, powerup.y, size, powerup.type);
+                    if (!powerup) return; // Skip invalid data
+
+                    const size = powerup.size ?? POWERUP_DEFAULTS.size; // Use default if needed
+                    const type = powerup.type; // e.g., 'health', 'armor', 'ammo_shotgun'
+                    const subtype = powerup.subtype; // Only present for 'special_ammo' on backend (we don't use it for drawing here)
+
+                    // Pass the main type to the drawing function
+                    drawPowerupSquare(powerup.x, powerup.y, size, type);
                 });
             }
 
             function drawPowerupSquare(x, y, size, type) {
-                 const colors = {
+                 // Use specific colors for known base types
+                 const baseColors = {
                      'health': getCssVar('--powerup-health') || 'lime',
                      'gun_upgrade': getCssVar('--powerup-gun') || 'fuchsia',
                      'speed_boost': getCssVar('--powerup-speed') || 'aqua',
                      'armor': getCssVar('--powerup-armor') || 'silver',
                  };
-                 ctx.fillStyle = colors[type] || '#CCC';
+
+                 let fillColor = baseColors[type] || '#888'; // Default grey for unknown/ammo types
+                 let symbol = '?';
+
+                 // Determine symbol and potentially override color for ammo types
+                 // Using A, B, C temporarily
+                 if (type === 'ammo_shotgun') {
+                     symbol = 'A'; // A for Shotgun
+                     fillColor = '#FFA500'; // Orange for shotgun?
+                 } else if (type === 'ammo_heavy_slug') {
+                     symbol = 'B'; // B for Heavy Slug
+                     fillColor = '#A0522D'; // Brown for heavy?
+                 } else if (type === 'ammo_rapid_fire') {
+                     symbol = 'C'; // C for Rapid Fire
+                     fillColor = '#FFFF00'; // Yellow for rapid?
+                 } else if (baseColors[type]) {
+                     // Use first letter for standard types if color exists
+                     symbol = type[0].toUpperCase(); // H, G, S, A for standard types
+                 }
+                 // Else: it's an unknown type, keep default color and '?' symbol
+
+                 // Draw background square
+                 ctx.fillStyle = fillColor;
                  ctx.fillRect(x - size / 2, y - size / 2, size, size);
-                 ctx.fillStyle = '#000'; ctx.font = `bold ${size * 0.7}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                 ctx.fillText((type?.[0] ?? '?').toUpperCase(), x, y + 1);
+
+                 // Draw symbol in black
+                 ctx.fillStyle = '#000'; // Black symbol for contrast
+                 ctx.font = `bold ${Math.round(size * 0.7)}px monospace`; // Scale font size
+                 ctx.textAlign = 'center';
+                 ctx.textBaseline = 'middle';
+                 // Offset slightly for better centering if needed
+                 ctx.fillText(symbol, x, y + (size * 0.05)); // Small vertical offset based on size
             }
 
             function drawHealthBar(x, y, width, currentHealth, maxHealth) {
