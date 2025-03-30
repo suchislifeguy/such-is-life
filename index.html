@@ -51,71 +51,71 @@
             --campfire-aura-color: rgba(255, 165, 0, 0.15); /* Orange aura */
         }
 
+        /* --- Add CSS Keyframes for Dripping Effect --- */
         @keyframes drip-fall {
-          0% {
-            transform: translateY(0) scaleY(0.8) scaleX(1); /* Start slightly squashed at bottom of letter */
-            opacity: 0.8;
-          }
-          20% {
-             transform: translateY(5px) scaleY(1.2) scaleX(0.9); /* Start falling, elongate */
-             opacity: 1;
-          }
-          80% {
-            transform: translateY(20px) scaleY(0.5) scaleX(0.5); /* Fall further, shrink */
-            opacity: 0.6;
-          }
-          100% {
-            transform: translateY(25px) scaleY(0) scaleX(0); /* Disappear further down */
-            opacity: 0;
-          }
+            0% {
+                transform: translateY(0) scaleY(0.8) scaleX(1); /* Start slightly squashed at bottom of letter */
+                opacity: 0.8;
+            }
+            20% {
+                transform: translateY(5px) scaleY(1.2) scaleX(0.9); /* Start falling, elongate */
+                opacity: 1;
+            }
+            80% {
+                transform: translateY(20px) scaleY(0.5) scaleX(0.5); /* Fall further, shrink */
+                opacity: 0.6;
+            }
+            100% {
+                transform: translateY(25px) scaleY(0) scaleX(0); /* Disappear further down */
+                opacity: 0;
+            }
         }
 
         /* --- General Body/Container --- */
         body {
             margin: 0; display: flex; flex-direction: column; justify-content: center;
-            align-items: center; min-height: 100vh; background-color: var(--bg-color); /* Uses new dark bg */
-            font-family: var(--font-family); color: var(--text-color); /* Uses new light text */
+            align-items: center; min-height: 100vh; background-color: var(--bg-color);
+            font-family: var(--font-family); color: var(--text-color);
         }
         #game-container {
-            background-color: var(--secondary-color); /* Uses new container bg */
-            border: 5px solid var(--container-border); /* Uses new dark border */
+            background-color: var(--secondary-color);
+            border: 5px solid var(--container-border);
             border-radius: 15px; padding: 20px; padding-top: 15px;
             text-align: center; max-width: 900px;
-            width: calc(100% - 40px); position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.7); /* Darker shadow */
+            width: calc(100% - 40px); position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.7);
             overflow: hidden;
         }
 
         /* --- Top Bar Styling --- */
         #top-bar {
             display: flex;
-            flex-direction: column; /* Stack title above stats */
-            align-items: center; /* Center items horizontally */
+            flex-direction: column;
+            align-items: center;
             padding: 0 5px 10px 5px;
             margin-bottom: 10px;
-            border-bottom: 2px solid var(--primary-color); /* Dusty green border */
-            background-color: var(--top-bar-bg); /* Add subtle overlay */
-            border-radius: 10px 10px 0 0; /* Optional: round top corners */
+            border-bottom: 2px solid var(--primary-color);
+            background-color: var(--top-bar-bg);
+            border-radius: 10px 10px 0 0;
         }
 
         /* Title Styling & Animation */
         #top-bar h1 {
-            color: var(--text-color); /* Use light text color */
-            margin: 5px 0 10px 0; /* Adjust spacing */
+            color: var(--text-color);
+            margin: 5px 0 10px 0;
             padding: 0;
-            line-height: 1.1; /* Tighten line height */
+            line-height: 1.1;
             text-shadow: 2px 2px 5px black;
-            font-size: 2.2em; /* Make title larger */
+            font-size: 2.2em;
             font-weight: bold;
-            /* Remove position:relative and overflow:hidden if they were only for the old animation */
         }
 
-        /* --- NEW: Style for the spans holding dripping letters --- */
+        /* Style for the spans holding dripping letters */
         #top-bar h1 span {
             position: relative; /* Crucial for positioning the ::after */
             display: inline-block; /* Needed for pseudo-element placement */
         }
 
-        /* --- NEW: Dripping Effect Pseudo-Element for SPANS --- */
+        /* Dripping Effect Pseudo-Element for SPANS */
         #top-bar h1 span::after {
             content: '';
             position: absolute;
@@ -131,91 +131,90 @@
             animation: drip-fall 2.5s ease-out infinite; /* Use new keyframes */
         }
 
-        /* --- NEW: Stagger the animations using delays --- */
-        /* Adjust these delays to your liking */
-        #top-bar h1 span.drip-l:nth-of-type(1)::after { /* First S */
+        /* CORRECTED: Stagger the animations using delays based on span order */
+        #top-bar h1 span:nth-child(1)::after { /* First span (S) */
             animation-delay: 0.5s;
         }
-        #top-bar h1 span.drip-m:nth-of-type(1)::after { /* First I */
+        #top-bar h1 span:nth-child(2)::after { /* Second span (I) */
             animation-delay: 1.2s;
              width: 3px; /* Make drops from 'I' thinner */
              height: 6px;
         }
-        #top-bar h1 span.drip-m:nth-of-type(2)::after { /* Second I */
+        #top-bar h1 span:nth-child(3)::after { /* Third span (I) */
              animation-delay: 0.2s;
              width: 3px; /* Make drops from 'I' thinner */
              height: 6px;
         }
-        #top-bar h1 span.drip-l:nth-of-type(2)::after { /* E */
+        #top-bar h1 span:nth-child(4)::after { /* Fourth span (E) */
              animation-delay: 1.8s;
         }
 
         /* Stats Container Alignment */
         #player-stats-container {
-            width: 100%; /* Allow container to take full width */
+            width: 100%;
         }
 
-        #mp-stats-display { /* The flex container for the two boxes */
+        #mp-stats-display {
             display: flex;
-            justify-content: center; /* <<< Center the items */
-            gap: 15px; /* Keep the gap */
+            justify-content: center;
+            gap: 15px;
             flex-wrap: wrap;
-            width: 100%; /* Ensure it uses available space for centering */
-            margin-top: 5px; /* Space below title */
+            width: 100%;
+            margin-top: 5px;
         }
 
         /* Stats Box Refinement */
         .player-stats-box {
-            color: var(--text-color); /* Light text */
+            color: var(--text-color);
             font-size: 12px;
-            background: rgba(10, 20, 25, 0.6); /* Darker semi-transparent background */
-            padding: 5px 8px; /* Slightly more padding */
+            background: rgba(10, 20, 25, 0.6);
+            padding: 5px 8px;
             border-radius: 5px;
             text-align: left;
-            border: 1px solid var(--dusty-green); /* Use dusty green for border */
-            min-width: 170px; /* Adjust as needed */
+            border: 1px solid var(--dusty-green);
+            min-width: 170px;
             box-sizing: border-box;
             margin-top: 4px;
-            box-shadow: inset 0 0 5px rgba(0,0,0,0.4); /* Subtle inner shadow */
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.4);
         }
 
         .player-stats-box .stats-header {
             font-weight: bold;
-            color: var(--accent-color); /* Gold header */
+            color: var(--accent-color);
             text-align: center;
             padding-bottom: 3px;
-            margin-bottom: 4px; /* More space */
-            border-bottom: 1px dashed var(--primary-color); /* Dusty green dashed line */
+            margin-bottom: 4px;
+            border-bottom: 1px dashed var(--primary-color);
             font-size: 13px;
         }
 
-        .player-stats-box .stats-content span { /* Labels inside stats */
+        .player-stats-box .stats-content span {
             display: inline-block;
-            min-width: 45px; /* Adjust label width */
+            min-width: 45px;
             font-weight: bold;
-            color: var(--dusty-green); /* Use green for labels */
+            color: var(--dusty-green);
         }
 
         /* Game Info Container */
          #game-info-container {
-             display: flex; /* Use flex to arrange items */
-             justify-content: space-around; /* Space out score and day/night */
+             display: flex;
+             justify-content: space-around;
              align-items: center;
-             width: 100%; /* Take full width below stats */
-             margin-top: 10px; /* Space above game info */
+             width: 100%;
+             margin-top: 10px;
              font-size: 14px;
-             padding: 0 10px; /* Add some padding */
+             padding: 0 10px;
              box-sizing: border-box;
-             color: var(--text-color); /* Ensure text is light */
+             color: var(--text-color);
         }
         #day-night-indicator {
             font-size: 15px;
             color: var(--text-color);
             background: rgba(0, 0, 0, 0.5);
-            padding: 4px 8px; /* Adjust padding */
+            padding: 4px 8px;
             border-radius: 5px;
             z-index: 5;
-            display: none; /* JS shows it */
+            display: none;
         }
 
 
@@ -226,29 +225,29 @@
         #join-code-section,
         #game-area,
         #game-over-screen {
-            display: none; /* Hide all sections by default */
+            display: none;
         }
 
         /* --- Common Elements --- */
         #game-status {
              min-height: 25px;
-             color: var(--accent-color); /* Gold status text */
+             color: var(--accent-color);
              font-weight: bold;
              margin-bottom: 15px;
         }
 
         /* Buttons */
         button {
-            background-color: var(--primary-color); /* Dusty Green buttons */
-            color: var(--dark-bg); /* Dark text on buttons */
-            border: 2px solid var(--container-border); /* Dark border */
+            background-color: var(--primary-color);
+            color: var(--dark-bg);
+            border: 2px solid var(--container-border);
             padding: 10px 20px; margin: 10px 5px; cursor: pointer; font-family: var(--font-family);
             font-size: 1rem; transition: background-color 0.2s ease, color 0.2s ease; border-radius: 5px;
             font-weight: bold;
         }
         button:hover:not(:disabled) {
-            background-color: #9cb49a; /* Lighter dusty green on hover */
-            color: #000; /* Black text on hover */
+            background-color: #9cb49a;
+            color: #000;
         }
         button:disabled {
             background-color: #555; color: #aaa; cursor: not-allowed; border-color: #444;
@@ -257,9 +256,9 @@
         /* Inputs */
         input[type="text"] {
             padding: 10px; margin: 10px 5px; width: 180px; font-family: var(--font-family); font-size: 1rem;
-            border: 2px solid var(--primary-color); /* Dusty green border */
-            border-radius: 5px; background-color: var(--dark-text); /* Light background */
-            color: var(--dark-bg); /* Dark text */
+            border: 2px solid var(--primary-color);
+            border-radius: 5px; background-color: var(--dark-text);
+            color: var(--dark-bg);
             text-transform: uppercase;
         }
 
@@ -268,9 +267,9 @@
              padding: 30px; text-align: center;
              box-sizing: border-box;
              width: 100%;
-             color: var(--text-color); /* Ensure light text in menus */
+             color: var(--text-color);
         }
-        .menu-section h2 { color: var(--accent-color); margin-bottom: 20px; } /* Gold headings */
+        .menu-section h2 { color: var(--accent-color); margin-bottom: 20px; }
         .menu-section button {
             display: block; width: 80%; max-width: 300px;
             margin: 15px auto; padding: 15px 20px; font-size: 1.2rem;
@@ -281,8 +280,8 @@
          #host-wait-section p, #join-code-section p { font-size: 1.1rem; margin-bottom: 10px; }
          #game-code-display {
              font-size: 1.8rem; font-weight: bold;
-             color: var(--accent-color); /* Gold code */
-             background-color: var(--dark-bg); /* Dark background behind code */
+             color: var(--accent-color);
+             background-color: var(--dark-bg);
              padding: 5px 15px; border-radius: 5px; display: inline-block;
              margin: 10px 0; user-select: all; border: 1px solid var(--primary-color);
          }
@@ -290,69 +289,67 @@
 
         /* --- Game Area Elements --- */
         #gameCanvas {
-            border: 3px solid var(--primary-color); /* Dusty Green Border */
-            /* Day background - slightly lighter than container */
-            background-color: #3b5261; /* Example: lighter slate blue/grey */
-            display: block; margin: 10px auto 0px; /* Reduced bottom margin */
+            border: 3px solid var(--primary-color);
+            background-color: #3b5261; /* Day background */
+            display: block; margin: 10px auto 0px;
             max-width: 100%; height: auto;
         }
         #countdown {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            font-size: 72px; color: var(--player-color); /* Player red countdown */
+            font-size: 72px; color: var(--player-color);
             text-shadow: 3px 3px 6px black; z-index: 10; pointer-events: none; display: none;
         }
 
         /* --- Chat Section Styling --- */
         #chat-section {
-            display: flex; margin-top: 10px; /* Space above chat */
+            display: flex; margin-top: 10px;
             align-items: center; flex-wrap: wrap; width: 100%;
-            padding: 0 5px; /* Align chat input/log slightly inside canvas border */
+            padding: 0 5px;
             box-sizing: border-box;
         }
-        /* Use general input/button styles - specific styles adjusted */
         #chatInput {
              flex-grow: 1; margin-right: 5px; min-width: 200px;
-             padding: 8px; font-size: 0.9rem; margin-bottom: 5px; /* Inherits light bg/dark text */
+             padding: 8px; font-size: 0.9rem; margin-bottom: 5px;
         }
         #sendChatBtn {
-             margin-left: 5px; padding: 8px 15px; font-size: 0.9rem; margin-bottom: 5px; /* Inherits green bg/dark text */
+             margin-left: 5px; padding: 8px 15px; font-size: 0.9rem; margin-bottom: 5px;
         }
         #chat-log {
-            height: 80px; overflow-y: scroll; border: 1px solid var(--primary-color); /* Dusty green border */
-            margin-top: 5px; /* Add space above log */
-            padding: 5px; text-align: left; background: rgba(10, 20, 25, 0.5); /* Darker bg */
-            font-size: 13px; border-radius: 5px; flex-basis: 100%; order: 3; /* Ensures log is below input/button */
+            height: 80px; overflow-y: scroll; border: 1px solid var(--primary-color);
+            margin-top: 5px;
+            padding: 5px; text-align: left; background: rgba(10, 20, 25, 0.5);
+            font-size: 13px; border-radius: 5px; flex-basis: 100%; order: 3;
             transition: background-color 0.5s ease, border-color 0.5s ease;
-            color: var(--dark-text); /* Default light text */
+            color: var(--dark-text);
         }
         #chat-log div { margin-bottom: 3px; word-wrap: break-word; }
-        #chat-log .my-message { color: var(--bullet-player-color); } /* Keep yellow for self */
-        #chat-log .other-message { color: var(--text-color); } /* Standard light text */
-        #chat-log .system-message { color: var(--accent-color); font-style: italic; } /* Gold system messages */
+        #chat-log .my-message { color: var(--bullet-player-color); }
+        #chat-log .other-message { color: var(--text-color); }
+        #chat-log .system-message { color: var(--accent-color); font-style: italic; }
 
         /* --- Night Mode Chat Styling --- */
         #game-container.night-mode #chat-log {
-            background-color: rgba(10, 20, 25, 0.7); /* Slightly darker/more opaque maybe */
-            border-color: var(--accent-color); /* Gold border in night */
+            background-color: rgba(10, 20, 25, 0.7);
+            border-color: var(--accent-color);
         }
-        #game-container.night-mode #chat-log .my-message { color: #FFFF99; } /* Paler yellow */
-        #game-container.night-mode #chat-log .other-message { color: #C0C0FF; } /* Pale blue/purple */
-        #game-container.night-mode #chat-log .system-message { color: var(--accent-color); } /* Keep gold */
+        #game-container.night-mode #chat-log .my-message { color: #FFFF99; }
+        #game-container.night-mode #chat-log .other-message { color: #C0C0FF; }
+        #game-container.night-mode #chat-log .system-message { color: var(--accent-color); }
 
 
         /* --- Game Over Screen --- */
         #game-over-screen {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background-color: rgba(10, 20, 25, 0.9); /* Dark bg, more opaque */
-            padding: 30px; border: 3px solid var(--player-color); /* Keep red border */
-            border-radius: 10px; color: var(--accent-color); /* Gold text */
+            background-color: rgba(10, 20, 25, 0.9);
+            padding: 30px; border: 3px solid var(--player-color);
+            border-radius: 10px; color: var(--accent-color);
             text-align: center; z-index: 20;
-            width: 80%; max-width: 500px; display: none; /* Start hidden */
+            width: 80%; max-width: 500px; display: none;
             box-sizing: border-box;
         }
-        #game-over-screen h2 { color: var(--player-color); margin-top: 0;} /* Red heading */
-        #final-stats { margin-bottom: 20px; text-align: left; color: var(--text-color); } /* Light stats text */
-        #final-stats strong { color: white; } /* White labels */
+        #game-over-screen h2 { color: var(--player-color); margin-top: 0;}
+        #final-stats { margin-bottom: 20px; text-align: left; color: var(--text-color); }
+        #final-stats strong { color: white; }
         #game-over-screen button { margin-top: 10px; }
 
     </style>
