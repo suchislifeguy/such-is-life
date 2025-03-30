@@ -1417,9 +1417,9 @@
                 const armWidth = w * 0.2;
                 const armLength = h * 0.4;
                 const helmetWidth = w * 0.85;
-                const helmetHeight = h * 0.45;
+                const helmetHeight = h * 0.5;
                 const slitWidth = helmetWidth * 0.75;
-                const slitHeight = helmetHeight * 0.18;
+                const slitHeight = helmetHeight * 0.2;
                 const bootSize = 5;
                 const bootSpacing = w * 0.3;
 
@@ -1539,62 +1539,111 @@
                 });
             }
 
-            // 2. Updated drawEnemyRect function (now draws body/head shape)
-            function drawEnemyRect(x, y, w, h, type, enemyState) {
-                const bodyHeightRatio = 0.65; // Adjust ratios
-                const headRadiusRatio = 0.35;
-                const bodyHeight = h * bodyHeightRatio;
-                const headRadius = h * headRadiusRatio / 2;
-                const bodyCenterY = y + (h / 2) - (bodyHeight / 2); // Center of body mass
-                const headCenterY = y - (h / 2) + headRadius;       // Center of head circle
 
-                const shoulderWidth = w * 1.1; // Slightly wider shoulders
-                const waistWidth = w * 0.8;   // Slightly narrower waist
-                const neckHeight = 3;
-                const neckWidth = 4;
+            function drawEnemyRect(x, y, w, h, type, enemyState) { // enemyState includes type, health, etc.
+                // --- Colors ---
+                const skinColor = '#D2B48C';        // Beige (Face/Head)
+                const coatColor = '#8B4513';        // Brown (Coat - same for all enemies for now)
+                // Different torso colors for identification
+                const torsoColorChaser = '#2F4F4F'; // DarkSlateGray for Chasers
+                const torsoColorShooter = '#4682B4'; // SteelBlue for Shooters
+                const bootColor = '#222222';        // Dark Grey (Boots)
+                const capColor = '#111111';         // Dark Cap instead of helmet
+                const hitFlashColor = 'rgba(255, 255, 255, 0.7)';
 
-                // Determine color (same as before)
-                let bodyColor;
-                let hasBarrel = false;
-                if (type === ENEMY_TYPE_SHOOTER) { /* ... set color/barrel ... */ }
-                else { /* ... set color/barrel ... */ }
+                // Determine torso color based on enemy type
+                const isShooter = type === ENEMY_TYPE_SHOOTER; // Use 'type' passed in
+                const torsoColor = isShooter ? torsoColorShooter : torsoColorChaser;
 
-                ctx.fillStyle = bodyColor;
-                ctx.strokeStyle = 'black'; // Add outline color
-                ctx.lineWidth = 1;        // Outline width
+                // --- Proportions (Based on Player Model, adjusted for potentially different w/h) ---
+                const headRadius = h * 0.18; // Slightly larger proportion for head without helmet
+                const bodyHeight = h * 0.5;
+                const coatLengthBonus = h * 0.15;
+                const bodyWidthTop = w * 0.9;
+                const bodyWidthBottom = w * 0.7;
+                const coatWidth = w * 1.1;
+                const armWidth = w * 0.2;
+                const armLength = h * 0.4;
+                const capHeight = headRadius * 0.8; // Cap height relative to head radius
+                const capWidth = headRadius * 2.2;  // Cap width relative to head radius
+                const bootSize = 5; // Keep boots simple for now
+                const bootSpacing = w * 0.3;
 
-                // 1. Draw Body (Trapezoid)
+                // --- Calculated Positions ---
+                // Base calculations on center x, y provided
+                const headCenterY = y - (h / 2) + headRadius; // Top-most part is head center now
+                const bodyTopY = headCenterY + headRadius * 0.8; // Body starts below head
+                const bodyBottomY = bodyTopY + bodyHeight;
+                const coatTopY = bodyTopY + bodyHeight * 0.1;
+                const coatBottomY = bodyBottomY + coatLengthBonus;
+                const armTopY = bodyTopY + bodyHeight * 0.05;
+                const capTopY = headCenterY - headRadius; // Cap sits on top of head circle
+                const bootOffsetY = coatBottomY + 2;
+
+                // --- Drawing Order (Similar to Player) ---
+                ctx.save(); // Isolate drawing state
+
+                // 1. Coat
+                ctx.fillStyle = coatColor;
+                ctx.fillRect(x - coatWidth / 2, coatTopY, coatWidth, coatBottomY - coatTopY);
+
+                // 2. Torso (Use type-specific color)
+                ctx.fillStyle = torsoColor;
                 ctx.beginPath();
-                ctx.moveTo(x - shoulderWidth / 2, bodyCenterY - bodyHeight / 2); // Top-left shoulder
-                ctx.lineTo(x + shoulderWidth / 2, bodyCenterY - bodyHeight / 2); // Top-right shoulder
-                ctx.lineTo(x + waistWidth / 2, bodyCenterY + bodyHeight / 2);   // Bottom-right waist
-                ctx.lineTo(x - waistWidth / 2, bodyCenterY + bodyHeight / 2);   // Bottom-left waist
+                ctx.moveTo(x - bodyWidthTop / 2, bodyTopY);
+                ctx.lineTo(x + bodyWidthTop / 2, bodyTopY);
+                ctx.lineTo(x + bodyWidthBottom / 2, bodyBottomY);
+                ctx.lineTo(x - bodyWidthBottom / 2, bodyBottomY);
                 ctx.closePath();
                 ctx.fill();
-                // ctx.stroke(); // Optional: Draw outline
 
-                // 2. Draw Neck (Small rectangle)
-                const neckTopY = bodyCenterY - bodyHeight / 2; // Top edge of body
-                ctx.fillRect(x - neckWidth / 2, neckTopY - neckHeight, neckWidth, neckHeight);
-                // ctx.strokeRect(x - neckWidth / 2, neckTopY - neckHeight, neckWidth, neckHeight); // Optional outline
+                // 3. Arms
+                ctx.fillStyle = coatColor; // Arms match coat color
+                ctx.fillRect(x - bodyWidthTop / 2 - armWidth, armTopY, armWidth, armLength);
+                ctx.fillRect(x + bodyWidthTop / 2, armTopY, armWidth, armLength);
 
-                // 3. Draw Head (Circle)
+                // 4. Head (Simple Circle)
+                ctx.fillStyle = skinColor;
                 ctx.beginPath();
-                // Head Y position needs adjustment to sit on neck
-                const headDrawY = neckTopY - neckHeight;
-                ctx.arc(x, headDrawY, headRadius, 0, Math.PI * 2);
+                ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2);
                 ctx.fill();
-                // ctx.stroke(); // Optional outline
 
-                // 4. Draw Barrel (if shooter - adjust position relative to new body)
-                if (hasBarrel) {
-                    // ... existing barrel drawing logic, adjust Y position if needed ...
-                    // Might need to draw from x + shoulderWidth / 2
-                }
+                // 5. Cap (Simple Rectangle on top of head) - Replaces Helmet
+                ctx.fillStyle = capColor;
+                ctx.fillRect(x - capWidth / 2, capTopY, capWidth, capHeight);
 
-                // 5. Hit Flash (same as before)
+                // 6. Boots (Simple Rectangles)
+                ctx.fillStyle = bootColor;
+                // Static boots for enemies for now (no walking animation)
+                ctx.fillRect(x - bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize); // Left
+                ctx.fillRect(x + bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize); // Right
+
+                // --- Optional: Shooter Barrel ---
+                // if (isShooter) {
+                //    ctx.fillStyle = '#444444'; // Gun Color
+                //    const barrelLength = 10;
+                //    const barrelThickness = 4;
+                //    const barrelOriginY = bodyTopY + bodyHeight / 2;
+                //    // Crude barrel pointing down for now
+                //    ctx.fillRect(x - barrelThickness / 2, barrelOriginY, barrelThickness, barrelLength);
+                //    // TODO: Could orient based on target direction if available in enemyState
+                // }
+
+                ctx.restore(); // Restore drawing state
+
+                // 7. Hit Flash (Draw Last - Uses enemyState passed in)
                 if (enemyState?.hit_flash_this_tick) {
-                    // ... existing flash logic ...
+                    ctx.fillStyle = hitFlashColor;
+                    const flashMargin = 2;
+                    // Use the original x, y, w, h for bounding box
+                    ctx.fillRect(
+                        x - w / 2 - flashMargin,
+                        y - h / 2 - flashMargin,
+                        w + flashMargin * 2,
+                        h + flashMargin * 2
+                    );
+                    // As noted before, server needs to manage clearing this flag,
+                    // or client needs to clear it after rendering once.
                 }
             }
 
