@@ -1724,6 +1724,7 @@
                  }
                  // Unknown types will keep '?' and default grey color
 
+
                  // Draw background square
                  ctx.fillStyle = fillColor;
                  ctx.fillRect(x - size / 2, y - size / 2, size, size);
@@ -1739,6 +1740,26 @@
                  ctx.textAlign = 'center';
                  ctx.textBaseline = 'middle';
                  ctx.fillText(symbol, x, y + (size * 0.05)); // Keep small vertical offset
+            }
+
+            function drawHealthBar(x, y, width, currentHealth, maxHealth) {
+                if (maxHealth <= 0) return;
+                const barHeight = 5;
+                const yOffset = -( (width/2) + 18); // Position above the entity's top edge
+                const barWidth = Math.max(20, width * 0.8);
+                const currentWidth = Math.max(0, (currentHealth / maxHealth) * barWidth);
+                const healthPercentage = currentHealth / maxHealth;
+                const barX = x - barWidth / 2;
+                const barY = y + yOffset - barHeight; // Align top of bar with yOffset
+
+                ctx.fillStyle = getCssVar('--health-bar-bg') || '#555';
+                ctx.fillRect(barX, barY, barWidth, barHeight);
+
+                let barColor = getCssVar('--health-bar-low') || '#F44336';
+                if (healthPercentage > 0.66) barColor = getCssVar('--health-bar-high') || '#4CAF50';
+                else if (healthPercentage > 0.33) barColor = getCssVar('--health-bar-medium') || '#FFC107';
+                ctx.fillStyle = barColor;
+                ctx.fillRect(barX, barY, currentWidth, barHeight);
             }
 
             function drawArmorBar(x, y, width, currentArmor) {
