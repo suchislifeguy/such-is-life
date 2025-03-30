@@ -881,11 +881,13 @@
                  }
                  lastShotTime = now; // Update last shot time ONLY if allowed to fire
 
-                 // 4. Calculate Aim Direction (using mouse relative to player)
-                 const playerRenderX = appState.renderedPlayerPos.x;
-                 const playerRenderY = appState.renderedPlayerPos.y;
-                 let aimDx = mouseCanvasPos.x - playerRenderX;
-                 let aimDy = mouseCanvasPos.y - playerRenderY;
+                 // 4. Calculate Aim Direction (using mouse relative to player's PREDICTED position)
+                 // *** MODIFIED LINES START ***
+                 const playerPredictX = appState.predictedPlayerPos.x; // USE PREDICTED X
+                 const playerPredictY = appState.predictedPlayerPos.y; // USE PREDICTED Y
+                 let aimDx = mouseCanvasPos.x - playerPredictX;       // Calculate dx based on PREDICTED
+                 let aimDy = mouseCanvasPos.y - playerPredictY;       // Calculate dy based on PREDICTED
+                 // *** MODIFIED LINES END ***
 
                  // Normalize the direction vector
                  const magnitude = Math.sqrt(aimDx * aimDx + aimDy * aimDy);
