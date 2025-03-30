@@ -856,7 +856,6 @@
              }
 
              // Handle shooting logic (triggered by space or mouse click)
-
              function handleShooting() {
                  // 1. Check Game Status
                  if (appState.serverState?.status !== 'active') return; // Can only shoot if game is active
@@ -926,6 +925,9 @@
                  // Optional: Play shoot sound locally
                  // Game.playSound('shoot');
              }
+
+             // Expose necessary functions (Keep existing exports)
+             return { setup, cleanup, getMovementInputVector }; // Add handleShooting if it wasn't exposed, but likely isn't needed externally
 
             })(); // End Input IIFE
         
