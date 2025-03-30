@@ -856,6 +856,7 @@
              }
 
              // Handle shooting logic (triggered by space or mouse click)
+
              function handleShooting() {
                  // 1. Check Game Status
                  if (appState.serverState?.status !== 'active') return; // Can only shoot if game is active
@@ -869,8 +870,6 @@
                  if (currentAmmo === 'ammo_rapid_fire') {
                      // Apply multiplier if rapid fire is active
                      actualShootCooldown = SHOOT_COOLDOWN * RAPID_FIRE_COOLDOWN_MULTIPLIER; // e.g., 200 * 0.4 = 80ms
-                     // Optional: log for debugging
-                     // log("Rapid Fire Active! Cooldown:", actualShootCooldown);
                  }
 
                  // 3. Check Cooldown Timer
@@ -881,13 +880,26 @@
                  }
                  lastShotTime = now; // Update last shot time ONLY if allowed to fire
 
-                 // 4. Calculate Aim Direction (using mouse relative to player's PREDICTED position)
-                 // *** MODIFIED LINES START ***
-                 const playerPredictX = appState.predictedPlayerPos.x; // USE PREDICTED X
-                 const playerPredictY = appState.predictedPlayerPos.y; // USE PREDICTED Y
-                 let aimDx = mouseCanvasPos.x - playerPredictX;       // Calculate dx based on PREDICTED
-                 let aimDy = mouseCanvasPos.y - playerPredictY;       // Calculate dy based on PREDICTED
-                 // *** MODIFIED LINES END ***
+                 // 4. Calculate Aim Direction (using mouse relative to LAST SERVER position)
+                 // --- *** USE LATEST SERVER POSITION FOR AIM ORIGIN *** ---
+                 let aimOriginX, aimOriginY;
+                 // Check if playerState and its x/y coordinates exist from the server update
+                 if (playerState?.x !== undefined && playerState?.y !== undefined) {
+                    // If we have valid position data from the last server state, use it
+                    aimOriginX = playerState.x;
+                    aimOriginY = playerState.y;
+                 } else {
+                    // Fallback ONLY if server state is somehow missing/invalid for the player
+                    // This should be rare during active gameplay
+                    aimOriginX = appState.renderedPlayerPos.x; // Use rendered as last resort
+                    aimOriginY = appState.renderedPlayerPos.y;
+                    log("CRITICAL WARNING: Aiming fallback to renderedPos! Server state invalid for player?");
+                 }
+                 // --- *** END AIM ORIGIN SELECTION *** ---
+
+                 // Calculate vector from selected origin to mouse position
+                 let aimDx = mouseCanvasPos.x - aimOriginX;
+                 let aimDy = mouseCanvasPos.y - aimOriginY;
 
                  // Normalize the direction vector
                  const magnitude = Math.sqrt(aimDx * aimDx + aimDy * aimDy);
@@ -899,6 +911,7 @@
                      normalizedDy = aimDy / magnitude;
                  }
                  const aimDirection = { dx: normalizedDx, dy: normalizedDy };
+                 // --- End Aim Calculation ---
 
                  // 5. Trigger Local Effects (Muzzle Flash)
                  localPlayerMuzzleFlash.active = true;
@@ -907,16 +920,14 @@
                  localPlayerMuzzleFlash.aimDy = aimDirection.dy;
 
                  // 6. Send Shoot Message to Server
-                 // log("Sending shoot message. Dir:", aimDirection); // Optional log
+                 // log("Sending shoot message (ServerPos Aim). Dir:", aimDirection); // Optional log
                  Network.sendMessage({ type: 'player_shoot', direction: aimDirection });
 
                  // Optional: Play shoot sound locally
                  // Game.playSound('shoot');
              }
 
-             // Expose necessary functions (Keep existing exports)
-             return { setup, cleanup, getMovementInputVector }; // Add handleShooting if it wasn't exposed, but likely isn't needed externally
-        })(); // End Input IIFE
+            })(); // End Input IIFE
         
         // --- Rendering "Module" ---
         const Renderer = (() => {
