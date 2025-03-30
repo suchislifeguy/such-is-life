@@ -7,38 +7,38 @@
     <style>
         /* --- Base Styles & Variables --- */
         :root {
-            /* NEW Dark/Green Scheme */
-            --dark-bg: #1e2a28; /* Very dark, slightly green-desaturated blue/grey */
-            --container-bg: #2a3d45; /* Dark slate blue/grey */
-            --container-border: #111a18; /* Almost black, darker than dark-bg */
-            --top-bar-bg: rgba(0, 0, 0, 0.2); /* Subtle dark transparent overlay */
-            --dusty-green: #7a8c79; /* Desaturated, earthy green */
-            --dark-text: #d0d8d7; /* Light grey/off-white for dark backgrounds */
-            --accent-gold: #FFD700; /* Keep gold for highlights */
-            --title-red: #a00000; /* Darker red for the drip effect */
+            /* Dark/Green Scheme */
+            --dark-bg: #1e2a28;
+            --container-bg: #2a3d45;
+            --container-border: #111a18;
+            --top-bar-bg: rgba(0, 0, 0, 0.2);
+            --dusty-green: #7a8c79;
+            --dark-text: #d0d8d7;
+            --accent-gold: #FFD700;
+            --title-red: #a00000; /* Kept in case needed elsewhere, but not used for animation */
 
-            /* Map to existing names (or replace usage later) */
-            --bg-color: var(--dark-bg); /* Used for body background */
-            --primary-color: var(--dusty-green); /* Used for buttons, some borders */
-            --secondary-color: var(--container-bg); /* Used for game-container bg */
-            --accent-color: var(--accent-gold); /* Used for status, some highlights */
-            --text-color: var(--dark-text); /* Default text color */
+            /* Mappings */
+            --bg-color: var(--dark-bg);
+            --primary-color: var(--dusty-green);
+            --secondary-color: var(--container-bg);
+            --accent-color: var(--accent-gold);
+            --text-color: var(--dark-text);
 
-            /* Other existing colors - Check if they need adjustment */
-            --player-color: #DC143C; /* Crimson - Keep for player elements? */
-            --other-player-color: #4682B4; /* SteelBlue - Keep for mate elements? */
-            --enemy-color: #556B2F; /* DarkOliveGreen - Fits the green theme! */
-            --bullet-player-color: #FFEB3B; /* Yellow - OK */
-            --bullet-enemy-color: #C0C0C0; /* Silver - OK */
-            --health-bar-bg: #444; /* Dark grey bg */
-            --health-bar-high: #66bb6a; /* Slightly softer green */
-            --health-bar-medium: var(--accent-gold); /* Use gold for medium */
-            --health-bar-low: var(--player-color); /* Use player red for low */
-            --powerup-health: #81c784; /* Softer green */
-            --powerup-gun: #ba68c8; /* Softer purple */
-            --powerup-speed: #4dd0e1; /* Softer cyan */
-            --powerup-armor: #9e9e9e; /* Grey */
-            --night-overlay: rgba(0, 0, 10, 0.3); /* More subtle night overlay */
+            /* Other Colors */
+            --player-color: #DC143C;
+            --other-player-color: #4682B4;
+            --enemy-color: #556B2F;
+            --bullet-player-color: #FFEB3B;
+            --bullet-enemy-color: #C0C0C0;
+            --health-bar-bg: #444;
+            --health-bar-high: #66bb6a;
+            --health-bar-medium: var(--accent-gold);
+            --health-bar-low: var(--player-color);
+            --powerup-health: #81c784;
+            --powerup-gun: #ba68c8;
+            --powerup-speed: #4dd0e1;
+            --powerup-armor: #9e9e9e;
+            --night-overlay: rgba(0, 0, 10, 0.3);
 
             /* Other variables */
             --font-family: 'Courier New', monospace;
@@ -48,28 +48,10 @@
             --damage-text-crit-color: var(--accent-gold);
             --damage-text-font-size: 14px;
             --damage-text-crit-font-size: 18px;
-            --campfire-aura-color: rgba(255, 165, 0, 0.15); /* Orange aura */
+            --campfire-aura-color: rgba(255, 165, 0, 0.15);
         }
 
-        /* --- Add CSS Keyframes for Dripping Effect --- */
-        @keyframes drip-fall {
-            0% {
-                transform: translateY(0) scaleY(0.8) scaleX(1); /* Start slightly squashed at bottom of letter */
-                opacity: 0.8;
-            }
-            20% {
-                transform: translateY(5px) scaleY(1.2) scaleX(0.9); /* Start falling, elongate */
-                opacity: 1;
-            }
-            80% {
-                transform: translateY(20px) scaleY(0.5) scaleX(0.5); /* Fall further, shrink */
-                opacity: 0.6;
-            }
-            100% {
-                transform: translateY(25px) scaleY(0) scaleX(0); /* Disappear further down */
-                opacity: 0;
-            }
-        }
+        /* --- Keyframes REMOVED --- */
 
         /* --- General Body/Container --- */
         body {
@@ -98,7 +80,7 @@
             border-radius: 10px 10px 0 0;
         }
 
-        /* Title Styling & Animation */
+        /* Title Styling (Cleaned up - no animation rules) */
         #top-bar h1 {
             color: var(--text-color);
             margin: 5px 0 10px 0;
@@ -109,45 +91,7 @@
             font-weight: bold;
         }
 
-        /* Style for the spans holding dripping letters */
-        #top-bar h1 span {
-            position: relative; /* Crucial for positioning the ::after */
-            display: inline-block; /* Needed for pseudo-element placement */
-        }
-
-        /* Dripping Effect Pseudo-Element for SPANS */
-        #top-bar h1 span::after {
-            content: '';
-            position: absolute;
-            left: 50%; /* Center horizontally under the letter */
-            bottom: -2px; /* Start just below the baseline of the letter */
-            transform: translateX(-50%); /* Fine-tune horizontal centering */
-            width: 5px; /* Width of the drip */
-            height: 8px; /* Initial height of the drip */
-            background-color: var(--title-red);
-            border-radius: 0 0 50% 50%; /* Rounded bottom like a drop */
-            opacity: 0; /* Start hidden */
-            /* Apply NEW animation */
-            animation: drip-fall 2.5s ease-out infinite; /* Use new keyframes */
-        }
-
-        /* CORRECTED: Stagger the animations using delays based on span order */
-        #top-bar h1 span:nth-child(1)::after { /* First span (S) */
-            animation-delay: 0.5s;
-        }
-        #top-bar h1 span:nth-child(2)::after { /* Second span (I) */
-            animation-delay: 1.2s;
-             width: 3px; /* Make drops from 'I' thinner */
-             height: 6px;
-        }
-        #top-bar h1 span:nth-child(3)::after { /* Third span (I) */
-             animation-delay: 0.2s;
-             width: 3px; /* Make drops from 'I' thinner */
-             height: 6px;
-        }
-        #top-bar h1 span:nth-child(4)::after { /* Fourth span (E) */
-             animation-delay: 1.8s;
-        }
+        /* --- Span/Animation rules REMOVED --- */
 
         /* Stats Container Alignment */
         #player-stats-container {
