@@ -855,77 +855,61 @@
                  }
              }
 
-             // Handle shooting logic (triggered by space or mouse click)
-             function handleShooting() {
-                 // 1. Check Game Status
-                 if (appState.serverState?.status !== 'active') return; // Can only shoot if game is active
+        // Handle shooting logic (triggered by space or mouse click)
+            function handleShooting() {
+                // 1. Check Game Status
+                if (appState.serverState?.status !== 'active') return;
 
-                 // 2. Calculate Actual Cooldown based on Ammo Type
-                 const playerState = appState.serverState?.players?.[appState.localPlayerId];
-                 // Default to 'standard' if state or ammo type is missing
-                 const currentAmmo = playerState?.active_ammo_type || 'standard';
-                 let actualShootCooldown = SHOOT_COOLDOWN; // Base cooldown (e.g., 200ms)
+                // 2. Calculate Actual Cooldown based on Ammo Type
+                const playerState = appState.serverState?.players?.[appState.localPlayerId];
+                const currentAmmo = playerState?.active_ammo_type || 'standard';
+                let actualShootCooldown = SHOOT_COOLDOWN; // Base cooldown
+                if (currentAmmo === 'ammo_rapid_fire') {
+                    actualShootCooldown = SHOOT_COOLDOWN * RAPID_FIRE_COOLDOWN_MULTIPLIER;
+                }
 
-                 if (currentAmmo === 'ammo_rapid_fire') {
-                     // Apply multiplier if rapid fire is active
-                     actualShootCooldown = SHOOT_COOLDOWN * RAPID_FIRE_COOLDOWN_MULTIPLIER; // e.g., 200 * 0.4 = 80ms
-                 }
+                // 3. Check Cooldown Timer
+                const now = Date.now();
+                if (now - lastShotTime < actualShootCooldown) {
+                    return; // Cooldown active
+                }
+                lastShotTime = now; // Update shot time ONLY if allowed to fire
 
-                 // 3. Check Cooldown Timer
-                 const now = Date.now();
-                 if (now - lastShotTime < actualShootCooldown) {
-                     // Cooldown active, prevent firing
-                     return;
-                 }
-                 lastShotTime = now; // Update last shot time ONLY if allowed to fire
+                // 4. --- AIM DIRECTION CALCULATION REMOVED FROM CLIENT ---
+                //    The server will calculate direction based on target coords.
 
-                 // 4. Calculate Aim Direction (using mouse relative to LAST SERVER position)
-                 // --- *** USE LATEST SERVER POSITION FOR AIM ORIGIN *** ---
-                 let aimOriginX, aimOriginY;
-                 // Check if playerState and its x/y coordinates exist from the server update
-                 if (playerState?.x !== undefined && playerState?.y !== undefined) {
-                    // If we have valid position data from the last server state, use it
-                    aimOriginX = playerState.x;
-                    aimOriginY = playerState.y;
-                 } else {
-                    // Fallback ONLY if server state is somehow missing/invalid for the player
-                    // This should be rare during active gameplay
-                    aimOriginX = appState.renderedPlayerPos.x; // Use rendered as last resort
-                    aimOriginY = appState.renderedPlayerPos.y;
-                    log("CRITICAL WARNING: Aiming fallback to renderedPos! Server state invalid for player?");
-                 }
-                 // --- *** END AIM ORIGIN SELECTION *** ---
+                // 5. Trigger Local Effects (Muzzle Flash) - Use MOUSE position relative to RENDERED player for flash direction
+                // (We still need a visual direction for the flash even if not sending it to server for physics)
+                const playerRenderX = appState.renderedPlayerPos.x; // Use render pos for flash visual
+                const playerRenderY = appState.renderedPlayerPos.y;
+                let flashDx = mouseCanvasPos.x - playerRenderX;
+                let flashDy = mouseCanvasPos.y - playerRenderY;
+                const flashMag = Math.sqrt(flashDx*flashDx + flashDy*flashDy);
+                if (flashMag > 0.01) { // Avoid division by zero/tiny values
+                    flashDx /= flashMag;
+                    flashDy /= flashMag;
+                } else {
+                    // Default flash direction if mouse is exactly on player (e.g., point up)
+                    flashDx = 0; flashDy = -1;
+                }
+                // Activate and configure the local muzzle flash effect
+                localPlayerMuzzleFlash.active = true;
+                localPlayerMuzzleFlash.endTime = performance.now() + 75; // Flash duration
+                localPlayerMuzzleFlash.aimDx = flashDx; // Store direction for drawing flash
+                localPlayerMuzzleFlash.aimDy = flashDy;
 
-                 // Calculate vector from selected origin to mouse position
-                 let aimDx = mouseCanvasPos.x - aimOriginX;
-                 let aimDy = mouseCanvasPos.y - aimOriginY;
 
-                 // Normalize the direction vector
-                 const magnitude = Math.sqrt(aimDx * aimDx + aimDy * aimDy);
-                 let normalizedDx = 0;
-                 let normalizedDy = -1; // Default aim UP if magnitude is ~zero
+                // 6. Send Shoot Message with TARGET COORDINATES
+                log("Sending shoot message with Target Coords:", mouseCanvasPos);
+                Network.sendMessage({
+                    type: 'player_shoot',
+                    // Send mouse coords relative to canvas origin {x: number, y: number}
+                    target: { x: mouseCanvasPos.x, y: mouseCanvasPos.y }
+                });
 
-                 if (magnitude > 0.01) { // Avoid division by zero/tiny values
-                     normalizedDx = aimDx / magnitude;
-                     normalizedDy = aimDy / magnitude;
-                 }
-                 const aimDirection = { dx: normalizedDx, dy: normalizedDy };
-                 // --- End Aim Calculation ---
-
-                 // 5. Trigger Local Effects (Muzzle Flash)
-                 localPlayerMuzzleFlash.active = true;
-                 localPlayerMuzzleFlash.endTime = performance.now() + 75; // Flash duration
-                 localPlayerMuzzleFlash.aimDx = aimDirection.dx; // Store direction for drawing flash
-                 localPlayerMuzzleFlash.aimDy = aimDirection.dy;
-
-                 // 6. Send Shoot Message to Server
-                 // log("Sending shoot message (ServerPos Aim). Dir:", aimDirection); // Optional log
-                 Network.sendMessage({ type: 'player_shoot', direction: aimDirection });
-
-                 // Optional: Play shoot sound locally
-                 // Game.playSound('shoot');
-             }
-
+                // Optional: Play shoot sound locally
+                // Game.playSound('shoot');
+            }
              // Expose necessary functions (Keep existing exports)
              return { setup, cleanup, getMovementInputVector }; // Add handleShooting if it wasn't exposed, but likely isn't needed externally
 
