@@ -820,13 +820,12 @@
         })();
         
         // --- Input Handling "Module" ---
-        // --- Input Handling "Module" ---
         const Input = (() => {
              let keys = {};
              let lastShotTime = 0;
              let movementInterval = null;
-             // Store mouse position relative to canvas
              let mouseCanvasPos = { x: 0, y: 0 };
+             let isMouseDown = false; // <<< ADDED: Tracks left mouse button state
 
              function setup() {
                 cleanup(); // Ensure no duplicate listeners
@@ -834,13 +833,15 @@
                 document.addEventListener('keyup', handleKeyUp);
                 DOM.chatInput.addEventListener('keydown', handleChatEnter);
 
-                // Add mouse listeners to the canvas
                 if (DOM.canvas) { // Ensure canvas exists
                      DOM.canvas.addEventListener('mousemove', handleMouseMove);
-                     DOM.canvas.addEventListener('mousedown', handleMouseDown); // Use mousedown for responsiveness
+                     DOM.canvas.addEventListener('mousedown', handleMouseDown); // Keep canvas listener for starting hold
                 } else {
                      error("Input setup failed: Canvas element not found.");
                 }
+                // --- ADDED global mouseup listener ---
+                document.addEventListener('mouseup', handleMouseUp);
+                // -----------------------------------
 
                 movementInterval = setInterval(sendMovementInput, INPUT_SEND_INTERVAL);
                 log("Input listeners setup.");
@@ -851,56 +852,70 @@
                  document.removeEventListener('keyup', handleKeyUp);
                  DOM.chatInput.removeEventListener('keydown', handleChatEnter);
 
-                 // Remove mouse listeners
                  if (DOM.canvas) { // Check if canvas exists before removing
                       DOM.canvas.removeEventListener('mousemove', handleMouseMove);
                       DOM.canvas.removeEventListener('mousedown', handleMouseDown);
                  }
+                 // --- REMOVE global mouseup listener ---
+                 document.removeEventListener('mouseup', handleMouseUp);
+                 // ------------------------------------
 
                  clearInterval(movementInterval);
                  movementInterval = null;
-                 keys = {}; // Reset keys state
-                 mouseCanvasPos = { x: 0, y: 0 }; // Reset mouse pos state
+                 keys = {};
+                 isMouseDown = false; // <<< ADDED: Reset mouse state on cleanup
+                 mouseCanvasPos = { x: 0, y: 0 };
                  log("Input listeners cleaned up.");
              }
 
-             // Update mouse position relative to canvas
              function handleMouseMove(event) {
-                 if (!DOM.canvas) return; // Should not happen if listener attached, but safety first
+                 if (!DOM.canvas) return;
                  const rect = DOM.canvas.getBoundingClientRect();
                  mouseCanvasPos.x = event.clientX - rect.left;
                  mouseCanvasPos.y = event.clientY - rect.top;
              }
 
-            // Trigger shooting on left mouse click
+            // --- MODIFIED handleMouseDown: Set flag, don't call handleShooting ---
             function handleMouseDown(event) {
                 if (document.activeElement === DOM.chatInput) return; // Ignore if typing chat
-                // Check if left mouse button (button === 0)
-                if (event.button === 0) {
-                    handleShooting(); // Trigger shooting logic
+                if (event.button === 0) { // Check if left mouse button
+                    isMouseDown = true; // Set the flag
+                    // REMOVED: handleShooting();
                     event.preventDefault(); // Prevent text selection etc.
                 }
             }
+            // --- End modification ---
 
-             // Handle keyboard presses
+            // --- ADDED handleMouseUp function ---
+            // Needs to listen globally in case mouse is released outside canvas
+            function handleMouseUp(event) {
+                // Check if left mouse button (button === 0) was released
+                if (event.button === 0) {
+                    isMouseDown = false; // Clear the flag
+                }
+            }
+            // --- End added function ---
+
+             // --- MODIFIED handleKeyDown: Set flag for space, don't call handleShooting ---
              function handleKeyDown(e) {
-                 if (document.activeElement === DOM.chatInput) return; // Ignore if typing chat
+                 if (document.activeElement === DOM.chatInput) return;
                  const key = e.key.toLowerCase();
                  // Track movement keys & spacebar
                  if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' '].includes(key)) {
-                    keys[key] = true;
+                    keys[key] = true; // Set flag for movement AND spacebar
                  }
-                 // Trigger shooting on spacebar press
-                 if (key === ' ') {
-                    handleShooting(); // Keep spacebar shooting
-                 }
+                 // REMOVED direct call for spacebar:
+                 // if (key === ' ') {
+                 //    handleShooting();
+                 // }
                  // Prevent default browser actions for game keys
                  if ([' ','w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(key)) {
                     e.preventDefault();
                  }
              }
+             // --- End modification ---
 
-             // Handle keyboard releases
+             // handleKeyUp remains unchanged (clears key flags)
              function handleKeyUp(e) {
                  const key = e.key.toLowerCase();
                  if (key in keys) {
@@ -908,15 +923,15 @@
                  }
              }
 
-             // Handle sending chat on Enter
+             // handleChatEnter remains unchanged
              function handleChatEnter(e) {
                  if (e.key === 'Enter') {
-                     e.preventDefault(); // Prevent default form submission/newline
-                     Game.sendChatMessage(); // Delegate sending to Game module
+                     e.preventDefault();
+                     Game.sendChatMessage();
                  }
              }
 
-             // Calculate current movement vector based on keys pressed
+             // getMovementInputVector remains unchanged
              function getMovementInputVector() {
                  let dx = 0, dy = 0;
                  if (keys['w'] || keys['arrowup']) dy -= 1;
@@ -924,7 +939,6 @@
                  if (keys['a'] || keys['arrowleft']) dx -= 1;
                  if (keys['d'] || keys['arrowright']) dx += 1;
 
-                 // Normalize diagonal movement
                  if (dx !== 0 && dy !== 0) {
                      const factor = 1 / Math.sqrt(2);
                      dx *= factor;
@@ -933,7 +947,7 @@
                  return { dx, dy };
              }
 
-             // Periodically send movement input to server if game is active
+             // sendMovementInput remains unchanged
              function sendMovementInput() {
                  if (appState.serverState?.status === 'active') {
                     const moveVector = getMovementInputVector();
@@ -941,7 +955,8 @@
                  }
              }
 
-        // Handle shooting logic (triggered by space or mouse click)
+            // handleShooting function remains UNCHANGED from your provided code
+            // (It correctly handles cooldowns and sends target coords)
             function handleShooting() {
                 // 1. Check Game Status
                 if (appState.serverState?.status !== 'active') return;
@@ -962,45 +977,52 @@
                 lastShotTime = now; // Update shot time ONLY if allowed to fire
 
                 // 4. --- AIM DIRECTION CALCULATION REMOVED FROM CLIENT ---
-                //    The server will calculate direction based on target coords.
 
-                // 5. Trigger Local Effects (Muzzle Flash) - Use MOUSE position relative to RENDERED player for flash direction
-                // (We still need a visual direction for the flash even if not sending it to server for physics)
-                const playerRenderX = appState.renderedPlayerPos.x; // Use render pos for flash visual
+                // 5. Trigger Local Effects (Muzzle Flash)
+                const playerRenderX = appState.renderedPlayerPos.x;
                 const playerRenderY = appState.renderedPlayerPos.y;
                 let flashDx = mouseCanvasPos.x - playerRenderX;
                 let flashDy = mouseCanvasPos.y - playerRenderY;
                 const flashMag = Math.sqrt(flashDx*flashDx + flashDy*flashDy);
-                if (flashMag > 0.01) { // Avoid division by zero/tiny values
+                if (flashMag > 0.01) {
                     flashDx /= flashMag;
                     flashDy /= flashMag;
                 } else {
-                    // Default flash direction if mouse is exactly on player (e.g., point up)
                     flashDx = 0; flashDy = -1;
                 }
-                // Activate and configure the local muzzle flash effect
                 localPlayerMuzzleFlash.active = true;
-                localPlayerMuzzleFlash.endTime = performance.now() + 75; // Flash duration
-                localPlayerMuzzleFlash.aimDx = flashDx; // Store direction for drawing flash
+                localPlayerMuzzleFlash.endTime = performance.now() + 75;
+                localPlayerMuzzleFlash.aimDx = flashDx;
                 localPlayerMuzzleFlash.aimDy = flashDy;
-
 
                 // 6. Send Shoot Message with TARGET COORDINATES
                 log("Sending shoot message with Target Coords:", mouseCanvasPos);
                 Network.sendMessage({
                     type: 'player_shoot',
-                    // Send mouse coords relative to canvas origin {x: number, y: number}
                     target: { x: mouseCanvasPos.x, y: mouseCanvasPos.y }
                 });
 
                 // Optional: Play shoot sound locally
                 // Game.playSound('shoot');
             }
-             // Expose necessary functions (Keep existing exports)
-             return { setup, cleanup, getMovementInputVector }; // Add handleShooting if it wasn't exposed, but likely isn't needed externally
 
-            })(); // End Input IIFE
-        
+            // --- ADDED helper function ---
+            function isShootHeld() {
+                return keys[' '] || isMouseDown; // Return true if Space or Left Mouse is down
+            }
+            // -----------------------------
+
+            // --- ADDED functions to the return statement ---
+            return {
+                setup,
+                cleanup,
+                getMovementInputVector,
+                handleShooting, // Expose the shooting function itself
+                isShootHeld     // Expose the state check helper
+            };
+
+        })(); // End Input IIFE
+
         // --- Rendering "Module" ---
         const Renderer = (() => {
             const ctx = DOM.ctx;
@@ -2057,56 +2079,52 @@
 
              // Define the main loop function at this scope level
             function gameLoop(currentTime) {
-             // --- Game Over Check ---
-             if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
-                 log(`Stopping game loop. Mode: ${appState.mode}, Connected: ${appState.isConnected}, Game Over: ${appState.serverState?.game_over}`);
-                 const finalStateForDisplay = appState.serverState; // Capture state before cleanup
+                if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
+                    log(`Stopping game loop. Mode: ${appState.mode}, Connected: ${appState.isConnected}, Game Over: ${appState.serverState?.game_over}`);
+                    const finalStateForDisplay = appState.serverState;
+                    if (finalStateForDisplay?.game_over) {
+                        UI.updateStatus("Game Over!");
+                        log("Game loop stopping due to game over.");
+                        // UI.showGameOver(finalStateForDisplay); // Optional
+                    } else if (appState.mode === 'menu') {
+                        UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
+                    }
+                    cleanupLoop();
+                    // if (finalStateForDisplay?.game_over) { UI.showGameOver(finalStateForDisplay); } // Optional
+                    return;
+                }
 
-                 // *** ADD STATUS UPDATE HERE ***
-                 if (finalStateForDisplay?.game_over) {
-                     UI.updateStatus("Game Over!"); // Or "Round Over!", "Defeated!", etc.
-                     log("Game loop stopping due to game over, showing screen.");
-                     // UI.showGameOver(finalStateForDisplay); // We decided to skip this for now
-                 } else if (appState.mode === 'menu') {
-                      UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected."); // Reset status if returning to menu normally
-                 }
-                 // *** END STATUS UPDATE ***
+                if (!appState.serverState && appState.mode !== 'singleplayer') {
+                    log("Loop: Waiting for server state update...");
+                    appState.animationFrameId = requestAnimationFrame(gameLoop);
+                    return;
+                }
 
-                 cleanupLoop(); // Stop input, clear animation frame
-                 // Don't call UI.showGameOver if we decided against it
-                 // if (finalStateForDisplay?.game_over) {
-                 //     UI.showGameOver(finalStateForDisplay);
-                 // }
-                 return;
-             }
-                 // ... (rest of gameLoop logic: state check, delta time, prediction, rendering, requestAnimationFrame) ...
+                if (appState.lastLoopTime === null) { appState.lastLoopTime = currentTime; }
+                const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000);
+                appState.lastLoopTime = currentTime;
 
-                 if (!appState.serverState && appState.mode !== 'singleplayer') {
-                     log("Loop: Waiting for server state update...");
-                     appState.animationFrameId = requestAnimationFrame(gameLoop);
-                     return;
-                 }
+                // Check for held shoot inputs each frame
+                if (appState.serverState?.status === 'active' && Input.isShootHeld()) {
+                    Input.handleShooting(); // Call the shooting function (checks cooldown inside)
+                }
 
-                 if (appState.lastLoopTime === null) { appState.lastLoopTime = currentTime; }
-                 const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000);
-                 appState.lastLoopTime = currentTime;
+                // Client-side prediction and reconciliation
+                if (appState.mode !== 'singleplayer' && appState.serverState?.status === 'active') {
+                    updatePredictedPosition(deltaTime);
+                    reconcileWithServer();
+                }
 
-                 if (appState.mode !== 'singleplayer' && appState.serverState?.status === 'active') {
-                      updatePredictedPosition(deltaTime);
-                      reconcileWithServer();
-                 }
+                // Render the game state
+                Renderer.drawGame();
 
-                 Renderer.drawGame();
-
-                  // --- Continue the Loop ---
-                  // Ensure we don't double-request if already stopping
-                  if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
-                     appState.animationFrameId = requestAnimationFrame(gameLoop);
-                  } else {
-                     // If state changed mid-frame to stop, ensure animationFrameId is cleared
-                     if(appState.animationFrameId) cleanupLoop();
-                  }
-             }
+                // Request next frame
+                if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
+                    appState.animationFrameId = requestAnimationFrame(gameLoop);
+                } else {
+                    if(appState.animationFrameId) cleanupLoop();
+                }
+            } 
 
 
             function startGameLoop() {
