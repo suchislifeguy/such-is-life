@@ -466,8 +466,7 @@
         let activeSpeechBubbles = {}; // { playerId: { text: "Hi!", endTime: 123456789 } }
         let activeEnemyBubbles = {};  // { enemyId: { text: "Grrr!", endTime: 123456789 } }
         let socket = null; // Single WebSocket connection reference
-        let activeParticles = {}; // Stores active particles { id: particleData }
-        let nextParticleId = 0; // Simple counter for unique IDs
+
         // --- Logging Wrapper ---
         function log(...args) { console.log("[Client]", ...args); }
         function error(...args) { console.error("[Client]", ...args); }
@@ -1086,146 +1085,68 @@
 
                 const x = campfireData.x ?? CANVAS_WIDTH / 2;
                 const y = campfireData.y ?? CANVAS_HEIGHT / 2;
-                const baseRadius = campfireData.radius ?? 0; // Use baseRadius name
+                const radius = campfireData.radius ?? 0; // Aura radius
 
-                if (baseRadius <= 0) return; // Don't draw if radius is invalid
+                if (radius <= 0) return; // Don't draw if radius is invalid
 
                 // --- Settings for Campfire Elements ---
                 const auraColor = getCssVar('--campfire-aura-color') || 'rgba(255, 255, 0, 0.15)';
-                // ... (stickColor, flameColorOuter, etc. remain the same) ...
-                const stickColor = '#8B4513';
-                const stickWidth = 20; const stickHeight = 4;
-                const flameColorOuter = 'rgba(255, 165, 0, 0.6)';
-                const flameColorInner = 'rgba(255, 255, 0, 0.7)';
-                const flameWidth = 15; const flameHeight = 25;
+                const stickColor = '#8B4513'; // SaddleBrown
+                const stickWidth = 20;
+                const stickHeight = 4;
+                const flameColorOuter = 'rgba(255, 165, 0, 0.6)'; // Semi-transparent Orange
+                const flameColorInner = 'rgba(255, 255, 0, 0.7)'; // Semi-transparent Yellow
+                const flameWidth = 15;
+                const flameHeight = 25;
+                // --------------------------------------
 
-                // --- NEW: Calculate Pulsing Radius ---
-                const pulseSpeed = 800; // Lower number = faster pulse (milliseconds per cycle)
-                const pulseMagnitude = 0.08; // Pulse by 8% of base radius
-                // Sine wave oscillates between -1 and 1
-                const pulseFactor = Math.sin(performance.now() / pulseSpeed);
-                // Calculate the radius change
-                const radiusVariation = baseRadius * pulseMagnitude * pulseFactor;
-                // Apply the variation to the base radius
-                const drawRadius = baseRadius + radiusVariation;
-                // --- End Pulsing Radius Calculation ---
-
+                // Use save/restore for rotations and state changes
                 ctx.save();
 
-                // 1. Draw the Aura (Use the dynamic drawRadius)
+                // 1. Draw the Aura (Behind everything else)
                 ctx.fillStyle = auraColor;
                 ctx.beginPath();
-                ctx.arc(x, y, drawRadius, 0, Math.PI * 2); // <<< Use drawRadius
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
                 ctx.fill();
 
-                // --- Rest of the campfire drawing (sticks, flame) remains the same ---
-                // 2. Draw the Sticks ...
-                const stickOffsetY = 5;
+                // 2. Draw the Sticks (Centered around x, y but slightly lower)
+                const stickOffsetY = 5; // Move sticks slightly down from exact center
                 ctx.fillStyle = stickColor;
-                ctx.translate(x, y + stickOffsetY);
-                ctx.rotate(Math.PI / 5); ctx.fillRect(-stickWidth / 2, -stickHeight / 2, stickWidth, stickHeight); ctx.rotate(-Math.PI / 5);
-                ctx.rotate(-Math.PI / 6); ctx.fillRect(-stickWidth / 2, -stickHeight / 2, stickWidth, stickHeight); ctx.rotate(Math.PI / 6);
-                ctx.translate(-x, -(y + stickOffsetY));
+                ctx.translate(x, y + stickOffsetY); // Move origin to stick center
 
-                // 3. Draw the Flame ...
-                const flameOffsetY = -10;
-                const flameCenterX = x; const flameCenterY = y + flameOffsetY;
-                ctx.fillStyle = flameColorOuter; ctx.beginPath();
-                ctx.ellipse(flameCenterX, flameCenterY, flameWidth / 2, flameHeight / 2, 0, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = flameColorInner; ctx.beginPath();
-                ctx.ellipse(flameCenterX, flameCenterY - 3, flameWidth / 3, flameHeight / 3, 0, 0, Math.PI * 2); ctx.fill();
+                // Stick 1 (angled)
+                ctx.rotate(Math.PI / 5); // Rotate ~36 degrees
+                ctx.fillRect(-stickWidth / 2, -stickHeight / 2, stickWidth, stickHeight);
+                ctx.rotate(-Math.PI / 5); // Rotate back
 
+                // Stick 2 (angled other way)
+                ctx.rotate(-Math.PI / 6); // Rotate ~-30 degrees
+                ctx.fillRect(-stickWidth / 2, -stickHeight / 2, stickWidth, stickHeight);
+                ctx.rotate(Math.PI / 6); // Rotate back
+
+                ctx.translate(-x, -(y + stickOffsetY)); // Reset translation
+
+                // 3. Draw the Flame (Above the sticks)
+                const flameOffsetY = -10; // Position flame slightly above center
+                const flameCenterX = x;
+                const flameCenterY = y + flameOffsetY;
+
+                // Draw Outer Flame (Orange Oval)
+                ctx.fillStyle = flameColorOuter;
+                ctx.beginPath();
+                // ellipse(xCenter, yCenter, radiusX, radiusY, rotation, startAngle, endAngle)
+                ctx.ellipse(flameCenterX, flameCenterY, flameWidth / 2, flameHeight / 2, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw Inner Flame (Yellow Oval - slightly smaller and higher)
+                ctx.fillStyle = flameColorInner;
+                ctx.beginPath();
+                ctx.ellipse(flameCenterX, flameCenterY - 3, flameWidth / 3, flameHeight / 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Restore context to prevent affecting other drawings
                 ctx.restore();
             }
-
-            function updateAndDrawParticles(state, now, deltaTime) {
-                const particleDefaults = {
-                    lifetime: 1000, // 1 second
-                    speedY: -40,   // Pixels per second upwards
-                    size: 10,
-                    color: '#00FF00', // Green
-                    char: '+'
-                };
-
-                // --- 1. Spawn New Regen Particles ---
-                const campfire = state.campfire;
-                const isNight = state.is_night;
-                const players = state.players;
-
-                // Only spawn during active night around the campfire
-                if (isNight && campfire && campfire.active && players) {
-                    const campfireX = campfire.x ?? 0;
-                    const campfireY = campfire.y ?? 0;
-                    const radiusSq = (campfire.radius ?? 0) * (campfire.radius ?? 0);
-
-                    Object.values(players).forEach(player => {
-                        // Check if player is alive and near campfire
-                        if (player && player.health > 0 && player.player_status === 'alive') {
-                            // Use rendered position for visual effect origin
-                            const isSelf = player.id === appState.localPlayerId;
-                            const playerDrawX = isSelf ? appState.renderedPlayerPos.x : player.x;
-                            const playerDrawY = isSelf ? appState.renderedPlayerPos.y : player.y;
-
-                            const distSq = distance_sq(playerDrawX, playerDrawY, campfireX, campfireY);
-
-                            if (distSq <= radiusSq) {
-                                // Player is regenerating - chance to spawn a particle
-                                const spawnChance = 2.0; // Avg particles per second
-                                if (Math.random() < spawnChance * deltaTime) {
-                                    const particleId = `p_${nextParticleId++}`;
-                                    activeParticles[particleId] = {
-                                        id: particleId,
-                                        x: playerDrawX + (Math.random() - 0.5) * (player.width ?? PLAYER_DEFAULTS.width), // Spawn near player center X
-                                        y: playerDrawY - (player.height ?? PLAYER_DEFAULTS.height) / 2, // Start near player top
-                                        spawnTime: now,
-                                        lifetime: particleDefaults.lifetime + (Math.random() * 200 - 100), // Slight duration variance
-                                        speedY: particleDefaults.speedY * (0.8 + Math.random() * 0.4), // Slight speed variance
-                                        color: particleDefaults.color,
-                                        char: particleDefaults.char,
-                                        size: particleDefaults.size
-                                    };
-                                }
-                            }
-                        }
-                    });
-                }
-
-                // --- 2. Update and Draw Existing Particles ---
-                const particlesToRemove = [];
-                ctx.font = `bold ${particleDefaults.size}px ${getCssVar('--font-family') || 'monospace'}`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-
-                for (const id in activeParticles) {
-                    const p = activeParticles[id];
-
-                    // Check lifetime
-                    const age = now - p.spawnTime;
-                    if (age >= p.lifetime) {
-                        particlesToRemove.push(id);
-                        continue;
-                    }
-
-                    // Update position
-                    p.y += p.speedY * deltaTime;
-
-                    // Calculate alpha (fade out)
-                    const lifeRemaining = 1.0 - (age / p.lifetime);
-                    const alpha = Math.min(1.0, lifeRemaining * 2.0); // Fade out in the last 50% of life
-
-                    // Draw
-                    ctx.fillStyle = p.color;
-                    ctx.globalAlpha = alpha; // Apply fading
-                    ctx.fillText(p.char, p.x, p.y);
-                    ctx.globalAlpha = 1.0; // Reset global alpha
-                }
-
-                // --- 3. Cleanup Expired Particles ---
-                particlesToRemove.forEach(id => {
-                    delete activeParticles[id];
-                });
-            }
-            // --- END OF NEW PARTICLE FUNCTION ---
 
             function drawMuzzleFlash(playerX, playerY, aimDx, aimDy) {
                 const flashSizeBase = 10;
@@ -1382,92 +1303,98 @@
                 });
             }
 
-            function drawGame(deltaTime = 1/60) { // Accept deltaTime, provide default
-            // 1. Preparation
-            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-            const now = performance.now(); // Use performance.now() for client effects
+            function drawGame() {
+                // 1. Preparation
+                ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                const now = performance.now();
 
-            // 2. Determine State to Render (SP vs MP/Interpolated)
-            let stateToRender;
-            if (appState.mode === 'singleplayer') {
-                stateToRender = appState.serverState;
-                const spPlayer = stateToRender?.players[appState.localPlayerId];
-                if (spPlayer) {
-                    appState.renderedPlayerPos.x = spPlayer.x;
-                    appState.renderedPlayerPos.y = spPlayer.y;
+                // 2. Determine State to Render (SP vs MP/Interpolated)
+                let stateToRender;
+                if (appState.mode === 'singleplayer') {
+                    stateToRender = appState.serverState;
+                    // In SP, prediction/interpolation isn't used for the local player.
+                    // Directly use server position for rendering.
+                    const spPlayer = stateToRender?.players[appState.localPlayerId];
+                    if (spPlayer) {
+                        appState.renderedPlayerPos.x = spPlayer.x;
+                        appState.renderedPlayerPos.y = spPlayer.y;
+                    }
+                } else { // Multiplayer uses interpolated state
+                    stateToRender = getInterpolatedState(now);
                 }
-            } else { // Multiplayer uses interpolated state
-                stateToRender = getInterpolatedState(now);
-            }
 
-            // 3. Guard Clause: Stop if essential render data is missing
-            if (!stateToRender || !appState.localPlayerId || !stateToRender.players) {
-                return;
-            }
-
-            // 4. Handle Muzzle Flash State (Decide if it should be drawn)
-            let shouldDrawMuzzleFlash = false;
-            if (localPlayerMuzzleFlash.active) {
-                if (now < localPlayerMuzzleFlash.endTime) {
-                    shouldDrawMuzzleFlash = true;
-                } else {
-                    localPlayerMuzzleFlash.active = false;
+                // 3. Guard Clause: Stop if essential render data is missing
+                if (!stateToRender || !appState.localPlayerId || !stateToRender.players) {
+                    // log("Skipping draw: Missing state, localPlayerId, or players");
+                    return;
                 }
-            }
 
-            // --- START DRAWING ---
-
-            // 5. Draw Background Elements
-            drawCampfire(stateToRender.campfire);
-
-            // 6. Draw Transient Effects (On top of background, under entities)
-            if (shouldDrawMuzzleFlash) {
-                drawMuzzleFlash(
-                    appState.renderedPlayerPos.x,
-                    appState.renderedPlayerPos.y,
-                    localPlayerMuzzleFlash.aimDx,
-                    localPlayerMuzzleFlash.aimDy
-                );
-            }
-
-            // 7. Draw Core Game Entities (Order matters for layering)
-            drawPowerups(stateToRender.powerups);
-            drawBullets(stateToRender.bullets);
-            drawEnemies(stateToRender.enemies);
-            drawPlayers(stateToRender.players); // Assumes drawPlayers checks internally
-
-            // --- >>> CORRECT PLACEMENT FOR PARTICLE UPDATE & DRAW <<< ---
-            // Update existing particles, spawn new ones (like regen '+'), and draw them.
-            // Do this AFTER drawing players so particles appear over them if needed.
-            updateAndDrawParticles(stateToRender, now, deltaTime);
-            // --- >>> END PARTICLE PLACEMENT <<< ---
-
-            // 8. Draw UI-like elements over entities and particles
-            drawSpeechBubbles(stateToRender.players);
-            drawEnemySpeechBubbles(stateToRender.enemies);
-            drawDamageTexts(stateToRender.damage_texts); // Draw damage text last (on top)
-
-            // --- DRAW VIGNETTE OVERLAY LAST (Based on Health %) ---
-            let vignetteIntensity = 0;
-            const localPlayer = stateToRender?.players?.[appState.localPlayerId];
-            if (localPlayer && localPlayer.max_health > 0) {
-                const healthPercentage = localPlayer.health / localPlayer.max_health;
-                if (healthPercentage <= 0.33) {
-                    vignetteIntensity = 0.6 + (0.4 * (1 - (healthPercentage / 0.33)));
-                    vignetteIntensity = Math.min(1.0, Math.max(0, vignetteIntensity));
-                } else if (healthPercentage <= 0.66) {
-                    vignetteIntensity = 0.4 * (1 - ((healthPercentage - 0.33) / (0.66 - 0.33)));
-                    vignetteIntensity = Math.max(0, vignetteIntensity);
+                // 4. Handle Muzzle Flash State (Decide if it should be drawn)
+                let shouldDrawMuzzleFlash = false;
+                if (localPlayerMuzzleFlash.active) {
+                    if (now < localPlayerMuzzleFlash.endTime) {
+                        shouldDrawMuzzleFlash = true; // Still active, mark for drawing this frame
+                    } else {
+                        localPlayerMuzzleFlash.active = false; // Time expired, deactivate for next frame
+                    }
                 }
-            }
-            drawDamageVignette(vignetteIntensity);
-            // ----------------------------------------------------
 
-            // 9. Future Placeholders
-            // drawMapObstacles(stateToRender.map);
+                // --- START DRAWING ---
 
-            // --- END DRAWING ---
-        } // End drawGame function
+                // 5. Draw Background Elements
+                drawCampfire(stateToRender.campfire); // Call the new function name
+
+                // 6. Draw Transient Effects (On top of background, under entities)
+                if (shouldDrawMuzzleFlash) {
+                    drawMuzzleFlash(
+                        appState.renderedPlayerPos.x, // Use local player's rendered position
+                        appState.renderedPlayerPos.y,
+                        localPlayerMuzzleFlash.aimDx, // Use stored aim direction
+                        localPlayerMuzzleFlash.aimDy
+                    );
+                }
+
+                // 7. Draw Core Game Entities (Order matters for layering)
+                // (Individual draw functions should handle null/undefined checks internally)
+                drawPowerups(stateToRender.powerups);
+                drawBullets(stateToRender.bullets);
+                drawEnemies(stateToRender.enemies);
+                drawPlayers(stateToRender.players); // Assumes drawPlayers checks internally
+                drawSpeechBubbles(stateToRender.players); // 
+                drawEnemySpeechBubbles(stateToRender.enemies); 
+                drawDamageTexts(stateToRender.damage_texts); // Draw damage text last (on top)
+
+                // --- DRAW VIGNETTE OVERLAY LAST (Based on Health %) ---
+                let vignetteIntensity = 0;
+                // Get local player's data from the state we are rendering
+                const localPlayer = stateToRender?.players?.[appState.localPlayerId];
+
+                if (localPlayer && localPlayer.max_health > 0) { // Check player exists
+                    const healthPercentage = localPlayer.health / localPlayer.max_health;
+
+                    // Set intensity based on health thresholds (matching health bar colors)
+                    if (healthPercentage <= 0.33) { // RED health
+                        // Intensity scales from 0.6 (at 33%) to 1.0 (at 0%)
+                        vignetteIntensity = 0.6 + (0.4 * (1 - (healthPercentage / 0.33)));
+                        vignetteIntensity = Math.min(1.0, Math.max(0, vignetteIntensity)); // Clamp 0-1
+                    } else if (healthPercentage <= 0.66) { // YELLOW health
+                        // Intensity scales from 0 (at 66%) to 0.4 (at 33%)
+                        vignetteIntensity = 0.4 * (1 - ((healthPercentage - 0.33) / (0.66 - 0.33)));
+                        vignetteIntensity = Math.max(0, vignetteIntensity); // Clamp >= 0
+                    }
+                    // No intensity if health is GREEN (> 66%)
+                }
+
+                // Call the drawing function with the calculated intensity
+                drawDamageVignette(vignetteIntensity);
+                // ----------------------------------------------------
+
+
+                // 8. Future Placeholders
+                // drawMapObstacles(stateToRender.map);
+
+                // --- END DRAWING ---
+            } // End drawGame function
 
             function getInterpolatedState(now) {
                 const { serverState, lastServerState, previousServerState } = appState;
@@ -2169,7 +2096,7 @@
                       reconcileWithServer();
                  }
 
-                 Renderer.drawGame(deltaTime);
+                 Renderer.drawGame();
 
                   // --- Continue the Loop ---
                   // Ensure we don't double-request if already stopping
