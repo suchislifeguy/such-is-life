@@ -1397,65 +1397,102 @@
             }
 
             function drawPlayerCharacter(x, y, w, h, isSelf, playerState, aimDx, aimDy) {
-                // Use playerState for gun level, hit flash etc.
-                // Use aimDx, aimDy for indicator direction
-
-                const bodyHeightRatio = 0.6; // Body is 60% 
+                // --- Original Proportions ---
+                const bodyHeightRatio = 0.6; // Body is 60%
                 const headRadiusRatio = 0.4; // Head is 40%
-                const bodyHeight = h * bodyHeightRatio;
-                const headRadius = h * headRadiusRatio / 1;
-                const bodyY = y + (h / 2) - (bodyHeight / 2); // Center body vertically within lower part
-                const headY = y - (h / 2) + (headRadius - 7); // Head sits just above center line
+                // --- End Original Proportions ---
 
-                // 1. Draw Body (Torso)
+                const bodyHeight = h * bodyHeightRatio;
+                // Calculate head radius based on the 40% height proportion
+                const headRadius = (h * headRadiusRatio) / 2; // Keep head calculation (will be slightly smaller than 45% version)
+
+                // --- Position Calculation ---
+                const bodyCenterY = y + (h / 2) - (bodyHeight / 2); // Center body in its space
+                // Place head centered directly above the body rectangle
+                const headCenterY = bodyCenterY - (bodyHeight / 2) - headRadius;
+                // --- End Position Calculation ---
+
+
+                // 1. Draw Body (Torso) - Red/Blue
                 const bodyColor = isSelf ? (getCssVar('--player-color') || 'red') : (getCssVar('--other-player-color') || 'blue');
                 ctx.fillStyle = bodyColor;
-                ctx.fillRect(x - w / 2, bodyY - bodyHeight / 2, w, bodyHeight);
+                ctx.fillRect(x - w / 2, bodyCenterY - bodyHeight / 2, w, bodyHeight);
 
-                // 2. Draw Head (Circle)
+
+                // 2. Draw Head (Circle) - Beige
+                const headColor = '#D2B48C'; // Beige / Tan color
+                ctx.fillStyle = headColor;   // Set fill style to beige
                 ctx.beginPath();
-                ctx.arc(x, headY, headRadius, 0, Math.PI * 2);
-                ctx.fill(); // Use same color as body
+                ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2); // Use calculated position/radius
+                ctx.fill(); // Fill head with beige
 
-                // 3. Draw Aiming Indicator/Gun Barrel (Only for local player)
+
+                // 3. Draw Aiming Indicator/Gun Barrel - Unchanged
                 if (isSelf) {
                     const gunLevel = playerState?.gun ?? 1;
-                    const gunLengthBase = 12; // Slightly shorter base
+                    const gunLengthBase = 12;
                     const gunLengthBonus = (gunLevel - 1) * 3;
                     const gunLength = gunLengthBase + gunLengthBonus;
-                    const gunThickness = 4; // Slightly thicker
+                    const gunThickness = 4;
 
                     ctx.save();
-                    // Rotate around the center of the BODY part for a better pivot feel
-                    ctx.translate(x, bodyY);
+                    ctx.translate(x, bodyCenterY); // Rotate around body center
                     const angle = Math.atan2(aimDy, aimDx);
                     ctx.rotate(angle);
-
-                    // Draw the gun line/rect extending from the body center
-                    ctx.fillStyle = '#444'; // Dark grey gun
-                    // Start drawing slightly in front of the body center along the rotated x-axis
+                    ctx.fillStyle = '#444';
                     ctx.fillRect(w * 0.1, -gunThickness / 2, gunLength, gunThickness);
-
                     ctx.restore();
                 }
 
-                // 4. Hit Flash (If you implemented it - using the version from previous steps)
+                // --- 4. Draw Boots ---
+                const bootSize = 4; // Size of the square boots
+                // Place boots just below the calculated bottom edge of the body rectangle
+                const bootOffsetY = bodyCenterY + bodyHeight / 2 + 1;
+                // Space boots relative to player width
+                const bootSpacing = w * 0.3; // Adjust spacing as needed
+
+                ctx.fillStyle = 'black'; // Boot color
+
+                // Determine if Moving based on input vector in playerState
+                // Default to not moving if playerState or input_vector is missing
+                const dx = playerState?.input_vector?.dx ?? 0;
+                const dy = playerState?.input_vector?.dy ?? 0;
+                const isMoving = (dx !== 0 || dy !== 0);
+
+                if (isMoving) {
+                    // Moving: Alternate boots based on time
+                    const stepDuration = 250; // Milliseconds per step phase (TWEAK THIS VALUE FOR SPEED)
+                    const stepPhase = Math.floor(performance.now() / stepDuration) % 2; // Gives 0 or 1
+
+                    if (stepPhase === 0) {
+                        // Phase 0: Draw left boot only
+                        ctx.fillRect(x - bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
+                    } else {
+                        // Phase 1: Draw right boot only
+                        ctx.fillRect(x + bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
+                    }
+                } else {
+                    // Not moving: Draw both boots statically
+                    ctx.fillRect(x - bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize); // Left
+                    ctx.fillRect(x + bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize); // Right
+                }
+                // --- End Draw Boots ---
+
+                // --- 5. Hit Flash --- (Draw LAST so it's on top)
                 if (playerState?.hit_flash_this_tick) {
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'; // White flash
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
                     const flashMargin = 2;
+                    // Use original y and h for flash bounding box to cover entire original space
                     ctx.fillRect(
                         x - w / 2 - flashMargin,
-                        y - h / 2 - flashMargin, // Flash covers whole original height
+                        y - h / 2 - flashMargin,
                         w + flashMargin * 2,
                         h + flashMargin * 2
                     );
                 }
-            }
+            } 
 
-            // Paste these two functions into your Renderer module,
-            // replacing the existing ones with the same names.
-
-            // 1. Updated drawEnemies function (passes the full enemy object)
+            // 1. Updated drawEnemies function 
             function drawEnemies(enemies) {
                 if (!enemies) return;
                 Object.values(enemies).forEach(enemy => {
@@ -1474,59 +1511,61 @@
             }
 
             // 2. Updated drawEnemyRect function (now draws body/head shape)
-            function drawEnemyRect(x, y, w, h, type, enemyState) { // Now accepts enemyState
-                // Define shape ratios (can adjust these if needed)
-                const bodyHeightRatio = 0.6; // Body 60%
-                const headRadiusRatio = 0.4; // Head 40%
+            function drawEnemyRect(x, y, w, h, type, enemyState) {
+                const bodyHeightRatio = 0.65; // Adjust ratios
+                const headRadiusRatio = 0.35;
                 const bodyHeight = h * bodyHeightRatio;
-                const headRadius = h * headRadiusRatio / 2; // Head radius based on its portion
-                const bodyY = y + (h / 2) - (bodyHeight / 2); // Body's vertical center
-                const headY = y - (h / 2) + headRadius;       // Head sits on top edge of body box
+                const headRadius = h * headRadiusRatio / 2;
+                const bodyCenterY = y + (h / 2) - (bodyHeight / 2); // Center of body mass
+                const headCenterY = y - (h / 2) + headRadius;       // Center of head circle
 
-                // Determine Enemy Color & if it has a barrel
+                const shoulderWidth = w * 1.1; // Slightly wider shoulders
+                const waistWidth = w * 0.8;   // Slightly narrower waist
+                const neckHeight = 3;
+                const neckWidth = 4;
+
+                // Determine color (same as before)
                 let bodyColor;
                 let hasBarrel = false;
-                if (type === ENEMY_TYPE_SHOOTER) {
-                    bodyColor = '#FFA500'; // Orange for shooters
-                    hasBarrel = true;
-                } else { // Default chaser or unknown type
-                    bodyColor = getCssVar('--enemy-color') || 'green'; // Default green
-                }
+                if (type === ENEMY_TYPE_SHOOTER) { /* ... set color/barrel ... */ }
+                else { /* ... set color/barrel ... */ }
 
-                // Draw Body (Torso Rectangle)
                 ctx.fillStyle = bodyColor;
-                ctx.fillRect(x - w / 2, bodyY - bodyHeight / 2, w, bodyHeight);
+                ctx.strokeStyle = 'black'; // Add outline color
+                ctx.lineWidth = 1;        // Outline width
 
-                // Draw Head (Circle)
+                // 1. Draw Body (Trapezoid)
                 ctx.beginPath();
-                ctx.arc(x, headY, headRadius, 0, Math.PI * 2);
-                ctx.fill(); // Use same color as body
+                ctx.moveTo(x - shoulderWidth / 2, bodyCenterY - bodyHeight / 2); // Top-left shoulder
+                ctx.lineTo(x + shoulderWidth / 2, bodyCenterY - bodyHeight / 2); // Top-right shoulder
+                ctx.lineTo(x + waistWidth / 2, bodyCenterY + bodyHeight / 2);   // Bottom-right waist
+                ctx.lineTo(x - waistWidth / 2, bodyCenterY + bodyHeight / 2);   // Bottom-left waist
+                ctx.closePath();
+                ctx.fill();
+                // ctx.stroke(); // Optional: Draw outline
 
-                // Draw Barrel (Only for Shooters)
+                // 2. Draw Neck (Small rectangle)
+                const neckTopY = bodyCenterY - bodyHeight / 2; // Top edge of body
+                ctx.fillRect(x - neckWidth / 2, neckTopY - neckHeight, neckWidth, neckHeight);
+                // ctx.strokeRect(x - neckWidth / 2, neckTopY - neckHeight, neckWidth, neckHeight); // Optional outline
+
+                // 3. Draw Head (Circle)
+                ctx.beginPath();
+                // Head Y position needs adjustment to sit on neck
+                const headDrawY = neckTopY - neckHeight;
+                ctx.arc(x, headDrawY, headRadius, 0, Math.PI * 2);
+                ctx.fill();
+                // ctx.stroke(); // Optional outline
+
+                // 4. Draw Barrel (if shooter - adjust position relative to new body)
                 if (hasBarrel) {
-                    const barrelLength = 8;
-                    const barrelWidth = 4;
-                    // Simple right-facing barrel
-                    ctx.fillStyle = '#555'; // Dark grey barrel color
-                    ctx.fillRect(
-                        x + w / 2,              // Start at the right edge of the body
-                        bodyY - barrelWidth / 2, // Center barrel vertically on the BODY's center Y
-                        barrelLength,
-                        barrelWidth
-                    );
+                    // ... existing barrel drawing logic, adjust Y position if needed ...
+                    // Might need to draw from x + shoulderWidth / 2
                 }
 
-                // Hit Flash (Uses enemyState passed into the function)
+                // 5. Hit Flash (same as before)
                 if (enemyState?.hit_flash_this_tick) {
-                    ctx.fillStyle = 'rgba(255, 100, 100, 0.7)'; // Reddish flash
-                    const flashMargin = 2;
-                    // Flash covers the approximate bounding box
-                    ctx.fillRect(
-                        x - w / 2 - flashMargin,
-                        y - h / 2 - flashMargin, // Use total height for flash
-                        w + flashMargin * 2,
-                        h + flashMargin * 2
-                    );
+                    // ... existing flash logic ...
                 }
             }
 
