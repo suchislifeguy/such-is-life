@@ -900,38 +900,68 @@
             }
             // --- End added function ---
 
-             // --- MODIFIED handleKeyDown: Set flag for space, don't call handleShooting ---
+// --- MODIFIED handleKeyDown: Includes 'E' pushback and checks chat focus ---
              function handleKeyDown(e) {
-                 if (document.activeElement === DOM.chatInput) return;
+                 // --- CRITICAL: Check if typing in chat FIRST ---
+                 if (document.activeElement === DOM.chatInput) {
+                     // If typing in chat, we DON'T want to process global game keys like movement, space, or 'e'.
+                     // The 'Enter' key press for chat submission is handled by the specific 'handleChatEnter'
+                     // listener attached directly to the chat input element. So, just return here.
+                     return;
+                 }
+                 // --- END Chat Focus Check ---
+
+                 // If not typing in chat, process game keys:
                  const key = e.key.toLowerCase();
-                 // Track movement keys & spacebar
+
+                 // Track movement keys & spacebar flag (set flag only)
                  if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' '].includes(key)) {
-                    keys[key] = true; // Set flag for movement AND spacebar
+                    // Set flag if not already set (prevents repeated actions if needed later)
+                    if (!keys[key]) {
+                        keys[key] = true;
+                    }
+                    e.preventDefault(); // Prevent default browser scroll/actions for these keys
+                    return; // Handled movement/space flag setting, no need to check 'e' below
                  }
-                 // REMOVED direct call for spacebar:
-                 // if (key === ' ') {
-                 //    handleShooting();
-                 // }
-                 // Prevent default browser actions for game keys
-                 if ([' ','w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(key)) {
-                    e.preventDefault();
+
+                 // Handle 'E' key for pushback (Only if NOT typing in chat)
+                 if (key === 'e') {
+                     // Check game state and send message
+                     if (appState.serverState?.status === 'active' && appState.isConnected) {
+                         log("Sending player_pushback message."); // Log the action
+                         Network.sendMessage({ type: 'player_pushback' });
+                         e.preventDefault(); // Prevent default browser action for 'e' (e.g., find)
+                     } else {
+                         log("Pushback ('e') ignored: Game not active or not connected.");
+                     }
+                     return; // Handled 'e', done with this keydown event
                  }
+
+                 // If the key wasn't a movement key, space, or 'e',
+                 // no further game-specific action needed in this global handler.
              }
              // --- End modification ---
 
-             // handleKeyUp remains unchanged (clears key flags)
+             // handleKeyUp remains unchanged - only clears movement/space flags
              function handleKeyUp(e) {
                  const key = e.key.toLowerCase();
-                 if (key in keys) {
-                     keys[key] = false;
+                 // Clear flags for keys that represent a HOLD state
+                 if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' '].includes(key)) {
+                     // Check if flag was actually set before clearing (optional but good practice)
+                     if (keys[key]) {
+                         keys[key] = false;
+                     }
                  }
+                 // 'e' is an event, not a state, so no need to clear a flag here.
              }
 
-             // handleChatEnter remains unchanged
+             // handleChatEnter remains unchanged - ADDED LOGGING
+             // This listener is attached specifically to DOM.chatInput in Input.setup()
              function handleChatEnter(e) {
                  if (e.key === 'Enter') {
-                     e.preventDefault();
-                     Game.sendChatMessage();
+                     e.preventDefault(); // Prevent submitting a form if one existed or line break
+                     log("Enter key detected in chat input."); // <<< ADDED LOGGING
+                     Game.sendChatMessage(); // Attempt to send the chat message
                  }
              }
 
@@ -943,6 +973,7 @@
                  if (keys['a'] || keys['arrowleft']) dx -= 1;
                  if (keys['d'] || keys['arrowright']) dx += 1;
 
+                 // Normalize diagonal movement (existing logic)
                  if (dx !== 0 && dy !== 0) {
                      const factor = 1 / Math.sqrt(2);
                      dx *= factor;
@@ -953,12 +984,14 @@
 
              // sendMovementInput remains unchanged
              function sendMovementInput() {
-                 if (appState.serverState?.status === 'active') {
+                 // Check game status before sending (existing logic)
+                 // Ensure player is connected and game is active before sending movement
+                 if (appState.mode !== 'menu' && appState.serverState?.status === 'active' && appState.isConnected) {
                     const moveVector = getMovementInputVector();
+                    // It's okay to send {dx:0, dy:0} - server handles it.
                     Network.sendMessage({ type: 'player_move', direction: moveVector });
                  }
              }
-
             // handleShooting function remains UNCHANGED from your provided code
             // (It correctly handles cooldowns and sends target coords)
             function handleShooting() {
