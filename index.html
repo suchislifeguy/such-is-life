@@ -2239,8 +2239,8 @@
                                 appState.renderedPlayerPos = { x: hostPlayer.x, y: hostPlayer.y };
                             }
                             DOM.gameCodeDisplay.textContent = appState.currentGameId || 'ERROR';
-                            DOM.waitingMessage.textContent = `Waiting for Team Mate... (1/${MAX_PLAYERS})`;
-                            UI.updateStatus(`Game hosted. Code: ${appState.currentGameId}`);
+                            const currentPlayers = Object.keys(appState.serverState?.players || {}).length;
+                            DOM.waitingMessage.textContent = `Waiting for Team Mate/s... (${currentPlayers}/${appState.maxPlayersInGame || '?'})`;                            UI.updateStatus(`Game hosted. Code: ${appState.currentGameId}`);
                             UI.showSection('host-wait-section');
                             Game.startGameLoop();
                             break;
