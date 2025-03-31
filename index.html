@@ -1534,15 +1534,15 @@
 
             function drawPlayerCharacter(x, y, w, h, isSelf, playerState, aimDx, aimDy) {
                 // --- Colors ---
-                const headColor = '#D2B48C';        // Beige (Face, potentially hidden)
-                const helmetColor = '#CCCCCC';      // Light Grey (Helmet Body)
-                const slitColor = '#222222';        // Dark Grey/Black (Helmet Slit)
-                const coatColor = '#8B4513';        // Brown (Coat)
+                const headColor = '#D2B48C';
+                const helmetColor = '#CCCCCC';
+                const slitColor = '#222222';
+                const coatColor = '#8B4513';
                 const torsoColor = isSelf ? '#A00000' : '#004488'; // Red (Self) / Blue (Mate)
-                const bootColor = '#222222';        // Dark Grey (Boots)
-                const gunColor = '#444444';         // Grey (Gun)
-                const hitFlashColor = 'rgba(255, 255, 255, 0.7)';
-                const armorOverlayColor = '#C0C0C0'; // Silver (For placeholder)
+                const bootColor = '#222222';
+                const gunColor = '#444444';
+                // Note: hitFlashColor variable is no longer needed/used here
+                const armorOverlayColor = '#C0C0C0';
 
                 // --- Proportions ---
                 const headRadius = h * 0.2;
@@ -1571,7 +1571,6 @@
                 const bootOffsetY = coatBottomY + 2;
 
                 // --- Drawing Order ---
-
                 // 1. Coat
                 ctx.fillStyle = coatColor;
                 ctx.fillRect(x - coatWidth / 2, coatTopY, coatWidth, coatBottomY - coatTopY);
@@ -1598,15 +1597,6 @@
                 ctx.fillStyle = slitColor;
                 ctx.fillRect(x - slitWidth / 2, slitY, slitWidth, slitHeight);
 
-                // --- Armor Overlay Placeholder ---
-                // if (playerState?.armor > 25) {
-                //    ctx.fillStyle = armorOverlayColor;
-                //    // Example: Draw chest plate rectangle
-                //    ctx.fillRect(x - w * 0.3, bodyTopY + h * 0.05, w * 0.6, h * 0.3);
-                //    // Need to add shoulder pads etc. and adjust positions carefully
-                // }
-                // --- End Armor Placeholder ---
-
                 // 6. Gun Barrel (Local Player Only)
                 if (isSelf) {
                     const gunLevel = playerState?.gun ?? 1;
@@ -1614,14 +1604,14 @@
                     const gunLengthBonus = (gunLevel - 1) * 3;
                     const gunLength = gunLengthBase + gunLengthBonus;
                     const gunThickness = 5;
-                    const gunOriginY = bodyTopY + bodyHeight / 2; // Gun originates near torso center Y
+                    const gunOriginY = bodyTopY + bodyHeight / 2;
 
                     ctx.save();
                     ctx.translate(x, gunOriginY);
                     const angle = Math.atan2(aimDy, aimDx);
                     ctx.rotate(angle);
                     ctx.fillStyle = gunColor;
-                    ctx.fillRect(w * 0.1, -gunThickness / 2, gunLength, gunThickness); // Start slightly forward
+                    ctx.fillRect(w * 0.1, -gunThickness / 2, gunLength, gunThickness);
                     ctx.restore();
                 }
 
@@ -1634,31 +1624,19 @@
                 if (isMoving) {
                     const stepDuration = 250;
                     const stepPhase = Math.floor(performance.now() / stepDuration) % 2;
-                    if (stepPhase === 0) { // Left boot forward
+                    if (stepPhase === 0) {
                         ctx.fillRect(x - bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
-                    } else { // Right boot forward
+                    } else {
                         ctx.fillRect(x + bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
                     }
-                } else { // Both boots static
-                    ctx.fillRect(x - bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize); // Left
-                    ctx.fillRect(x + bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize); // Right
+                } else {
+                    ctx.fillRect(x - bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
+                    ctx.fillRect(x + bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
                 }
 
-                // 8. Hit Flash (Draw Last)
-                if (playerState?.hit_flash_this_tick) {
-                    ctx.fillStyle = hitFlashColor;
-                    const flashMargin = 2;
-                    ctx.fillRect(
-                        x - w / 2 - flashMargin,
-                        y - h / 2 - flashMargin, // Base flash on original y/h bounding box
-                        w + flashMargin * 2,
-                        h + flashMargin * 2
-                    );
-                    // Remember to reset playerState.hit_flash_this_tick = false after drawing
-                }
-            }
+                // Note: The Hit Flash drawing block based on playerState?.hit_flash_this_tick has been removed.
 
-            // 1. Updated drawEnemies function 
+            } 
 
             function drawEnemies(enemies) {
                 if (!enemies) return;
