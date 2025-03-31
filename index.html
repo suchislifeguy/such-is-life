@@ -393,7 +393,7 @@
         const SHOOT_COOLDOWN = 300; // ms
         const RAPID_FIRE_COOLDOWN_MULTIPLIER = 0.4;
         const INPUT_SEND_INTERVAL = 50; // ms
-        const MAX_PLAYERS = 2;
+        const MAX_PLAYERS = 4;
         const RECONNECT_DELAY = 3000; // ms
         // Default player state values needed for rendering/prediction before server state arrives
         const PLAYER_DEFAULTS = { width: 20, height: 20, max_health: 100 };
@@ -2263,14 +2263,17 @@
                             appState.localPlayerId = data.player_id;
                             appState.currentGameId = data.game_id;
                             appState.serverState = data.initial_state;
+                            appState.maxPlayersInGame = 1; // Set max players for SP
+
                             const spPlayer = appState.serverState?.players[appState.localPlayerId];
                             if (spPlayer) {
                                 appState.predictedPlayerPos = { x: spPlayer.x, y: spPlayer.y };
                                 appState.renderedPlayerPos = { x: spPlayer.x, y: spPlayer.y };
                             }
+
                             UI.updateStatus("Single Player Game Started!");
                             UI.showSection('game-area');
-                            Game.startGameLoop();
+                            Game.startGameLoop(); // Start loop AFTER confirmation
                             break;
 
                         case 'game_state':
@@ -2556,46 +2559,27 @@
 
             try {
                 switch (data.type) {
-                    case 'game_created':
+                    case 'game_created': // HOST receives this
                         appState.localPlayerId = data.player_id;
                         appState.currentGameId = data.game_id;
                         appState.serverState = data.initial_state;
-                        // --- STORE MAX PLAYERS ---
-                        appState.maxPlayersInGame = data.max_players; // Get max_players from response
-                        // -------------------------
-                        const hostPlayer = appState.serverState?.players[appState.localPlayerId];
-                        if (hostPlayer) {
-                            appState.predictedPlayerPos = { x: hostPlayer.x, y: hostPlayer.y };
-                            appState.renderedPlayerPos = { x: hostPlayer.x, y: hostPlayer.y };
-                        }
-
-                        DOM.gameCodeDisplay.textContent = appState.currentGameId || 'ERROR';
-                        // --- UPDATE WAITING MESSAGE ---
-                        const currentPlayers = Object.keys(appState.serverState?.players || {}).length;
-                        DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentPlayers}/${appState.maxPlayersInGame || '?'})`;
-                        // ----------------------------
+                        appState.maxPlayersInGame = data.max_players; // Store max players correctly
+                        // ... (update player position, game code, waiting message) ...
                         UI.updateStatus(`Game hosted. Code: ${appState.currentGameId}`);
                         UI.showSection('host-wait-section');
+                        // !!! PROBLEM: Loop starts HERE while WAITING !!!
+                        Game.startGameLoop();
+                        // !!! END PROBLEM !!!
+                        break;
+
+                    case 'game_joined': // CLIENT receives this
+                        // ... (update state) ...
+                        UI.updateStatus(`Joined game ${appState.currentGameId}. Get ready!`);
+                        UI.showSection('game-area');
+                        // Correct: Loop starts when joining confirms game is ready/starting
                         Game.startGameLoop();
                         break;
 
-                    case 'game_joined': // Also store max_players when joining
-                        appState.localPlayerId = data.player_id;
-                        appState.currentGameId = data.game_id;
-                        appState.serverState = data.initial_state;
-                        // --- STORE MAX PLAYERS ON JOIN ---
-                        // NOTE: Assumes server state snapshot includes max_players for the game
-                        appState.maxPlayersInGame = appState.serverState?.max_players;
-                        // -------------------------------
-                        const joinedPlayer = appState.serverState?.players[appState.localPlayerId];
-                        if (joinedPlayer) {
-                            appState.predictedPlayerPos = { x: joinedPlayer.x, y: joinedPlayer.y };
-                            appState.renderedPlayerPos = { x: joinedPlayer.x, y: joinedPlayer.y };
-                        }
-                        UI.updateStatus(`Joined game ${appState.currentGameId}. Get ready!`);
-                        UI.showSection('game-area');
-                        Game.startGameLoop();
-                        break;
 
                     case 'sp_game_started':
                         appState.localPlayerId = data.player_id;
@@ -2612,37 +2596,64 @@
                         Game.startGameLoop(); // Start loop AFTER confirmation
                         break;
 
-                    case 'game_state':
+                        case 'game_state':
                         // 1. Store previous state info before overwriting
                         const previousStatus = appState.serverState?.status;
                         const wasGameOver = appState.serverState?.game_over;
-
-                        // 2. Update state timing variables
+                        // Update timing BEFORE updating state (if using these for interpolation base)
                         appState.previousServerState = appState.lastServerState;
                         appState.lastServerState = appState.serverState;
 
                         // 3. *** Update the core server state ***
                         appState.serverState = data.state;
-                        const newState = appState.serverState; // Use a shorter reference for the new state
+                        const newState = appState.serverState; // Use a shorter reference
+
+                        // Ensure maxPlayersInGame is updated if it wasn't set before (e.g., from first game_state)
+                        if (!appState.maxPlayersInGame && newState.max_players) {
+                             appState.maxPlayersInGame = newState.max_players;
+                             log(`Max players set from game_state: ${appState.maxPlayersInGame}`);
+                        }
+
+                        // Handle Hit Pause trigger (remains the same)
+                         const localPlayerStateHit = newState?.players?.[appState.localPlayerId];
+                         if (localPlayerStateHit?.hit_flash_this_tick && hitPauseFrames <= 0) {
+                             hitPauseFrames = 3;
+                         }
 
                         // 4. Handle Game Status Changes (Waiting, Countdown, Active)
                         if (newState.status !== previousStatus) {
-                            log(`Game state changed from ${previousStatus} to ${newState.status}`);
+                            log(`[Client State Change] From ${previousStatus || 'null'} to ${newState.status}`);
+
                             if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') {
-                                UI.updateStatus("Waiting for players...", true);
+                                log("[Client State Change] Handling transition TO waiting (player left?)");
+                                UI.updateStatus("Teammate left. Waiting...", true); // Use appropriate message
                                 UI.showSection('host-wait-section');
-                                const currentPlayers = Object.keys(newState.players || {}).length;
-                                DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentPlayers}/${appState.maxPlayersInGame || '?'})`;
+                                const currentPlayersWaiting = Object.keys(newState.players || {}).length;
+                                // --- FIX: Use appState.maxPlayersInGame ---
+                                DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentPlayersWaiting}/${appState.maxPlayersInGame || '?'})`;
+                                // ------------------------------------------
+                                Game.cleanupLoop(); // Stop the loop if returning to waiting
+
                             } else if (newState.status === 'countdown') {
+                                log("[Client State Change] Handling transition TO countdown");
                                 UI.updateStatus("Countdown starting...");
-                                UI.showSection('game-area');
-                                // Ensure loop starts if it wasn't running (e.g., after waiting)
-                                if (!appState.animationFrameId) Game.startGameLoop();
+                                UI.showSection('game-area'); // Show game area
+                                // --- Start loop HERE if not already running ---
+                                if (!appState.animationFrameId) {
+                                    log("Starting game loop due to status -> countdown");
+                                    Game.startGameLoop();
+                                }
+                                // --------------------------------------------
                             } else if (newState.status === 'active') {
+                                log("[Client State Change] Handling transition TO active");
                                 UI.updateStatus("Game active!");
-                                UI.showSection('game-area');
-                                // Ensure loop starts if it wasn't running
-                                if (!appState.animationFrameId) Game.startGameLoop();
+                                UI.showSection('game-area'); // Ensure game area is shown
+                                // --- Start loop HERE if not already running ---
+                                if (!appState.animationFrameId) {
+                                    log("Starting game loop due to status -> active");
+                                    Game.startGameLoop();
+                                }
+                                // --------------------------------------------
                             }
                         }
 
@@ -2653,44 +2664,30 @@
                             UI.updateCountdown(newState);
                             UI.updateDayNight(newState);
                         }
-                        // Update waiting message count even if status didn't change
+                        // Update waiting message count even if status didn't change (but is waiting)
                         else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') {
                             const playerCount = Object.keys(newState.players || {}).length;
-                            DOM.waitingMessage.textContent = `Waiting for Team Mate... (${playerCount}/${MAX_PLAYERS})`;
+                            // --- FIX: Use appState.maxPlayersInGame ---
+                            DOM.waitingMessage.textContent = `Waiting for Team Mate... (${playerCount}/${appState.maxPlayersInGame || '?'})`;
+                            // ------------------------------------------
                         }
 
                         // 6. Check for Game Over Transition
                         if (newState.game_over && !wasGameOver) {
                             log("Game Over signal received from server.");
-                            // The game loop should detect appState.serverState.game_over and stop itself.
+                            // Loop will detect game_over flag and stop / show screen
                         }
 
-                        // 7. *** Handle Enemy Speech Bubble Data ***
-                        // Declare variables to hold potential speech data from THIS state update
+                        // 7. Handle Enemy Speech (remains the same)
                         const serverSpeakerId = newState.enemy_speaker_id;
                         const serverSpeechText = newState.enemy_speech_text;
-
-                        // Log what was received in this specific state packet
-                        // console.log(`[handleServerMessage] State Received. Enemy Speaker: ${serverSpeakerId}, Speech: "${serverSpeechText}"`); // Optional: Less verbose log
-
-                        // *** Only update bubble data if NEW speech info arrived in THIS packet ***
                         if (serverSpeakerId && serverSpeechText) {
-                            log(`---> Processing NEW enemy speech. ID: ${serverSpeakerId}, Text: "${serverSpeechText}"`); // Log when adding/updating
-                            const bubbleText = serverSpeechText.substring(0, 50); // Limit length
-
-                            // Add or update the bubble in the global activeEnemyBubbles object
+                            const bubbleText = serverSpeechText.substring(0, 50);
                             activeEnemyBubbles[serverSpeakerId] = {
-                                text: bubbleText,
-                                // Set expiration based on when THIS message was received
-                                endTime: performance.now() + 3000 // Bubble lasts 3 seconds from now
+                                text: bubbleText, endTime: performance.now() + 3000
                             };
-                            // console.log(`---> Active Enemy Bubbles Updated:`, JSON.stringify(activeEnemyBubbles)); // Optional debug
                         }
-                        // Note: We DO NOT clear bubbles here if speakerId/speechText are null.
-                        // The drawEnemySpeechBubbles function handles removing bubbles when their endTime expires.
-
-                        // 8. End the case
-                        break;
+                        break; // End game_state case
 
                     case 'chat_message':
                         const senderId = data.sender_id;
