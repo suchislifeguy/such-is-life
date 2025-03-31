@@ -466,6 +466,7 @@
 
         };
         let localPlayerMuzzleFlash = { active: false, endTime: 0, aimDx: 0, aimDy: 0 };
+        let hitPauseFrames = 0;
         let activeSpeechBubbles = {}; // { playerId: { text: "Hi!", endTime: 123456789 } }
         let activeEnemyBubbles = {};  // { enemyId: { text: "Grrr!", endTime: 123456789 } }
         let socket = null; // Single WebSocket connection reference
@@ -2140,53 +2141,207 @@
              // --- Game Loop Management ---
 
              // Define the main loop function at this scope level
-            function gameLoop(currentTime) {
-                if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
-                    log(`Stopping game loop. Mode: ${appState.mode}, Connected: ${appState.isConnected}, Game Over: ${appState.serverState?.game_over}`);
-                    const finalStateForDisplay = appState.serverState;
-                    if (finalStateForDisplay?.game_over) {
-                        UI.updateStatus("Game Over!");
-                        log("Game loop stopping due to game over.");
-                        // UI.showGameOver(finalStateForDisplay); // Optional
-                    } else if (appState.mode === 'menu') {
-                        UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
+             function gameLoop(currentTime) {
+    // Check for active hit pause
+    if (hitPauseFrames > 0) {
+        hitPauseFrames--;
+        if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
+            appState.animationFrameId = requestAnimationFrame(gameLoop);
+        }
+        return; // Skip rendering and logic this frame
+    }
+
+    // Original game loop logic continues if not paused
+    if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
+        const finalStateForDisplay = appState.serverState;
+        if (finalStateForDisplay?.game_over) {
+            UI.updateStatus("Game Over!");
+            UI.showGameOver(finalStateForDisplay); // Show game over screen here
+        } else if (appState.mode === 'menu') {
+            UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
+        }
+        cleanupLoop();
+        return;
+    }
+
+    if (!appState.serverState && appState.mode !== 'singleplayer') {
+        appState.animationFrameId = requestAnimationFrame(gameLoop);
+        return;
+    }
+
+    if (appState.lastLoopTime === null) { appState.lastLoopTime = currentTime; }
+    const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000);
+    appState.lastLoopTime = currentTime;
+
+    if (appState.serverState?.status === 'active' && Input.isShootHeld()) {
+        Input.handleShooting();
+    }
+
+    if (appState.mode !== 'singleplayer' && appState.serverState?.status === 'active') {
+        updatePredictedPosition(deltaTime);
+        reconcileWithServer();
+    }
+
+    Renderer.drawGame();
+
+    if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
+        appState.animationFrameId = requestAnimationFrame(gameLoop);
+    } else {
+        if(appState.animationFrameId) cleanupLoop();
+    }
+} // End gameLoop
+
+// ---
+
+// Modified handleServerMessage function
+            function handleServerMessage(event) {
+                let data;
+                try {
+                    data = JSON.parse(event.data);
+                } catch (err) {
+                    console.error("[Client] Failed to parse server message:", err, event.data);
+                    UI.updateStatus("Received invalid data from server.", true);
+                    return;
+                }
+
+                try {
+                    switch (data.type) {
+                        case 'game_created':
+                            appState.localPlayerId = data.player_id;
+                            appState.currentGameId = data.game_id;
+                            appState.serverState = data.initial_state;
+                            const hostPlayer = appState.serverState?.players[appState.localPlayerId];
+                            if (hostPlayer) {
+                                appState.predictedPlayerPos = { x: hostPlayer.x, y: hostPlayer.y };
+                                appState.renderedPlayerPos = { x: hostPlayer.x, y: hostPlayer.y };
+                            }
+                            DOM.gameCodeDisplay.textContent = appState.currentGameId || 'ERROR';
+                            DOM.waitingMessage.textContent = `Waiting for Team Mate... (1/${MAX_PLAYERS})`;
+                            UI.updateStatus(`Game hosted. Code: ${appState.currentGameId}`);
+                            UI.showSection('host-wait-section');
+                            Game.startGameLoop();
+                            break;
+
+                        case 'game_joined':
+                            appState.localPlayerId = data.player_id;
+                            appState.currentGameId = data.game_id;
+                            appState.serverState = data.initial_state;
+                            const joinedPlayer = appState.serverState?.players[appState.localPlayerId];
+                            if (joinedPlayer) {
+                                appState.predictedPlayerPos = { x: joinedPlayer.x, y: joinedPlayer.y };
+                                appState.renderedPlayerPos = { x: joinedPlayer.x, y: joinedPlayer.y };
+                            }
+                            UI.updateStatus(`Joined game ${appState.currentGameId}. Get ready!`);
+                            UI.showSection('game-area');
+                            Game.startGameLoop();
+                            break;
+
+                        case 'sp_game_started':
+                            appState.localPlayerId = data.player_id;
+                            appState.currentGameId = data.game_id;
+                            appState.serverState = data.initial_state;
+                            const spPlayer = appState.serverState?.players[appState.localPlayerId];
+                            if (spPlayer) {
+                                appState.predictedPlayerPos = { x: spPlayer.x, y: spPlayer.y };
+                                appState.renderedPlayerPos = { x: spPlayer.x, y: spPlayer.y };
+                            }
+                            UI.updateStatus("Single Player Game Started!");
+                            UI.showSection('game-area');
+                            Game.startGameLoop();
+                            break;
+
+                        case 'game_state':
+                            const previousStatus = appState.serverState?.status;
+                            const wasGameOver = appState.serverState?.game_over;
+                            appState.previousServerState = appState.lastServerState;
+                            appState.lastServerState = appState.serverState;
+                            appState.serverState = data.state;
+                            const newState = appState.serverState;
+
+                            // Check for Hit Pause trigger
+                            const localPlayerState = newState?.players?.[appState.localPlayerId];
+                            if (localPlayerState?.hit_flash_this_tick) {
+                                if (hitPauseFrames <= 0) {
+                                    hitPauseFrames = 3; // Number of frames to pause rendering
+                                }
+                            }
+
+                            if (newState.status !== previousStatus) {
+                                if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') {
+                                    UI.updateStatus("Teammate left. Waiting...", true);
+                                    UI.showSection('host-wait-section');
+                                    const hostPlayerCount = Object.keys(newState.players || {}).length;
+                                    DOM.waitingMessage.textContent = `Waiting for Team Mate... (${hostPlayerCount}/${MAX_PLAYERS})`;
+                                } else if (newState.status === 'countdown') {
+                                    UI.updateStatus("Countdown starting...");
+                                    UI.showSection('game-area');
+                                    if (!appState.animationFrameId) Game.startGameLoop();
+                                } else if (newState.status === 'active') {
+                                    UI.updateStatus("Game active!");
+                                    UI.showSection('game-area');
+                                    if (!appState.animationFrameId) Game.startGameLoop();
+                                }
+                            }
+
+                            if (newState.status === 'countdown' || newState.status === 'active') {
+                                const player = newState.players?.[appState.localPlayerId];
+                                UI.updateHUD(player, newState);
+                                UI.updateCountdown(newState);
+                                UI.updateDayNight(newState);
+                            }
+                            else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') {
+                                const playerCount = Object.keys(newState.players || {}).length;
+                                DOM.waitingMessage.textContent = `Waiting for Team Mate... (${playerCount}/${MAX_PLAYERS})`;
+                            }
+
+                            if (newState.game_over && !wasGameOver) {
+                                // Game loop will handle stopping and showing screen
+                            }
+
+                            const serverSpeakerId = newState.enemy_speaker_id;
+                            const serverSpeechText = newState.enemy_speech_text;
+                            if (serverSpeakerId && serverSpeechText) {
+                                const bubbleText = serverSpeechText.substring(0, 50);
+                                activeEnemyBubbles[serverSpeakerId] = {
+                                    text: bubbleText, endTime: performance.now() + 3000
+                                };
+                            }
+                            break;
+
+                        case 'chat_message':
+                            const senderId = data.sender_id;
+                            const messageText = data.message;
+                            const isSelf = senderId === appState.localPlayerId;
+                            UI.addChatMessage(senderId, messageText, isSelf);
+                            if (senderId && messageText) {
+                                const bubbleText = messageText.substring(0, 50);
+                                activeSpeechBubbles[senderId] = {
+                                    text: bubbleText, endTime: performance.now() + 4000
+                                };
+                            }
+                            break;
+
+                        case 'error':
+                            console.error("[Client] Server Error Message:", data.message);
+                            UI.updateStatus(`Server Error: ${data.message}`, true);
+                            if (appState.mode === 'multiplayer-client' && (data.message.includes('not found') || data.message.includes('not waiting') || data.message.includes('full') || data.message.includes('finished'))) {
+                                UI.showSection('join-code-section');
+                                appState.mode = 'menu';
+                            } else if (appState.mode === 'multiplayer-host' && data.message.includes('Creation Error')) {
+                                Game.resetClientState(true);
+                            } else if (data.message === 'Please create or join a game first.') {
+                                Game.resetClientState(true);
+                            }
+                            break;
+
+                        default:
+                            log('Unknown message type received:', data.type);
                     }
-                    cleanupLoop();
-                    // if (finalStateForDisplay?.game_over) { UI.showGameOver(finalStateForDisplay); } // Optional
-                    return;
+                } catch (handlerError) {
+                    console.error("[Client] Error inside handleServerMessage logic:", handlerError);
+                    UI.updateStatus("Client error processing message.", true);
                 }
-
-                if (!appState.serverState && appState.mode !== 'singleplayer') {
-                    log("Loop: Waiting for server state update...");
-                    appState.animationFrameId = requestAnimationFrame(gameLoop);
-                    return;
-                }
-
-                if (appState.lastLoopTime === null) { appState.lastLoopTime = currentTime; }
-                const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000);
-                appState.lastLoopTime = currentTime;
-
-                // Check for held shoot inputs each frame
-                if (appState.serverState?.status === 'active' && Input.isShootHeld()) {
-                    Input.handleShooting(); // Call the shooting function (checks cooldown inside)
-                }
-
-                // Client-side prediction and reconciliation
-                if (appState.mode !== 'singleplayer' && appState.serverState?.status === 'active') {
-                    updatePredictedPosition(deltaTime);
-                    reconcileWithServer();
-                }
-
-                // Render the game state
-                Renderer.drawGame();
-
-                // Request next frame
-                if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
-                    appState.animationFrameId = requestAnimationFrame(gameLoop);
-                } else {
-                    if(appState.animationFrameId) cleanupLoop();
-                }
-            } 
+            } // End handleServerMessage
 
 
             function startGameLoop() {
