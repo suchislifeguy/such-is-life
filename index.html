@@ -334,11 +334,17 @@
             <button id="multiplayerBtn">Multiplayer</button>
         </div>
         <div id="multiplayer-menu-section" class="menu-section">
-             <h2>Multiplayer</h2>
-             <button id="hostGameBtn">Host Game (Get Code)</button>
-             <button id="showJoinUIBtn">Join Game (Enter Code)</button>
-             <button class="back-button" onclick="showSection('main-menu-section')">Back</button>
-        </div>
+            <h2>Multiplayer</h2>
+            <p style="margin-bottom: 5px;">Choose number of players:</p>
+            <!-- New Host Buttons -->
+            <button id="hostGameBtn2">Host 2 Player Game</button>
+            <button id="hostGameBtn3">Host 3 Player Game</button>
+            <button id="hostGameBtn4">Host 4 Player Game</button>
+            <hr style="margin: 20px auto; width: 80%; border-color: var(--primary-color);">
+            <!-- Join Button remains -->
+            <button id="showJoinUIBtn">Join Game (Enter Code)</button>
+            <button class="back-button" onclick="showSection('main-menu-section')">Back</button>
+       </div>
         <div id="host-wait-section" class="menu-section">
              <h2>Hosting Game</h2>
              <p>Share this code with your mate:</p>
@@ -439,7 +445,9 @@
             // Buttons (listeners assigned in Game.initListeners)
             singlePlayerBtn: document.getElementById('singlePlayerBtn'),
             multiplayerBtn: document.getElementById('multiplayerBtn'),
-            hostGameBtn: document.getElementById('hostGameBtn'),
+            hostGameBtn2: document.getElementById('hostGameBtn2'),
+            hostGameBtn3: document.getElementById('hostGameBtn3'),
+            hostGameBtn4: document.getElementById('hostGameBtn4'),
             showJoinUIBtn: document.getElementById('showJoinUIBtn'),
             cancelHostBtn: document.getElementById('cancelHostBtn'),
             joinGameSubmitBtn: document.getElementById('joinGameSubmitBtn'),
@@ -452,8 +460,9 @@
         let appState = {
             mode: 'menu', // Start in menu
             localPlayerId: null,
+            maxPlayersInGame: null, 
             currentGameId: null,
-            serverState: null, // Latest authoritative state from server
+            serverState: null, 
             animationFrameId: null,
             isConnected: false,
             // Interpolation/Prediction State
@@ -2123,6 +2132,7 @@
                  appState.currentGameId = null;
                  appState.serverState = null;
                  appState.lastServerState = null;
+                 appState.maxPlayersInGame = null; 
                  appState.previousServerState = null;
                  appState.predictedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
                  appState.renderedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
@@ -2472,7 +2482,9 @@
                  log("Initializing button listeners...");
                  DOM.singlePlayerBtn.onclick = startSinglePlayer;
                  DOM.multiplayerBtn.onclick = () => UI.showSection('multiplayer-menu-section');
-                 DOM.hostGameBtn.onclick = hostMultiplayer;
+                 DOM.hostGameBtn2.onclick = () => hostMultiplayer(2);
+                 DOM.hostGameBtn3.onclick = () => hostMultiplayer(3);
+                 DOM.hostGameBtn4.onclick = () => hostMultiplayer(4);
                  DOM.showJoinUIBtn.onclick = () => UI.showSection('join-code-section');
                  DOM.cancelHostBtn.onclick = leaveGame;
                  DOM.joinGameSubmitBtn.onclick = joinMultiplayer;
@@ -2496,6 +2508,25 @@
                      }
                  });
              }
+
+
+            function hostMultiplayer(maxPlayers) {
+                log(`Requesting to Host Multiplayer game for ${maxPlayers} players...`);
+                // Validate maxPlayers briefly on client side
+                if (![2, 3, 4].includes(maxPlayers)) {
+                    error("Invalid max player count requested:", maxPlayers);
+                    UI.updateStatus("Invalid player count.", true);
+                    return;
+                }
+                appState.mode = 'multiplayer-host';
+                resetClientState(false); // Reset state but don't show menu yet
+                UI.updateStatus(`Creating ${maxPlayers}-player game...`);
+                // Send max_players value to server
+                Network.sendMessage({ type: 'create_game', max_players: maxPlayers });
+                // UI transition happens on 'game_created' response
+            }
+
+
 
             // --- Expose necessary functions from Game module ---
             return {
@@ -2529,6 +2560,9 @@
                         appState.localPlayerId = data.player_id;
                         appState.currentGameId = data.game_id;
                         appState.serverState = data.initial_state;
+                        // --- STORE MAX PLAYERS ---
+                        appState.maxPlayersInGame = data.max_players; // Get max_players from response
+                        // -------------------------
                         const hostPlayer = appState.serverState?.players[appState.localPlayerId];
                         if (hostPlayer) {
                             appState.predictedPlayerPos = { x: hostPlayer.x, y: hostPlayer.y };
@@ -2536,25 +2570,31 @@
                         }
 
                         DOM.gameCodeDisplay.textContent = appState.currentGameId || 'ERROR';
-                        DOM.waitingMessage.textContent = `Waiting for Team Mate... (1/${MAX_PLAYERS})`; // Updated text
+                        // --- UPDATE WAITING MESSAGE ---
+                        const currentPlayers = Object.keys(appState.serverState?.players || {}).length;
+                        DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentPlayers}/${appState.maxPlayersInGame || '?'})`;
+                        // ----------------------------
                         UI.updateStatus(`Game hosted. Code: ${appState.currentGameId}`);
                         UI.showSection('host-wait-section');
-                        Game.startGameLoop(); // Start loop AFTER confirmation
+                        Game.startGameLoop();
                         break;
 
-                    case 'game_joined':
+                    case 'game_joined': // Also store max_players when joining
                         appState.localPlayerId = data.player_id;
                         appState.currentGameId = data.game_id;
                         appState.serverState = data.initial_state;
+                        // --- STORE MAX PLAYERS ON JOIN ---
+                        // NOTE: Assumes server state snapshot includes max_players for the game
+                        appState.maxPlayersInGame = appState.serverState?.max_players;
+                        // -------------------------------
                         const joinedPlayer = appState.serverState?.players[appState.localPlayerId];
                         if (joinedPlayer) {
                             appState.predictedPlayerPos = { x: joinedPlayer.x, y: joinedPlayer.y };
                             appState.renderedPlayerPos = { x: joinedPlayer.x, y: joinedPlayer.y };
                         }
-
                         UI.updateStatus(`Joined game ${appState.currentGameId}. Get ready!`);
                         UI.showSection('game-area');
-                        Game.startGameLoop(); // Start loop AFTER confirmation
+                        Game.startGameLoop();
                         break;
 
                     case 'sp_game_started':
@@ -2589,10 +2629,10 @@
                         if (newState.status !== previousStatus) {
                             log(`Game state changed from ${previousStatus} to ${newState.status}`);
                             if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') {
-                                UI.updateStatus("Teammate left. Waiting...", true);
+                                UI.updateStatus("Waiting for players...", true);
                                 UI.showSection('host-wait-section');
-                                const hostPlayerCount = Object.keys(newState.players || {}).length;
-                                DOM.waitingMessage.textContent = `Waiting for Team Mate... (${hostPlayerCount}/${MAX_PLAYERS})`;
+                                const currentPlayers = Object.keys(newState.players || {}).length;
+                                DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentPlayers}/${appState.maxPlayersInGame || '?'})`;
                             } else if (newState.status === 'countdown') {
                                 UI.updateStatus("Countdown starting...");
                                 UI.showSection('game-area');
