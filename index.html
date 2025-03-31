@@ -1480,28 +1480,53 @@
             function drawPlayers(players) {
                 if (!players) return;
                 Object.values(players).forEach(player => {
-                    if (!player || player.health <= 0) return;
-                    const isSelf = player.id === appState.localPlayerId;
+                    // Skip if player data is invalid or status is fully DEAD
+                    if (!player || player.player_status === PLAYER_STATUS_DEAD) {
+                        return;
+                    }
 
+                    const isSelf = player.id === appState.localPlayerId;
+                    const playerStatus = player.player_status || PLAYER_STATUS_ALIVE; // Default to alive if missing
+
+                    // Determine draw position (use prediction/reconciliation for self)
                     const drawX = isSelf ? appState.renderedPlayerPos.x : player.x;
                     const drawY = isSelf ? appState.renderedPlayerPos.y : player.y;
+
+                    // Get dimensions and health info
                     const width = player.width ?? PLAYER_DEFAULTS.width;
                     const height = player.height ?? PLAYER_DEFAULTS.height;
                     const maxHealth = player.max_health ?? PLAYER_DEFAULTS.max_health;
-                    const currentArmor = player.armor ?? 0; // Get current armor value
+                    const currentArmor = player.armor ?? 0;
 
+                    // --- GHOST STATE LOGIC ---
+                    let isDown = (playerStatus === PLAYER_STATUS_DOWN);
+                    let alpha = isDown ? 0.4 : 1.0; // Set transparency if down
+                    // --- END GHOST STATE LOGIC ---
+
+                    // --- DRAW PLAYER ---
+                    ctx.save(); // Save context before applying alpha
+                    ctx.globalAlpha = alpha; // Apply calculated alpha
+
+                    // Pass aim direction only for self (unchanged)
                     const aimDx = isSelf ? localPlayerMuzzleFlash.aimDx : 0;
                     const aimDy = isSelf ? localPlayerMuzzleFlash.aimDy : 0;
 
                     // Draw the character shape
                     drawPlayerCharacter(drawX, drawY, width, height, isSelf, player, aimDx, aimDy);
 
-                    // --- DRAW BARS AFTER CHARACTER ---
-                    drawHealthBar(drawX, drawY, width, player.health, maxHealth);
-                    drawArmorBar(drawX, drawY, width, currentArmor); // <<< --- ADD THIS LINE --- >>>
-                    // ----------------------------------
+                    ctx.restore(); // Restore context (resets globalAlpha)
+                    // --- END DRAW PLAYER ---
+
+                    // --- DRAW BARS (Only if ALIVE) ---
+                    if (playerStatus === PLAYER_STATUS_ALIVE) {
+                        drawHealthBar(drawX, drawY, width, player.health, maxHealth);
+                        if (currentArmor > 0) { // Only draw armor bar if armor exists
+                            drawArmorBar(drawX, drawY, width, currentArmor);
+                        }
+                    }
+                    // --- END BARS ---
                 });
-            }
+            } 
 
             function drawPlayerCharacter(x, y, w, h, isSelf, playerState, aimDx, aimDy) {
                 // --- Colors ---
@@ -1632,20 +1657,54 @@
             // 1. Updated drawEnemies function 
             function drawEnemies(enemies) {
                 if (!enemies) return;
+                const now = performance.now() / 1000; // Get current time in seconds
+                const FADE_DURATION = 0.5; // Match server duration
+
                 Object.values(enemies).forEach(enemy => {
-                    if (!enemy || enemy.health <= 0) return;
+                    if (!enemy) return; // Skip invalid enemy data
+
                     const width = enemy.width ?? ENEMY_DEFAULTS.width;
                     const height = enemy.height ?? ENEMY_DEFAULTS.height;
                     const maxHealth = enemy.max_health ?? ENEMY_DEFAULTS.max_health;
 
-                    // Call the modified drawEnemyRect, passing the whole enemy object
-                    // This replaces the old call: drawEnemyRect(enemy.x, enemy.y, width, height, enemy.type);
-                    drawEnemyRect(enemy.x, enemy.y, width, height, enemy.type, enemy); // Pass 'enemy' as enemyState
+                    // --- FADE LOGIC ---
+                    let alpha = 1.0;
+                    let isFading = false;
+                    if (enemy.health <= 0 && enemy.death_timestamp) {
+                        const elapsed = now - enemy.death_timestamp;
+                        if (elapsed < FADE_DURATION) {
+                            alpha = Math.max(0, 1.0 - (elapsed / FADE_DURATION));
+                            isFading = true;
+                        } else {
+                            // If fade time is over but server hasn't cleaned up yet, just draw transparent
+                            alpha = 0;
+                            isFading = true; // Treat as fading (don't draw health bar)
+                        }
+                    }
+                    // --- END FADE LOGIC ---
 
-                    // Keep health bar drawing
-                    drawHealthBar(enemy.x, enemy.y, width, enemy.health, maxHealth);
+                    // Don't draw if fully faded
+                    if (alpha <= 0 && isFading) {
+                        return;
+                    }
+
+                    // --- DRAW ENEMY ---
+                    ctx.save(); // Save context before applying alpha
+                    ctx.globalAlpha = alpha; // Apply calculated alpha
+
+                    // Call the draw function using the enemy object
+                    drawEnemyRect(enemy.x, enemy.y, width, height, enemy.type, enemy);
+
+                    ctx.restore(); // Restore context (resets globalAlpha)
+                    // --- END DRAW ENEMY ---
+
+                    // --- DRAW HEALTH BAR (Only if NOT fading) ---
+                    if (!isFading && enemy.health > 0) {
+                        drawHealthBar(enemy.x, enemy.y, width, enemy.health, maxHealth);
+                    }
+                    // --- END HEALTH BAR ---
                 });
-            }
+            } // End drawEnemies
 
 
             function drawEnemyRect(x, y, w, h, type, enemyState) { // enemyState includes type, health, etc.
