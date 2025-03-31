@@ -382,8 +382,8 @@
         const WEBSOCKET_URL = 'wss://such-is-life.glitch.me/ws'; // UPDATE IF YOUR GLITCH URL CHANGES
         const CANVAS_WIDTH = 800;
         const CANVAS_HEIGHT = 600;
-        const PLAYER_WIDTH = 20; const PLAYER_HEIGHT = 20;
-        const ENEMY_WIDTH = 25; const ENEMY_HEIGHT = 25; const BULLET_RADIUS = 4; const POWERUP_SIZE = 12;
+        const PLAYER_WIDTH = 25; const PLAYER_HEIGHT = 25;
+        const ENEMY_WIDTH = 20; const ENEMY_HEIGHT = 25; const BULLET_RADIUS = 4; const POWERUP_SIZE = 12;
         const SHOOT_COOLDOWN = 300; // ms
         const RAPID_FIRE_COOLDOWN_MULTIPLIER = 0.4;
         const INPUT_SEND_INTERVAL = 50; // ms
@@ -396,7 +396,10 @@
         const ENEMY_TYPE_CHASER = 'chaser'; 
         const ENEMY_TYPE_SHOOTER = 'shooter'; 
         const BULLET_TYPE_STANDARD = 'standard'; 
-        const BULLET_TYPE_STANDARD_ENEMY = 'standard_enemy'; 
+        const BULLET_TYPE_STANDARD_ENEMY = 'standard_enemy';
+        const PLAYER_STATUS_ALIVE = 'alive';
+        const PLAYER_STATUS_DOWN = 'down';
+        const PLAYER_STATUS_DEAD = 'dead';
         // --- End Constants ---
 
         // --- Utility Functions ---
