@@ -382,8 +382,8 @@
         const WEBSOCKET_URL = 'wss://such-is-life.glitch.me/ws'; // UPDATE IF YOUR GLITCH URL CHANGES
         const CANVAS_WIDTH = 800;
         const CANVAS_HEIGHT = 600;
-        const PLAYER_WIDTH = 25; const PLAYER_HEIGHT = 25;
-        const ENEMY_WIDTH = 20; const ENEMY_HEIGHT = 25; const BULLET_RADIUS = 4; const POWERUP_SIZE = 12;
+        const PLAYER_WIDTH = 25; const PLAYER_HEIGHT = 32;
+        const ENEMY_WIDTH = 15; const ENEMY_HEIGHT = 25; const BULLET_RADIUS = 4; const POWERUP_SIZE = 12;
         const SHOOT_COOLDOWN = 300; // ms
         const RAPID_FIRE_COOLDOWN_MULTIPLIER = 0.4;
         const INPUT_SEND_INTERVAL = 50; // ms
@@ -1659,10 +1659,11 @@
             }
 
             // 1. Updated drawEnemies function 
+
             function drawEnemies(enemies) {
                 if (!enemies) return;
                 const now = performance.now() / 1000; // Get current time in seconds
-                const FADE_DURATION = 0.5; // Match server duration
+                const FADE_DURATION = 0.5; // Still use this duration constant for the window
 
                 Object.values(enemies).forEach(enemy => {
                     if (!enemy) return; // Skip invalid enemy data
@@ -1671,39 +1672,40 @@
                     const height = enemy.height ?? ENEMY_DEFAULTS.height;
                     const maxHealth = enemy.max_health ?? ENEMY_DEFAULTS.max_health;
 
-                    // --- FADE LOGIC ---
-                    let alpha = 1.0;
-                    let isFading = false;
+                    // --- CORRECTED FADE LOGIC ---
+                    let alpha = 1.0; // Default to fully visible
+                    let shouldDraw = true;
+                    let isDying = false; // Track if in the dying state
+
+                    // Check if enemy is marked as dying (health <= 0 and has timestamp)
                     if (enemy.health <= 0 && enemy.death_timestamp) {
+                        isDying = true;
                         const elapsed = now - enemy.death_timestamp;
+
+                        // If within the 0.5 second window after death
                         if (elapsed < FADE_DURATION) {
-                            alpha = Math.max(0, 1.0 - (elapsed / FADE_DURATION));
-                            isFading = true;
+                            alpha = 0.4; // Instantly set alpha to 40%
                         } else {
-                            // If fade time is over but server hasn't cleaned up yet, just draw transparent
-                            alpha = 0;
-                            isFading = true; // Treat as fading (don't draw health bar)
+                            // If fade duration has passed, don't draw at all
+                            shouldDraw = false;
                         }
                     }
-                    // --- END FADE LOGIC ---
+                    // --- END CORRECTED FADE LOGIC ---
 
-                    // Don't draw if fully faded
-                    if (alpha <= 0 && isFading) {
-                        return;
+                    // --- DRAW ENEMY (only if shouldDraw is true) ---
+                    if (shouldDraw) {
+                        ctx.save(); // Save context before applying alpha
+                        ctx.globalAlpha = alpha; // Apply calculated alpha (1.0 or 0.4)
+
+                        // Call the draw function using the enemy object
+                        drawEnemyRect(enemy.x, enemy.y, width, height, enemy.type, enemy);
+
+                        ctx.restore(); // Restore context (resets globalAlpha)
                     }
-
-                    // --- DRAW ENEMY ---
-                    ctx.save(); // Save context before applying alpha
-                    ctx.globalAlpha = alpha; // Apply calculated alpha
-
-                    // Call the draw function using the enemy object
-                    drawEnemyRect(enemy.x, enemy.y, width, height, enemy.type, enemy);
-
-                    ctx.restore(); // Restore context (resets globalAlpha)
                     // --- END DRAW ENEMY ---
 
-                    // --- DRAW HEALTH BAR (Only if NOT fading) ---
-                    if (!isFading && enemy.health > 0) {
+                    // --- DRAW HEALTH BAR (Only if NOT dying and alive) ---
+                    if (!isDying && enemy.health > 0) {
                         drawHealthBar(enemy.x, enemy.y, width, enemy.health, maxHealth);
                     }
                     // --- END HEALTH BAR ---
