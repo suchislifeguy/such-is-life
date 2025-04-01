@@ -332,6 +332,8 @@
             <h2>Main Menu</h2>
             <button id="singlePlayerBtn">Single Player</button>
             <button id="multiplayerBtn">Multiplayer</button>
+            <button id="viewHighScoresBtn">View High Scores</button> 
+
         </div>
         <div id="multiplayer-menu-section" class="menu-section">
             <h2>Multiplayer</h2>
@@ -380,6 +382,24 @@
             <div id="final-stats"></div>
             <button id="gameOverBackBtn">Back to Menu</button>
         </div>
+
+        <div id="highscore-prompt" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(10, 20, 25, 0.95); padding: 25px; border: 3px solid var(--accent-color); border-radius: 10px; color: var(--text-color); text-align: center; z-index: 30; width: 80%; max-width: 350px;">
+            <h2>High Score!</h2>
+            <p>Your score of <strong id="highscore-prompt-score">0</strong> qualifies!</p>
+            <p>Enter 3 Initials:</p>
+            <input type="text" id="highscore-name-input" maxlength="3" style="width: 80px; text-align: center; font-size: 1.5rem; text-transform: uppercase;">
+            <button id="highscore-submit-btn" style="display: block; margin: 15px auto 0 auto;">Submit</button>
+            <!-- Hidden field to store max_players -->
+            <input type="hidden" id="highscore-prompt-maxplayers" value="0">
+        </div>
+
+        <!-- High Score Display List (Hidden by default) -->
+        <div id="highscore-display" style="display: none; background-color: rgba(10, 20, 25, 0.9); padding: 20px; border: 2px solid var(--primary-color); border-radius: 10px; color: var(--text-color); margin-top: 20px; max-height: 400px; overflow-y: auto;">
+            <h2>Top Scores</h2>
+            <ol id="highscore-list" style="list-style-type: decimal; padding-left: 30px; text-align: left; font-size: 14px;"></ol>
+            <button id="highscore-back-btn" style="margin-top: 15px;">Back to Menu</button>
+        </div>
+
 
     </div>
 
@@ -454,6 +474,17 @@
             sendChatBtn: document.getElementById('sendChatBtn'),
             leaveGameBtn: document.getElementById('leaveGameBtn'),
             gameOverBackBtn: document.getElementById('gameOverBackBtn'),
+
+            highscorePrompt: document.getElementById('highscore-prompt'),
+            highscorePromptScore: document.getElementById('highscore-prompt-score'),
+            highscoreNameInput: document.getElementById('highscore-name-input'),
+            highscoreSubmitBtn: document.getElementById('highscore-submit-btn'),
+            highscorePromptMaxPlayers: document.getElementById('highscore-prompt-maxplayers'), 
+            highscoreDisplay: document.getElementById('highscore-display'),
+            highscoreList: document.getElementById('highscore-list'),
+            highscoreBackBtn: document.getElementById('highscore-back-btn'),
+            viewHighScoresBtn: document.getElementById('viewHighScoresBtn'), 
+
         };
 
         // --- Global Client State ---
@@ -647,6 +678,78 @@
                     error("DOM.countdownDiv or DOM.dayNightIndicator not found.");
                 }
              }
+
+            function showHighscorePrompt(score, maxPlayers) {
+                // Check if DOM elements exist
+                if (!DOM.highscorePrompt || !DOM.highscorePromptScore || !DOM.highscoreNameInput || !DOM.highscorePromptMaxPlayers) {
+                    error("Highscore prompt DOM elements not found!");
+                    return;
+                }
+                log(`Showing highscore prompt for score: ${score}, maxP: ${maxPlayers}`);
+
+                // Populate the prompt
+                DOM.highscorePromptScore.textContent = score;
+                DOM.highscoreNameInput.value = ''; // Clear previous input
+                DOM.highscorePromptMaxPlayers.value = maxPlayers; // Store max_players in the hidden input
+
+                // Show the prompt and focus the input
+                DOM.highscorePrompt.style.display = 'block';
+                DOM.highscoreNameInput.focus();
+
+                // Listener for submit button is added in Game.initListeners
+            }
+
+            function hideHighscorePrompt() {
+                if (DOM.highscorePrompt) {
+                    DOM.highscorePrompt.style.display = 'none';
+                }
+            }
+
+            function displayHighscores(scores) {
+                // Check if DOM elements exist
+                if (!DOM.highscoreDisplay || !DOM.highscoreList) {
+                    error("Highscore display DOM elements not found!");
+                    return;
+                }
+                log("Displaying high scores list.");
+
+                // Clear previous list content
+                DOM.highscoreList.innerHTML = '';
+
+                // Populate the list
+                if (!scores || scores.length === 0) {
+                    DOM.highscoreList.innerHTML = '<li style="color: var(--dusty-green);">No high scores recorded yet.</li>';
+                } else {
+                    scores.forEach((entry, index) => {
+                        const li = document.createElement('li');
+                        // Format Date (handle potential missing timestamp)
+                        const dateStr = entry.timestamp
+                                    ? new Date(entry.timestamp * 1000).toLocaleDateString()
+                                    : '??/??/????';
+                        // Format: Rank. NAME - Score (XP Players) - Date
+                        // Ensure default values if parts of entry are missing
+                        li.innerHTML = `
+                            <span style="color: var(--accent-gold); font-weight: bold;">${index + 1}. ${entry.name || '???'}</span> -
+                            ${entry.score || 0} pts
+                            <span style="color: var(--dusty-green);">(${entry.players || '?'}P)</span> -
+                            <span style="font-size: 0.9em;">${dateStr}</span>
+                        `;
+                        DOM.highscoreList.appendChild(li);
+                    });
+                }
+
+                // Show the highscore display section (uses the existing UI.showSection)
+                UI.showSection('highscore-display');
+            }
+
+            // --- IF USING UI MODULE, add to return statement ---
+            // return {
+            //    ..., // showSection, updateStatus, updateHUD, etc.
+            //    showHighscorePrompt,
+            //    hideHighscorePrompt,
+            //    displayHighscores
+            // };
+
 
             function updateDayNight(serverState) {
                  // Add checks for DOM elements
@@ -2349,6 +2452,106 @@
              }
 
 
+             function initListeners() {
+                log("Initializing button listeners...");
+
+                // --- Existing Game/Menu Listeners ---
+                if (DOM.singlePlayerBtn) DOM.singlePlayerBtn.onclick = startSinglePlayer;
+                if (DOM.multiplayerBtn) DOM.multiplayerBtn.onclick = () => UI.showSection('multiplayer-menu-section');
+                if (DOM.hostGameBtn2) DOM.hostGameBtn2.onclick = () => hostMultiplayer(2);
+                if (DOM.hostGameBtn3) DOM.hostGameBtn3.onclick = () => hostMultiplayer(3);
+                if (DOM.hostGameBtn4) DOM.hostGameBtn4.onclick = () => hostMultiplayer(4);
+                if (DOM.showJoinUIBtn) DOM.showJoinUIBtn.onclick = () => UI.showSection('join-code-section');
+                if (DOM.cancelHostBtn) DOM.cancelHostBtn.onclick = leaveGame; // Assuming leaveGame handles connection closing
+                if (DOM.joinGameSubmitBtn) DOM.joinGameSubmitBtn.onclick = joinMultiplayer;
+                if (DOM.sendChatBtn) DOM.sendChatBtn.onclick = sendChatMessage; // Assuming sendChatMessage defined elsewhere
+                if (DOM.leaveGameBtn) DOM.leaveGameBtn.onclick = leaveGame; // Assuming leaveGame defined elsewhere
+                if (DOM.gameOverBackBtn) DOM.gameOverBackBtn.onclick = () => resetClientState(true); // Assuming resetClientState defined elsewhere
+
+                // --- Existing Back Buttons (Using Class) ---
+                DOM.gameContainer.querySelectorAll('.back-button').forEach(btn => {
+                    const targetSectionMatch = btn.getAttribute('onclick')?.match(/'([^']+)'/);
+                    if (targetSectionMatch && targetSectionMatch[1]) {
+                        const targetSectionId = targetSectionMatch[1];
+                        // Ensure valid section ID before overriding
+                        if (DOM[targetSectionId] || document.getElementById(targetSectionId)) {
+                             btn.onclick = (e) => { e.preventDefault(); UI.showSection(targetSectionId); }; // Override inline
+                        } else {
+                             log(`Warning: Back button target section invalid: ${targetSectionId}`);
+                        }
+                    } else {
+                        log("Warning: Back button found without valid target in onclick:", btn);
+                    }
+                });
+
+                // --- START ADDITION: High Score Listeners ---
+
+                // View High Scores Button (Main Menu)
+                if (DOM.viewHighScoresBtn) {
+                    DOM.viewHighScoresBtn.onclick = () => {
+                        log("Requesting high scores list...");
+                        // Check if connected before sending
+                        if (appState.isConnected && socket && socket.readyState === WebSocket.OPEN) {
+                            Network.sendMessage({ type: 'request_high_scores' });
+                            // The displayHighscores function will be called by handleServerMessage when the server responds
+                        } else {
+                            UI.updateStatus("Cannot fetch scores: Not connected.", true);
+                            // Optionally show a more direct message to the user:
+                            // alert("Not connected to server. Cannot fetch high scores.");
+                        }
+                    };
+                } else { error("DOM element not found: viewHighScoresBtn"); } // Log if button is missing
+
+                // Submit Button (High Score Name Prompt)
+                if (DOM.highscoreSubmitBtn) {
+                    DOM.highscoreSubmitBtn.onclick = () => {
+                        const name = DOM.highscoreNameInput.value.trim().toUpperCase();
+                        const scoreText = DOM.highscorePromptScore.textContent;
+                        const maxPlayersText = DOM.highscorePromptMaxPlayers.value; // Read from hidden input
+
+                        // Validate inputs
+                        const score = parseInt(scoreText, 10);
+                        const maxPlayers = parseInt(maxPlayersText, 10);
+
+                        // Check if name is 3 chars, score is a positive number, maxPlayers is a positive number
+                        if (name.length === 3 && !isNaN(score) && score >= 0 && !isNaN(maxPlayers) && maxPlayers > 0) {
+                            log(`Submitting highscore: Name=${name}, Score=${score}, MaxP=${maxPlayers}`);
+                            // Check connection before sending
+                            if (appState.isConnected && socket && socket.readyState === WebSocket.OPEN) {
+                                Network.sendMessage({
+                                    type: 'submit_highscore_name',
+                                    name: name,
+                                    score: score,
+                                    max_players: maxPlayers // Send max_players back to server
+                                });
+                                UI.hideHighscorePrompt(); // Hide prompt after successful submission attempt
+                            } else {
+                                UI.updateStatus("Cannot submit score: Not connected.", true);
+                                alert("Connection error. Could not submit score."); // User feedback
+                            }
+                        } else if (name.length !== 3) {
+                             alert("Please enter exactly 3 initials."); // Validation feedback
+                             DOM.highscoreNameInput.focus(); // Keep focus on input for easy correction
+                        } else {
+                             // Generic error for invalid score or maxPlayers
+                             alert("An error occurred validating score data. Could not submit.");
+                             log(`Highscore submission validation failed: Name='${name}', Score=${score} (from '${scoreText}'), MaxP=${maxPlayers} (from '${maxPlayersText}')`);
+                             UI.hideHighscorePrompt(); // Hide prompt even on error to prevent getting stuck
+                        }
+                    };
+                } else { error("DOM element not found: highscoreSubmitBtn"); } // Log if button is missing
+
+                // Back Button (High Score Display)
+                if (DOM.highscoreBackBtn) {
+                    DOM.highscoreBackBtn.onclick = () => {
+                        log("Closing high scores display.");
+                        UI.showSection('main-menu-section'); // Return to main menu
+                    };
+                } else { error("DOM element not found: highscoreBackBtn"); } // Log if button is missing
+
+                // --- END ADDITION ---
+            } // End initListeners function
+
             function hostMultiplayer(maxPlayers) {
                 log(`Requesting to Host Multiplayer game for ${maxPlayers} players...`);
                 // Validate maxPlayers briefly on client side
@@ -2624,6 +2827,32 @@
                               Game.resetClientState(true);
                          }
                          break;
+
+
+
+                     case 'request_highscore_name':
+                        log("Received request_highscore_name", data);
+                        // Check if data contains the necessary score and max_players
+                        if (data.score !== undefined && data.max_players !== undefined) {
+                            // Call the UI function to show the prompt
+                            // Assuming UI module exists or functions are global
+                            UI.showHighscorePrompt(data.score, data.max_players);
+                        } else {
+                            log("Invalid request_highscore_name data received.", data);
+                        }
+                        break;
+
+                     case 'high_scores_list':
+                        log("Received high_scores_list", data);
+                        // Check if data contains a valid scores array
+                        if (data.scores && Array.isArray(data.scores)) {
+                            // Call the UI function to display the scores
+                            // Assuming UI module exists or functions are global
+                            UI.displayHighscores(data.scores);
+                        } else {
+                            log("Invalid high_scores_list data received.", data);
+                        }
+                        break;
 
                     default:
                         log(`Unknown message type received: ${data.type}`);
