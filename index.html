@@ -742,14 +742,6 @@
                 UI.showSection('highscore-display');
             }
 
-            // --- IF USING UI MODULE, add to return statement ---
-            // return {
-            //    ..., // showSection, updateStatus, updateHUD, etc.
-            //    showHighscorePrompt,
-            //    hideHighscorePrompt,
-            //    displayHighscores
-            // };
-
 
             function updateDayNight(serverState) {
                  // Add checks for DOM elements
@@ -806,15 +798,18 @@
             } // End showGameOver
 
             // Expose necessary UI functions
-            return {
+             return {
                 showSection,
                 updateStatus,
-                updateHUD, // Now updated
+                updateHUD,
                 addChatMessage,
                 updateCountdown,
                 updateDayNight,
-                showGameOver
-            };
+                showGameOver,
+                showHighscorePrompt,
+                hideHighscorePrompt,
+                displayHighscores,
+             };
         })(); // <-- This closes the UI IIFE
 
 
@@ -2578,6 +2573,7 @@
                  sendChatMessage,
                  getLocalGameState,
                  initListeners // Expose initListeners to be called on load
+
             };
         })(); // End Game module IIFE
 
