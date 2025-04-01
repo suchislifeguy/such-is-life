@@ -524,97 +524,98 @@
 
             // UPDATED updateHUD function for Multiplayer Stats
             function updateHUD(player, serverState) {
-                // Find local player and teammate
-                const localPlayer = player; // 'player' passed in is assumed to be local
-                let matePlayer = null;
-                let mateId = null;
-
-                // Find the teammate ID (only works robustly if exactly 2 players expected)
-                if (serverState?.players && Object.keys(serverState.players).length > 1 && appState.localPlayerId) {
-                     mateId = Object.keys(serverState.players).find(id => id !== appState.localPlayerId);
-                     if (mateId) {
-                         matePlayer = serverState.players[mateId];
-                     }
-                }
-
-                // --- Update Local Player Stats ---
-                // Check if the specific DOM element exists before updating
+                // --- Update Local Player Stats (Same as before) ---
                 if (DOM.localPlayerStatsBoxContent) {
-                     if (localPlayer) {
-                        // Indicate if local player is dead
-                        const healthDisplay = localPlayer.health <= 0 ? "<span style='color: var(--health-bar-low);'>DEAD</span>" : `${localPlayer.health ?? 0}/${localPlayer.max_health ?? 100}`;
+                    if (player) { // 'player' passed in is the local player state
+                        const healthDisplay = player.health <= 0 ? "<span style='color: var(--health-bar-low);'>DEAD</span>" : `${player.health ?? 0}/${player.max_health ?? 100}`;
                         DOM.localPlayerStatsBoxContent.innerHTML = `
                             <span>HP:</span> ${healthDisplay}<br>
-                            <span>Armor:</span> ${localPlayer.armor ?? 0}<br>
-                            <span>Gun:</span> ${localPlayer.gun ?? 1}<br>
-                            <span>Speed:</span> ${localPlayer.speed ?? 150}<br>
-                            <span>Kills:</span> ${localPlayer.kills ?? 0} | <span>Score:</span> ${localPlayer.score ?? 0}`;
+                            <span>Armor:</span> ${player.armor ?? 0}<br>
+                            <span>Gun:</span> ${player.gun ?? 1}<br>
+                            <span>Speed:</span> ${player.speed ?? 150}<br>
+                            <span>Kills:</span> ${player.kills ?? 0} | <span>Score:</span> ${player.score ?? 0}`;
                     } else {
-                         DOM.localPlayerStatsBoxContent.textContent = "Waiting...";
+                        DOM.localPlayerStatsBoxContent.textContent = "Waiting...";
                     }
                 } else {
-                    log("DOM.localPlayerStatsBoxContent not found"); // Log error if element missing
+                    log("DOM.localPlayerStatsBoxContent not found");
+                }
+
+                // --- Update Teammate Stats (Dynamic) ---
+                const teammateBoxes = document.querySelectorAll('.teammate-stats-box'); // Get all placeholder boxes
+                let teammateBoxIndex = 0; // Index for assigning players to boxes
+
+                // Iterate through ALL players in the server state
+                if (serverState?.players && appState.localPlayerId) {
+                    for (const playerId in serverState.players) {
+                        // Skip the local player
+                        if (playerId === appState.localPlayerId) {
+                            continue;
+                        }
+
+                        // Get the teammate's data
+                        const teammateData = serverState.players[playerId];
+
+                        // Find the next available teammate box
+                        if (teammateBoxIndex < teammateBoxes.length) {
+                            const boxElement = teammateBoxes[teammateBoxIndex];
+                            const headerElement = boxElement.querySelector('.stats-header');
+                            const contentElement = boxElement.querySelector('.stats-content');
+
+                            if (headerElement && contentElement) {
+                                // Update Header (e.g., "P:ABCD")
+                                headerElement.textContent = `P:${playerId.substring(0, 4)}`; // Use first 4 chars of ID
+
+                                // Update Content
+                                const mateHealthDisplay = teammateData.health <= 0 ? "<span style='color: var(--health-bar-low);'>DEAD</span>" : `${teammateData.health ?? 0}/${teammateData.max_health ?? 100}`;
+                                contentElement.innerHTML = `
+                                    <span>HP:</span> ${mateHealthDisplay}<br>
+                                    <span>Armor:</span> ${teammateData.armor ?? 0}<br>
+                                    <span>Gun:</span> ${teammateData.gun ?? 1}<br>
+                                    <span>Speed:</span> ${teammateData.speed ?? 150}<br>
+                                    <span>Kills:</span> ${teammateData.kills ?? 0} | <span>Score:</span> ${teammateData.score ?? 0}`;
+
+                                // Show the box
+                                boxElement.style.display = 'block';
+                            } else {
+                                log(`Error finding header/content in teammate box index ${teammateBoxIndex}`);
+                            }
+
+                            teammateBoxIndex++; // Move to the next box for the next teammate
+                        } else {
+                            // This happens if more players connect than we have placeholder boxes
+                            log(`Warning: More teammates (${Object.keys(serverState.players).length - 1}) than available stat boxes (${teammateBoxes.length}). Player ${playerId} not shown.`);
+                        }
+                    }
+                }
+
+                // --- Hide Unused Teammate Boxes ---
+                // Iterate from the last used index to the end of the boxes
+                for (let i = teammateBoxIndex; i < teammateBoxes.length; i++) {
+                    teammateBoxes[i].style.display = 'none'; // Hide any boxes not filled with data
                 }
 
 
-                // --- Update Mate Player Stats ---
-                // Check if the specific DOM elements exist before updating
-                if (DOM.matePlayerStatsBox && DOM.matePlayerStatsBoxContent) {
-                    if (matePlayer) {
-                        DOM.matePlayerStatsBox.style.display = 'block'; // Show the mate's box
-                        // Indicate if mate is dead
-                        const mateHealthDisplay = matePlayer.health <= 0 ? "<span style='color: var(--health-bar-low);'>DEAD</span>" : `${matePlayer.health ?? 0}/${matePlayer.max_health ?? 100}`;
-                        DOM.matePlayerStatsBoxContent.innerHTML = `
-                            <span>HP:</span> ${mateHealthDisplay}<br>
-                            <span>Armor:</span> ${matePlayer.armor ?? 0}<br>
-                            <span>Gun:</span> ${matePlayer.gun ?? 1}<br>
-                            <span>Speed:</span> ${matePlayer.speed ?? 150}<br>
-                            <span>Kills:</span> ${matePlayer.kills ?? 0} | <span>Score:</span> ${matePlayer.score ?? 0}`;
-                    } else {
-                        // Hide mate's box if not present or only 1 player
-                        DOM.matePlayerStatsBox.style.display = 'none';
-                        DOM.matePlayerStatsBoxContent.textContent = "Waiting...";
-                    }
-                } else {
-                     log("DOM.matePlayerStatsBox or DOM.matePlayerStatsBoxContent not found"); // Log error if elements missing
-                }
-
-
-                // --- Update General Game Info (Score) ---
-
-                // --- Update Score ---
+                // --- Update General Game Info (Score & Day/Night - Remains the same) ---
                 if (DOM.gameScoreDiv) {
                     const totalScore = serverState?.score ?? 0;
                     DOM.gameScoreDiv.textContent = `Score: ${totalScore}`;
-                } else {
-                    log("DOM.gameScoreDiv not found");
-                }
+                } else { log("DOM.gameScoreDiv not found"); }
 
-                // --- Update Combined Day/Night Indicator & Timer ---
                 if (DOM.dayNightIndicator) {
-                    if (serverState?.status === 'active' && serverState?.day_night_timer_remaining !== undefined) {
-                        const remaining = serverState.day_night_timer_remaining;
-                        const phaseText = serverState.is_night ? "Night" : "Day";
-                        // Combine Phase Text and Formatted Time
-                        DOM.dayNightIndicator.textContent = `${phaseText} ${formatTime(remaining)}`;
-                        DOM.dayNightIndicator.style.display = 'inline-block'; // Show it
-                    } else {
-                        // Hide the indicator when game is not active
-                        DOM.dayNightIndicator.style.display = 'none';
-                        // Optional: Reset text when hidden?
-                        // DOM.dayNightIndicator.textContent = "Day --:--";
-                    }
-                } else {
-                    log("DOM.dayNightIndicator not found");
-                }
+                     if (serverState?.status === 'active' && serverState?.day_night_timer_remaining !== undefined) {
+                         const remaining = serverState.day_night_timer_remaining;
+                         const phaseText = serverState.is_night ? "Night" : "Day";
+                         DOM.dayNightIndicator.textContent = `${phaseText} ${formatTime(remaining)}`;
+                         DOM.dayNightIndicator.style.display = 'inline-block';
+                     } else {
+                         DOM.dayNightIndicator.style.display = 'none';
+                     }
+                } else { log("DOM.dayNightIndicator not found"); }
 
-                // We also need to update the canvas background color based on is_night
-                // Let's keep the updateDayNight function separate for that responsibility
-                updateDayNight(serverState); // Call the existing function to handle background/container class
+                updateDayNight(serverState); // Keep calling this for background/class updates
 
             } // End of updateHUD
-
-
 
             function addChatMessage(sender, message, isSelf, isSystem = false) {
                 // Add check for DOM.chatLog existence
