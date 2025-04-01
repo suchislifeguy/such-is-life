@@ -2864,8 +2864,12 @@
         // Wrapper for inline HTML button compatibility
         function showSection(sectionId) { UI.showSection(sectionId); }
 
+        // --- Global Init ---
+        // Wrapper for inline HTML button compatibility
+        function showSection(sectionId) { UI.showSection(sectionId); }
+
         window.onload = () => {
-            log("Window loaded.");
+            // There were duplicate logs here, removed one
             log("Window loaded.");
             UI.updateStatus("Initializing...");
 
@@ -2888,12 +2892,16 @@
 
             // Now safe to initialize listeners and connect
             try {
+                 // Initialize listeners first (sets up button clicks etc)
                  Game.initListeners();
+
+                 // Connect to WebSocket. The callback runs *after* connection succeeds.
                  Network.connect(() => {
                      // This callback runs *after* WebSocket opens
                      UI.updateStatus("Connected. Select Mode.");
                      // Show main menu only *after* connection is confirmed open
                      UI.showSection('main-menu-section');
+                     // *** NO automatic high score request here ***
                  });
                  UI.updateStatus("Connecting..."); // Initial status while connecting
             } catch (initError) {
