@@ -134,19 +134,20 @@
             flex-direction: column; /* Stack children vertically */
             color: var(--text-color);
             font-size: 13px;
-            overflow-y: auto;       /* Scroll if needed */
+            overflow-y: auto;       /* Scroll if needed vertically */
+            overflow-x: hidden;     /* Hide horizontal scroll */
             margin-right: 10px;     /* Space between panel and canvas */
         }
 
-        /* Player Stats Grid Styling */
+        /* Player Stats Grid Styling (Option 1: 1fr columns, small gap) */
         #player-stats-grid {
             display: grid;
-            gap: 8px; /* Set your desired gap */
-            /* Explicitly calculate column width: 50% of container MINUS half the gap */
-            grid-template-columns: repeat(2, calc(50% - (8px / 2))); /* Adjust '8px' if you change gap */
+            grid-template-columns: repeat(2, 1fr); /* 2 equal fractional columns */
+            gap: 6px;                /* Reduced gap */
+            /* gap: 0px; /* Uncomment to test with zero gap */
             width: 100%;
             box-sizing: border-box;
-            margin-bottom: 20px;
+            margin-bottom: 20px;      /* Space below grid */
         }
 
         /* Player Stat Box Styling (for Grid Items) */
@@ -172,12 +173,14 @@
             margin-bottom: 3px;
             border-bottom: 1px dashed var(--primary-color);
             font-size: 12px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            white-space: nowrap;     /* Prevent wrapping */
+            overflow: hidden;        /* Hide overflow */
+            text-overflow: ellipsis; /* Show ... */
+            box-sizing: border-box;  /* Include padding/border in header width */
         }
         .player-stats-box .stats-content {
             line-height: 1.35;
+            /* overflow: hidden; /* Optionally add if needed */
         }
         .player-stats-box .stats-content span {
             display: inline-block;
@@ -195,7 +198,8 @@
             padding: 5px;
             background: rgba(0, 0, 0, 0.5);
             border-radius: 5px;
-            box-sizing: border-box;
+            box-sizing: border-box; /* Ensures padding is included */
+            /* No width: 100% needed, block will fill */
             color: var(--text-color);
             flex-shrink: 0;
         }
@@ -208,7 +212,7 @@
             margin-bottom: 0;
             padding: 12px 10px;
             font-size: 1rem;
-            box-sizing: border-box; /* ADDED */
+            box-sizing: border-box; /* Ensures padding is included */
             flex-shrink: 0;
             /* Inherits general button styles */
         }
@@ -291,11 +295,11 @@
         button {
             background-color: var(--primary-color);
             color: var(--dark-bg);
-            border: 2px solid var(--container-border); /* This border adds width! */
+            border: 2px solid var(--container-border);
             padding: 10px 20px; margin: 10px 5px; cursor: pointer; font-family: var(--font-family);
             font-size: 1rem; transition: background-color 0.2s ease, color 0.2s ease; border-radius: 5px;
             font-weight: bold;
-            box-sizing: border-box; 
+            box-sizing: border-box; /* Ensure general buttons have this */
         }
         button:hover:not(:disabled) {
             background-color: #9cb49a;
@@ -381,6 +385,7 @@
         /* --- REMOVE OBSOLETE --- */
         /* Hide any remnants of old top-bar stats structures */
         #player-stats-container, #mp-stats-display { display: none !important; }
+        /* #player-hud { display: none !important; } /* Remove this if still present */
 
     </style>
 </head>
