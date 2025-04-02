@@ -9,22 +9,27 @@
         :root {
             /* Dark/Green Scheme */
             --dark-bg: #1e2a28;
-            --container-bg: #2a3d45; /* Slightly lighter for main container */
-            --left-panel-bg: #1e2a28; /* Darker for left info panel */
+            --container-bg: #2a3d45;
             --container-border: #111a18;
+            --top-bar-bg: rgba(0, 0, 0, 0.2);
             --dusty-green: #7a8c79;
             --dark-text: #d0d8d7;
             --accent-gold: #FFD700;
+            --title-red: #a00000; /* Kept in case needed elsewhere, but not used for animation */
 
             /* Mappings */
             --bg-color: var(--dark-bg);
             --primary-color: var(--dusty-green);
-            --secondary-color: var(--left-panel-bg); /* Use darker bg for panel */
+            --secondary-color: var(--container-bg);
             --accent-color: var(--accent-gold);
             --text-color: var(--dark-text);
 
             /* Other Colors */
-            --player-color: #DC143C; /* Crimson */
+            --player-color: #DC143C;
+            --other-player-color: #4682B4;
+            --enemy-color: #556B2F;
+            --bullet-player-color: #FFEB3B;
+            --bullet-enemy-color: #C0C0C0;
             --health-bar-bg: #444;
             --health-bar-high: #66bb6a;
             --health-bar-medium: var(--accent-gold);
@@ -34,46 +39,161 @@
             --powerup-speed: #4dd0e1;
             --powerup-armor: #9e9e9e;
             --night-overlay: rgba(0, 0, 10, 0.3);
-            --bullet-player-color: #FFEB3B;
-            --bullet-enemy-color: #C0C0C0;
-            --damage-text-color: #FFFFFF;
-            --damage-text-crit-color: var(--accent-gold);
-            --campfire-aura-color: rgba(255, 165, 0, 0.15);
-            --esc-menu-bg: rgba(10, 20, 25, 0.9);
 
             /* Other variables */
             --font-family: 'Courier New', monospace;
-            --left-panel-width: 360px;
+            --reconciliation-threshold: 15;
+            --lerp-factor: 0.1;
+            --damage-text-color: #FFFFFF;
+            --damage-text-crit-color: var(--accent-gold);
             --damage-text-font-size: 14px;
             --damage-text-crit-font-size: 18px;
+            --campfire-aura-color: rgba(255, 165, 0, 0.15);
         }
+
+        /* --- Keyframes REMOVED --- */
 
         /* --- General Body/Container --- */
         body {
             margin: 0; display: flex; flex-direction: column; justify-content: center;
             align-items: center; min-height: 100vh; background-color: var(--bg-color);
             font-family: var(--font-family); color: var(--text-color);
-            overflow: hidden; /* Prevent body scrollbars */
+        }
+        #game-container {
+            background-color: var(--secondary-color);
+            border: 5px solid var(--container-border);
+            border-radius: 15px; padding: 20px; padding-top: 15px;
+            text-align: center; max-width: 00px;
+            width: calc(100% - 40px); position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.7);
+            overflow: hidden;
         }
 
-        #game-container {
-            background-color: var(--container-bg);
-            border: 5px solid var(--container-border);
-            border-radius: 15px;
-            /* Padding removed from main container, will be added to inner panels */
-            padding: 0;
-            text-align: center;
-            /* Max width calculation accounts for left panel + canvas + padding/borders */
-            max-width: calc(var(--left-panel-width) + 1600px + 40px); /* Adjust padding if needed */
-            width: calc(100% - 40px);
-            position: relative;
-            box-shadow: 0 0 20px rgba(0,0,0,0.7);
-            display: flex; /* Use flex for main container content alignment */
-            flex-direction: column; /* Stack menus/game area vertically */
-            overflow: hidden; /* Prevent scrollbars on container */
-            /* Allow container height to grow based on content, up to screen height */
-            max-height: calc(100vh - 40px); /* Adjust based on body padding/margins */
+        /* --- Top Bar Styling --- */
+        #top-bar {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            /* Ensure this is space-between to push Title left, Day/Night right */
+            justify-content: space-between;
+            padding: 0 10px 5px 10px;
+            margin-bottom: 5px;
+            border-bottom: 2px solid var(--primary-color);
+            background-color: var(--top-bar-bg);
+            border-radius: 10px 10px 0 0;
+            min-height: 50px;
             box-sizing: border-box;
+            width: 100%;
+        }
+
+        /* Title Styling */
+        #top-bar h1 {
+            color: var(--text-color);
+            margin: 5px 0 10px 0;
+            padding: 0;
+            line-height: 1.1;
+            text-shadow: 2px 2px 5px black;
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+
+        /* Stats Container Alignment */
+        #player-stats-container {
+            width: 100%;
+        }
+
+        /* Container for Multiplayer Stats */
+        #player-stats-container {
+            /* CHANGE: Allow container to grow/shrink, sit on the right */
+            flex-grow: 1;
+            display: flex;
+            justify-content: flex-end; /* Align stat boxes to the right */
+            align-items: center;
+            min-width: 0; /* Prevent overflow issues */
+        }
+
+        #mp-stats-display {
+            display: flex;
+            /* CHANGE: Keep horizontal, allow wrapping *if necessary* but prefer no wrap */
+            flex-direction: row;
+            justify-content: center; /* Center boxes within their container */
+            gap: 8px; /* CHANGE: Reduced gap */
+            flex-wrap: wrap; /* Allow wrapping as fallback if screen REALLY narrow */
+            width: 100%; /* Take available width */
+            margin-top: 0; /* CHANGE: Removed top margin */
+        }
+
+        /* Stats Box Refinement */
+        .player-stats-box {
+            color: var(--text-color);
+            /* CHANGE: Reduced font size */
+            font-size: 11px;
+            background: rgba(10, 20, 25, 0.6);
+            /* CHANGE: Reduced padding */
+            padding: 3px 6px;
+            border-radius: 4px; /* Slightly smaller radius */
+            text-align: left;
+            border: 1px solid var(--dusty-green);
+            /* CHANGE: Let width adjust, but set a min/max */
+            min-width: 120px; /* Adjust as needed */
+            max-width: 160px;
+            box-sizing: border-box;
+            margin-top: 0; /* CHANGE: Removed top margin */
+            box-shadow: inset 0 0 4px rgba(0,0,0,0.4);
+            /* CHANGE: Prevent boxes from shrinking too much */
+            flex-shrink: 0;
+        }
+
+        .player-stats-box .stats-header {
+            font-weight: bold;
+            color: var(--accent-color);
+            text-align: center;
+            /* CHANGE: Reduced padding/margin */
+            padding-bottom: 2px;
+            margin-bottom: 2px;
+            border-bottom: 1px dashed var(--primary-color);
+            /* CHANGE: Reduced font size */
+            font-size: 12px;
+        }
+
+        /* CHANGE: Tweak stats content display */
+        .player-stats-box .stats-content {
+             line-height: 1.3; /* Adjust spacing between lines */
+        }
+
+        .player-stats-box .stats-content span {
+            display: inline-block;
+             /* CHANGE: Reduced min-width */
+            min-width: 35px;
+            font-weight: bold;
+            color: var(--dusty-green);
+        }
+
+        /* Game Info Container - Position it below stats if needed, or keep separate */
+         #game-info-container {
+             /* This might need repositioning depending on final layout preference */
+             /* For now, let's keep it below the top bar */
+             display: flex;
+             justify-content: space-around;
+             align-items: center;
+             width: 100%;
+             margin-top: 5px; /* Reduced margin */
+             font-size: 13px; /* Slightly smaller */
+             padding: 0 10px;
+             box-sizing: border-box;
+             color: var(--text-color);
+             border-top: 1px solid var(--primary-color); /* Add separator */
+             padding-top: 5px; /* Add padding above */
+        }
+        #day-night-indicator {
+            font-size: 15px;
+            color: var(--text-color);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 4px 8px;
+            border-radius: 5px;
+            z-index: 5;
+            display: none; /* Keep hidden initially, JS will show it */
+            margin-left: 15px; /* Add space to its left */
+            flex-shrink: 0; /* Prevent shrinking */
         }
 
         /* --- Visibility Control --- */
@@ -81,251 +201,21 @@
         #multiplayer-menu-section,
         #host-wait-section,
         #join-code-section,
-        #game-area, /* This is the main wrapper for the in-game layout */
-        #game-over-screen,
-        #esc-menu-overlay { /* Initially hide Esc menu */
+        #game-area,
+        #game-over-screen {
             display: none;
         }
 
-        /* --- NEW: In-Game Layout Structure --- */
-        #game-area {
-            display: flex; /* Use flexbox for the two-column layout */
-            flex-direction: row; /* Arrange columns side-by-side */
-            width: 100%;
-            height: 100%; /* Take up full container height when visible */
-            overflow: hidden; /* Prevent internal scrollbars if not needed */
-        }
-
-        #left-panel {
-            width: var(--left-panel-width);
-            flex-shrink: 0; /* Prevent left panel from shrinking */
-            background-color: var(--secondary-color); /* Darker background for contrast */
-            padding: 15px;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column; /* Stack elements vertically */
-            border-right: 3px solid var(--container-border);
-            overflow-y: auto; /* Allow scrolling ONLY if content overflows height */
-            height: 100%; /* Make panel fill vertical space */
-        }
-
-        #right-panel {
-            flex-grow: 1; /* Allow right panel to take remaining space */
-            display: flex; /* Center canvas within this panel */
-            justify-content: center;
-            align-items: center;
-            overflow: hidden; /* Hide anything extending beyond canvas container */
-            padding: 10px; /* Optional padding around canvas */
-             background-color: #3b5261; /* Default DAY canvas background color, JS will override */
-        }
-
-        /* --- Styling for Elements within Left Panel --- */
-
-        /* Title */
-        #left-panel h1.game-title { /* Add class to H1 in HTML */
-            color: var(--text-color);
-            margin: 0 0 15px 0; /* Adjust margin */
-            padding: 0;
-            line-height: 1.1;
-            text-shadow: 2px 2px 5px black;
-            font-size: 2.5em;
-            font-weight: bold;
-            text-align: center; /* Center title in left panel */
-        }
-
-        /* Day/Night Indicator */
-        #day-night-indicator {
-            font-size: 16px; /* Slightly larger */
-            font-weight: bold;
-            color: var(--text-color);
-            background: rgba(0, 0, 0, 0.5);
-            padding: 5px 10px; /* Adjust padding */
-            border-radius: 5px;
-            display: none; /* JS shows this */
-            margin: 0 auto 15px auto; /* Center horizontally, add margin below */
-            text-align: center;
-            width: fit-content; /* Size to content */
-        }
-
-        /* Stats Grid Container */
-        #stats-grid-container {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr); /* 2 equal columns */
-            gap: 8px; /* Gap between grid items */
-            margin-bottom: 15px; /* Space below the grid */
-            width: 100%; /* Take full width of left panel */
-        }
-
-        /* Stats Box Refinement (largely unchanged, fits in grid now) */
-        .player-stats-box {
-            color: var(--text-color);
-            font-size: 11px;
-            background: rgba(10, 20, 25, 0.6);
-            padding: 4px 8px; /* Slightly increased padding */
-            border-radius: 4px;
-            text-align: left;
-            border: 1px solid var(--dusty-green);
-            box-sizing: border-box;
-            box-shadow: inset 0 0 4px rgba(0,0,0,0.4);
-            /* Width is controlled by the grid, remove min/max width maybe */
-            /* min-width: 120px; */
-            /* max-width: 160px; */
-            overflow: hidden; /* Prevent content overflow */
-        }
-
-         /* Add styles for empty placeholder grid items if needed */
-        .player-stats-box.placeholder {
-            background: transparent;
-            border: 1px dashed rgba(122, 140, 121, 0.3); /* Dimmer border */
-            box-shadow: none;
-            /* Ensure it takes up space */
-             min-height: 100px; /* Match expected height of filled boxes */
-        }
-
-        .player-stats-box .stats-header {
-            font-weight: bold;
-            color: var(--accent-color);
-            text-align: center;
-            padding-bottom: 3px; /* Adjust spacing */
-            margin-bottom: 3px; /* Adjust spacing */
-            border-bottom: 1px dashed var(--primary-color);
-            font-size: 13px; /* Slightly larger header */
-        }
-
-        .player-stats-box .stats-content {
-             line-height: 1.4; /* Adjust line spacing */
-        }
-
-        .player-stats-box .stats-content span {
-            display: inline-block;
-            min-width: 40px; /* Slightly wider label */
-            font-weight: bold;
-            color: var(--dusty-green);
-            padding-right: 3px; /* Space between label and value */
-        }
-
-        /* Game Status */
+        /* --- Common Elements --- */
         #game-status {
-            min-height: 25px;
-            color: var(--accent-color);
-            font-weight: bold;
-            margin-bottom: 15px;
-            text-align: center;
-            font-size: 1.1em; /* Slightly larger status */
-            flex-shrink: 0; /* Prevent shrinking */
+             min-height: 25px;
+             color: var(--accent-color);
+             font-weight: bold;
+             margin-bottom: 15px;
         }
 
-        /* Chat Section Styling */
-        #chat-section {
-            display: flex;
-            flex-direction: column; /* Stack log and input vertically */
-            margin-top: auto; /* Pushes chat to the bottom of the left panel */
-            width: 100%;
-            padding: 0;
-            box-sizing: border-box;
-            flex-shrink: 0; /* Prevent shrinking */
-            border-top: 1px solid var(--primary-color); /* Separator */
-            padding-top: 10px; /* Space above chat log */
-        }
-
-        #chat-log {
-            /* Set a flexible height, allowing it to grow but also have max */
-            height: 150px; /* Example starting height */
-            max-height: 250px; /* Limit growth */
-            min-height: 80px; /* Ensure some space even if short */
-            overflow-y: scroll;
-            border: 1px solid var(--primary-color);
-            margin-bottom: 8px; /* Space between log and input */
-            padding: 6px;
-            text-align: left;
-            background: rgba(10, 20, 25, 0.5);
-            font-size: 13px;
-            border-radius: 5px;
-            width: 100%; /* Take full width */
-            box-sizing: border-box;
-            transition: background-color 0.5s ease, border-color 0.5s ease;
-            color: var(--dark-text);
-            order: 1; /* Ensure log comes first */
-            flex-grow: 1; /* Allow log to take up available space before input */
-        }
-
-        #chat-input-area { /* New wrapper for input and button */
-            display: flex;
-            width: 100%;
-            order: 2; /* Ensure input comes after log */
-            flex-shrink: 0; /* Prevent input area shrinking */
-        }
-
-        #chatInput {
-             flex-grow: 1; /* Take remaining space */
-             margin-right: 5px;
-             padding: 8px;
-             font-size: 0.9rem;
-             /* Remove bottom margin, handled by container */
-             margin-bottom: 0;
-             /* Ensure input styling is consistent (copied from before) */
-             font-family: var(--font-family);
-             border: 2px solid var(--primary-color);
-             border-radius: 5px;
-             background-color: var(--dark-text);
-             color: var(--dark-bg);
-             text-transform: uppercase;
-        }
-        #sendChatBtn {
-             padding: 8px 15px;
-             font-size: 0.9rem;
-             /* Remove margins, handled by container/gap */
-             margin: 0;
-             flex-shrink: 0; /* Prevent button shrinking */
-        }
-
-        #chat-log div { margin-bottom: 3px; word-wrap: break-word; }
-        #chat-log .my-message { color: var(--bullet-player-color); }
-        #chat-log .other-message { color: var(--text-color); }
-        #chat-log .system-message { color: var(--accent-color); font-style: italic; }
-
-        /* --- Night Mode Chat Styling (Unchanged) --- */
-        #game-container.night-mode #chat-log {
-            background-color: rgba(10, 20, 25, 0.7);
-            border-color: var(--accent-color);
-        }
-        /* (Other night mode styles unchanged) */
-
-        /* --- Styling for Elements within Right Panel --- */
-        #canvas-wrapper { /* Wrapper for canvas and countdown */
-            position: relative;
-            /* Ensure wrapper doesn't exceed canvas size */
-            width: 1600px;
-            height: 900px;
-            max-width: 100%; /* Allow shrinking if needed */
-            max-height: 100%;
-             box-shadow: 0 0 15px rgba(0,0,0,0.5); /* Optional shadow around canvas */
-        }
-
-        #gameCanvas {
-            border: 3px solid var(--primary-color);
-             /* Background color now set on #right-panel or via JS */
-            /* background-color: #3b5261; */
-            display: block; /* Remove extra space below canvas */
-            /* Canvas size set by attributes, let wrapper handle max size */
-            width: 100%;
-            height: 100%;
-            box-sizing: border-box;
-            image-rendering: pixelated; /* Optional: For crisp pixel art */
-            image-rendering: crisp-edges; /* Broader support */
-        }
-
-        #countdown {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            font-size: 80px; /* Larger countdown */
-            color: var(--player-color);
-            text-shadow: 3px 3px 8px black; /* Stronger shadow */
-            z-index: 10; pointer-events: none; display: none;
-            font-weight: bold;
-        }
-
-        /* --- Common Elements (Buttons, Inputs) - Largely Unchanged --- */
-        button { /* Base button styles */
+        /* Buttons */
+        button {
             background-color: var(--primary-color);
             color: var(--dark-bg);
             border: 2px solid var(--container-border);
@@ -333,40 +223,38 @@
             font-size: 1rem; transition: background-color 0.2s ease, color 0.2s ease; border-radius: 5px;
             font-weight: bold;
         }
-        button:hover:not(:disabled) { background-color: #9cb49a; color: #000; }
-        button:disabled { background-color: #555; color: #aaa; cursor: not-allowed; border-color: #444; }
+        button:hover:not(:disabled) {
+            background-color: #9cb49a;
+            color: #000;
+        }
+        button:disabled {
+            background-color: #555; color: #aaa; cursor: not-allowed; border-color: #444;
+        }
 
-        input[type="text"] { /* Base text input */
-             padding: 10px; margin: 10px 5px; /* Keep default margins for menu inputs */
-             width: auto; /* Allow natural width unless overridden */
-             font-family: var(--font-family); font-size: 1rem;
-             border: 2px solid var(--primary-color);
-             border-radius: 5px; background-color: var(--dark-text);
-             color: var(--dark-bg);
-             text-transform: uppercase;
-         }
+        /* Inputs */
+        input[type="text"] {
+            padding: 10px; margin: 10px 5px; width: 180px; font-family: var(--font-family); font-size: 1rem;
+            border: 2px solid var(--primary-color);
+            border-radius: 5px; background-color: var(--dark-text);
+            color: var(--dark-bg);
+            text-transform: uppercase;
+        }
 
-        /* --- Menu Sections Styling (Keep for non-game screens) --- */
+        /* --- Menu Sections --- */
         .menu-section {
              padding: 30px; text-align: center;
              box-sizing: border-box;
-             width: 100%; /* Menus take full container width */
+             width: 100%;
              color: var(--text-color);
-             /* Allow menus to scroll if content exceeds viewport height */
-             overflow-y: auto;
-             max-height: calc(100vh - 80px); /* Example max height */
         }
         .menu-section h2 { color: var(--accent-color); margin-bottom: 20px; }
         .menu-section button {
             display: block; width: 80%; max-width: 300px;
             margin: 15px auto; padding: 15px 20px; font-size: 1.2rem;
         }
-        .menu-section input[type="text"] { /* Specific styling for menu inputs */
-            display: inline-block; width: auto; min-width: 180px;
-            margin: 10px 5px; /* Restore menu input margins */
-        }
+        .menu-section input[type="text"] { display: inline-block; width: auto; min-width: 180px; }
 
-        /* --- Host/Join Specific (Unchanged) --- */
+        /* --- Host/Join Specific --- */
          #host-wait-section p, #join-code-section p { font-size: 1.1rem; margin-bottom: 10px; }
          #game-code-display {
              font-size: 1.8rem; font-weight: bold;
@@ -377,92 +265,116 @@
          }
          #waiting-message { margin-top: 15px; font-style: italic;}
 
-        /* --- Game Over Screen (Unchanged structurally, check positioning) --- */
+        /* --- Game Area Elements --- */
+        #gameCanvas {
+            border: 3px solid var(--primary-color);
+            background-color: #3b5261; /* Day background */
+            display: block; margin: 10px auto 0px;
+            max-width: 100%; height: auto;
+        }
+        #countdown {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 72px; color: var(--player-color);
+            text-shadow: 3px 3px 6px black; z-index: 10; pointer-events: none; display: none;
+        }
+
+        /* --- Chat Section Styling --- */
+        #chat-section {
+            display: flex; margin-top: 10px;
+            align-items: center; flex-wrap: wrap; width: 100%;
+            padding: 0 5px;
+            box-sizing: border-box;
+        }
+        #chatInput {
+             flex-grow: 1; margin-right: 5px; min-width: 200px;
+             padding: 8px; font-size: 0.9rem; margin-bottom: 5px;
+        }
+        #sendChatBtn {
+             margin-left: 5px; padding: 8px 15px; font-size: 0.9rem; margin-bottom: 5px;
+        }
+        #chat-log {
+            height: 80px; overflow-y: scroll; border: 1px solid var(--primary-color);
+            margin-top: 5px;
+            padding: 5px; text-align: left; background: rgba(10, 20, 25, 0.5);
+            font-size: 13px; border-radius: 5px; flex-basis: 100%; order: 3;
+            transition: background-color 0.5s ease, border-color 0.5s ease;
+            color: var(--dark-text);
+        }
+        #chat-log div { margin-bottom: 3px; word-wrap: break-word; }
+        #chat-log .my-message { color: var(--bullet-player-color); }
+        #chat-log .other-message { color: var(--text-color); }
+        #chat-log .system-message { color: var(--accent-color); font-style: italic; }
+
+        /* --- Night Mode Chat Styling --- */
+        #game-container.night-mode #chat-log {
+            background-color: rgba(10, 20, 25, 0.7);
+            border-color: var(--accent-color);
+        }
+        #game-container.night-mode #chat-log .my-message { color: #FFFF99; }
+        #game-container.night-mode #chat-log .other-message { color: #C0C0FF; }
+        #game-container.night-mode #chat-log .system-message { color: var(--accent-color); }
+
+        /* --- Game Over Screen --- */
         #game-over-screen {
-            position: absolute; /* Position relative to game-container */
-            top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background-color: var(--esc-menu-bg); /* Consistent background */
-            padding: 25px;
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background-color: rgba(10, 20, 25, 0.9);
+            padding: 25px; /* Slightly reduced padding */
             border: 3px solid var(--player-color);
             border-radius: 10px; color: var(--accent-color);
             text-align: center; z-index: 20;
-            width: 90%; max-width: 400px; /* Slightly wider */
+            width: 80%; max-width: 350px; /* Narrower width */
             display: none;
             box-sizing: border-box;
         }
-        /* --- Game Over Screen (Positioning relative to game-container) --- */
-
-        /* Apply original styles */
         #game-over-screen h2 {
             color: var(--player-color);
             margin-top: 0;
-            margin-bottom: 20px;
-            font-size: 1.8em;
+            margin-bottom: 20px; /* Add space below title */
+            font-size: 1.8em; /* Slightly smaller title */
         }
+
+        /* --- Updated Final Stats Styling --- */
         #final-stats {
-            margin-bottom: 25px;
-            text-align: center;
+            margin-bottom: 25px; /* More space before button */
+            text-align: center; /* Center the stat items */
             color: var(--text-color);
-            font-size: 1.3em;
-            line-height: 1.6;
+            font-size: 1.3em; /* Larger font for stats */
+            line-height: 1.6; /* Space out stat lines */
         }
-        .final-stat-item strong {
-             color: var(--accent-color);
-             margin-right: 8px;
-             display: inline-block;
-             min-width: 70px;
+        .final-stat-item strong { /* Style the labels */
+             color: var(--accent-color); /* Use accent color for labels */
+             margin-right: 8px; /* Space between label and value */
+             display: inline-block; /* Ensure proper spacing */
+             min-width: 70px; /* Align values roughly */
              text-align: right;
         }
+        /* --- End Updated Styling --- */
+
         #game-over-screen button {
             margin-top: 10px;
+            /* Optional: Make button slightly larger */
             padding: 12px 25px;
             font-size: 1.1rem;
         }
-
-        /* --- NEW: ESC Key Menu Overlay --- */
-        #esc-menu-overlay {
-            position: absolute;
-            top: 0; left: 0; /* Cover entire container */
-            width: 100%; height: 100%;
-            background-color: rgba(0, 0, 0, 0.7); /* Dark semi-transparent overlay */
-            display: none; /* Hidden by default */
-            justify-content: center;
-            align-items: center;
-            z-index: 50; /* Ensure it's above everything */
-        }
-
-        #esc-menu-content {
-            background-color: var(--left-panel-bg); /* Use panel background */
-            padding: 30px 40px;
-            border-radius: 10px;
-            border: 3px solid var(--primary-color);
-            text-align: center;
-            box-shadow: 0 5px 25px rgba(0,0,0,0.7);
-        }
-
-        #esc-menu-content h2 {
-            color: var(--accent-color);
-            margin-top: 0;
-            margin-bottom: 25px;
-            font-size: 1.8em;
-        }
-
-        #esc-menu-content button {
-            display: block; /* Stack buttons */
-            width: 100%; /* Full width within the menu */
-            min-width: 200px;
-            margin: 15px auto; /* Center horizontally */
-            padding: 12px 20px;
-            font-size: 1.2rem;
-        }
-
 
     </style>
 </head>
 <body>
     <div id="game-container">
+        <!-- Top Bar -->
+        <div id="top-bar">
+            <h1>SUCH IS LIFE</h1>
+            <div id="player-stats-container">
+                <!-- Container for ALL player stats displays -->
+                <div id="mp-stats-display" style="display: flex; justify-content: center; /* Adjusted justification */ gap: 8px; flex-wrap: wrap;">
+                <!-- Stat boxes will be generated here by JS -->
+                </div>
+            </div>
+            <div id="day-night-indicator" style="display: none;">Day --:--</div> 
+        </div>
+        <div id="game-status">Initializing...</div>
 
-        <!-- Menu Sections (Remain outside the main game layout) -->
+        <!-- Menu Sections -->
         <div id="main-menu-section" class="menu-section">
             <h2>Main Menu</h2>
             <button id="singlePlayerBtn">Single Player</button>
@@ -471,10 +383,12 @@
         <div id="multiplayer-menu-section" class="menu-section">
             <h2>Multiplayer</h2>
             <p style="margin-bottom: 5px;">Choose number of players:</p>
+            <!-- New Host Buttons -->
             <button id="hostGameBtn2">Host 2 Player Game</button>
             <button id="hostGameBtn3">Host 3 Player Game</button>
             <button id="hostGameBtn4">Host 4 Player Game</button>
             <hr style="margin: 20px auto; width: 80%; border-color: var(--primary-color);">
+            <!-- Join Button remains -->
             <button id="showJoinUIBtn">Join Game (Enter Code)</button>
             <button class="back-button" onclick="showSection('main-menu-section')">Back</button>
        </div>
@@ -493,133 +407,82 @@
              <button class="back-button" onclick="showSection('multiplayer-menu-section')">Back</button>
         </div>
 
-        <!-- NEW Game Area Structure -->
+        <!-- Game Area -->
         <div id="game-area">
-            <!-- Left Info Panel -->
-            <div id="left-panel">
-                <h1 class="game-title">SUCH IS LIFE</h1>
-                <div id="day-night-indicator" style="display: none;">Day --:--</div>
-
-                <!-- Player Stats Grid -->
-                <div id="stats-grid-container">
-                     <!-- JS will populate .player-stats-box elements here -->
-                     <!-- Example Placeholder Structure (JS needs to generate this) -->
-                     <!-- <div class="player-stats-box placeholder"></div> -->
-                     <!-- <div class="player-stats-box placeholder"></div> -->
-                     <!-- <div class="player-stats-box placeholder"></div> -->
-                     <!-- <div class="player-stats-box placeholder"></div> -->
-                </div>
-
-                <div id="game-status">Initializing...</div>
-
-                <!-- Chat Section -->
-                <div id="chat-section">
-                    <div id="chat-log"></div>
-                    <div id="chat-input-area">
-                        <input type="text" id="chatInput" placeholder="Say somethin'..." maxlength="50">
-                        <button id="sendChatBtn">Send</button>
-                    </div>
-                </div>
+            <div style="position: relative;">
+                <canvas id="gameCanvas" width="1600" height="900"></canvas>
+                <div id="countdown"></div>
             </div>
-
-            <!-- Right Canvas Panel -->
-            <div id="right-panel">
-                <div id="canvas-wrapper"> {/* Added wrapper */}
-                    <canvas id="gameCanvas" width="1600" height="900"></canvas>
-                    <div id="countdown"></div> {/* Countdown overlay */}
-                </div>
+            <div id="chat-section">
+                 <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="50">
+                 <button id="sendChatBtn">Send</button>
+                 <div id="chat-log"></div>
             </div>
+             <button id="leaveGameBtn">Leave Game</button>
         </div>
-        <!-- End NEW Game Area Structure -->
 
-        <!-- Game Over Screen (Remains the same structure, positioned absolutely) -->
+        <!-- Game Over Screen -->
         <div id="game-over-screen">
             <h2>Game Over, Mate!</h2>
             <div id="final-stats"></div>
             <button id="gameOverBackBtn">Back to Menu</button>
         </div>
 
-        <!-- NEW ESC Menu Overlay -->
-        <div id="esc-menu-overlay">
-            <div id="esc-menu-content">
-                <h2>Paused</h2>
-                <button id="resumeGameBtn">Resume</button>
-                {/* <!-- Add Settings button here later if needed --> */}
-                <button id="escLeaveGameBtn">Leave Game</button>
-            </div>
-        </div>
-
-
-    </div> {/* End #game-container */}
+    </div>
 
     <script>
         // --- Constants (Defined First) ---
         const WEBSOCKET_URL = 'wss://such-is-life.glitch.me/ws'; // UPDATE IF YOUR GLITCH URL CHANGES
         const CANVAS_WIDTH = 1600;
         const CANVAS_HEIGHT = 900;
-        // Constants PLAYER_WIDTH etc. remain unchanged...
         const PLAYER_WIDTH = 32; const PLAYER_HEIGHT = 32;
         const ENEMY_WIDTH = 15; const ENEMY_HEIGHT = 25; const BULLET_RADIUS = 4; const POWERUP_SIZE = 12;
         const SHOOT_COOLDOWN = 300; // ms
         const RAPID_FIRE_COOLDOWN_MULTIPLIER = 0.4;
         const INPUT_SEND_INTERVAL = 50; // ms
-        const MAX_PLAYERS = 4; // Keep consistent with CSS Grid logic
+        const MAX_PLAYERS = 4;
         const RECONNECT_DELAY = 3000; // ms
+        // Default player state values needed for rendering/prediction before server state arrives
         const PLAYER_DEFAULTS = { width: 20, height: 20, max_health: 100 };
         const ENEMY_DEFAULTS = { width: 25, height: 25, max_health: 50 };
         const BULLET_DEFAULTS = { radius: 4 };
-        const ENEMY_TYPE_CHASER = 'chaser';
-        const ENEMY_TYPE_SHOOTER = 'shooter';
-        const BULLET_TYPE_STANDARD = 'standard';
+        const ENEMY_TYPE_CHASER = 'chaser'; 
+        const ENEMY_TYPE_SHOOTER = 'shooter'; 
+        const BULLET_TYPE_STANDARD = 'standard'; 
         const BULLET_TYPE_STANDARD_ENEMY = 'standard_enemy';
         const PLAYER_STATUS_ALIVE = 'alive';
         const PLAYER_STATUS_DOWN = 'down';
         const PLAYER_STATUS_DEAD = 'dead';
         // --- End Constants ---
 
-        // --- Utility Functions (Unchanged) ---
+        // --- Utility Functions ---
         function getCssVar(varName) { return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || ''; }
         function lerp(start, end, amount) { return start + (end - start) * amount; }
         function distance(x1, y1, x2, y2) { const dx = x1 - x2; const dy = y1 - y2; return Math.sqrt(dx * dx + dy * dy); }
 
-        // --- DOM Elements (UPDATED) ---
+        // --- DOM Elements ---
         const DOM = {
             gameContainer: document.getElementById('game-container'),
-            // Menu Sections
+            gameStatus: document.getElementById('game-status'),
+            // Sections
             mainMenuSection: document.getElementById('main-menu-section'),
             multiplayerMenuSection: document.getElementById('multiplayer-menu-section'),
             hostWaitSection: document.getElementById('host-wait-section'),
             joinCodeSection: document.getElementById('join-code-section'),
-            // In-Game Layout Sections
-            gameArea: document.getElementById('game-area'), // Wrapper for 2-column layout
-            leftPanel: document.getElementById('left-panel'),
-            rightPanel: document.getElementById('right-panel'),
-            // Elements within Left Panel
-            gameTitle: document.querySelector('#left-panel h1.game-title'), // Use querySelector for class
-            dayNightIndicator: document.getElementById('day-night-indicator'),
-            statsGridContainer: document.getElementById('stats-grid-container'), // Container for player stats boxes
-            gameStatus: document.getElementById('game-status'),
-            chatSection: document.getElementById('chat-section'),
-            chatLog: document.getElementById('chat-log'),
-            chatInput: document.getElementById('chatInput'),
-            sendChatBtn: document.getElementById('sendChatBtn'),
-            // Elements within Right Panel
-            canvasWrapper: document.getElementById('canvas-wrapper'),
-            canvas: document.getElementById('gameCanvas'),
-            ctx: document.getElementById('gameCanvas').getContext('2d'),
-            countdownDiv: document.getElementById('countdown'),
-            // Other Screens
+            gameArea: document.getElementById('game-area'),
             gameOverScreen: document.getElementById('game-over-screen'),
-            finalStatsDiv: document.getElementById('final-stats'),
-            gameOverBackBtn: document.getElementById('gameOverBackBtn'),
-            // Esc Menu
-            escMenuOverlay: document.getElementById('esc-menu-overlay'),
-            resumeGameBtn: document.getElementById('resumeGameBtn'),
-            escLeaveGameBtn: document.getElementById('escLeaveGameBtn'),
-            // Menu Specific Elements (remain unchanged)
+            // Specific elements
             gameCodeDisplay: document.getElementById('game-code-display'),
             waitingMessage: document.getElementById('waiting-message'),
             gameIdInput: document.getElementById('gameIdInput'),
+            canvas: document.getElementById('gameCanvas'),
+            ctx: document.getElementById('gameCanvas').getContext('2d'),
+            gameScoreDiv: document.getElementById('game-score'),
+            dayNightIndicator: document.getElementById('day-night-indicator'), 
+            countdownDiv: document.getElementById('countdown'),
+            finalStatsDiv: document.getElementById('final-stats'),
+            chatInput: document.getElementById('chatInput'),
+            chatLog: document.getElementById('chat-log'),
             // Buttons (listeners assigned in Game.initListeners)
             singlePlayerBtn: document.getElementById('singlePlayerBtn'),
             multiplayerBtn: document.getElementById('multiplayerBtn'),
@@ -629,304 +492,381 @@
             showJoinUIBtn: document.getElementById('showJoinUIBtn'),
             cancelHostBtn: document.getElementById('cancelHostBtn'),
             joinGameSubmitBtn: document.getElementById('joinGameSubmitBtn'),
-            // leaveGameBtn is REMOVED
+            sendChatBtn: document.getElementById('sendChatBtn'),
+            leaveGameBtn: document.getElementById('leaveGameBtn'),
+            gameOverBackBtn: document.getElementById('gameOverBackBtn'),
         };
 
-        // --- Global Client State (Unchanged) ---
+        // --- Global Client State ---
         let appState = {
             mode: 'menu', // Start in menu
             localPlayerId: null,
-            maxPlayersInGame: null,
+            maxPlayersInGame: null, 
             currentGameId: null,
-            serverState: null,
+            serverState: null, 
             animationFrameId: null,
             isConnected: false,
-            isPaused: false, // <<< NEW: Track pause state for Esc menu
             // Interpolation/Prediction State
             renderedPlayerPos: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 },
             predictedPlayerPos: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 },
-            lastServerState: null,
-            previousServerState: null,
+            lastServerState: null,     // State before latest
+            previousServerState: null, // State before that
             lastLoopTime: performance.now(),
-            lastStateReceiveTime: performance.now(),
+            lastStateReceiveTime: performance.now(), // Initialize with current time
+
         };
-        // Other global vars unchanged...
         let localPlayerMuzzleFlash = { active: false, endTime: 0, aimDx: 0, aimDy: 0 };
         let hitPauseFrames = 0;
-        let activeSpeechBubbles = {};
-        let activeEnemyBubbles = {};
-        let socket = null;
+        let activeSpeechBubbles = {}; // { playerId: { text: "Hi!", endTime: 123456789 } }
+        let activeEnemyBubbles = {};  // { enemyId: { text: "Grrr!", endTime: 123456789 } }
+        let socket = null; // Single WebSocket connection reference
 
-        // --- Logging Wrapper (Unchanged) ---
+        // --- Logging Wrapper ---
         function log(...args) { console.log("[Client]", ...args); }
         function error(...args) { console.error("[Client]", ...args); }
 
-        // --- UI Management "Module" (MODIFIED) ---
+        // --- UI Management "Module" ---
         const UI = (() => {
-            // Keep track of ALL toggleable sections, including the new Esc menu
             const allSections = [
                 DOM.mainMenuSection, DOM.multiplayerMenuSection, DOM.hostWaitSection,
-                DOM.joinCodeSection, DOM.gameArea, DOM.gameOverScreen, DOM.escMenuOverlay
+                DOM.joinCodeSection, DOM.gameArea, DOM.gameOverScreen
             ];
 
-            const gameSections = ['game-area']; // Only 'game-area' represents the active game view
+            const gameSections = ['game-area']; // Sections that mean the game is "active" visually
 
-            // showSection now handles the main view toggling
             function showSection(sectionId) {
-                allSections.forEach(s => { if(s && s.id !== 'esc-menu-overlay') s.style.display = 'none'; }); // Hide all *except* esc menu
-
+                allSections.forEach(s => { if(s) s.style.display = 'none'; });
                 const sectionToShow = DOM[sectionId] || document.getElementById(sectionId);
-
                 if (sectionToShow) {
-                    // Use 'flex' for game-area, 'block' for others
-                    sectionToShow.style.display = gameSections.includes(sectionId) ? 'flex' : 'block';
+                    sectionToShow.style.display = 'block';
                     log(`UI: Showing section: ${sectionId}`);
 
-                    // Update body class based on whether we are in-game or not
+                    // --- ADD CLASS TOGGLE LOGIC ---
                     if (gameSections.includes(sectionId)) {
-                        document.body.classList.add('in-game'); // Add class to body
+                        DOM.gameContainer.classList.add('in-game');
                     } else {
-                        document.body.classList.remove('in-game');
+                        DOM.gameContainer.classList.remove('in-game');
                     }
+                    // --- END CLASS TOGGLE LOGIC ---
 
                 } else {
                      error(`UI: Section not found: ${sectionId}`);
                 }
             }
 
-            // --- NEW: Toggle Esc Menu ---
-            function toggleEscMenu(show) {
-                if (DOM.escMenuOverlay) {
-                    DOM.escMenuOverlay.style.display = show ? 'flex' : 'none'; // Use flex to center content
-                    appState.isPaused = show; // Update global pause state
-                    log(`UI: Esc Menu ${show ? 'Shown' : 'Hidden'}. Paused: ${appState.isPaused}`);
-                    // Potentially pause/resume game loop or input handling here or in Game module
-                } else {
-                    error("DOM.escMenuOverlay not found!");
-                }
-            }
-
-            // updateStatus (Unchanged)
-            function updateStatus(message, isError = false) {
+            function updateStatus(message, isError = false) { // Keep this function
                  if (DOM.gameStatus) {
                      DOM.gameStatus.textContent = message;
                      DOM.gameStatus.style.color = isError ? (getCssVar('--player-color') || 'red') : (getCssVar('--accent-color') || 'yellow');
-                     // Don't log here, handled by caller if needed
+                     if(isError) console.error("Status Update:", message);
+                     else console.log("Status Update:", message);
                  } else {
                      error("DOM.gameStatus not found for update:", message);
                  }
             }
 
-            // formatTime (Unchanged)
-            function formatTime(totalSeconds) { /* ... */ return ''; }
+            function formatTime(totalSeconds) { // Keep this function
+                if (totalSeconds < 0) totalSeconds = 0;
+                const minutes = Math.floor(totalSeconds / 60);
+                const seconds = Math.floor(totalSeconds % 60);
+                const paddedSeconds = seconds < 10 ? '0' + seconds : seconds;
+                return `${minutes}:${paddedSeconds}`;
+            }
 
-
-// --- REWRITTEN updateHUD function for Stats Grid ---
-            function updateHUD(localPlayerData, serverState) { // localPlayerData might not be strictly needed if using serverState directly
+// UPDATED updateHUD function for Multiplayer Stats
+            function updateHUD(localPlayerData, serverState) {
                 const players = serverState?.players;
                 const localPlayerId = appState.localPlayerId;
-                const statsGridContainer = DOM.statsGridContainer; // Target the grid container
+                const mpStatsDisplayContainer = document.getElementById('mp-stats-display');
 
-                // --- 1. Check if container exists ---
-                if (!statsGridContainer) {
-                    error("DOM.statsGridContainer not found for HUD update.");
-                    return;
-                }
+                if (!mpStatsDisplayContainer) { /* ... (error handling) ... */ return; }
+                mpStatsDisplayContainer.innerHTML = '';
 
-                // --- 2. Clear previous content ---
-                statsGridContainer.innerHTML = '';
-                let generatedBoxes = 0; // Counter for generated player boxes
+                if (!players || Object.keys(players).length === 0) { /* ... (empty state) ... */ }
+                else {
+                    const sortedPlayerIds = Object.keys(players).sort((a, b) => { /* ... (sorting) ... */ });
 
-                // --- 3. Handle player data ---
-                if (players && Object.keys(players).length > 0) {
-                    // Sort players: Local player first, then by ID
-                    const sortedPlayerIds = Object.keys(players).sort((a, b) => {
-                        if (a === localPlayerId) return -1; // Prioritize local player
-                        if (b === localPlayerId) return 1;
-                        return a.localeCompare(b); // Simple alphabetical sort for others
-                    });
-
-                    // --- 4. Generate boxes for actual players ---
                     sortedPlayerIds.forEach(playerId => {
-                        // Only generate up to MAX_PLAYERS boxes
-                        if (generatedBoxes >= MAX_PLAYERS) return;
-
                         const playerData = players[playerId];
-                        if (!playerData) return; // Skip if data somehow missing
+                        if (!playerData) return;
 
                         const isSelf = (playerId === localPlayerId);
                         const headerText = isSelf ? "YOU" : `P:${playerId.substring(0, 4)}`;
 
-                        // Format health display based on status
+                        // Ensure health is rounded nicely for display, handle DEAD status
                         const healthValue = playerData.health ?? 0;
-                        const maxHealth = playerData.max_health ?? 100;
-                        const status = playerData.player_status ?? PLAYER_STATUS_ALIVE;
-                        let healthDisplay;
-                        if (status === PLAYER_STATUS_DEAD) {
-                            healthDisplay = `<span style='color: var(--health-bar-low); font-weight: bold;'>DEAD</span>`;
-                        } else if (status === PLAYER_STATUS_DOWN) {
-                             // Use a distinct color/style for DOWN, maybe orange/yellow?
-                            healthDisplay = `<span style='color: var(--health-bar-medium); font-weight: bold;'>DOWN</span>`;
-                        } else {
-                            // Format as current/max for alive players
-                             healthDisplay = `${Math.round(healthValue)}/${maxHealth}`;
-                        }
+                        const healthDisplay = healthValue <= 0
+                            ? `<span style='color: var(--health-bar-low);'>DEAD</span>`
+                            : `${Math.round(healthValue)}/${playerData.max_health ?? 100}`;
 
-                        // Format other stats (using nullish coalescing for defaults)
-                        const armorDisplay = Math.round(playerData.armor ?? 0);
-                        const gunDisplay = playerData.gun ?? 1;
-                        // Use base_speed from defaults if player speed is missing
-                        const speedDisplay = playerData.speed ?? PLAYER_DEFAULTS.base_speed ?? 150;
-                        const killsDisplay = playerData.kills ?? 0;
-                        const scoreDisplay = playerData.score ?? 0;
-
-                        // Create the HTML string for this player's stats box
-                        // Styling/layout is handled by CSS grid rules
+                        // --- LAYOUT CHANGE & COMMENT REMOVAL ---
                         const statsBoxHTML = `
                             <div class="player-stats-box">
                                 <div class="stats-header">${headerText}</div>
                                 <div class="stats-content">
                                     <span>HP:</span> ${healthDisplay}<br>
-                                    <span>Armor:</span> ${armorDisplay}<br>
-                                    <span>Gun:</span> ${gunDisplay}<br>
-                                    <span>Speed:</span> ${speedDisplay}<br>
-                                    <span>Kills:</span> ${killsDisplay}<br>
-                                    <span>Score:</span> ${scoreDisplay}
+                                    <span>Armor:</span> ${playerData.armor ?? 0}<br>
+                                    <span>Gun:</span> ${playerData.gun ?? 1}<br>
+                                    <span>Speed:</span> ${playerData.speed ?? 150}<br>
+                                    <span>Kills:</span> ${playerData.kills ?? 0}<br>
+                                    <span>Score:</span> ${playerData.score ?? 0}
                                 </div>
                             </div>
                         `;
+                        // --- END LAYOUT CHANGE ---
 
-                        // Append the generated box to the grid container
-                        statsGridContainer.innerHTML += statsBoxHTML;
-                        generatedBoxes++; // Increment the counter
+                        mpStatsDisplayContainer.innerHTML += statsBoxHTML;
                     });
                 }
 
-                // --- 5. Add placeholder boxes if needed ---
-                // Fill remaining grid slots (up to MAX_PLAYERS) with placeholders
-                while (generatedBoxes < MAX_PLAYERS) {
-                    statsGridContainer.innerHTML += `<div class="player-stats-box placeholder"></div>`;
-                    generatedBoxes++;
-                }
-
-                // --- 6. Update Day/Night Indicator (as before) ---
-                // This function is called separately but keep the call here for completeness
+                // --- Update General Game Info (Score, Day/Night) ---
+                if (DOM.dayNightIndicator) { /* ... */ }
                 updateDayNight(serverState);
 
-            } // --- End of REWRITTEN updateHUD ---
+            } // --- End of MODIFIED updateHUD ---
 
+            function addChatMessage(sender, message, isSelf, isSystem = false) {
+                // Add check for DOM.chatLog existence
+                if (!DOM.chatLog) { error("DOM.chatLog not found for chat message."); return; }
+                const div = document.createElement('div');
+                if (isSystem) {
+                    div.className = 'system-message'; div.textContent = message;
+                } else {
+                    div.className = isSelf ? 'my-message' : 'other-message';
+                    // Use player ID for now, could map to names later
+                    div.textContent = `${sender ? `P:${sender.substring(0,4)}` : '???'}: ${message}`;
+                }
+                DOM.chatLog.appendChild(div);
+                DOM.chatLog.scrollTop = DOM.chatLog.scrollHeight; // Scroll to bottom
+            }
 
-            // addChatMessage (Unchanged)
-            function addChatMessage(sender, message, isSelf, isSystem = false) { /* ... */ }
-
-            // updateCountdown (Small change: check visibility based on pause state)
             function updateCountdown(serverState) {
+                // Add checks for DOM elements
                  if (DOM.countdownDiv && DOM.dayNightIndicator) {
-                     // Hide countdown if paused
-                    if (appState.isPaused) {
-                         DOM.countdownDiv.style.display = 'none';
-                         // Keep day/night indicator potentially visible if game active? Or hide too? Let's hide.
-                         DOM.dayNightIndicator.style.display = 'none';
-                         return;
-                     }
-
                     if (serverState?.status === 'countdown' && serverState?.countdown >= 0) {
                         DOM.countdownDiv.textContent = Math.ceil(serverState.countdown);
                         DOM.countdownDiv.style.display = 'block';
                         DOM.dayNightIndicator.style.display = 'none';
                     } else {
                         DOM.countdownDiv.style.display = 'none';
-                        // Show day/night only if game is active AND not paused
-                        DOM.dayNightIndicator.style.display = (serverState?.status === 'active') ? 'inline-block' : 'none';
+                        DOM.dayNightIndicator.style.display = (serverState?.status === 'active') ? 'inline-block' : 'none'; // Use inline-block for day/night
                     }
                 } else {
                     error("DOM.countdownDiv or DOM.dayNightIndicator not found.");
                 }
              }
 
-            // updateDayNight (Small change: check visibility based on pause state)
             function updateDayNight(serverState) {
-                 if (DOM.dayNightIndicator && DOM.rightPanel && DOM.gameContainer) { // Check rightPanel for background
-                     // Hide day/night if paused
-                     if (appState.isPaused) {
-                         DOM.dayNightIndicator.style.display = 'none';
-                         return;
-                     }
-
+                 // Add checks for DOM elements
+                 if (DOM.dayNightIndicator && DOM.canvas && DOM.gameContainer) {
                      if (serverState?.status === 'active') {
                         const isNight = serverState.is_night;
                         DOM.dayNightIndicator.textContent = isNight ? 'Night' : 'Day';
-                        // Update background color of the right panel instead of canvas
-                        DOM.rightPanel.style.backgroundColor = isNight ? (getCssVar('--bg-color') || '#1e2a28') : '#3b5261'; // Use game bg or day color
-                        DOM.dayNightIndicator.style.display = 'inline-block';
+                        DOM.canvas.style.backgroundColor = isNight ? (getCssVar('--bg-color') || '#3E2723') : '#A0522D';
+                        DOM.dayNightIndicator.style.display = 'inline-block'; // Use inline-block
 
-                        // Toggle night-mode class on game-container for broader style changes (like chat)
                         if (isNight) {
                             DOM.gameContainer.classList.add('night-mode');
                         } else {
                             DOM.gameContainer.classList.remove('night-mode');
                         }
                      } else {
-                        // Hide indicator and remove class if game not active
                         DOM.dayNightIndicator.style.display = 'none';
                         DOM.gameContainer.classList.remove('night-mode');
-                        // Reset right panel background? Or let it persist? Let's reset to default day.
-                        DOM.rightPanel.style.backgroundColor = '#3b5261';
                      }
                  } else {
-                      error("DOM.dayNightIndicator, DOM.rightPanel, or DOM.gameContainer not found for day/night update.");
+                      error("DOM.dayNightIndicator, DOM.canvas, or DOM.gameContainer not found for day/night update.");
                  }
              }
 
-            // showGameOver (Unchanged)
-            function showGameOver(finalState) { /* ... */ }
+            function showGameOver(finalState) {
+                // Add checks for DOM elements
+                if (!DOM.finalStatsDiv || !DOM.gameOverScreen) {
+                     error("DOM.finalStatsDiv or DOM.gameOverScreen not found."); return;
+                }
 
+                // --- SIMPLIFIED STATS LOGIC ---
+                const player = finalState?.players?.[appState.localPlayerId]; // Get local player data
+                let statsHtml = "Stats Unavailable"; // Default message
+
+                if (player) {
+                     // Generate simple HTML for Score and Kills
+                     statsHtml = `
+                        <div class="final-stat-item">
+                             <strong>Score:</strong> ${player.score ?? 0}
+                        </div>
+                        <div class="final-stat-item">
+                             <strong>Kills:</strong> ${player.kills ?? 0}
+                        </div>
+                     `;
+                     // Optional: Add Level if desired
+                     // statsHtml += `<div class="final-stat-item"><strong>Level Reached:</strong> ${finalState?.level ?? 1}</div>`;
+                }
+                // --- END SIMPLIFIED STATS ---
+
+                DOM.finalStatsDiv.innerHTML = statsHtml;
+
+                log("UI: Attempting to show simple game over screen.");
+                 // Hide other sections (keep this logic)
+                 [DOM.mainMenuSection, DOM.multiplayerMenuSection, DOM.hostWaitSection,
+                  DOM.joinCodeSection, DOM.gameArea].forEach(s => { if (s) s.style.display = 'none'; });
+                        } 
+                        
             // Expose necessary UI functions
             return {
                 showSection,
-                toggleEscMenu, // <<< ADDED
                 updateStatus,
-                updateHUD,
+                updateHUD, // Ensure this is the updated one
                 addChatMessage,
                 updateCountdown,
                 updateDayNight,
-                showGameOver
+                showGameOver // Expose the simplified function
             };
-        })(); // <-- This closes the UI IIFE
+        })(); // <-- This closes the UI IIFEw
 
-        // --- Network "Module" (Unchanged) ---
+
+        // --- Network "Module" ---
         const Network = (() => {
             let reconnectTimer = null;
-            function connect(onOpenCallback) { /* ... */ }
-            function scheduleReconnect() { /* ... */ }
-            function sendMessage(payload) { /* ... */ }
-             function closeConnection(code = 1000, reason = "User action") { /* ... */ }
+
+            function connect(onOpenCallback) {
+                // Prevent multiple connections
+                if (socket && socket.readyState !== WebSocket.CLOSED) {
+                    log("Connect called but socket exists, state:", socket.readyState);
+                    if (socket.readyState === WebSocket.OPEN && onOpenCallback) {
+                        onOpenCallback(); // Call callback if already open
+                    }
+                    return;
+                }
+                clearTimeout(reconnectTimer); // Clear any pending reconnect attempts
+                UI.updateStatus('Connecting...');
+                log("Attempting WebSocket connection to:", WEBSOCKET_URL);
+
+                try {
+                    socket = new WebSocket(WEBSOCKET_URL);
+                } catch (err) {
+                    error("WebSocket creation failed:", err);
+                    UI.updateStatus('Connection failed (WebSocket Error). Please refresh.', true);
+                    return; // Stop connection attempt
+                }
+
+
+                socket.onopen = () => {
+                    log('WebSocket connection established.');
+                    appState.isConnected = true;
+                    UI.updateStatus('Connected.');
+                    // Ensure menu is shown only after connection
+                    UI.showSection('main-menu-section');
+                    if (onOpenCallback) onOpenCallback();
+                };
+
+                socket.onmessage = handleServerMessage; // Use the global handler
+
+                socket.onerror = (event) => {
+                    // Browsers often don't provide detailed error info here,
+                    // rely on onclose for failure/reconnect logic.
+                    error('WebSocket Error Event:', event);
+                };
+
+                socket.onclose = (event) => {
+                    error(`WebSocket Closed: Code=${event.code}, Reason='${event.reason || 'N/A'}'`);
+                    const wasConnected = appState.isConnected;
+                    appState.isConnected = false;
+                    socket = null; // Clear socket reference
+                    // Reset game state but keep UI showing error/reconnecting message
+                    Game.resetClientState(false);
+
+                    if (event.code === 1000) { // Normal closure (e.g., user left game)
+                        UI.updateStatus('Disconnected.');
+                        UI.showSection('main-menu-section'); // Back to main menu
+                    } else if (wasConnected) { // Abnormal closure after successful connection
+                         UI.updateStatus('Connection lost. Reconnecting...', true);
+                         scheduleReconnect();
+                    } else { // Failed initial connection attempt
+                         UI.updateStatus('Connection failed. Please check console and refresh.', true);
+                         // Consider disabling buttons here?
+                    }
+                    // Stop game loop if it was running
+                     if (appState.animationFrameId) {
+                         cancelAnimationFrame(appState.animationFrameId);
+                         appState.animationFrameId = null;
+                         Input.cleanup(); // Clean input listeners if loop stops
+                         log("Game loop stopped due to connection close.");
+                     }
+                };
+            }
+
+            function scheduleReconnect() {
+                 clearTimeout(reconnectTimer);
+                 log(`Scheduling reconnect in ${RECONNECT_DELAY}ms`);
+                 reconnectTimer = setTimeout(() => {
+                     log("Attempting reconnect...");
+                     // Pass a callback to handle UI on successful reconnect
+                     connect(() => {
+                          UI.updateStatus('Reconnected.');
+                          UI.showSection('main-menu-section'); // Go back to menu after reconnect
+                     });
+                 }, RECONNECT_DELAY);
+            }
+
+            function sendMessage(payload) {
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    try {
+                        const msg = JSON.stringify(payload);
+                        // log("Sending:", msg.substring(0, 150)); // Optional: Log sent message snippet
+                        socket.send(msg);
+                    } catch (err) {
+                        error("Error sending message:", err, payload);
+                    }
+                } else {
+                    error('Cannot send message, WebSocket not open or null.', payload);
+                    // Maybe trigger reconnect attempt if socket is unexpectedly closed?
+                    if (!socket || socket.readyState === WebSocket.CLOSED) {
+                         // scheduleReconnect(); // Be careful not to spam reconnects
+                    }
+                }
+            }
+
+             function closeConnection(code = 1000, reason = "User action") {
+                 clearTimeout(reconnectTimer); // Stop reconnect attempts on manual close
+                 if (socket && socket.readyState === WebSocket.OPEN) {
+                     log(`Closing WebSocket explicitly: ${reason} (Code: ${code})`);
+                     socket.close(code, reason);
+                 } else {
+                    log("closeConnection called but socket not open or null.");
+                 }
+                 // Clear refs and state immediately, onclose handler will confirm
+                 socket = null;
+                 appState.isConnected = false;
+             }
+
             return { connect, sendMessage, closeConnection };
         })();
-
-        // --- Input Handling "Module" (MODIFIED for Esc key) ---
+        
+        // --- Input Handling "Module" ---
         const Input = (() => {
              let keys = {};
              let lastShotTime = 0;
              let movementInterval = null;
              let mouseCanvasPos = { x: 0, y: 0 };
-             let isMouseDown = false;
+             let isMouseDown = false; // <<< ADDED: Tracks left mouse button state
 
              function setup() {
-                cleanup();
-                // Add keydown listener globally
+                cleanup(); // Ensure no duplicate listeners
                 document.addEventListener('keydown', handleKeyDown);
                 document.addEventListener('keyup', handleKeyUp);
-                // Chat input listener remains specific
                 DOM.chatInput.addEventListener('keydown', handleChatEnter);
-                // Mouse listeners remain on canvas/document
-                if (DOM.canvas) {
-                     DOM.canvas.addEventListener('mousemove', handleMouseMove);
-                     DOM.canvas.addEventListener('mousedown', handleMouseDown);
-                } else { error("Input setup failed: Canvas element not found."); }
-                document.addEventListener('mouseup', handleMouseUp);
 
-                // Movement interval remains
+                if (DOM.canvas) { // Ensure canvas exists
+                     DOM.canvas.addEventListener('mousemove', handleMouseMove);
+                     DOM.canvas.addEventListener('mousedown', handleMouseDown); // Keep canvas listener for starting hold
+                } else {
+                     error("Input setup failed: Canvas element not found.");
+                }
+                // --- ADDED global mouseup listener ---
+                document.addEventListener('mouseup', handleMouseUp);
+                // -----------------------------------
+
                 movementInterval = setInterval(sendMovementInput, INPUT_SEND_INTERVAL);
                 log("Input listeners setup.");
              }
@@ -935,139 +875,207 @@
                  document.removeEventListener('keydown', handleKeyDown);
                  document.removeEventListener('keyup', handleKeyUp);
                  DOM.chatInput.removeEventListener('keydown', handleChatEnter);
-                 if (DOM.canvas) {
+
+                 if (DOM.canvas) { // Check if canvas exists before removing
                       DOM.canvas.removeEventListener('mousemove', handleMouseMove);
                       DOM.canvas.removeEventListener('mousedown', handleMouseDown);
                  }
+                 // --- REMOVE global mouseup listener ---
                  document.removeEventListener('mouseup', handleMouseUp);
+                 // ------------------------------------
+
                  clearInterval(movementInterval);
                  movementInterval = null;
                  keys = {};
-                 isMouseDown = false;
+                 isMouseDown = false; // <<< ADDED: Reset mouse state on cleanup
                  mouseCanvasPos = { x: 0, y: 0 };
                  log("Input listeners cleaned up.");
              }
 
-             // handleMouseMove, handleMouseDown, handleMouseUp (Unchanged)
-             function handleMouseMove(event) { /* ... */ }
-             function handleMouseDown(event) { /* ... */ }
-             function handleMouseUp(event) { /* ... */ }
+             function handleMouseMove(event) {
+                 if (!DOM.canvas) return;
+                 const rect = DOM.canvas.getBoundingClientRect();
+                 mouseCanvasPos.x = event.clientX - rect.left;
+                 mouseCanvasPos.y = event.clientY - rect.top;
+             }
 
+            // --- MODIFIED handleMouseDown: Set flag, don't call handleShooting ---
+            function handleMouseDown(event) {
+                if (document.activeElement === DOM.chatInput) return; // Ignore if typing chat
+                if (event.button === 0) { // Check if left mouse button
+                    isMouseDown = true; // Set the flag
+                    // REMOVED: handleShooting();
+                    event.preventDefault(); // Prevent text selection etc.
+                }
+            }
+            // --- End modification ---
 
-             // --- MODIFIED handleKeyDown: Includes Esc Menu Toggle ---
+            // --- ADDED handleMouseUp function ---
+            // Needs to listen globally in case mouse is released outside canvas
+            function handleMouseUp(event) {
+                // Check if left mouse button (button === 0) was released
+                if (event.button === 0) {
+                    isMouseDown = false; // Clear the flag
+                }
+            }
+            // --- End added function ---
+
+// --- MODIFIED handleKeyDown: Includes 'E' pushback and checks chat focus ---
              function handleKeyDown(e) {
-                // --- 1. Handle ESC Key First (if in game) ---
-                if (e.key === 'Escape' && document.body.classList.contains('in-game')) {
-                    e.preventDefault(); // Prevent browser default Esc behavior
-                    // Toggle the menu (show if hidden, hide if shown)
-                    UI.toggleEscMenu(!appState.isPaused); // Pass the desired *new* state
-                    return; // Handled Esc, do nothing else
-                }
+                 // --- CRITICAL: Check if typing in chat FIRST ---
+                 if (document.activeElement === DOM.chatInput) {
+                     // If typing in chat, we DON'T want to process global game keys like movement, space, or 'e'.
+                     // The 'Enter' key press for chat submission is handled by the specific 'handleChatEnter'
+                     // listener attached directly to the chat input element. So, just return here.
+                     return;
+                 }
+                 // --- END Chat Focus Check ---
 
-                // --- 2. Ignore Game Inputs if Paused or Typing Chat ---
-                if (appState.isPaused || document.activeElement === DOM.chatInput) {
-                    // If paused, ONLY allow Esc (already handled) or Enter in chat (handled separately)
-                    // If typing chat, Enter is handled by handleChatEnter, other keys ignored here
-                    return;
-                }
-                 // --- END Pause/Chat Focus Check ---
-
-
-                 // --- 3. Process Game Keys (if not paused/typing chat) ---
+                 // If not typing in chat, process game keys:
                  const key = e.key.toLowerCase();
 
-                 // Movement & Space (Hold Keys)
+                 // Track movement keys & spacebar flag (set flag only)
                  if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' '].includes(key)) {
-                    if (!keys[key]) { keys[key] = true; }
-                    e.preventDefault();
-                    return; // Handled hold key start
+                    // Set flag if not already set (prevents repeated actions if needed later)
+                    if (!keys[key]) {
+                        keys[key] = true;
+                    }
+                    e.preventDefault(); // Prevent default browser scroll/actions for these keys
+                    return; // Handled movement/space flag setting, no need to check 'e' below
                  }
 
-                 // Pushback ('E' - Event Key)
+                 // Handle 'E' key for pushback (Only if NOT typing in chat)
                  if (key === 'e') {
-                     // Check game state (active check now implies not paused)
+                     // Check game state and send message
                      if (appState.serverState?.status === 'active' && appState.isConnected) {
-                         log("Sending player_pushback message.");
+                         log("Sending player_pushback message."); // Log the action
                          Network.sendMessage({ type: 'player_pushback' });
-                         e.preventDefault();
-                     } else { log("Pushback ('e') ignored: Game not active or not connected."); }
-                     return; // Handled 'e'
+                         e.preventDefault(); // Prevent default browser action for 'e' (e.g., find)
+                     } else {
+                         log("Pushback ('e') ignored: Game not active or not connected.");
+                     }
+                     return; // Handled 'e', done with this keydown event
                  }
-                 // --- End Game Key Processing ---
+
+                 // If the key wasn't a movement key, space, or 'e',
+                 // no further game-specific action needed in this global handler.
              }
              // --- End modification ---
 
-
-             // handleKeyUp (Unchanged - clears hold flags)
+             // handleKeyUp remains unchanged - only clears movement/space flags
              function handleKeyUp(e) {
                  const key = e.key.toLowerCase();
+                 // Clear flags for keys that represent a HOLD state
                  if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' '].includes(key)) {
-                     if (keys[key]) { keys[key] = false; }
+                     // Check if flag was actually set before clearing (optional but good practice)
+                     if (keys[key]) {
+                         keys[key] = false;
+                     }
                  }
+                 // 'e' is an event, not a state, so no need to clear a flag here.
              }
 
-             // handleChatEnter (Unchanged - handles Enter specifically for chat input)
+             // handleChatEnter remains unchanged - ADDED LOGGING
+             // This listener is attached specifically to DOM.chatInput in Input.setup()
              function handleChatEnter(e) {
                  if (e.key === 'Enter') {
-                     e.preventDefault();
-                     log("Enter key detected in chat input.");
-                     Game.sendChatMessage(); // Attempt to send
+                     e.preventDefault(); // Prevent submitting a form if one existed or line break
+                     log("Enter key detected in chat input."); // <<< ADDED LOGGING
+                     Game.sendChatMessage(); // Attempt to send the chat message
                  }
              }
 
-             // getMovementInputVector (Unchanged)
-             function getMovementInputVector() { /* ... */ return {dx:0, dy:0}; }
+             // getMovementInputVector remains unchanged
+             function getMovementInputVector() {
+                 let dx = 0, dy = 0;
+                 if (keys['w'] || keys['arrowup']) dy -= 1;
+                 if (keys['s'] || keys['arrowdown']) dy += 1;
+                 if (keys['a'] || keys['arrowleft']) dx -= 1;
+                 if (keys['d'] || keys['arrowright']) dx += 1;
 
-             // sendMovementInput (Add Pause Check)
+                 // Normalize diagonal movement (existing logic)
+                 if (dx !== 0 && dy !== 0) {
+                     const factor = 1 / Math.sqrt(2);
+                     dx *= factor;
+                     dy *= factor;
+                 }
+                 return { dx, dy };
+             }
+
+             // sendMovementInput remains unchanged
              function sendMovementInput() {
-                 // Don't send movement if paused
-                 if (appState.isPaused) return;
-
-                 // Original checks remain
+                 // Check game status before sending (existing logic)
+                 // Ensure player is connected and game is active before sending movement
                  if (appState.mode !== 'menu' && appState.serverState?.status === 'active' && appState.isConnected) {
                     const moveVector = getMovementInputVector();
+                    // It's okay to send {dx:0, dy:0} - server handles it.
                     Network.sendMessage({ type: 'player_move', direction: moveVector });
                  }
              }
-
-            // handleShooting (Add Pause Check)
+            // handleShooting function remains UNCHANGED from your provided code
+            // (It correctly handles cooldowns and sends target coords)
             function handleShooting() {
-                // Don't shoot if paused
-                if (appState.isPaused) return;
-
-                // Original checks remain
+                // 1. Check Game Status
                 if (appState.serverState?.status !== 'active') return;
+
+                // 2. Calculate Actual Cooldown based on Ammo Type
                 const playerState = appState.serverState?.players?.[appState.localPlayerId];
                 const currentAmmo = playerState?.active_ammo_type || 'standard';
-                let actualShootCooldown = SHOOT_COOLDOWN;
-                if (currentAmmo === 'ammo_rapid_fire') { /* ... adjust cooldown ... */ }
+                let actualShootCooldown = SHOOT_COOLDOWN; // Base cooldown
+                if (currentAmmo === 'ammo_rapid_fire') {
+                    actualShootCooldown = SHOOT_COOLDOWN * RAPID_FIRE_COOLDOWN_MULTIPLIER;
+                }
+
+                // 3. Check Cooldown Timer
                 const now = Date.now();
-                if (now - lastShotTime < actualShootCooldown) { return; }
-                lastShotTime = now;
+                if (now - lastShotTime < actualShootCooldown) {
+                    return; // Cooldown active
+                }
+                lastShotTime = now; // Update shot time ONLY if allowed to fire
 
-                // Muzzle flash logic...
-                /* ... */
+                // 4. --- AIM DIRECTION CALCULATION REMOVED FROM CLIENT ---
 
-                // Send message (Unchanged)
+                // 5. Trigger Local Effects (Muzzle Flash)
+                const playerRenderX = appState.renderedPlayerPos.x;
+                const playerRenderY = appState.renderedPlayerPos.y;
+                let flashDx = mouseCanvasPos.x - playerRenderX;
+                let flashDy = mouseCanvasPos.y - playerRenderY;
+                const flashMag = Math.sqrt(flashDx*flashDx + flashDy*flashDy);
+                if (flashMag > 0.01) {
+                    flashDx /= flashMag;
+                    flashDy /= flashMag;
+                } else {
+                    flashDx = 0; flashDy = -1;
+                }
+                localPlayerMuzzleFlash.active = true;
+                localPlayerMuzzleFlash.endTime = performance.now() + 75;
+                localPlayerMuzzleFlash.aimDx = flashDx;
+                localPlayerMuzzleFlash.aimDy = flashDy;
+
+                // 6. Send Shoot Message with TARGET COORDINATES
                 log("Sending shoot message with Target Coords:", mouseCanvasPos);
                 Network.sendMessage({
                     type: 'player_shoot',
                     target: { x: mouseCanvasPos.x, y: mouseCanvasPos.y }
                 });
+
+                // Optional: Play shoot sound locally
+                // Game.playSound('shoot');
             }
 
-            // isShootHeld (Unchanged)
+            // --- ADDED helper function ---
             function isShootHeld() {
-                return keys[' '] || isMouseDown;
+                return keys[' '] || isMouseDown; // Return true if Space or Left Mouse is down
             }
+            // -----------------------------
 
-            // Expose functions
+            // --- ADDED functions to the return statement ---
             return {
                 setup,
                 cleanup,
                 getMovementInputVector,
-                handleShooting,
-                isShootHeld
+                handleShooting, // Expose the shooting function itself
+                isShootHeld     // Expose the state check helper
             };
 
         })(); // End Input IIFE
@@ -2230,63 +2238,55 @@
              // --- Game Loop Management ---
 
              // Define the main loop function at this scope level
-            function gameLoop(currentTime) {
-                // --- Hit Pause Check ---
-                if (hitPauseFrames > 0) {
-                    hitPauseFrames--;
-                    if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
-                        appState.animationFrameId = requestAnimationFrame(gameLoop);
-                    }
-                    appState.lastLoopTime = null; // Reset time for accurate deltaTime on resume
-                    return; // Skip updates this frame
-                }
+             function gameLoop(currentTime) {
+    // Check for active hit pause
+    if (hitPauseFrames > 0) {
+        hitPauseFrames--;
+        if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
+            appState.animationFrameId = requestAnimationFrame(gameLoop);
+        }
+        return; // Skip rendering and logic this frame
+    }
 
-                // --- Game Stop Checks ---
-                if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
-                    const finalStateForDisplay = appState.serverState;
-                    if (finalStateForDisplay?.game_over) {
-                        UI.showGameOver(finalStateForDisplay);
-                    } else if (appState.mode === 'menu') {
-                        UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
-                    }
-                    cleanupLoop();
-                    return;
-                }
+    // Original game loop logic continues if not paused
+    if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
+        const finalStateForDisplay = appState.serverState;
+        if (finalStateForDisplay?.game_over) {
+            UI.updateStatus("Game Over!");
+            UI.showGameOver(finalStateForDisplay); // Show game over screen here
+        } else if (appState.mode === 'menu') {
+            UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
+        }
+        cleanupLoop();
+        return;
+    }
 
-                // --- Server State Check ---
-                if (!appState.serverState && appState.mode !== 'singleplayer') {
-                    appState.animationFrameId = requestAnimationFrame(gameLoop);
-                    return;
-                }
+    if (!appState.serverState && appState.mode !== 'singleplayer') {
+        appState.animationFrameId = requestAnimationFrame(gameLoop);
+        return;
+    }
 
-                // --- Calculate Delta Time ---
-                if (appState.lastLoopTime === null) {
-                    appState.lastLoopTime = currentTime; // Initialize or reset time after pause
-                }
-                const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000);
-                appState.lastLoopTime = currentTime;
+    if (appState.lastLoopTime === null) { appState.lastLoopTime = currentTime; }
+    const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000);
+    appState.lastLoopTime = currentTime;
 
-                // --- Process Input (Shooting) ---
-                if (appState.serverState?.status === 'active' && Input.isShootHeld()) {
-                    Input.handleShooting(); // Input module handles isPaused check
-                }
+    if (appState.serverState?.status === 'active' && Input.isShootHeld()) {
+        Input.handleShooting();
+    }
 
-                // --- Prediction & Reconciliation ---
-                if (appState.mode !== 'singleplayer' && appState.serverState?.status === 'active') {
-                    updatePredictedPosition(deltaTime); // Input module provides {dx:0, dy:0} if paused
-                    reconcileWithServer();
-                }
+    if (appState.mode !== 'singleplayer' && appState.serverState?.status === 'active') {
+        updatePredictedPosition(deltaTime);
+        reconcileWithServer();
+    }
 
-                // --- Render ---
-                Renderer.drawGame();
+    Renderer.drawGame();
 
-                // --- Request Next Frame ---
-                if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
-                    appState.animationFrameId = requestAnimationFrame(gameLoop);
-                } else {
-                    if(appState.animationFrameId) cleanupLoop();
-                }
-            } // End gameLoop
+    if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
+        appState.animationFrameId = requestAnimationFrame(gameLoop);
+    } else {
+        if(appState.animationFrameId) cleanupLoop();
+    }
+} // End gameLoop
 
             function startGameLoop() {
                 // --- Initial Checks ---
