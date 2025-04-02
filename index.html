@@ -123,70 +123,81 @@
 
         /* Left Panel Styling (Wider) */
         #left-panel {
-            width: 360px;           /* NEW Wider width */
-            max-height: 910px;      /* Approx canvas height + border */
-            flex-shrink: 0;         /* Don't shrink */
+            width: 360px;
+            max-height: 910px;
+            flex-shrink: 0;
             background-color: var(--container-bg);
             border-right: 3px solid var(--primary-color);
             padding: 15px;
             box-sizing: border-box;
             display: flex;
-            flex-direction: column; /* Stack children vertically */
+            flex-direction: column;
             color: var(--text-color);
-            font-size: 13px;
-            overflow-y: auto;       /* Scroll if needed vertically */
-            overflow-x: hidden;     /* Hide horizontal scroll */
-            margin-right: 10px;     /* Space between panel and canvas */
+            font-size: 13px; /* Base size, can be overridden */
+            overflow-y: auto;
+            overflow-x: hidden; /* Prevents horizontal scroll on panel */
+            margin-right: 10px;
         }
 
-        /* Player Stats Grid Styling (Option 1: 1fr columns, small gap) */
+        /* Player Stats Grid Styling (Keep 1fr columns) */
         #player-stats-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr); /* 2 equal fractional columns */
-            gap: 6px;                /* Reduced gap */
-            /* gap: 0px; /* Uncomment to test with zero gap */
+            grid-template-columns: repeat(2, 1fr); /* This ensures columns share width */
+            gap: 8px; /* Adjust gap as needed */
             width: 100%;
             box-sizing: border-box;
-            margin-bottom: 20px;      /* Space below grid */
+            margin-bottom: 20px;
         }
 
-        /* Player Stat Box Styling (for Grid Items) */
+        /* Player Stat Box Styling */
         .player-stats-box {
             display: block;
             color: var(--text-color);
-            font-size: 11px;
+            /* --- INCREASE BASE FONT FOR BOX --- */
+            font-size: 14px; /* Example: Increased from 11px */
             background: rgba(10, 20, 25, 0.6);
-            padding: 5px 8px;
+            /* --- (Optional) INCREASE PADDING --- */
+            padding: 8px 10px; /* Example: Slightly increased */
             border-radius: 4px;
             text-align: left;
             border: 1px solid var(--dusty-green);
             box-sizing: border-box;
             box-shadow: inset 0 0 4px rgba(0,0,0,0.4);
-            overflow: hidden; /* Prevent content spill */
-            /* No fixed width needed - grid controls it */
+            overflow: hidden; /* Keep this to clip if absolutely necessary */
+            /* Height will grow automatically */
         }
+
+        /* Stat Box Header */
         .player-stats-box .stats-header {
+            /* --- INCREASE HEADER FONT --- */
+            font-size: 15px; /* Example: Increased from 12px */
             font-weight: bold;
             color: var(--accent-color);
             text-align: center;
-            padding-bottom: 3px;
-            margin-bottom: 3px;
+            padding-bottom: 4px; /* Adjust spacing */
+            margin-bottom: 5px;  /* Adjust spacing */
             border-bottom: 1px dashed var(--primary-color);
-            font-size: 12px;
-            white-space: nowrap;     /* Prevent wrapping */
+            white-space: nowrap;     /* Keep header on one line */
             overflow: hidden;        /* Hide overflow */
-            text-overflow: ellipsis; /* Show ... */
-            box-sizing: border-box;  /* Include padding/border in header width */
+            text-overflow: ellipsis; /* Show ... if too long */
+            box-sizing: border-box;
         }
+
+        /* Stat Box Content */
         .player-stats-box .stats-content {
-            line-height: 1.35;
-            /* overflow: hidden; /* Optionally add if needed */
+            /* --- INCREASE LINE HEIGHT --- */
+            line-height: 1.5; /* Example: Increased for better spacing */
+            /* --- ENSURE WRAPPING --- */
+            overflow-wrap: break-word; /* Allow long words/values to break */
+            word-wrap: break-word; /* Legacy fallback */
         }
+
         .player-stats-box .stats-content span {
             display: inline-block;
-            min-width: 30px; /* Adjust label width */
+            min-width: 40px; /* Example: Slightly wider label space */
             font-weight: bold;
             color: var(--dusty-green);
+            vertical-align: top; /* Helps align labels and values */
         }
 
         /* Day/Night Indicator in Left Panel */
