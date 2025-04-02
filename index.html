@@ -141,10 +141,12 @@
         /* Player Stats Grid Styling */
         #player-stats-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr); /* 2 equal columns */
-            gap: 10px;                /* Gap between boxes */
+            gap: 8px; /* Set your desired gap */
+            /* Explicitly calculate column width: 50% of container MINUS half the gap */
+            grid-template-columns: repeat(2, calc(50% - (8px / 2))); /* Adjust '8px' if you change gap */
             width: 100%;
-            margin-bottom: 20px;      /* Space below grid */
+            box-sizing: border-box;
+            margin-bottom: 20px;
         }
 
         /* Player Stat Box Styling (for Grid Items) */
