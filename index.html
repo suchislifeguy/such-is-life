@@ -61,7 +61,7 @@
             background-color: var(--secondary-color);
             border: 5px solid var(--container-border);
             border-radius: 15px; padding: 20px; padding-top: 15px; /* Keep padding */
-            text-align: center; max-width: 1800px; /* Adjusted max-width slightly */
+            text-align: center; max-width: 1980px; /* Increased max-width for wider layout */
             width: calc(100% - 40px); position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.7);
             overflow: hidden;
         }
@@ -72,12 +72,11 @@
             flex-direction: row;
             align-items: center;
             justify-content: center; /* Center title */
-            padding: 5px 10px; /* Adjusted padding */
+            padding: 5px 10px;
             margin-bottom: 5px;
             border-bottom: 2px solid var(--primary-color);
             background-color: var(--top-bar-bg);
             border-radius: 10px 10px 0 0;
-            min-height: auto; /* Let content define height */
             box-sizing: border-box;
             width: 100%;
         }
@@ -93,77 +92,101 @@
             font-weight: bold;
         }
 
+        /* Game Status (Below Top Bar) */
+        #game-status {
+            min-height: 25px;
+            color: var(--accent-color);
+            font-weight: bold;
+            margin-bottom: 15px; /* Space below status */
+            text-align: center;
+        }
+
+
         /* --- Visibility Control --- */
         #main-menu-section,
         #multiplayer-menu-section,
         #host-wait-section,
         #join-code-section,
-        #game-area, /* Initially hidden */
+        #game-area, /* Initially hidden, shown via JS */
         #game-over-screen {
             display: none;
         }
 
         /* --- Game Area Layout --- */
-        /* This is the MAIN flex container for the game screen */
         #game-area {
-            /* display: none; /* Set by JS when shown */
-            display: flex;          /* Use flexbox */
-            flex-direction: row;    /* Arrange children side-by-side */
-            align-items: flex-start; /* Align top edges */
-            flex-wrap: wrap;        /* Allow chat to wrap below */
-            width: 100%;            /* Ensure it takes full width */
+            display: flex;
+            flex-direction: row;    /* Side-by-side */
+            align-items: flex-start; /* Align top */
+            flex-wrap: wrap;        /* Allow chat wrap */
+            width: 100%;
         }
 
-        /* Left Panel Styling */
+        /* Left Panel Styling (Wider) */
         #left-panel {
-            width: 180px;           /* Fixed width */
-            /* Removed fixed height - let content determine or set max-height */
-            max-height: 910px; /* Match canvas height + border? Adjust as needed */
-            flex-shrink: 0;         /* Prevent shrinking */
-            background-color: var(--container-bg); /* Optional background */
-            border-right: 3px solid var(--primary-color); /* Separator */
+            width: 360px;           /* NEW Wider width */
+            max-height: 910px;      /* Approx canvas height + border */
+            flex-shrink: 0;         /* Don't shrink */
+            background-color: var(--container-bg);
+            border-right: 3px solid var(--primary-color);
             padding: 15px;
             box-sizing: border-box;
-            display: flex;          /* Use flexbox for internal layout */
-            flex-direction: column; /* Stack items vertically */
+            display: flex;
+            flex-direction: column; /* Stack children vertically */
             color: var(--text-color);
             font-size: 13px;
-            overflow-y: auto;       /* Scroll if content exceeds max-height */
-            margin-right: 10px;     /* Add some space between panel and canvas */
+            overflow-y: auto;       /* Scroll if needed */
+            margin-right: 10px;     /* Space between panel and canvas */
         }
 
-        /* Styling for HUD within Left Panel */
-        #left-panel #player-hud {
-            margin-bottom: 20px;
-            border: 1px dashed var(--dusty-green);
-            padding: 10px;
-            background: rgba(10, 20, 25, 0.4);
-            border-radius: 5px;
-            text-align: left; /* Align text left */
+        /* Player Stats Grid Styling */
+        #player-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr); /* 2 equal columns */
+            gap: 10px;                /* Gap between boxes */
+            width: 100%;
+            margin-bottom: 20px;      /* Space below grid */
         }
-        #player-hud .hud-title {
+
+        /* Player Stat Box Styling (for Grid Items) */
+        .player-stats-box {
+            display: block;
+            color: var(--text-color);
+            font-size: 11px;
+            background: rgba(10, 20, 25, 0.6);
+            padding: 5px 8px;
+            border-radius: 4px;
+            text-align: left;
+            border: 1px solid var(--dusty-green);
+            box-sizing: border-box;
+            box-shadow: inset 0 0 4px rgba(0,0,0,0.4);
+            overflow: hidden; /* Prevent content spill */
+            /* No fixed width needed - grid controls it */
+        }
+        .player-stats-box .stats-header {
             font-weight: bold;
             color: var(--accent-color);
             text-align: center;
-            margin-bottom: 8px;
-            font-size: 1.1em;
-            border-bottom: 1px solid var(--primary-color);
-            padding-bottom: 4px;
+            padding-bottom: 3px;
+            margin-bottom: 3px;
+            border-bottom: 1px dashed var(--primary-color);
+            font-size: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
-        #player-hud .hud-stat {
-            margin-bottom: 4px;
-            line-height: 1.4;
+        .player-stats-box .stats-content {
+            line-height: 1.35;
         }
-        #player-hud .hud-stat span {
+        .player-stats-box .stats-content span {
+            display: inline-block;
+            min-width: 30px; /* Adjust label width */
             font-weight: bold;
             color: var(--dusty-green);
-            display: inline-block;
-            min-width: 50px;
         }
 
-        /* Styling for Day/Night Indicator within Left Panel */
+        /* Day/Night Indicator in Left Panel */
         #left-panel #day-night-indicator {
-            display: block; /* Initially none via inline style, JS shows */
+            display: none; /* Shown by JS */
             text-align: center;
             margin: 15px 0;
             font-size: 1.1em;
@@ -172,22 +195,11 @@
             border-radius: 5px;
             width: 100%;
             box-sizing: border-box;
-            color: var(--text-color); /* Ensure color is set */
-            flex-shrink: 0; /* Prevent shrinking */
+            color: var(--text-color);
+            flex-shrink: 0;
         }
 
-        /* Styling for Game Status within Left Panel */
-        #left-panel #game-status {
-            min-height: 20px;
-            text-align: center;
-            margin: 15px 0;
-            font-weight: bold;
-            color: var(--accent-color);
-            word-wrap: break-word;
-            flex-shrink: 0; /* Prevent shrinking */
-        }
-
-        /* Styling for Leave Button within Left Panel */
+        /* Leave Button in Left Panel */
         #left-panel #leaveGameBtn {
             display: block;
             width: 100%;
@@ -196,35 +208,32 @@
             padding: 12px 10px;
             font-size: 1rem;
             box-sizing: border-box;
-            /* Inherits general button styles */
-            flex-shrink: 0; /* Prevent shrinking */
+            flex-shrink: 0;
+            /* Inherits general button style */
         }
 
         /* Canvas Container Styling */
         #canvas-container {
-            flex-grow: 1;           /* Allow canvas container to take remaining space */
-            display: flex;          /* Use flex to center its content (the canvas wrapper) */
-            justify-content: center; /* Center horizontally */
-            align-items: flex-start; /* Align to top */
-            /* background-color: #f0f; */ /* DEBUG: Add temp background to see its bounds */
-            min-width: 0; /* Prevent flex overflow issues */
+            flex-grow: 1;           /* Take remaining space */
+            display: flex;
+            justify-content: center; /* Center canvas wrapper */
+            align-items: flex-start;
+            min-width: 0; /* Important for flex sizing */
         }
 
-        /* Canvas Styling (Consolidated) */
+        /* Canvas Styling */
         #gameCanvas {
             border: 3px solid var(--primary-color);
             background-color: #a0522d; /* Day background (JS may override) */
-            display: block;         /* Keep as block */
-            max-width: 100%;        /* Allow shrinking */
-            /* --- CRITICAL: Set fixed height to match panel --- */
-            height: 900px;          /* Set explicit height */
-            width: 1600px;         /* Set explicit width */
-            /* --- End Critical --- */
-            margin: 0;              /* Remove auto margins */
-            box-sizing: border-box; /* Include border in size */
+            display: block;
+            width: 1600px; /* Match game constant */
+            height: 900px; /* Match game constant */
+            max-width: 100%; /* Allow shrinking if container is smaller */
+            margin: 0;
+            box-sizing: border-box;
         }
 
-        /* Countdown Styling (Positioned relative to its wrapper) */
+        /* Countdown Styling */
         #countdown {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             font-size: 72px; color: var(--player-color);
@@ -233,9 +242,9 @@
 
         /* Chat Section Layout (Below the main row) */
         #chat-section {
-            flex-basis: 100%;       /* Take full width */
-            order: 3;               /* Ensure it's below left-panel and canvas-container */
-            margin-top: 10px;       /* Space above */
+            flex-basis: 100%; /* Full width */
+            order: 3;         /* Place below panel/canvas */
+            margin-top: 10px;
             display: flex;
             align-items: center;
             flex-wrap: wrap;
@@ -248,11 +257,9 @@
         #chatInput {
             flex-grow: 1; margin-right: 5px; min-width: 200px;
             padding: 8px; font-size: 0.9rem; margin-bottom: 5px;
-            /* Inherits general input styles */
         }
         #sendChatBtn {
             margin-left: 5px; padding: 8px 15px; font-size: 0.9rem; margin-bottom: 5px;
-            /* Inherits general button styles */
         }
 
         /* Chat Log Styling */
@@ -260,7 +267,7 @@
             height: 80px; overflow-y: scroll; border: 1px solid var(--primary-color);
             margin-top: 5px;
             padding: 5px; text-align: left; background: rgba(10, 20, 25, 0.5);
-            font-size: 13px; border-radius: 5px; flex-basis: 100%; order: 3; /* Full width, below input */
+            font-size: 13px; border-radius: 5px; flex-basis: 100%; order: 3;
             transition: background-color 0.5s ease, border-color 0.5s ease;
             color: var(--dark-text);
         }
@@ -280,7 +287,6 @@
 
 
         /* --- Common Elements --- */
-        /* General Button Styles */
         button {
             background-color: var(--primary-color);
             color: var(--dark-bg);
@@ -297,9 +303,8 @@
             background-color: #555; color: #aaa; cursor: not-allowed; border-color: #444;
         }
 
-        /* General Input Styles */
         input[type="text"] {
-            padding: 10px; margin: 10px 5px; /*width: 180px; /* Let flexbox control width where needed */
+            padding: 10px; margin: 10px 5px;
             font-family: var(--font-family); font-size: 1rem;
             border: 2px solid var(--primary-color);
             border-radius: 5px; background-color: var(--dark-text);
@@ -314,7 +319,6 @@
             box-sizing: border-box;
             width: 100%;
             color: var(--text-color);
-            /* display: none; /* Set by JS */
         }
         .menu-section h2 { color: var(--accent-color); margin-bottom: 20px; }
         .menu-section button {
@@ -337,7 +341,6 @@
 
         /* --- Game Over Screen --- */
         #game-over-screen {
-            /* display: none; /* Set by JS */
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             background-color: rgba(10, 20, 25, 0.9);
             padding: 25px;
@@ -373,15 +376,23 @@
             font-size: 1.1rem;
         }
 
+        /* --- REMOVE OBSOLETE --- */
+        /* Hide any remnants of old top-bar stats structures */
+        #player-stats-container, #mp-stats-display { display: none !important; }
+        #player-hud { display: none !important; } /* Hide old single div if it exists */
+
     </style>
 </head>
 <body>
     <div id="game-container">
-        <!-- Top Bar - Now ONLY contains the title -->
+        <!-- Top Bar (Just Title) -->
         <div id="top-bar">
             <h1>SUCH IS LIFE</h1>
         </div>
+        <!-- Game Status (Below Top Bar) -->
+        <div id="game-status">Initializing...</div>
 
+        <!-- Menu Sections -->
         <div id="main-menu-section" class="menu-section">
             <h2>Main Menu</h2>
             <button id="singlePlayerBtn">Single Player</button>
@@ -390,12 +401,10 @@
         <div id="multiplayer-menu-section" class="menu-section">
             <h2>Multiplayer</h2>
             <p style="margin-bottom: 5px;">Choose number of players:</p>
-            <!-- New Host Buttons -->
             <button id="hostGameBtn2">Host 2 Player Game</button>
             <button id="hostGameBtn3">Host 3 Player Game</button>
             <button id="hostGameBtn4">Host 4 Player Game</button>
             <hr style="margin: 20px auto; width: 80%; border-color: var(--primary-color);">
-            <!-- Join Button remains -->
             <button id="showJoinUIBtn">Join Game (Enter Code)</button>
             <button class="back-button" onclick="showSection('main-menu-section')">Back</button>
        </div>
@@ -414,39 +423,36 @@
              <button class="back-button" onclick="showSection('multiplayer-menu-section')">Back</button>
         </div>
 
-         <!-- Game Area - UPDATED STRUCTURE -->
-         <div id="game-area">
-            <!-- NEW: Left Panel -->
+        <!-- Game Area -->
+        <div id="game-area">
+            <!-- Left Panel (Wider, contains grid) -->
             <div id="left-panel">
-                <div id="player-hud">
-                    <!-- Player stats content will be injected here by JS -->
-                    Loading HUD...
+                <!-- Grid Container for Player Stats -->
+                <div id="player-stats-grid">
+                    <!-- Player stat boxes (.player-stats-box) injected here by JS -->
+                    Loading Stats...
                 </div>
-                <!-- Moved Elements -->
+                <!-- Other elements below the grid -->
                 <div id="day-night-indicator" style="display: none;">Day --:--</div>
-                <div id="game-status">Initializing...</div>
+                <!-- Leave Button at bottom -->
                 <button id="leaveGameBtn">Leave Game</button>
             </div>
 
-            <!-- Container for Canvas + Countdown -->
+            <!-- Canvas Container (Takes remaining width) -->
             <div id="canvas-container">
-                <div style="position: relative;"> <!-- Keep this wrapper for countdown -->
+                 <div style="position: relative;"> <!-- Wrapper for countdown -->
                     <canvas id="gameCanvas" width="1600" height="900"></canvas>
                     <div id="countdown"></div>
-                </div>
+                 </div>
             </div>
 
-            <!-- Chat Section - Now outside the main flex row -->
+            <!-- Chat Section (Below everything) -->
              <div id="chat-section">
                  <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="50">
                  <button id="sendChatBtn">Send</button>
                  <div id="chat-log"></div>
             </div>
         </div>
-
-        <!-- Game Over Screen (No change needed here) -->
-        <div id="game-over-screen"> ... </div>
-    </div>
 
         <!-- Game Over Screen -->
         <div id="game-over-screen">
@@ -604,55 +610,69 @@
             }
 
 // --- REVISED UI.updateHUD function ---
-            function updateHUD(localPlayerData, serverState) {
-                const hudContainer = document.getElementById('player-hud'); // Target the new container
-                if (!hudContainer) {
-                    console.error("UI Error: #player-hud container not found!");
+            function updateHUD(serverState) {
+                const gridContainer = document.getElementById('player-stats-grid');
+                if (!gridContainer) {
+                    error("UI Error: #player-stats-grid container not found!");
                     return;
                 }
 
+                const players = serverState?.players;
                 const localPlayerId = appState.localPlayerId;
-                const playersData = serverState?.players;
-                // Use the passed localPlayerData if available, otherwise try finding from serverState
-                const player = localPlayerData || (playersData ? playersData[localPlayerId] : null);
 
-                let hudHTML = '<div class="hud-title">STATS</div><div>Waiting...</div>'; // Default content
+                // Clear previous stats
+                gridContainer.innerHTML = ''; // Clear the grid
 
-                if (player) {
-                    const status = player.player_status || PLAYER_STATUS_ALIVE;
-                    const health = player.health ?? 0;
-                    const maxHealth = player.max_health ?? PLAYER_DEFAULTS.max_health;
+                if (!players || Object.keys(players).length === 0) {
+                     gridContainer.innerHTML = '<span>Waiting for players...</span>'; // Placeholder
+                     return;
+                }
+
+                // Sort players (optional: self first)
+                const sortedPlayerIds = Object.keys(players).sort((a, b) => {
+                     if (a === localPlayerId) return -1;
+                     if (b === localPlayerId) return 1;
+                     return a.localeCompare(b);
+                 });
+
+                // Generate a box for each player and add to the grid
+                sortedPlayerIds.forEach(playerId => {
+                    const playerData = players[playerId];
+                    if (!playerData) return;
+
+                    const isSelf = (playerId === localPlayerId);
+                    const headerText = isSelf ? "YOU" : `P:${playerId.substring(0, 4)}`; // Short ID or YOU
+                    const status = playerData.player_status || PLAYER_STATUS_ALIVE;
+                    const healthValue = playerData.health ?? 0;
+                    const maxHealth = playerData.max_health ?? PLAYER_DEFAULTS.max_health;
 
                     // Determine Health Display String
                     let healthDisplay;
-                    if (status === PLAYER_STATUS_DOWN) {
-                        healthDisplay = `<strong style='color: var(--health-bar-medium);'>DOWN</strong>`;
-                    } else if (status === PLAYER_STATUS_DEAD || health <= 0) {
-                         healthDisplay = `<strong style='color: var(--health-bar-low);'>DEAD</strong>`;
-                    } else {
-                        healthDisplay = `${Math.round(health)} / ${maxHealth}`;
+                     if (status === PLAYER_STATUS_DOWN) {
+                         healthDisplay = `<span style='color: var(--health-bar-medium);'>DOWN</span>`;
+                     } else if (status === PLAYER_STATUS_DEAD || healthValue <= 0) {
+                         healthDisplay = `<span style='color: var(--health-bar-low);'>DEAD</span>`;
+                     } else {
+                        healthDisplay = `${Math.round(healthValue)}/${maxHealth}`;
                     }
 
-                    // Build vertical HTML structure
-                    hudHTML = `
-                        <div class="hud-title">YOU</div>
-                        <div class="hud-stat"><span>HP:</span> ${healthDisplay}</div>
-                        <div class="hud-stat"><span>Armor:</span> ${player.armor ?? 0}</div>
-                        <div class="hud-stat"><span>Gun:</span> ${player.gun ?? 1}</div>
-                        <div class="hud-stat"><span>Speed:</span> ${player.speed ?? PLAYER_DEFAULTS.base_speed}</div>
-                        <div class="hud-stat"><span>Kills:</span> ${player.kills ?? 0}</div>
-                        <div class="hud-stat"><span>Score:</span> ${player.score ?? 0}</div>
+                    // Generate HTML for one stat box
+                    const statsBoxHTML = `
+                        <div class="player-stats-box">
+                            <div class="stats-header">${headerText}</div>
+                            <div class="stats-content">
+                                <span>HP:</span> ${healthDisplay}<br>
+                                <span>Armor:</span> ${playerData.armor ?? 0}<br>
+                                <span>Gun:</span> ${playerData.gun ?? 1}<br>
+                                <span>Speed:</span> ${playerData.speed ?? PLAYER_DEFAULTS.base_speed}<br>
+                                <span>Kills:</span> ${playerData.kills ?? 0}<br>
+                                <span>Score:</span> ${playerData.score ?? 0}
+                            </div>
+                        </div>
                     `;
-                } else if (localPlayerId) {
-                    hudHTML = '<div class="hud-title">STATS</div><div>Waiting for player data...</div>';
-                } else {
-                    hudHTML = '<div class="hud-title">STATS</div><div>No player assigned.</div>';
-                }
-
-                hudContainer.innerHTML = hudHTML;
-
-                // Day/Night is now handled separately as it's a distinct element
-                // updateDayNight(serverState); // Call this elsewhere if needed or rely on its direct update
+                    // Append the box to the grid container
+                    gridContainer.innerHTML += statsBoxHTML;
+                });
 
             } // --- End of REVISED updateHUD ---
 
