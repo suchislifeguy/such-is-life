@@ -1,3 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SUCH IS LIFE - Kelly Gang Survival</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        /* --- Base Styles & Variables --- */
+        :root {
+            /* Dark/Green Scheme */
+            --dark-bg: #1e2a28;
+            --container-bg: #2a3d45;
+            --container-border: #111a18;
+            --top-bar-bg: rgba(0, 0, 0, 0.2);
+            --dusty-green: #7a8c79;
+            --dark-text: #d0d8d7;
+            --accent-gold: #FFD700;
+            --title-red: #a00000; /* Kept in case needed elsewhere, but not used for animation */
+
+            /* Mappings */
+            --bg-color: var(--dark-bg);
+            --primary-color: var(--dusty-green);
+            --secondary-color: var(--container-bg);
+            --accent-color: var(--accent-gold);
+            --text-color: var(--dark-text);
+
+            /* Other Colors */
+            --player-color: #DC143C;
+            --other-player-color: #4682B4;
+            --enemy-color: #556B2F;
+            --bullet-player-color: #FFEB3B;
+            --bullet-enemy-color: #C0C0C0;
+            --health-bar-bg: #444;
+            --health-bar-high: #66bb6a;
+            --health-bar-medium: var(--accent-gold);
+            --health-bar-low: var(--player-color);
+            --powerup-health: #81c784;
+            --powerup-gun: #ba68c8;
+            --powerup-speed: #4dd0e1;
+            --powerup-armor: #9e9e9e;
+            --night-overlay: rgba(0, 0, 10, 0.3);
+
+            /* Other variables */
+            --font-family: 'Courier New', monospace;
+            --reconciliation-threshold: 15;
+            --lerp-factor: 0.1;
+            --damage-text-color: #FFFFFF;
+            --damage-text-crit-color: var(--accent-gold);
+            --damage-text-font-size: 14px;
+            --damage-text-crit-font-size: 18px;
+            --campfire-aura-color: rgba(255, 165, 0, 0.15);
+        }
+
+        /* --- Keyframes REMOVED --- */
+
+        /* --- General Body/Container --- */
+        body {
+            margin: 0; display: flex; flex-direction: column; justify-content: center;
+            align-items: center; min-height: 100vh; background-color: var(--bg-color);
+            font-family: var(--font-family); color: var(--text-color);
+        }
+        #game-container {
+            background-color: var(--secondary-color);
+            border: 5px solid var(--container-border);
+            border-radius: 15px; padding: 20px; padding-top: 15px;
+            text-align: center; max-width: 900px;
+            width: calc(100% - 40px); position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.7);
+            overflow: hidden;
+        }
+
+        /* --- Top Bar Styling --- */
+        #top-bar {
+            display: flex;
+            /* CHANGE: Arrange items horizontally, align vertically */
+            flex-direction: row; /* Changed from column */
+            align-items: center; /* Vertically center items */
+            justify-content: space-between; /* Push Title (when visible) & Stats apart */
+            /* CHANGE: Reduced padding slightly */
+            padding: 0 10px 5px 10px; /* Reduced top/bottom padding */
+            margin-bottom: 5px; /* Reduced margin slightly */
+            border-bottom: 2px solid var(--primary-color);
+            background-color: var(--top-bar-bg);
+            border-radius: 10px 10px 0 0;
+            min-height: 50px; /* Ensure a minimum height */
+            box-sizing: border-box; /* Include padding in height */
+            width: 100%; /* Ensure it spans the container */
+        }
+
+        /* Title Styling */
+        #top-bar h1 {
+            color: var(--text-color);
+            margin: 5px 0 10px 0;
+            padding: 0;
+            line-height: 1.1;
+            text-shadow: 2px 2px 5px black;
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+
+        /* Stats Container Alignment */
+        #player-stats-container {
+            width: 100%;
+        }
+
+                /* --- NEW RULE: Hide title when game is active --- */
+                #game-container.in-game #top-bar h1 {
+            display: none; /* Hide the H1 */
+        }
+        /* --- NEW RULE: Adjust top-bar justification when title is hidden --- */
+         #game-container.in-game #top-bar {
+            justify-content: center; /* Center the stats when title is gone */
+         }
+
+
+        /* Container for Multiplayer Stats */
+        #player-stats-container {
+            /* CHANGE: Allow container to grow/shrink, sit on the right */
+            flex-grow: 1;
+            display: flex;
+            justify-content: flex-end; /* Align stat boxes to the right */
+            align-items: center;
+            min-width: 0; /* Prevent overflow issues */
+        }
+
+        #mp-stats-display {
+            display: flex;
+            /* CHANGE: Keep horizontal, allow wrapping *if necessary* but prefer no wrap */
+            flex-direction: row;
+            justify-content: center; /* Center boxes within their container */
+            gap: 8px; /* CHANGE: Reduced gap */
+            flex-wrap: wrap; /* Allow wrapping as fallback if screen REALLY narrow */
+            width: 100%; /* Take available width */
+            margin-top: 0; /* CHANGE: Removed top margin */
+        }
+
+        /* Stats Box Refinement */
+        .player-stats-box {
+            color: var(--text-color);
+            /* CHANGE: Reduced font size */
+            font-size: 11px;
+            background: rgba(10, 20, 25, 0.6);
+            /* CHANGE: Reduced padding */
+            padding: 3px 6px;
+            border-radius: 4px; /* Slightly smaller radius */
+            text-align: left;
+            border: 1px solid var(--dusty-green);
+            /* CHANGE: Let width adjust, but set a min/max */
+            min-width: 120px; /* Adjust as needed */
+            max-width: 160px;
+            box-sizing: border-box;
+            margin-top: 0; /* CHANGE: Removed top margin */
+            box-shadow: inset 0 0 4px rgba(0,0,0,0.4);
+            /* CHANGE: Prevent boxes from shrinking too much */
+            flex-shrink: 0;
+        }
+
+        .player-stats-box .stats-header {
+            font-weight: bold;
+            color: var(--accent-color);
+            text-align: center;
+            /* CHANGE: Reduced padding/margin */
+            padding-bottom: 2px;
+            margin-bottom: 2px;
+            border-bottom: 1px dashed var(--primary-color);
+            /* CHANGE: Reduced font size */
+            font-size: 12px;
+        }
+
+        /* CHANGE: Tweak stats content display */
+        .player-stats-box .stats-content {
+             line-height: 1.3; /* Adjust spacing between lines */
+        }
+
+        .player-stats-box .stats-content span {
+            display: inline-block;
+             /* CHANGE: Reduced min-width */
+            min-width: 35px;
+            font-weight: bold;
+            color: var(--dusty-green);
+        }
+
+        /* Game Info Container - Position it below stats if needed, or keep separate */
+         #game-info-container {
+             /* This might need repositioning depending on final layout preference */
+             /* For now, let's keep it below the top bar */
+             display: flex;
+             justify-content: space-around;
+             align-items: center;
+             width: 100%;
+             margin-top: 5px; /* Reduced margin */
+             font-size: 13px; /* Slightly smaller */
+             padding: 0 10px;
+             box-sizing: border-box;
+             color: var(--text-color);
+             border-top: 1px solid var(--primary-color); /* Add separator */
+             padding-top: 5px; /* Add padding above */
+        }
+        #day-night-indicator {
+            font-size: 15px;
+            color: var(--text-color);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 4px 8px;
+            border-radius: 5px;
+            z-index: 5;
+            display: none;
+        }
+
+
+        /* --- Visibility Control --- */
+        #main-menu-section,
+        #multiplayer-menu-section,
+        #host-wait-section,
+        #join-code-section,
+        #game-area,
+        #game-over-screen {
+            display: none;
+        }
+
+        /* --- Common Elements --- */
+        #game-status {
+             min-height: 25px;
+             color: var(--accent-color);
+             font-weight: bold;
+             margin-bottom: 15px;
+        }
+
+        /* Buttons */
+        button {
+            background-color: var(--primary-color);
+            color: var(--dark-bg);
+            border: 2px solid var(--container-border);
+            padding: 10px 20px; margin: 10px 5px; cursor: pointer; font-family: var(--font-family);
+            font-size: 1rem; transition: background-color 0.2s ease, color 0.2s ease; border-radius: 5px;
+            font-weight: bold;
+        }
+        button:hover:not(:disabled) {
+            background-color: #9cb49a;
+            color: #000;
+        }
+        button:disabled {
+            background-color: #555; color: #aaa; cursor: not-allowed; border-color: #444;
+        }
+
+        /* Inputs */
+        input[type="text"] {
+            padding: 10px; margin: 10px 5px; width: 180px; font-family: var(--font-family); font-size: 1rem;
+            border: 2px solid var(--primary-color);
+            border-radius: 5px; background-color: var(--dark-text);
+            color: var(--dark-bg);
+            text-transform: uppercase;
+        }
+
+        /* --- Menu Sections --- */
+        .menu-section {
+             padding: 30px; text-align: center;
+             box-sizing: border-box;
+             width: 100%;
+             color: var(--text-color);
+        }
+        .menu-section h2 { color: var(--accent-color); margin-bottom: 20px; }
+        .menu-section button {
+            display: block; width: 80%; max-width: 300px;
+            margin: 15px auto; padding: 15px 20px; font-size: 1.2rem;
+        }
+        .menu-section input[type="text"] { display: inline-block; width: auto; min-width: 180px; }
+
+        /* --- Host/Join Specific --- */
+         #host-wait-section p, #join-code-section p { font-size: 1.1rem; margin-bottom: 10px; }
+         #game-code-display {
+             font-size: 1.8rem; font-weight: bold;
+             color: var(--accent-color);
+             background-color: var(--dark-bg);
+             padding: 5px 15px; border-radius: 5px; display: inline-block;
+             margin: 10px 0; user-select: all; border: 1px solid var(--primary-color);
+         }
+         #waiting-message { margin-top: 15px; font-style: italic;}
+
+        /* --- Game Area Elements --- */
+        #gameCanvas {
+            border: 3px solid var(--primary-color);
+            background-color: #3b5261; /* Day background */
+            display: block; margin: 10px auto 0px;
+            max-width: 100%; height: auto;
+        }
+        #countdown {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 72px; color: var(--player-color);
+            text-shadow: 3px 3px 6px black; z-index: 10; pointer-events: none; display: none;
+        }
+
+        /* --- Chat Section Styling --- */
+        #chat-section {
+            display: flex; margin-top: 10px;
+            align-items: center; flex-wrap: wrap; width: 100%;
+            padding: 0 5px;
+            box-sizing: border-box;
+        }
+        #chatInput {
+             flex-grow: 1; margin-right: 5px; min-width: 200px;
+             padding: 8px; font-size: 0.9rem; margin-bottom: 5px;
+        }
+        #sendChatBtn {
+             margin-left: 5px; padding: 8px 15px; font-size: 0.9rem; margin-bottom: 5px;
+        }
+        #chat-log {
+            height: 80px; overflow-y: scroll; border: 1px solid var(--primary-color);
+            margin-top: 5px;
+            padding: 5px; text-align: left; background: rgba(10, 20, 25, 0.5);
+            font-size: 13px; border-radius: 5px; flex-basis: 100%; order: 3;
+            transition: background-color 0.5s ease, border-color 0.5s ease;
+            color: var(--dark-text);
+        }
+        #chat-log div { margin-bottom: 3px; word-wrap: break-word; }
+        #chat-log .my-message { color: var(--bullet-player-color); }
+        #chat-log .other-message { color: var(--text-color); }
+        #chat-log .system-message { color: var(--accent-color); font-style: italic; }
+
+        /* --- Night Mode Chat Styling --- */
+        #game-container.night-mode #chat-log {
+            background-color: rgba(10, 20, 25, 0.7);
+            border-color: var(--accent-color);
+        }
+        #game-container.night-mode #chat-log .my-message { color: #FFFF99; }
+        #game-container.night-mode #chat-log .other-message { color: #C0C0FF; }
+        #game-container.night-mode #chat-log .system-message { color: var(--accent-color); }
+
+        /* --- Game Over Screen --- */
         #game-over-screen {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             background-color: rgba(10, 20, 25, 0.9);
@@ -39,3 +366,2438 @@
             padding: 12px 25px;
             font-size: 1.1rem;
         }
+
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <!-- Top Bar -->
+        <div id="top-bar">
+            <h1>SUCH IS LIFE</h1>
+            <div id="player-stats-container">
+    <!-- Container for ALL player stats displays -->
+    <div id="mp-stats-display" style="display: flex; justify-content: flex-start; gap: 15px; flex-wrap: wrap;">
+    </div>
+</div>
+<!-- Game Info Container remains the same -->
+<div id="game-info-container">
+    <div id="game-score">Score: 0</div>
+    <div id="day-night-indicator">Day --:--</div> 
+</div>
+        </div>
+
+        <div id="game-status">Initializing...</div>
+
+        <!-- Menu Sections -->
+        <div id="main-menu-section" class="menu-section">
+            <h2>Main Menu</h2>
+            <button id="singlePlayerBtn">Single Player</button>
+            <button id="multiplayerBtn">Multiplayer</button>
+        </div>
+        <div id="multiplayer-menu-section" class="menu-section">
+            <h2>Multiplayer</h2>
+            <p style="margin-bottom: 5px;">Choose number of players:</p>
+            <!-- New Host Buttons -->
+            <button id="hostGameBtn2">Host 2 Player Game</button>
+            <button id="hostGameBtn3">Host 3 Player Game</button>
+            <button id="hostGameBtn4">Host 4 Player Game</button>
+            <hr style="margin: 20px auto; width: 80%; border-color: var(--primary-color);">
+            <!-- Join Button remains -->
+            <button id="showJoinUIBtn">Join Game (Enter Code)</button>
+            <button class="back-button" onclick="showSection('main-menu-section')">Back</button>
+       </div>
+        <div id="host-wait-section" class="menu-section">
+             <h2>Hosting Game</h2>
+             <p>Share this code with your mate:</p>
+             <div id="game-code-display">------</div>
+             <p id="waiting-message">Waiting for opponent to connect...</p>
+             <button id="cancelHostBtn">Cancel Hosting</button>
+        </div>
+        <div id="join-code-section" class="menu-section">
+             <h2>Join Game</h2>
+             <p>Enter the 6-character game code:</p>
+             <input type="text" id="gameIdInput" placeholder="ABCDEF" maxlength="6">
+             <button id="joinGameSubmitBtn">Join Game</button>
+             <button class="back-button" onclick="showSection('multiplayer-menu-section')">Back</button>
+        </div>
+
+        <!-- Game Area -->
+        <div id="game-area">
+            <div style="position: relative;">
+                <canvas id="gameCanvas" width="800" height="600"></canvas>
+                <div id="countdown"></div>
+            </div>
+            <div id="chat-section">
+                 <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="50">
+                 <button id="sendChatBtn">Send</button>
+                 <div id="chat-log"></div>
+            </div>
+             <button id="leaveGameBtn">Leave Game</button>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="game-over-screen">
+            <h2>Game Over, Mate!</h2>
+            <div id="final-stats"></div>
+            <button id="gameOverBackBtn">Back to Menu</button>
+        </div>
+
+    </div>
+
+    <script>
+        // --- Constants (Defined First) ---
+        const WEBSOCKET_URL = 'wss://such-is-life.glitch.me/ws'; // UPDATE IF YOUR GLITCH URL CHANGES
+        const CANVAS_WIDTH = 800;
+        const CANVAS_HEIGHT = 600;
+        const PLAYER_WIDTH = 25; const PLAYER_HEIGHT = 32;
+        const ENEMY_WIDTH = 15; const ENEMY_HEIGHT = 25; const BULLET_RADIUS = 4; const POWERUP_SIZE = 12;
+        const SHOOT_COOLDOWN = 300; // ms
+        const RAPID_FIRE_COOLDOWN_MULTIPLIER = 0.4;
+        const INPUT_SEND_INTERVAL = 50; // ms
+        const MAX_PLAYERS = 4;
+        const RECONNECT_DELAY = 3000; // ms
+        // Default player state values needed for rendering/prediction before server state arrives
+        const PLAYER_DEFAULTS = { width: 20, height: 20, max_health: 100 };
+        const ENEMY_DEFAULTS = { width: 25, height: 25, max_health: 50 };
+        const BULLET_DEFAULTS = { radius: 4 };
+        const ENEMY_TYPE_CHASER = 'chaser'; 
+        const ENEMY_TYPE_SHOOTER = 'shooter'; 
+        const BULLET_TYPE_STANDARD = 'standard'; 
+        const BULLET_TYPE_STANDARD_ENEMY = 'standard_enemy';
+        const PLAYER_STATUS_ALIVE = 'alive';
+        const PLAYER_STATUS_DOWN = 'down';
+        const PLAYER_STATUS_DEAD = 'dead';
+        // --- End Constants ---
+
+        // --- Utility Functions ---
+        function getCssVar(varName) { return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || ''; }
+        function lerp(start, end, amount) { return start + (end - start) * amount; }
+        function distance(x1, y1, x2, y2) { const dx = x1 - x2; const dy = y1 - y2; return Math.sqrt(dx * dx + dy * dy); }
+
+        // --- DOM Elements ---
+        const DOM = {
+            gameContainer: document.getElementById('game-container'),
+            gameStatus: document.getElementById('game-status'),
+            // Sections
+            mainMenuSection: document.getElementById('main-menu-section'),
+            multiplayerMenuSection: document.getElementById('multiplayer-menu-section'),
+            hostWaitSection: document.getElementById('host-wait-section'),
+            joinCodeSection: document.getElementById('join-code-section'),
+            gameArea: document.getElementById('game-area'),
+            gameOverScreen: document.getElementById('game-over-screen'),
+            // Specific elements
+            gameCodeDisplay: document.getElementById('game-code-display'),
+            waitingMessage: document.getElementById('waiting-message'),
+            gameIdInput: document.getElementById('gameIdInput'),
+            canvas: document.getElementById('gameCanvas'),
+            ctx: document.getElementById('gameCanvas').getContext('2d'),
+            gameScoreDiv: document.getElementById('game-score'), // Ensure this exists
+            // gameInfoDiv: document.getElementById('game-info'), // REMOVE IF DELETED FROM HTML
+            dayNightIndicator: document.getElementById('day-night-indicator'), // Keep this one
+            countdownDiv: document.getElementById('countdown'),
+            finalStatsDiv: document.getElementById('final-stats'),
+            chatInput: document.getElementById('chatInput'),
+            chatLog: document.getElementById('chat-log'),
+            // Buttons (listeners assigned in Game.initListeners)
+            singlePlayerBtn: document.getElementById('singlePlayerBtn'),
+            multiplayerBtn: document.getElementById('multiplayerBtn'),
+            hostGameBtn2: document.getElementById('hostGameBtn2'),
+            hostGameBtn3: document.getElementById('hostGameBtn3'),
+            hostGameBtn4: document.getElementById('hostGameBtn4'),
+            showJoinUIBtn: document.getElementById('showJoinUIBtn'),
+            cancelHostBtn: document.getElementById('cancelHostBtn'),
+            joinGameSubmitBtn: document.getElementById('joinGameSubmitBtn'),
+            sendChatBtn: document.getElementById('sendChatBtn'),
+            leaveGameBtn: document.getElementById('leaveGameBtn'),
+            gameOverBackBtn: document.getElementById('gameOverBackBtn'),
+        };
+
+        // --- Global Client State ---
+        let appState = {
+            mode: 'menu', // Start in menu
+            localPlayerId: null,
+            maxPlayersInGame: null, 
+            currentGameId: null,
+            serverState: null, 
+            animationFrameId: null,
+            isConnected: false,
+            // Interpolation/Prediction State
+            renderedPlayerPos: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 },
+            predictedPlayerPos: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 },
+            lastServerState: null,     // State before latest
+            previousServerState: null, // State before that
+            lastLoopTime: performance.now(),
+            lastStateReceiveTime: performance.now(), // Initialize with current time
+
+        };
+        let localPlayerMuzzleFlash = { active: false, endTime: 0, aimDx: 0, aimDy: 0 };
+        let hitPauseFrames = 0;
+        let activeSpeechBubbles = {}; // { playerId: { text: "Hi!", endTime: 123456789 } }
+        let activeEnemyBubbles = {};  // { enemyId: { text: "Grrr!", endTime: 123456789 } }
+        let socket = null; // Single WebSocket connection reference
+
+        // --- Logging Wrapper ---
+        function log(...args) { console.log("[Client]", ...args); }
+        function error(...args) { console.error("[Client]", ...args); }
+
+        // --- UI Management "Module" ---
+        const UI = (() => {
+            const allSections = [
+                DOM.mainMenuSection, DOM.multiplayerMenuSection, DOM.hostWaitSection,
+                DOM.joinCodeSection, DOM.gameArea, DOM.gameOverScreen
+            ];
+
+            const gameSections = ['game-area']; // Sections that mean the game is "active" visually
+
+            function showSection(sectionId) {
+                allSections.forEach(s => { if(s) s.style.display = 'none'; });
+                const sectionToShow = DOM[sectionId] || document.getElementById(sectionId);
+                if (sectionToShow) {
+                    sectionToShow.style.display = 'block';
+                    log(`UI: Showing section: ${sectionId}`);
+
+                    // --- ADD CLASS TOGGLE LOGIC ---
+                    if (gameSections.includes(sectionId)) {
+                        DOM.gameContainer.classList.add('in-game');
+                    } else {
+                        DOM.gameContainer.classList.remove('in-game');
+                    }
+                    // --- END CLASS TOGGLE LOGIC ---
+
+                } else {
+                     error(`UI: Section not found: ${sectionId}`);
+                }
+            }
+
+            function updateStatus(message, isError = false) { // Keep this function
+                 if (DOM.gameStatus) {
+                     DOM.gameStatus.textContent = message;
+                     DOM.gameStatus.style.color = isError ? (getCssVar('--player-color') || 'red') : (getCssVar('--accent-color') || 'yellow');
+                     if(isError) console.error("Status Update:", message);
+                     else console.log("Status Update:", message);
+                 } else {
+                     error("DOM.gameStatus not found for update:", message);
+                 }
+            }
+
+            function formatTime(totalSeconds) { // Keep this function
+                if (totalSeconds < 0) totalSeconds = 0;
+                const minutes = Math.floor(totalSeconds / 60);
+                const seconds = Math.floor(totalSeconds % 60);
+                const paddedSeconds = seconds < 10 ? '0' + seconds : seconds;
+                return `${minutes}:${paddedSeconds}`;
+            }
+
+// UPDATED updateHUD function for Multiplayer Stats
+            function updateHUD(localPlayerData, serverState) { // Renamed first param for clarity
+
+                const players = serverState?.players;
+                const localPlayerId = appState.localPlayerId;
+                const mpStatsDisplayContainer = document.getElementById('mp-stats-display'); // Get the container
+
+                // --- Clear Previous Stats & Check for Container ---
+                if (!mpStatsDisplayContainer) {
+                    log("DOM element #mp-stats-display not found!");
+                    return; // Cannot update HUD without the container
+                }
+                mpStatsDisplayContainer.innerHTML = ''; // Clear out old stat boxes
+
+                // --- Check if Player Data Exists ---
+                if (!players || Object.keys(players).length === 0) {
+                    // Optional: mpStatsDisplayContainer.innerHTML = '<div class="system-message">Waiting...</div>';
+                } else {
+                    // --- Sort Player IDs --- (Keep existing sort)
+                    const sortedPlayerIds = Object.keys(players).sort((a, b) => { /* ... */ });
+
+                    // --- Generate and Append Stat Boxes for Each Player ---
+                    sortedPlayerIds.forEach(playerId => {
+                        const playerData = players[playerId];
+                        if (!playerData) return;
+
+                        const isSelf = (playerId === localPlayerId);
+                        // --- CHANGE: More compact header ---
+                        const headerText = isSelf ? "YOU" : `P:${playerId.substring(0, 4)}`; // Use P:ID for others
+
+                        const healthDisplay = (playerData.health ?? 0) <= 0
+                            ? `<span style='color: var(--health-bar-low);'>DEAD</span>`
+                            : `${Math.round(playerData.health ?? 0)}/${playerData.max_health ?? 100}`; // Round health
+
+                        // --- CHANGE: More compact HTML structure ---
+                        const statsBoxHTML = `
+                            <div class="player-stats-box"> {/* Removed style override */}
+                                <div class="stats-header">${headerText}</div>
+                                <div class="stats-content">
+                                    <span>HP:</span> ${healthDisplay} | <span>Arm:</span> ${playerData.armor ?? 0}<br>
+                                    <span>Gun:</span> ${playerData.gun ?? 1} | <span>Spd:</span> ${playerData.speed ?? 150}<br>
+                                    <span>K:</span> ${playerData.kills ?? 0} | <span>S:</span> ${playerData.score ?? 0}
+                                </div>
+                            </div>
+                        `;
+                        // --- END CHANGE ---
+
+                        mpStatsDisplayContainer.innerHTML += statsBoxHTML;
+                    });
+                } // --- End Player Data Check ---
+
+                // --- Update General Game Info (Score, Day/Night) - REMAINS THE SAME ---
+                // ... (rest of HUD update code for score/day-night is unchanged) ...
+                if (DOM.gameScoreDiv) {
+                    const totalScore = serverState?.score ?? 0;
+                    DOM.gameScoreDiv.textContent = `Score: ${totalScore}`;
+                 } else {
+                log("DOM.gameScoreDiv not found");
+            }
+
+            if (DOM.dayNightIndicator) {
+                if (serverState?.status === 'active' && serverState?.day_night_timer_remaining !== undefined) {
+                    const remaining = serverState.day_night_timer_remaining;
+                    const phaseText = serverState.is_night ? "Night" : "Day";
+                    DOM.dayNightIndicator.textContent = `${phaseText} ${formatTime(remaining)}`;
+                    DOM.dayNightIndicator.style.display = 'inline-block';
+                } else {
+                    DOM.dayNightIndicator.style.display = 'none';
+                }
+            } else {
+                log("DOM.dayNightIndicator not found");
+            }
+
+            updateDayNight(serverState); // Keep calling this
+
+            } // --- End of MODIFIED updateHUD ---
+
+            function addChatMessage(sender, message, isSelf, isSystem = false) {
+                // Add check for DOM.chatLog existence
+                if (!DOM.chatLog) { error("DOM.chatLog not found for chat message."); return; }
+                const div = document.createElement('div');
+                if (isSystem) {
+                    div.className = 'system-message'; div.textContent = message;
+                } else {
+                    div.className = isSelf ? 'my-message' : 'other-message';
+                    // Use player ID for now, could map to names later
+                    div.textContent = `${sender ? `P:${sender.substring(0,4)}` : '???'}: ${message}`;
+                }
+                DOM.chatLog.appendChild(div);
+                DOM.chatLog.scrollTop = DOM.chatLog.scrollHeight; // Scroll to bottom
+            }
+
+            function updateCountdown(serverState) {
+                // Add checks for DOM elements
+                 if (DOM.countdownDiv && DOM.dayNightIndicator) {
+                    if (serverState?.status === 'countdown' && serverState?.countdown >= 0) {
+                        DOM.countdownDiv.textContent = Math.ceil(serverState.countdown);
+                        DOM.countdownDiv.style.display = 'block';
+                        DOM.dayNightIndicator.style.display = 'none';
+                    } else {
+                        DOM.countdownDiv.style.display = 'none';
+                        DOM.dayNightIndicator.style.display = (serverState?.status === 'active') ? 'inline-block' : 'none'; // Use inline-block for day/night
+                    }
+                } else {
+                    error("DOM.countdownDiv or DOM.dayNightIndicator not found.");
+                }
+             }
+
+            function updateDayNight(serverState) {
+                 // Add checks for DOM elements
+                 if (DOM.dayNightIndicator && DOM.canvas && DOM.gameContainer) {
+                     if (serverState?.status === 'active') {
+                        const isNight = serverState.is_night;
+                        DOM.dayNightIndicator.textContent = isNight ? 'Night' : 'Day';
+                        DOM.canvas.style.backgroundColor = isNight ? (getCssVar('--bg-color') || '#3E2723') : '#A0522D';
+                        DOM.dayNightIndicator.style.display = 'inline-block'; // Use inline-block
+
+                        if (isNight) {
+                            DOM.gameContainer.classList.add('night-mode');
+                        } else {
+                            DOM.gameContainer.classList.remove('night-mode');
+                        }
+                     } else {
+                        DOM.dayNightIndicator.style.display = 'none';
+                        DOM.gameContainer.classList.remove('night-mode');
+                     }
+                 } else {
+                      error("DOM.dayNightIndicator, DOM.canvas, or DOM.gameContainer not found for day/night update.");
+                 }
+             }
+
+            function showGameOver(finalState) {
+                // Add checks for DOM elements
+                if (!DOM.finalStatsDiv || !DOM.gameOverScreen) {
+                     error("DOM.finalStatsDiv or DOM.gameOverScreen not found."); return;
+                }
+
+                // --- SIMPLIFIED STATS LOGIC ---
+                const player = finalState?.players?.[appState.localPlayerId]; // Get local player data
+                let statsHtml = "Stats Unavailable"; // Default message
+
+                if (player) {
+                     // Generate simple HTML for Score and Kills
+                     statsHtml = `
+                        <div class="final-stat-item">
+                             <strong>Score:</strong> ${player.score ?? 0}
+                        </div>
+                        <div class="final-stat-item">
+                             <strong>Kills:</strong> ${player.kills ?? 0}
+                        </div>
+                     `;
+                     // Optional: Add Level if desired
+                     // statsHtml += `<div class="final-stat-item"><strong>Level Reached:</strong> ${finalState?.level ?? 1}</div>`;
+                }
+                // --- END SIMPLIFIED STATS ---
+
+                DOM.finalStatsDiv.innerHTML = statsHtml;
+
+                log("UI: Attempting to show simple game over screen.");
+                 // Hide other sections (keep this logic)
+                 [DOM.mainMenuSection, DOM.multiplayerMenuSection, DOM.hostWaitSection,
+                  DOM.joinCodeSection, DOM.gameArea].forEach(s => { if (s) s.style.display = 'none'; });
+                        } 
+                        
+            // Expose necessary UI functions
+            return {
+                showSection,
+                updateStatus,
+                updateHUD, // Ensure this is the updated one
+                addChatMessage,
+                updateCountdown,
+                updateDayNight,
+                showGameOver // Expose the simplified function
+            };
+        })(); // <-- This closes the UI IIFEw
+
+
+        // --- Network "Module" ---
+        const Network = (() => {
+            let reconnectTimer = null;
+
+            function connect(onOpenCallback) {
+                // Prevent multiple connections
+                if (socket && socket.readyState !== WebSocket.CLOSED) {
+                    log("Connect called but socket exists, state:", socket.readyState);
+                    if (socket.readyState === WebSocket.OPEN && onOpenCallback) {
+                        onOpenCallback(); // Call callback if already open
+                    }
+                    return;
+                }
+                clearTimeout(reconnectTimer); // Clear any pending reconnect attempts
+                UI.updateStatus('Connecting...');
+                log("Attempting WebSocket connection to:", WEBSOCKET_URL);
+
+                try {
+                    socket = new WebSocket(WEBSOCKET_URL);
+                } catch (err) {
+                    error("WebSocket creation failed:", err);
+                    UI.updateStatus('Connection failed (WebSocket Error). Please refresh.', true);
+                    return; // Stop connection attempt
+                }
+
+
+                socket.onopen = () => {
+                    log('WebSocket connection established.');
+                    appState.isConnected = true;
+                    UI.updateStatus('Connected.');
+                    // Ensure menu is shown only after connection
+                    UI.showSection('main-menu-section');
+                    if (onOpenCallback) onOpenCallback();
+                };
+
+                socket.onmessage = handleServerMessage; // Use the global handler
+
+                socket.onerror = (event) => {
+                    // Browsers often don't provide detailed error info here,
+                    // rely on onclose for failure/reconnect logic.
+                    error('WebSocket Error Event:', event);
+                };
+
+                socket.onclose = (event) => {
+                    error(`WebSocket Closed: Code=${event.code}, Reason='${event.reason || 'N/A'}'`);
+                    const wasConnected = appState.isConnected;
+                    appState.isConnected = false;
+                    socket = null; // Clear socket reference
+                    // Reset game state but keep UI showing error/reconnecting message
+                    Game.resetClientState(false);
+
+                    if (event.code === 1000) { // Normal closure (e.g., user left game)
+                        UI.updateStatus('Disconnected.');
+                        UI.showSection('main-menu-section'); // Back to main menu
+                    } else if (wasConnected) { // Abnormal closure after successful connection
+                         UI.updateStatus('Connection lost. Reconnecting...', true);
+                         scheduleReconnect();
+                    } else { // Failed initial connection attempt
+                         UI.updateStatus('Connection failed. Please check console and refresh.', true);
+                         // Consider disabling buttons here?
+                    }
+                    // Stop game loop if it was running
+                     if (appState.animationFrameId) {
+                         cancelAnimationFrame(appState.animationFrameId);
+                         appState.animationFrameId = null;
+                         Input.cleanup(); // Clean input listeners if loop stops
+                         log("Game loop stopped due to connection close.");
+                     }
+                };
+            }
+
+            function scheduleReconnect() {
+                 clearTimeout(reconnectTimer);
+                 log(`Scheduling reconnect in ${RECONNECT_DELAY}ms`);
+                 reconnectTimer = setTimeout(() => {
+                     log("Attempting reconnect...");
+                     // Pass a callback to handle UI on successful reconnect
+                     connect(() => {
+                          UI.updateStatus('Reconnected.');
+                          UI.showSection('main-menu-section'); // Go back to menu after reconnect
+                     });
+                 }, RECONNECT_DELAY);
+            }
+
+            function sendMessage(payload) {
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    try {
+                        const msg = JSON.stringify(payload);
+                        // log("Sending:", msg.substring(0, 150)); // Optional: Log sent message snippet
+                        socket.send(msg);
+                    } catch (err) {
+                        error("Error sending message:", err, payload);
+                    }
+                } else {
+                    error('Cannot send message, WebSocket not open or null.', payload);
+                    // Maybe trigger reconnect attempt if socket is unexpectedly closed?
+                    if (!socket || socket.readyState === WebSocket.CLOSED) {
+                         // scheduleReconnect(); // Be careful not to spam reconnects
+                    }
+                }
+            }
+
+             function closeConnection(code = 1000, reason = "User action") {
+                 clearTimeout(reconnectTimer); // Stop reconnect attempts on manual close
+                 if (socket && socket.readyState === WebSocket.OPEN) {
+                     log(`Closing WebSocket explicitly: ${reason} (Code: ${code})`);
+                     socket.close(code, reason);
+                 } else {
+                    log("closeConnection called but socket not open or null.");
+                 }
+                 // Clear refs and state immediately, onclose handler will confirm
+                 socket = null;
+                 appState.isConnected = false;
+             }
+
+            return { connect, sendMessage, closeConnection };
+        })();
+        
+        // --- Input Handling "Module" ---
+        const Input = (() => {
+             let keys = {};
+             let lastShotTime = 0;
+             let movementInterval = null;
+             let mouseCanvasPos = { x: 0, y: 0 };
+             let isMouseDown = false; // <<< ADDED: Tracks left mouse button state
+
+             function setup() {
+                cleanup(); // Ensure no duplicate listeners
+                document.addEventListener('keydown', handleKeyDown);
+                document.addEventListener('keyup', handleKeyUp);
+                DOM.chatInput.addEventListener('keydown', handleChatEnter);
+
+                if (DOM.canvas) { // Ensure canvas exists
+                     DOM.canvas.addEventListener('mousemove', handleMouseMove);
+                     DOM.canvas.addEventListener('mousedown', handleMouseDown); // Keep canvas listener for starting hold
+                } else {
+                     error("Input setup failed: Canvas element not found.");
+                }
+                // --- ADDED global mouseup listener ---
+                document.addEventListener('mouseup', handleMouseUp);
+                // -----------------------------------
+
+                movementInterval = setInterval(sendMovementInput, INPUT_SEND_INTERVAL);
+                log("Input listeners setup.");
+             }
+
+             function cleanup() {
+                 document.removeEventListener('keydown', handleKeyDown);
+                 document.removeEventListener('keyup', handleKeyUp);
+                 DOM.chatInput.removeEventListener('keydown', handleChatEnter);
+
+                 if (DOM.canvas) { // Check if canvas exists before removing
+                      DOM.canvas.removeEventListener('mousemove', handleMouseMove);
+                      DOM.canvas.removeEventListener('mousedown', handleMouseDown);
+                 }
+                 // --- REMOVE global mouseup listener ---
+                 document.removeEventListener('mouseup', handleMouseUp);
+                 // ------------------------------------
+
+                 clearInterval(movementInterval);
+                 movementInterval = null;
+                 keys = {};
+                 isMouseDown = false; // <<< ADDED: Reset mouse state on cleanup
+                 mouseCanvasPos = { x: 0, y: 0 };
+                 log("Input listeners cleaned up.");
+             }
+
+             function handleMouseMove(event) {
+                 if (!DOM.canvas) return;
+                 const rect = DOM.canvas.getBoundingClientRect();
+                 mouseCanvasPos.x = event.clientX - rect.left;
+                 mouseCanvasPos.y = event.clientY - rect.top;
+             }
+
+            // --- MODIFIED handleMouseDown: Set flag, don't call handleShooting ---
+            function handleMouseDown(event) {
+                if (document.activeElement === DOM.chatInput) return; // Ignore if typing chat
+                if (event.button === 0) { // Check if left mouse button
+                    isMouseDown = true; // Set the flag
+                    // REMOVED: handleShooting();
+                    event.preventDefault(); // Prevent text selection etc.
+                }
+            }
+            // --- End modification ---
+
+            // --- ADDED handleMouseUp function ---
+            // Needs to listen globally in case mouse is released outside canvas
+            function handleMouseUp(event) {
+                // Check if left mouse button (button === 0) was released
+                if (event.button === 0) {
+                    isMouseDown = false; // Clear the flag
+                }
+            }
+            // --- End added function ---
+
+// --- MODIFIED handleKeyDown: Includes 'E' pushback and checks chat focus ---
+             function handleKeyDown(e) {
+                 // --- CRITICAL: Check if typing in chat FIRST ---
+                 if (document.activeElement === DOM.chatInput) {
+                     // If typing in chat, we DON'T want to process global game keys like movement, space, or 'e'.
+                     // The 'Enter' key press for chat submission is handled by the specific 'handleChatEnter'
+                     // listener attached directly to the chat input element. So, just return here.
+                     return;
+                 }
+                 // --- END Chat Focus Check ---
+
+                 // If not typing in chat, process game keys:
+                 const key = e.key.toLowerCase();
+
+                 // Track movement keys & spacebar flag (set flag only)
+                 if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' '].includes(key)) {
+                    // Set flag if not already set (prevents repeated actions if needed later)
+                    if (!keys[key]) {
+                        keys[key] = true;
+                    }
+                    e.preventDefault(); // Prevent default browser scroll/actions for these keys
+                    return; // Handled movement/space flag setting, no need to check 'e' below
+                 }
+
+                 // Handle 'E' key for pushback (Only if NOT typing in chat)
+                 if (key === 'e') {
+                     // Check game state and send message
+                     if (appState.serverState?.status === 'active' && appState.isConnected) {
+                         log("Sending player_pushback message."); // Log the action
+                         Network.sendMessage({ type: 'player_pushback' });
+                         e.preventDefault(); // Prevent default browser action for 'e' (e.g., find)
+                     } else {
+                         log("Pushback ('e') ignored: Game not active or not connected.");
+                     }
+                     return; // Handled 'e', done with this keydown event
+                 }
+
+                 // If the key wasn't a movement key, space, or 'e',
+                 // no further game-specific action needed in this global handler.
+             }
+             // --- End modification ---
+
+             // handleKeyUp remains unchanged - only clears movement/space flags
+             function handleKeyUp(e) {
+                 const key = e.key.toLowerCase();
+                 // Clear flags for keys that represent a HOLD state
+                 if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' '].includes(key)) {
+                     // Check if flag was actually set before clearing (optional but good practice)
+                     if (keys[key]) {
+                         keys[key] = false;
+                     }
+                 }
+                 // 'e' is an event, not a state, so no need to clear a flag here.
+             }
+
+             // handleChatEnter remains unchanged - ADDED LOGGING
+             // This listener is attached specifically to DOM.chatInput in Input.setup()
+             function handleChatEnter(e) {
+                 if (e.key === 'Enter') {
+                     e.preventDefault(); // Prevent submitting a form if one existed or line break
+                     log("Enter key detected in chat input."); // <<< ADDED LOGGING
+                     Game.sendChatMessage(); // Attempt to send the chat message
+                 }
+             }
+
+             // getMovementInputVector remains unchanged
+             function getMovementInputVector() {
+                 let dx = 0, dy = 0;
+                 if (keys['w'] || keys['arrowup']) dy -= 1;
+                 if (keys['s'] || keys['arrowdown']) dy += 1;
+                 if (keys['a'] || keys['arrowleft']) dx -= 1;
+                 if (keys['d'] || keys['arrowright']) dx += 1;
+
+                 // Normalize diagonal movement (existing logic)
+                 if (dx !== 0 && dy !== 0) {
+                     const factor = 1 / Math.sqrt(2);
+                     dx *= factor;
+                     dy *= factor;
+                 }
+                 return { dx, dy };
+             }
+
+             // sendMovementInput remains unchanged
+             function sendMovementInput() {
+                 // Check game status before sending (existing logic)
+                 // Ensure player is connected and game is active before sending movement
+                 if (appState.mode !== 'menu' && appState.serverState?.status === 'active' && appState.isConnected) {
+                    const moveVector = getMovementInputVector();
+                    // It's okay to send {dx:0, dy:0} - server handles it.
+                    Network.sendMessage({ type: 'player_move', direction: moveVector });
+                 }
+             }
+            // handleShooting function remains UNCHANGED from your provided code
+            // (It correctly handles cooldowns and sends target coords)
+            function handleShooting() {
+                // 1. Check Game Status
+                if (appState.serverState?.status !== 'active') return;
+
+                // 2. Calculate Actual Cooldown based on Ammo Type
+                const playerState = appState.serverState?.players?.[appState.localPlayerId];
+                const currentAmmo = playerState?.active_ammo_type || 'standard';
+                let actualShootCooldown = SHOOT_COOLDOWN; // Base cooldown
+                if (currentAmmo === 'ammo_rapid_fire') {
+                    actualShootCooldown = SHOOT_COOLDOWN * RAPID_FIRE_COOLDOWN_MULTIPLIER;
+                }
+
+                // 3. Check Cooldown Timer
+                const now = Date.now();
+                if (now - lastShotTime < actualShootCooldown) {
+                    return; // Cooldown active
+                }
+                lastShotTime = now; // Update shot time ONLY if allowed to fire
+
+                // 4. --- AIM DIRECTION CALCULATION REMOVED FROM CLIENT ---
+
+                // 5. Trigger Local Effects (Muzzle Flash)
+                const playerRenderX = appState.renderedPlayerPos.x;
+                const playerRenderY = appState.renderedPlayerPos.y;
+                let flashDx = mouseCanvasPos.x - playerRenderX;
+                let flashDy = mouseCanvasPos.y - playerRenderY;
+                const flashMag = Math.sqrt(flashDx*flashDx + flashDy*flashDy);
+                if (flashMag > 0.01) {
+                    flashDx /= flashMag;
+                    flashDy /= flashMag;
+                } else {
+                    flashDx = 0; flashDy = -1;
+                }
+                localPlayerMuzzleFlash.active = true;
+                localPlayerMuzzleFlash.endTime = performance.now() + 75;
+                localPlayerMuzzleFlash.aimDx = flashDx;
+                localPlayerMuzzleFlash.aimDy = flashDy;
+
+                // 6. Send Shoot Message with TARGET COORDINATES
+                log("Sending shoot message with Target Coords:", mouseCanvasPos);
+                Network.sendMessage({
+                    type: 'player_shoot',
+                    target: { x: mouseCanvasPos.x, y: mouseCanvasPos.y }
+                });
+
+                // Optional: Play shoot sound locally
+                // Game.playSound('shoot');
+            }
+
+            // --- ADDED helper function ---
+            function isShootHeld() {
+                return keys[' '] || isMouseDown; // Return true if Space or Left Mouse is down
+            }
+            // -----------------------------
+
+            // --- ADDED functions to the return statement ---
+            return {
+                setup,
+                cleanup,
+                getMovementInputVector,
+                handleShooting, // Expose the shooting function itself
+                isShootHeld     // Expose the state check helper
+            };
+
+        })(); // End Input IIFE
+
+        // --- Rendering "Module" ---
+        const Renderer = (() => {
+            const ctx = DOM.ctx;
+            const lerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.2;
+
+            // Define enemy type constants locally to match backend
+            const ENEMY_TYPE_CHASER = 'chaser';
+            const ENEMY_TYPE_SHOOTER = 'shooter';
+            const BULLET_TYPE_STANDARD = 'standard';
+            const BULLET_TYPE_STANDARD_ENEMY = 'standard_enemy';
+
+         // Inside Renderer module IIFE...
+
+            function drawDamageTexts(damageTexts) {
+                    if (!damageTexts) return;
+
+                    const now = performance.now(); // Get current time for animation calc
+                    const normalColor = getCssVar('--damage-text-color') || '#FFFFFF';
+                    const critColor = getCssVar('--damage-text-crit-color') || '#FFD700';
+                    const normalFontSizeBase = 14; // Base size from CSS or default
+                    const critFontSizeBase = 18;   // Base crit size from CSS or default
+                    const fontFamily = getCssVar('--font-family') || 'monospace';
+                    const pulseDuration = 250; // How long the pulse effect lasts (in ms)
+                    const pulseMaxSizeIncrease = 4; // How many extra pixels font size increases at peak
+
+                    // Attempt to parse font sizes from CSS vars, use defaults if failed
+                    const normalFontSize = parseInt(getCssVar('--damage-text-font-size'), 10) || normalFontSizeBase;
+                    const critFontSize = parseInt(getCssVar('--damage-text-crit-font-size'), 10) || critFontSizeBase;
+
+
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
+
+                    Object.values(damageTexts).forEach(dmgText => {
+                        if (!dmgText) return;
+
+                        const x = dmgText.x ?? 0;
+                        const y = dmgText.y ?? 0;
+                        const text = dmgText.text ?? '?';
+                        const isCrit = dmgText.is_crit ?? false;
+                        const spawnTime = dmgText.spawn_time ? dmgText.spawn_time * 1000 : now; // Convert backend seconds to ms
+                        const timeSinceSpawn = now - spawnTime;
+
+                        let currentFontSize = isCrit ? critFontSize : normalFontSize;
+                        let currentFillColor = isCrit ? critColor : normalColor;
+
+                        // --- Add Pulse Effect for Crits ---
+                        if (isCrit && timeSinceSpawn < pulseDuration) {
+                            // Calculate pulse progress (0 to 1, then back to 0) using sine wave
+                            const pulseProgress = Math.sin((timeSinceSpawn / pulseDuration) * Math.PI); // Goes 0 -> 1 -> 0
+                            // Increase font size based on progress
+                            currentFontSize += pulseProgress * pulseMaxSizeIncrease;
+                            // Optional: Slightly brighten color? (Could lerp towards white)
+                            // Example: Lerp between critColor and white - might be too much
+                            // const white = '#FFFFFF';
+                            // currentFillColor = lerpColor(critColor, white, pulseProgress * 0.5); // Need a lerpColor helper
+                        }
+                        // --- End Pulse Effect ---
+
+                        // Set final font and color
+                        ctx.font = `bold ${Math.round(currentFontSize)}px ${fontFamily}`; // Round size to integer
+                        ctx.fillStyle = currentFillColor;
+
+                        // Optional: Shadow
+                        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+                        ctx.shadowBlur = 3; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 1;
+
+                        // Draw the text
+                        ctx.fillText(text, x, y);
+
+                        // Reset shadow
+                        ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+                        ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+                    });
+                } 
+
+            function drawCampfire(campfireData) {
+                // Only draw if campfire data exists and it's active (night time)
+                if (!campfireData || !campfireData.active) {
+                    return;
+                }
+
+                const x = campfireData.x ?? CANVAS_WIDTH / 2;
+                const y = campfireData.y ?? CANVAS_HEIGHT / 2;
+                const radius = campfireData.radius ?? 0; // Aura radius
+
+                if (radius <= 0) return; // Don't draw if radius is invalid
+
+                // --- Settings for Campfire Elements ---
+                const auraColor = getCssVar('--campfire-aura-color') || 'rgba(255, 255, 0, 0.15)';
+                const stickColor = '#8B4513'; // SaddleBrown
+                const stickWidth = 20;
+                const stickHeight = 4;
+                const flameColorOuter = 'rgba(255, 165, 0, 0.6)'; // Semi-transparent Orange
+                const flameColorInner = 'rgba(255, 255, 0, 0.7)'; // Semi-transparent Yellow
+                const flameWidth = 15;
+                const flameHeight = 25;
+                // --------------------------------------
+
+                // Use save/restore for rotations and state changes
+                ctx.save();
+
+                // 1. Draw the Aura (Behind everything else)
+                ctx.fillStyle = auraColor;
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 2. Draw the Sticks (Centered around x, y but slightly lower)
+                const stickOffsetY = 5; // Move sticks slightly down from exact center
+                ctx.fillStyle = stickColor;
+                ctx.translate(x, y + stickOffsetY); // Move origin to stick center
+
+                // Stick 1 (angled)
+                ctx.rotate(Math.PI / 5); // Rotate ~36 degrees
+                ctx.fillRect(-stickWidth / 2, -stickHeight / 2, stickWidth, stickHeight);
+                ctx.rotate(-Math.PI / 5); // Rotate back
+
+                // Stick 2 (angled other way)
+                ctx.rotate(-Math.PI / 6); // Rotate ~-30 degrees
+                ctx.fillRect(-stickWidth / 2, -stickHeight / 2, stickWidth, stickHeight);
+                ctx.rotate(Math.PI / 6); // Rotate back
+
+                ctx.translate(-x, -(y + stickOffsetY)); // Reset translation
+
+                // 3. Draw the Flame (Above the sticks)
+                const flameOffsetY = -10; // Position flame slightly above center
+                const flameCenterX = x;
+                const flameCenterY = y + flameOffsetY;
+
+                // Draw Outer Flame (Orange Oval)
+                ctx.fillStyle = flameColorOuter;
+                ctx.beginPath();
+                // ellipse(xCenter, yCenter, radiusX, radiusY, rotation, startAngle, endAngle)
+                ctx.ellipse(flameCenterX, flameCenterY, flameWidth / 2, flameHeight / 2, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw Inner Flame (Yellow Oval - slightly smaller and higher)
+                ctx.fillStyle = flameColorInner;
+                ctx.beginPath();
+                ctx.ellipse(flameCenterX, flameCenterY - 3, flameWidth / 3, flameHeight / 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Restore context to prevent affecting other drawings
+                ctx.restore();
+            }
+
+            function drawMuzzleFlash(playerX, playerY, aimDx, aimDy) {
+                const flashSizeBase = 10;
+                const flashSizeVariation = 5;
+                const flashColor = 'rgba(255, 220, 50, 0.9)'; // Bright yellow/orange
+                const offsetDistance = 12;
+                const flashX = playerX + aimDx * offsetDistance;
+                const flashY = playerY + aimDy * offsetDistance;
+                const flashSize = flashSizeBase + Math.random() * flashSizeVariation;
+
+                ctx.fillStyle = flashColor;
+                ctx.beginPath();
+                ctx.arc(flashX, flashY, flashSize / 2, 0, Math.PI * 2); // Simple circle
+                ctx.fill();
+            }
+
+            function drawDamageVignette(intensity) { // Intensity 0 to 1
+                if (intensity <= 0) return; // Don't draw if intensity is zero or less
+                ctx.save(); // Save current context settings
+
+                // Calculate outer radius to cover canvas corners
+                const outerRadius = Math.sqrt(CANVAS_WIDTH * CANVAS_WIDTH + CANVAS_HEIGHT * CANVAS_HEIGHT) / 2;
+
+                // Create gradient from center outwards
+                const gradient = ctx.createRadialGradient(
+                    CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 0, // Inner circle (center, radius 0)
+                    CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, outerRadius // Outer circle (center, covers canvas)
+                );
+
+                // Colors: Transparent center, fading to semi-transparent red at edges
+                const redAlpha = 0.4 * intensity; // Base alpha (max 0.4), scaled by intensity
+                gradient.addColorStop(0, 'rgba(255, 0, 0, 0)');    // Center transparent
+                gradient.addColorStop(0.75, 'rgba(255, 0, 0, 0)'); // Stay transparent until outer part
+                gradient.addColorStop(1, `rgba(255, 0, 0, ${redAlpha.toFixed(2)})`); // Fade to red edge
+
+                // Draw the gradient over the whole canvas
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+                ctx.restore(); // Restore context settings
+            }
+
+            function drawEnemySpeechBubbles(enemiesToRender) {
+                const now = performance.now();
+                const bubbleFont = 'italic 11px ' + (getCssVar('--font-family') || 'monospace'); // Slightly different?
+                const bubbleColor = '#FFAAAA'; // Pale Red / Pink?
+                const bubbleBgColor = 'rgba(50, 0, 0, 0.6)'; // Dark red transparent background?
+                const textPadding = 3;
+                const bubbleOffset = 20;
+
+                ctx.font = bubbleFont;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+
+                const enemyIdsToRemove = [];
+
+                for (const enemyId in activeEnemyBubbles) {
+                    const bubble = activeEnemyBubbles[enemyId];
+
+                    if (now >= bubble.endTime) {
+                        enemyIdsToRemove.push(enemyId);
+                        continue;
+                    }
+
+                    const enemy = enemiesToRender?.[enemyId]; // Find enemy in current render state
+
+                    if (enemy && enemy.health > 0) { // Check enemy exists and is alive
+                        const enemyDrawX = enemy.x; // Use interpolated/current enemy X
+                        const enemyDrawY = enemy.y; // Use interpolated/current enemy Y
+                        const enemyHeight = enemy.height ?? ENEMY_DEFAULTS.height;
+
+                        const bubbleY = enemyDrawY - (enemyHeight / 2) - bubbleOffset; // Position above head
+
+                        const textMetrics = ctx.measureText(bubble.text);
+                        const textWidth = textMetrics.width;
+                        const boxWidth = textWidth + textPadding * 2;
+                        const approxFontHeight = 11;
+                        const boxHeight = approxFontHeight + textPadding * 2;
+                        const boxX = enemyDrawX - boxWidth / 2;
+
+                        ctx.fillStyle = bubbleBgColor;
+                        ctx.fillRect(boxX, bubbleY - boxHeight, boxWidth, boxHeight);
+
+                        ctx.fillStyle = bubbleColor;
+                        ctx.fillText(bubble.text, enemyDrawX, bubbleY - textPadding);
+                    } else {
+                        // Enemy might have died while bubble was active, mark for removal
+                        enemyIdsToRemove.push(enemyId);
+                    }
+                }
+
+                // Clean up expired/invalid bubbles
+                enemyIdsToRemove.forEach(id => {
+                    delete activeEnemyBubbles[id];
+                });
+            }
+
+            function drawSpeechBubbles(playersToRender) {
+                const now = performance.now();
+                const bubbleFont = 'bold 12px ' + (getCssVar('--font-family') || 'monospace');
+                // Use the standard text color directly
+                const bubbleColor = getCssVar('--text-color') || '#FFF8DC';
+                const bubbleBgColor = 'rgba(0, 0, 0, 0.6)'; // Semi-transparent black background
+                const textPadding = 4;
+                const bubbleOffset = 30; // How far above the player's head
+
+                ctx.font = bubbleFont;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom'; // Text draws upwards from y position
+
+                const playerIdsToRemove = []; // Keep track of expired bubbles
+
+                for (const playerId in activeSpeechBubbles) {
+                    const bubble = activeSpeechBubbles[playerId];
+
+                    if (now >= bubble.endTime) {
+                        playerIdsToRemove.push(playerId); // Mark for removal
+                        continue; // Skip drawing expired bubble
+                    }
+
+                    // Find the player's current rendered position from the passed state
+                    const player = playersToRender?.[playerId];
+
+                    // Only draw if player exists and is alive
+                    if (player && player.health > 0) {
+                        // Use player's draw position
+                        const playerDrawX = (playerId === appState.localPlayerId) ? appState.renderedPlayerPos.x : player.x;
+                        const playerDrawY = (playerId === appState.localPlayerId) ? appState.renderedPlayerPos.y : player.y;
+                        const playerHeight = player.height ?? PLAYER_DEFAULTS.height;
+
+                        const bubbleY = playerDrawY - (playerHeight / 2) - bubbleOffset; // Position above head
+
+                        // Measure text for background box
+                        const textMetrics = ctx.measureText(bubble.text);
+                        const textWidth = textMetrics.width;
+                        const boxWidth = textWidth + textPadding * 2;
+                        const approxFontHeight = 12; // Rough height based on font size
+                        const boxHeight = approxFontHeight + textPadding * 2;
+                        const boxX = playerDrawX - boxWidth / 2; // Center the box
+
+                        // Draw background box
+                        ctx.fillStyle = bubbleBgColor;
+                        ctx.fillRect(boxX, bubbleY - boxHeight, boxWidth, boxHeight);
+
+                        // Draw text using the standard color
+                        ctx.fillStyle = bubbleColor;
+                        ctx.fillText(bubble.text, playerDrawX, bubbleY - textPadding); // Y adjusted for padding
+                    }
+                }
+
+                // Clean up expired bubbles
+                playerIdsToRemove.forEach(id => {
+                    delete activeSpeechBubbles[id];
+                });
+            }
+
+            function drawGame() {
+                // 1. Preparation
+                ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                const now = performance.now();
+
+                // 2. Determine State to Render (SP vs MP/Interpolated)
+                let stateToRender;
+                if (appState.mode === 'singleplayer') {
+                    stateToRender = appState.serverState;
+                    // In SP, prediction/interpolation isn't used for the local player.
+                    // Directly use server position for rendering.
+                    const spPlayer = stateToRender?.players[appState.localPlayerId];
+                    if (spPlayer) {
+                        appState.renderedPlayerPos.x = spPlayer.x;
+                        appState.renderedPlayerPos.y = spPlayer.y;
+                    }
+                } else { // Multiplayer uses interpolated state
+                    stateToRender = getInterpolatedState(now);
+                }
+
+                // 3. Guard Clause: Stop if essential render data is missing
+                if (!stateToRender || !appState.localPlayerId || !stateToRender.players) {
+                    // log("Skipping draw: Missing state, localPlayerId, or players");
+                    return;
+                }
+
+                // 4. Handle Muzzle Flash State (Decide if it should be drawn)
+                let shouldDrawMuzzleFlash = false;
+                if (localPlayerMuzzleFlash.active) {
+                    if (now < localPlayerMuzzleFlash.endTime) {
+                        shouldDrawMuzzleFlash = true; // Still active, mark for drawing this frame
+                    } else {
+                        localPlayerMuzzleFlash.active = false; // Time expired, deactivate for next frame
+                    }
+                }
+
+                // --- START DRAWING ---
+
+                // 5. Draw Background Elements
+                drawCampfire(stateToRender.campfire); // Call the new function name
+
+                // 6. Draw Transient Effects (On top of background, under entities)
+                if (shouldDrawMuzzleFlash) {
+                    drawMuzzleFlash(
+                        appState.renderedPlayerPos.x, // Use local player's rendered position
+                        appState.renderedPlayerPos.y,
+                        localPlayerMuzzleFlash.aimDx, // Use stored aim direction
+                        localPlayerMuzzleFlash.aimDy
+                    );
+                }
+
+                // 7. Draw Core Game Entities (Order matters for layering)
+                // (Individual draw functions should handle null/undefined checks internally)
+                drawPowerups(stateToRender.powerups);
+                drawBullets(stateToRender.bullets);
+                drawEnemies(stateToRender.enemies);
+                drawPlayers(stateToRender.players); // Assumes drawPlayers checks internally
+                drawSpeechBubbles(stateToRender.players); // 
+                drawEnemySpeechBubbles(stateToRender.enemies); 
+                drawDamageTexts(stateToRender.damage_texts); // Draw damage text last (on top)
+
+                // --- DRAW VIGNETTE OVERLAY LAST (Based on Health %) ---
+                let vignetteIntensity = 0;
+                // Get local player's data from the state we are rendering
+                const localPlayer = stateToRender?.players?.[appState.localPlayerId];
+
+                if (localPlayer && localPlayer.max_health > 0) { // Check player exists
+                    const healthPercentage = localPlayer.health / localPlayer.max_health;
+
+                    // Set intensity based on health thresholds (matching health bar colors)
+                    if (healthPercentage <= 0.33) { // RED health
+                        // Intensity scales from 0.6 (at 33%) to 1.0 (at 0%)
+                        vignetteIntensity = 0.6 + (0.4 * (1 - (healthPercentage / 0.33)));
+                        vignetteIntensity = Math.min(1.0, Math.max(0, vignetteIntensity)); // Clamp 0-1
+                    } else if (healthPercentage <= 0.66) { // YELLOW health
+                        // Intensity scales from 0 (at 66%) to 0.4 (at 33%)
+                        vignetteIntensity = 0.4 * (1 - ((healthPercentage - 0.33) / (0.66 - 0.33)));
+                        vignetteIntensity = Math.max(0, vignetteIntensity); // Clamp >= 0
+                    }
+                    // No intensity if health is GREEN (> 66%)
+                }
+
+                // Call the drawing function with the calculated intensity
+                drawDamageVignette(vignetteIntensity);
+                // ----------------------------------------------------
+
+
+                // 8. Future Placeholders
+                // drawMapObstacles(stateToRender.map);
+
+                // --- END DRAWING ---
+            } // End drawGame function
+
+            function getInterpolatedState(now) {
+                const { serverState, lastServerState, previousServerState, localPlayerId, renderedPlayerPos } = appState;
+
+                // --- Guard Clauses (remain the same) ---
+                if (!serverState) {
+                    // console.warn("getInterpolatedState: No serverState available.");
+                    return null; // Return null or an empty object if no state exists yet
+                }
+                if (!lastServerState || !previousServerState || serverState.timestamp === lastServerState.timestamp) {
+                    // Not enough history for interpolation, return the latest state directly
+                    // Return a shallow copy to prevent accidental modification of the original appState.serverState
+                    // elsewhere if the caller modifies the returned object.
+                    // return { ...serverState }; // Simple shallow copy (careful with nested objects if they exist)
+                    // OR more robustly copy only known top-level properties needed for rendering:
+                     const latestStateCopy = {
+                         timestamp: serverState.timestamp,
+                         status: serverState.status,
+                         score: serverState.score,
+                         level: serverState.level,
+                         is_night: serverState.is_night,
+                         day_night_timer_remaining: serverState.day_night_timer_remaining,
+                         countdown: serverState.countdown,
+                         game_over: serverState.game_over,
+                         max_players: serverState.max_players,
+                         // Deep copy potentially complex objects if needed, shallow otherwise
+                         players: serverState.players ? { ...serverState.players } : {},
+                         enemies: serverState.enemies ? { ...serverState.enemies } : {},
+                         bullets: serverState.bullets ? { ...serverState.bullets } : {},
+                         powerups: serverState.powerups ? { ...serverState.powerups } : {},
+                         damage_texts: serverState.damage_texts ? { ...serverState.damage_texts } : {},
+                         campfire: serverState.campfire ? { ...serverState.campfire } : null,
+                         enemy_speaker_id: serverState.enemy_speaker_id,
+                         enemy_speech_text: serverState.enemy_speech_text,
+                     };
+                    // Crucially, still adjust local player pos in this non-interpolated state
+                    if (localPlayerId && latestStateCopy.players[localPlayerId]) {
+                        latestStateCopy.players[localPlayerId] = {
+                             ...latestStateCopy.players[localPlayerId], // Copy existing player props
+                             x: renderedPlayerPos.x, // Override with rendered pos
+                             y: renderedPlayerPos.y
+                         };
+                    }
+                    return latestStateCopy;
+                 }
+                // --- End Guard Clauses ---
+
+
+                // --- Interpolation Factor Calculation (remains the same) ---
+                const timeBetweenServerUpdates = lastServerState.timestamp - previousServerState.timestamp;
+                const timeSinceLastServerUpdate = (now / 1000) - lastServerState.timestamp;
+                let factor = 0;
+                if (timeBetweenServerUpdates > 0.001) {
+                    factor = timeSinceLastServerUpdate / timeBetweenServerUpdates;
+                }
+                factor = Math.max(0, Math.min(factor, 1.5)); // Clamp factor (allow slight extrapolation)
+                // --- End Factor Calculation ---
+
+
+                // --- Build the Interpolated State (NEW LOGIC) ---
+                // Start with an empty object
+                const iState = {};
+
+                // 1. Copy non-entity, top-level properties from the latest serverState
+                //    (Assume these don't need interpolation themselves)
+                iState.timestamp = serverState.timestamp; // Keep latest timestamp
+                iState.status = serverState.status;
+                iState.score = serverState.score;
+                iState.level = serverState.level;
+                iState.is_night = serverState.is_night;
+                iState.day_night_timer_remaining = serverState.day_night_timer_remaining;
+                iState.countdown = serverState.countdown;
+                iState.game_over = serverState.game_over;
+                iState.max_players = serverState.max_players;
+                // Copy objects that aren't interpolated entity containers (shallow copy is usually fine)
+                // Make sure damage_texts are handled correctly - they have timestamps but aren't lerped
+                iState.damage_texts = serverState.damage_texts ? { ...serverState.damage_texts } : {};
+                iState.campfire = serverState.campfire ? { ...serverState.campfire } : null;
+                iState.enemy_speaker_id = serverState.enemy_speaker_id;
+                iState.enemy_speech_text = serverState.enemy_speech_text;
+
+
+                // 2. Process Entity Collections (Players, Enemies, Bullets, Powerups)
+                const entityKeys = ['players', 'enemies', 'bullets', 'powerups'];
+                entityKeys.forEach(key => {
+                    // Initialize the collection in iState
+                    iState[key] = {};
+
+                    // Iterate through entities present in the *latest* server state for this key
+                    const currentEntities = serverState[key] || {};
+                    Object.keys(currentEntities).forEach(id => {
+                        const currentEntity = currentEntities[id];
+                        const lastEntity = lastServerState[key]?.[id];
+                        const previousEntity = previousServerState[key]?.[id];
+
+                        // Create a shallow copy of the current entity state first
+                        // This ensures all non-positional data from the latest state is preserved
+                        const interpolatedEntity = { ...currentEntity };
+
+                        // Check if interpolation is possible for this entity's position
+                        const canInterpolate = previousEntity && lastEntity &&
+                                               previousEntity.x !== undefined && previousEntity.y !== undefined &&
+                                               lastEntity.x !== undefined && lastEntity.y !== undefined;
+
+                        // Apply interpolation or specific logic
+                        if (key === 'players' && id === localPlayerId) {
+                            // --- Local Player ---
+                            // Use the reconciled rendered position, not interpolated server position
+                            interpolatedEntity.x = renderedPlayerPos.x;
+                            interpolatedEntity.y = renderedPlayerPos.y;
+                        } else if (canInterpolate) {
+                            // --- Remote Entity - Interpolate ---
+                            interpolatedEntity.x = lerp(previousEntity.x, lastEntity.x, factor);
+                            interpolatedEntity.y = lerp(previousEntity.y, lastEntity.y, factor);
+                        }
+                        // --- Else (New Entity or Not Interpolatable) ---
+                        // No position change needed, the shallow copy already has the latest x, y
+
+                        // Assign the processed entity (copied/interpolated) to our iState
+                        iState[key][id] = interpolatedEntity;
+                    });
+                });
+                // --- End Build ---
+
+                return iState; // Return the newly constructed state object
+            }
+
+            // No changes needed for drawPlayers - it already correctly consumes
+            // the state object passed to it (which will now be the efficiently interpolated one)
+            // and uses appState.renderedPlayerPos for the local player.
+            function drawPlayers(players) {
+                 if (!players) return;
+                 Object.values(players).forEach(player => {
+                     // Skip if player data is invalid or status is fully DEAD
+                     if (!player || player.player_status === PLAYER_STATUS_DEAD) {
+                         return;
+                     }
+
+                     const isSelf = player.id === appState.localPlayerId;
+                     const playerStatus = player.player_status || PLAYER_STATUS_ALIVE; // Default to alive if missing
+
+                     // Determine draw position (use prediction/reconciliation for self)
+                     // This logic correctly uses appState.renderedPlayerPos for self,
+                     // and the (now interpolated) player.x/y for others.
+                     const drawX = isSelf ? appState.renderedPlayerPos.x : player.x;
+                     const drawY = isSelf ? appState.renderedPlayerPos.y : player.y;
+
+                     // Get dimensions and health info
+                     const width = player.width ?? PLAYER_DEFAULTS.width;
+                     const height = player.height ?? PLAYER_DEFAULTS.height;
+                     const maxHealth = player.max_health ?? PLAYER_DEFAULTS.max_health;
+                     const currentArmor = player.armor ?? 0;
+
+                     // --- GHOST STATE LOGIC ---
+                     let isDown = (playerStatus === PLAYER_STATUS_DOWN);
+                     let alpha = isDown ? 0.4 : 1.0; // Set transparency if down
+                     // --- END GHOST STATE LOGIC ---
+
+                     // --- DRAW PLAYER ---
+                     ctx.save(); // Save context before applying alpha
+                     ctx.globalAlpha = alpha; // Apply calculated alpha
+
+                     // Pass aim direction only for self (unchanged)
+                     const aimDx = isSelf ? localPlayerMuzzleFlash.aimDx : 0;
+                     const aimDy = isSelf ? localPlayerMuzzleFlash.aimDy : 0;
+
+                     // Draw the character shape
+                     drawPlayerCharacter(drawX, drawY, width, height, isSelf, player, aimDx, aimDy);
+
+                     ctx.restore(); // Restore context (resets globalAlpha)
+                     // --- END DRAW PLAYER ---
+
+                     // --- DRAW BARS (Only if ALIVE) ---
+                     if (playerStatus === PLAYER_STATUS_ALIVE) {
+                         drawHealthBar(drawX, drawY, width, player.health, maxHealth);
+                         if (currentArmor > 0) { // Only draw armor bar if armor exists
+                             drawArmorBar(drawX, drawY, width, currentArmor);
+                         }
+                     }
+                     // --- END BARS ---
+                 });
+            }
+
+            function drawPlayerCharacter(x, y, w, h, isSelf, playerState, aimDx, aimDy) {
+                // --- Colors ---
+                const headColor = '#D2B48C';
+                const helmetColor = '#CCCCCC';
+                const slitColor = '#222222';
+                const coatColor = '#8B4513';
+                const torsoColor = isSelf ? '#A00000' : '#004488'; // Red (Self) / Blue (Mate)
+                const bootColor = '#222222';
+                const gunColor = '#444444';
+                // Note: hitFlashColor variable is no longer needed/used here
+                const armorOverlayColor = '#C0C0C0';
+
+                // --- Proportions ---
+                const headRadius = h * 0.2;
+                const bodyHeight = h * 0.5;
+                const coatLengthBonus = h * 0.15;
+                const bodyWidthTop = w * 0.9;
+                const bodyWidthBottom = w * 0.7;
+                const coatWidth = w * 1.1;
+                const armWidth = w * 0.2;
+                const armLength = h * 0.4;
+                const helmetWidth = w * 0.85;
+                const helmetHeight = h * 0.5;
+                const slitWidth = helmetWidth * 0.75;
+                const slitHeight = helmetHeight * 0.2;
+                const bootSize = 5;
+                const bootSpacing = w * 0.3;
+
+                // --- Calculated Positions ---
+                const headCenterY = y - (h / 2) + headRadius;
+                const bodyTopY = headCenterY + headRadius * 0.8;
+                const bodyBottomY = bodyTopY + bodyHeight;
+                const coatTopY = bodyTopY + bodyHeight * 0.1;
+                const coatBottomY = bodyBottomY + coatLengthBonus;
+                const helmetTopY = headCenterY - helmetHeight * 0.4;
+                const slitY = helmetTopY + (helmetHeight / 2) - (slitHeight / 2);
+                const bootOffsetY = coatBottomY + 2;
+
+                // --- Drawing Order ---
+                // 1. Coat
+                ctx.fillStyle = coatColor;
+                ctx.fillRect(x - coatWidth / 2, coatTopY, coatWidth, coatBottomY - coatTopY);
+
+                // 2. Torso
+                ctx.fillStyle = torsoColor;
+                ctx.beginPath();
+                ctx.moveTo(x - bodyWidthTop / 2, bodyTopY);
+                ctx.lineTo(x + bodyWidthTop / 2, bodyTopY);
+                ctx.lineTo(x + bodyWidthBottom / 2, bodyBottomY);
+                ctx.lineTo(x - bodyWidthBottom / 2, bodyBottomY);
+                ctx.closePath();
+                ctx.fill();
+
+                // 3. Arms
+                ctx.fillRect(x - bodyWidthTop / 2 - armWidth, bodyTopY, armWidth, armLength);
+                ctx.fillRect(x + bodyWidthTop / 2, bodyTopY, armWidth, armLength);
+
+                // 4. Helmet Body
+                ctx.fillStyle = helmetColor;
+                ctx.fillRect(x - helmetWidth / 2, helmetTopY, helmetWidth, helmetHeight);
+
+                // 5. Helmet Slit
+                ctx.fillStyle = slitColor;
+                ctx.fillRect(x - slitWidth / 2, slitY, slitWidth, slitHeight);
+
+                // 6. Gun Barrel (Local Player Only)
+                if (isSelf) {
+                    const gunLevel = playerState?.gun ?? 1;
+                    const gunLengthBase = 12;
+                    const gunLengthBonus = (gunLevel - 1) * 3;
+                    const gunLength = gunLengthBase + gunLengthBonus;
+                    const gunThickness = 5;
+                    const gunOriginY = bodyTopY + bodyHeight / 2;
+
+                    ctx.save();
+                    ctx.translate(x, gunOriginY);
+                    const angle = Math.atan2(aimDy, aimDx);
+                    ctx.rotate(angle);
+                    ctx.fillStyle = gunColor;
+                    ctx.fillRect(w * 0.1, -gunThickness / 2, gunLength, gunThickness);
+                    ctx.restore();
+                }
+
+                // 7. Boots (Dynamic Animation)
+                ctx.fillStyle = bootColor;
+                const dx = playerState?.input_vector?.dx ?? 0;
+                const dy = playerState?.input_vector?.dy ?? 0;
+                const isMoving = (dx !== 0 || dy !== 0);
+
+                if (isMoving) {
+                    const stepDuration = 250;
+                    const stepPhase = Math.floor(performance.now() / stepDuration) % 2;
+                    if (stepPhase === 0) {
+                        ctx.fillRect(x - bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
+                    } else {
+                        ctx.fillRect(x + bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
+                    }
+                } else {
+                    ctx.fillRect(x - bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
+                    ctx.fillRect(x + bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
+                }
+
+                // Note: The Hit Flash drawing block based on playerState?.hit_flash_this_tick has been removed.
+
+            } 
+
+            function drawEnemies(enemies) {
+                if (!enemies) return;
+                const now = performance.now() / 1000; // Get current time in seconds
+                const FADE_DURATION = 0.5; // Still use this duration constant for the window
+
+                Object.values(enemies).forEach(enemy => {
+                    if (!enemy) return; // Skip invalid enemy data
+
+                    const width = enemy.width ?? ENEMY_DEFAULTS.width;
+                    const height = enemy.height ?? ENEMY_DEFAULTS.height;
+                    const maxHealth = enemy.max_health ?? ENEMY_DEFAULTS.max_health;
+
+                    // --- CORRECTED FADE LOGIC ---
+                    let alpha = 1.0; // Default to fully visible
+                    let shouldDraw = true;
+                    let isDying = false; // Track if in the dying state
+
+                    // Check if enemy is marked as dying (health <= 0 and has timestamp)
+                    if (enemy.health <= 0 && enemy.death_timestamp) {
+                        isDying = true;
+                        const elapsed = now - enemy.death_timestamp;
+
+                        // If within the 0.5 second window after death
+                        if (elapsed < FADE_DURATION) {
+                            alpha = 0.4; // Instantly set alpha to 40%
+                        } else {
+                            // If fade duration has passed, don't draw at all
+                            shouldDraw = false;
+                        }
+                    }
+                    // --- END CORRECTED FADE LOGIC ---
+
+                    // --- DRAW ENEMY (only if shouldDraw is true) ---
+                    if (shouldDraw) {
+                        ctx.save(); // Save context before applying alpha
+                        ctx.globalAlpha = alpha; // Apply calculated alpha (1.0 or 0.4)
+
+                        // Call the draw function using the enemy object
+                        drawEnemyRect(enemy.x, enemy.y, width, height, enemy.type, enemy);
+
+                        ctx.restore(); // Restore context (resets globalAlpha)
+                    }
+                    // --- END DRAW ENEMY ---
+
+                    // --- DRAW HEALTH BAR (Only if NOT dying and alive) ---
+                    if (!isDying && enemy.health > 0) {
+                        drawHealthBar(enemy.x, enemy.y, width, enemy.health, maxHealth);
+                    }
+                    // --- END HEALTH BAR ---
+                });
+            } // End drawEnemies
+
+
+            function drawEnemyRect(x, y, w, h, type, enemyState) { // enemyState includes type, health, etc.
+                // --- Colors ---
+                const skinColor = '#D2B48C';        // Beige (Face/Head)
+                const coatColor = '#8B4513';        // Brown (Coat - same for all enemies for now)
+                // Different torso colors for identification
+                const torsoColorChaser = '#2F4F4F'; // DarkSlateGray for Chasers
+                const torsoColorShooter = '#4682B4'; // SteelBlue for Shooters
+                const bootColor = '#222222';        // Dark Grey (Boots)
+                const capColor = '#111111';         // Dark Cap instead of helmet
+                const hitFlashColor = 'rgba(255, 255, 255, 0.7)';
+
+                // Determine torso color based on enemy type
+                const isShooter = type === ENEMY_TYPE_SHOOTER; // Use 'type' passed in
+                const torsoColor = isShooter ? torsoColorShooter : torsoColorChaser;
+
+                // --- Proportions (Based on Player Model, adjusted for potentially different w/h) ---
+                const headRadius = h * 0.18; // Slightly larger proportion for head without helmet
+                const bodyHeight = h * 0.5;
+                const coatLengthBonus = h * 0.15;
+                const bodyWidthTop = w * 0.9;
+                const bodyWidthBottom = w * 0.7;
+                const coatWidth = w * 1.1;
+                const armWidth = w * 0.2;
+                const armLength = h * 0.4;
+                const capHeight = headRadius * 0.8; // Cap height relative to head radius
+                const capWidth = headRadius * 2.2;  // Cap width relative to head radius
+                const bootSize = 5; // Keep boots simple for now
+                const bootSpacing = w * 0.3;
+
+                // --- Calculated Positions ---
+                // Base calculations on center x, y provided
+                const headCenterY = y - (h / 2) + headRadius; // Top-most part is head center now
+                const bodyTopY = headCenterY + headRadius * 0.8; // Body starts below head
+                const bodyBottomY = bodyTopY + bodyHeight;
+                const coatTopY = bodyTopY + bodyHeight * 0.1;
+                const coatBottomY = bodyBottomY + coatLengthBonus;
+                const armTopY = bodyTopY + bodyHeight * 0.05;
+                const capTopY = headCenterY - headRadius; // Cap sits on top of head circle
+                const bootOffsetY = coatBottomY + 2;
+
+                // --- Drawing Order (Similar to Player) ---
+                ctx.save(); // Isolate drawing state
+
+                // 1. Coat
+                ctx.fillStyle = coatColor;
+                ctx.fillRect(x - coatWidth / 2, coatTopY, coatWidth, coatBottomY - coatTopY);
+
+                // 2. Torso (Use type-specific color)
+                ctx.fillStyle = torsoColor;
+                ctx.beginPath();
+                ctx.moveTo(x - bodyWidthTop / 2, bodyTopY);
+                ctx.lineTo(x + bodyWidthTop / 2, bodyTopY);
+                ctx.lineTo(x + bodyWidthBottom / 2, bodyBottomY);
+                ctx.lineTo(x - bodyWidthBottom / 2, bodyBottomY);
+                ctx.closePath();
+                ctx.fill();
+
+                // 3. Arms
+                ctx.fillStyle = coatColor; // Arms match coat color
+                ctx.fillRect(x - bodyWidthTop / 2 - armWidth, armTopY, armWidth, armLength);
+                ctx.fillRect(x + bodyWidthTop / 2, armTopY, armWidth, armLength);
+
+                // 4. Head (Simple Circle)
+                ctx.fillStyle = skinColor;
+                ctx.beginPath();
+                ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 5. Cap (Simple Rectangle on top of head) - Replaces Helmet
+                ctx.fillStyle = capColor;
+                ctx.fillRect(x - capWidth / 2, capTopY, capWidth, capHeight);
+
+                // 6. Boots (Simple Rectangles)
+                ctx.fillStyle = bootColor;
+                // Static boots for enemies for now (no walking animation)
+                ctx.fillRect(x - bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize); // Left
+                ctx.fillRect(x + bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize); // Right
+
+                // --- Optional: Shooter Barrel ---
+                // if (isShooter) {
+                //    ctx.fillStyle = '#444444'; // Gun Color
+                //    const barrelLength = 10;
+                //    const barrelThickness = 4;
+                //    const barrelOriginY = bodyTopY + bodyHeight / 2;
+                //    // Crude barrel pointing down for now
+                //    ctx.fillRect(x - barrelThickness / 2, barrelOriginY, barrelThickness, barrelLength);
+                //    // TODO: Could orient based on target direction if available in enemyState
+                // }
+
+                ctx.restore(); // Restore drawing state
+
+                // 7. Hit Flash (Draw Last - Uses enemyState passed in)
+                if (enemyState?.hit_flash_this_tick) {
+                    ctx.fillStyle = hitFlashColor;
+                    const flashMargin = 2;
+                    // Use the original x, y, w, h for bounding box
+                    ctx.fillRect(
+                        x - w / 2 - flashMargin,
+                        y - h / 2 - flashMargin,
+                        w + flashMargin * 2,
+                        h + flashMargin * 2
+                    );
+                    // As noted before, server needs to manage clearing this flag,
+                    // or client needs to clear it after rendering once.
+                }
+            }
+
+            function drawBullets(bullets) {
+                if (!bullets) return; // Exit if no bullets data
+
+                Object.values(bullets).forEach(bullet => {
+                    if (!bullet) return; // Skip if bullet data is invalid
+
+                    // Extract bullet properties, providing defaults
+                    const x = bullet.x ?? 0;
+                    const y = bullet.y ?? 0;
+                    const vx = bullet.vx ?? 0;
+                    const vy = bullet.vy ?? 0;
+                    // Use the bullet's specific radius if provided by backend, else default
+                    const radius = bullet.radius ?? BULLET_DEFAULTS.radius;
+                    // Use bullet type string directly ('standard', 'ammo_shotgun', etc.)
+                    const bulletType = bullet.bullet_type || 'standard';
+                    const ownerType = bullet.owner_type; // 'player' or 'enemy'
+
+                    // --- Choose Drawing Style Based on Type ---
+
+                    // Check if velocity is valid for angle calculation
+                    const hasVelocity = Math.abs(vx) > 0.01 || Math.abs(vy) > 0.01;
+
+                    // Heavy slugs and potentially others might use the shaped drawing
+                    if (bulletType === 'ammo_heavy_slug' || bulletType === 'standard' || bulletType === 'ammo_rapid_fire' || bulletType === 'standard_enemy') {
+                        if (hasVelocity) {
+                            // Pass the whole bullet object to use its radius
+                            drawShapedBullet(bullet);
+                        } else {
+                            // Fallback if velocity is zero (draw simple circle)
+                            drawBulletCircle(x, y, radius, ownerType === 'player');
+                        }
+                    }
+                    // Shotgun pellets use the simple circle for now (could customize later)
+                    else if (bulletType === 'ammo_shotgun') {
+                        // Use the potentially smaller radius sent from backend
+                        drawBulletCircle(x, y, radius, ownerType === 'player');
+                    }
+                    // Fallback for any other unknown types
+                    else {
+                        drawBulletCircle(x, y, radius, ownerType === 'player');
+                    }
+                });
+            }
+
+            // Draws a simple circle - used as fallback and for shotgun pellets
+            function drawBulletCircle(x, y, r, isPlayerBullet) {
+                // Determine color based on ownership
+                ctx.fillStyle = isPlayerBullet
+                                ? (getCssVar('--bullet-player-color') || 'yellow')
+                                : (getCssVar('--bullet-enemy-color') || '#C0C0C0'); // Enemy bullets silver/grey
+
+                ctx.beginPath();
+                ctx.arc(x, y, r, 0, Math.PI * 2); // Draw circle with given radius
+                ctx.fill();
+            }
+
+            // Draws the standard rectangle-with-cone bullet, potentially scaled by radius
+            // Now accepts the whole bullet object
+            function drawShapedBullet(bullet) {
+                // Extract properties from bullet object
+                const x = bullet.x;
+                const y = bullet.y;
+                const vx = bullet.vx;
+                const vy = bullet.vy;
+                const ownerType = bullet.owner_type;
+                // Use the bullet's specific radius for scaling
+                const radius = bullet.radius || BULLET_DEFAULTS.radius;
+
+                // --- Scaling based on radius ---
+                // Make length and width proportional to the bullet's radius
+                // Adjust these base values and multiplier as needed for visual appeal
+                const baseLength = 8;
+                const baseWidth = 4;
+                const scaleFactor = radius / BULLET_DEFAULTS.radius; // How much bigger/smaller than default
+                const length = baseLength * scaleFactor;
+                const width = baseWidth * scaleFactor;
+                // --- End Scaling ---
+
+                // Determine color based on owner
+                const color = (ownerType === 'player')
+                              ? (getCssVar('--bullet-player-color') || 'yellow')
+                              : (getCssVar('--bullet-enemy-color') || '#C0C0C0'); // Use consistent enemy bullet color
+
+                // Calculate angle from velocity
+                const angle = Math.atan2(vy, vx);
+
+                ctx.save(); // Save context state
+                ctx.translate(x, y); // Move origin to bullet position
+                ctx.rotate(angle); // Rotate to bullet direction
+
+                // Draw the scaled bullet body (rectangle) centered on the new origin
+                ctx.fillStyle = color;
+                ctx.fillRect(-length / 2, -width / 2, length, width);
+
+                // Draw the scaled cone nose (triangle)
+                const noseLength = length * 0.4; // Make nose proportional to body length
+                ctx.beginPath();
+                ctx.moveTo(length / 2, 0);                 // Tip of the nose
+                ctx.lineTo(length / 2 - noseLength, -width / 2); // Back-left corner of nose base
+                ctx.lineTo(length / 2 - noseLength, width / 2);  // Back-right corner of nose base
+                ctx.closePath();
+                ctx.fill(); // Use same color as body
+
+                ctx.restore(); // Restore context state
+            }
+
+            function drawPowerups(powerups) {
+                if (!powerups) return; // Exit if no powerups data
+                Object.values(powerups).forEach(powerup => {
+                    if (!powerup) return; // Skip invalid data
+
+                    const size = powerup.size ?? POWERUP_DEFAULTS.size; // Use default if needed
+                    const type = powerup.type; // e.g., 'health', 'armor', 'ammo_shotgun'
+                    const subtype = powerup.subtype; // Only present for 'special_ammo' on backend (we don't use it for drawing here)
+
+                    // Pass the main type to the drawing function
+                    drawPowerupSquare(powerup.x, powerup.y, size, type);
+                });
+            }
+
+            function drawPowerupSquare(x, y, size, type) {
+                 const baseColors = {
+                     'health': getCssVar('--powerup-health') || 'lime',
+                     'gun_upgrade': getCssVar('--powerup-gun') || 'fuchsia',
+                     'speed_boost': getCssVar('--powerup-speed') || 'aqua',
+                     'armor': getCssVar('--powerup-armor') || 'silver',
+                 };
+
+                 let fillColor = baseColors[type] || '#888';
+                 let symbol = '?';
+
+                 // Determine symbol based on type
+                 if (type === 'health') {
+                     symbol = '+';
+                 } else if (type === 'gun_upgrade') {
+                     symbol = 'G';
+                 } else if (type === 'speed_boost') {
+                     symbol = 'S';
+                 } else if (type === 'armor') {
+                     symbol = '#'; // Hash for Armor
+                 } else if (type === 'ammo_shotgun') {
+                     symbol = '::'; // Colon pair for Shotgun spread
+                     fillColor = '#FFA500'; // Orange
+                 } else if (type === 'ammo_heavy_slug') {
+                     symbol = '■'; // Black Square for Heavy Slug (Unicode: U+25A0)
+                     fillColor = '#A0522D'; // Brown
+                 } else if (type === 'ammo_rapid_fire') {
+                     symbol = '>'; // Single '>' for simplicity, maybe '>>' ? Let's try '>'
+                     fillColor = '#FFFF00'; // Yellow
+                 } else if (type === 'bonus_score') {
+                     symbol = '$'; // Dollar sign for score/money
+                     fillColor = '#FFD700'; // Gold
+                 }
+                 // Unknown types will keep '?' and default grey color
+
+
+                 // Draw background square
+                 ctx.fillStyle = fillColor;
+                 ctx.fillRect(x - size / 2, y - size / 2, size, size);
+
+                 // Draw symbol in black
+                 ctx.fillStyle = '#000'; // Black symbol for contrast
+                 // Adjust font size slightly for multi-character symbols if needed
+                 let fontSize = Math.round(size * 0.7);
+                 if (symbol === '::' || symbol === '>') { // Adjust for potentially wider/taller symbols
+                     // fontSize = Math.round(size * 0.6); // Example: slightly smaller
+                 }
+                 ctx.font = `bold ${fontSize}px monospace`;
+                 ctx.textAlign = 'center';
+                 ctx.textBaseline = 'middle';
+                 ctx.fillText(symbol, x, y + (size * 0.05)); // Keep small vertical offset
+            }
+
+            function drawHealthBar(x, y, width, currentHealth, maxHealth) {
+                if (maxHealth <= 0) return;
+                const barHeight = 5;
+                const yOffset = -( (width/2) + 18); // Position above the entity's top edge
+                const barWidth = Math.max(20, width * 0.8);
+                const currentWidth = Math.max(0, (currentHealth / maxHealth) * barWidth);
+                const healthPercentage = currentHealth / maxHealth;
+                const barX = x - barWidth / 2;
+                const barY = y + yOffset - barHeight; // Align top of bar with yOffset
+
+                ctx.fillStyle = getCssVar('--health-bar-bg') || '#555';
+                ctx.fillRect(barX, barY, barWidth, barHeight);
+
+                let barColor = getCssVar('--health-bar-low') || '#F44336';
+                if (healthPercentage > 0.66) barColor = getCssVar('--health-bar-high') || '#4CAF50';
+                else if (healthPercentage > 0.33) barColor = getCssVar('--health-bar-medium') || '#FFC107';
+                ctx.fillStyle = barColor;
+                ctx.fillRect(barX, barY, currentWidth, barHeight);
+            }
+
+            function drawArmorBar(x, y, width, currentArmor) {
+                const maxArmor = 100;
+                if (currentArmor <= 0) return;
+
+                const armorBarHeight = 4; // Armor bar height
+                const healthBarHeight = 5; // Height of the health bar above it
+                const barSpacing = 1;      // Desired gap in pixels
+
+                // --- Calculate position relative to HEALTH bar ---
+                // 1. Find the health bar's vertical offset (negative = upwards)
+                const healthBarYOffset = -( (width / 2) + 20);
+                // 2. Find the absolute Y coordinate of the health bar's TOP edge
+                const healthBarTopY = y + healthBarYOffset; // Note: No '- healthBarHeight' here, offset defines top
+                // 3. Find the absolute Y coordinate of the health bar's BOTTOM edge
+                const healthBarBottomY = healthBarTopY + healthBarHeight;
+                // 4. Calculate the armor bar's TOP edge Y coordinate
+                const armorBarTopY = healthBarBottomY + barSpacing;
+                // ----------------------------------------------
+
+                const barWidth = Math.max(20, width * 0.8);
+                const currentWidth = Math.max(0, (currentArmor / maxArmor) * barWidth);
+                const barX = x - barWidth / 2;
+                const barY = armorBarTopY; // Use the correctly calculated top Y for drawing
+
+                // Optional: Background
+                ctx.fillStyle = getCssVar('--health-bar-bg') || '#555';
+                ctx.fillRect(barX, barY, barWidth, armorBarHeight); // Use armorBarHeight
+
+                // Armor Bar Fill
+                ctx.fillStyle = getCssVar('--powerup-armor') || '#C0C0C0';
+                ctx.fillRect(barX, barY, currentWidth, armorBarHeight); // Use armorBarHeight
+            }
+
+            // Expose only the main drawing function from the Renderer module
+            return { drawGame };
+        })(); // End Renderer module IIFE
+
+        const Game = (() => {
+
+            // --- Game Actions ---
+            function startSinglePlayer() {
+                log("Requesting Single Player game...");
+                appState.mode = 'singleplayer';
+                resetClientState(false);
+                UI.updateStatus("Starting Single Player...");
+                Network.sendMessage({ type: 'start_single_player' });
+                // Loop starts on server confirmation ('sp_game_started')
+            }
+
+            function joinMultiplayer() {
+                const gameId = DOM.gameIdInput.value.trim().toUpperCase();
+                if (!gameId || gameId.length !== 6) {
+                    UI.updateStatus('Invalid Game ID format.', true); return;
+                 }
+                log(`Attempting to join game: ${gameId}`);
+                appState.mode = 'multiplayer-client';
+                resetClientState(false);
+                UI.updateStatus(`Joining game ${gameId}...`);
+                Network.sendMessage({ type: 'join_game', game_id: gameId });
+                 // Loop starts on server confirmation ('game_joined')
+            }
+
+            function leaveGame() {
+                log("Leaving current game / Cancelling host...");
+                Network.closeConnection(1000, "User action (leave/cancel)");
+                resetClientState(true); // Show menu immediately
+            }
+
+            function sendChatMessage() {
+                const message = DOM.chatInput.value.trim();
+                if (message && appState.isConnected && appState.currentGameId && appState.localPlayerId) {
+                    Network.sendMessage({ type: 'player_chat', message: message });
+                    DOM.chatInput.value = '';
+                } else {
+                    log("Cannot send chat: Not connected or not in a game.");
+                }
+            }
+
+            function resetClientState(showMenu = true) {
+                 log(`Resetting client state. Show Menu: ${showMenu}`);
+                 cleanupLoop(); // Stop game loop if running first
+
+                 // --- DO NOT RESET appState.mode here ---
+                 // Mode is set by the initiating action (startSP, hostMP, joinMP)
+                 // or when explicitly returning to menu.
+
+                 appState.localPlayerId = null;
+                 appState.currentGameId = null;
+                 appState.serverState = null;
+                 appState.lastServerState = null;
+                 appState.maxPlayersInGame = null; 
+                 appState.previousServerState = null;
+                 appState.predictedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
+                 appState.renderedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
+                 appState.lastLoopTime = null; // Reset timer
+
+                 // Clear UI elements related to game state
+                 DOM.chatLog.innerHTML = '';
+                 DOM.gameCodeDisplay.textContent = '------';
+                 DOM.gameIdInput.value = '';
+                 DOM.countdownDiv.style.display = 'none';
+                 DOM.dayNightIndicator.style.display = 'none';
+                 DOM.gameOverScreen.style.display = 'none';
+                 // Optional: Clear HUD?
+                 // DOM.playerStatsDiv.textContent = 'Loading...';
+                 // DOM.gameInfoDiv.textContent = 'Score: 0 | Level: 1';
+
+
+                 // Update UI section and mode only if explicitly returning to menu
+                 if (showMenu) {
+                     appState.mode = 'menu'; // Set mode to 'menu' ONLY when showing the menu
+                     UI.showSection('main-menu-section');
+                     UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
+                 }
+                 // If showMenu is false, we assume we are resetting state *before*
+                 // entering a game, and the correct mode ('singleplayer', 'multiplayer-host', etc.)
+                 // has already been set by the function that called resetClientState(false).
+             }
+
+             // --- Game Loop Management ---
+
+             // Define the main loop function at this scope level
+             function gameLoop(currentTime) {
+    // Check for active hit pause
+    if (hitPauseFrames > 0) {
+        hitPauseFrames--;
+        if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
+            appState.animationFrameId = requestAnimationFrame(gameLoop);
+        }
+        return; // Skip rendering and logic this frame
+    }
+
+    // Original game loop logic continues if not paused
+    if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
+        const finalStateForDisplay = appState.serverState;
+        if (finalStateForDisplay?.game_over) {
+            UI.updateStatus("Game Over!");
+            UI.showGameOver(finalStateForDisplay); // Show game over screen here
+        } else if (appState.mode === 'menu') {
+            UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
+        }
+        cleanupLoop();
+        return;
+    }
+
+    if (!appState.serverState && appState.mode !== 'singleplayer') {
+        appState.animationFrameId = requestAnimationFrame(gameLoop);
+        return;
+    }
+
+    if (appState.lastLoopTime === null) { appState.lastLoopTime = currentTime; }
+    const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000);
+    appState.lastLoopTime = currentTime;
+
+    if (appState.serverState?.status === 'active' && Input.isShootHeld()) {
+        Input.handleShooting();
+    }
+
+    if (appState.mode !== 'singleplayer' && appState.serverState?.status === 'active') {
+        updatePredictedPosition(deltaTime);
+        reconcileWithServer();
+    }
+
+    Renderer.drawGame();
+
+    if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
+        appState.animationFrameId = requestAnimationFrame(gameLoop);
+    } else {
+        if(appState.animationFrameId) cleanupLoop();
+    }
+} // End gameLoop
+
+            function startGameLoop() {
+                // --- Initial Checks ---
+                // Don't start if explicitly in menu mode
+                if (appState.mode === 'menu') {
+                    log("StartGameLoop called but client is in menu mode.");
+                    return;
+                }
+                // Don't start if loop is already running
+                if (appState.animationFrameId) {
+                    log("StartGameLoop called but loop already running.");
+                    return;
+                }
+                // Don't start multiplayer if initial state hasn't arrived
+                // (SP gets state immediately with sp_game_started)
+                if (!appState.serverState && appState.mode !== 'singleplayer') {
+                     log("StartGameLoop: Waiting for initial server state in multiplayer... (Loop will start via state update)");
+                     return;
+                }
+
+                // --- Setup & Start ---
+                Input.setup(); // <<< SETUP INPUT LISTENERS FIRST
+                log("Starting game loop..."); // <<< THEN LOG
+                appState.lastLoopTime = null; // Reset last time for accurate delta calculation on the first frame
+
+                // Make the initial call to request the first frame of the game loop
+                appState.animationFrameId = requestAnimationFrame(gameLoop);
+            }
+
+            function cleanupLoop() {
+                 if (appState.animationFrameId) {
+                     cancelAnimationFrame(appState.animationFrameId);
+                     appState.animationFrameId = null;
+                     log("Game loop stopped and cleaned up.");
+                 } else {
+                     // log("CleanupLoop called but no active loop found."); // Can be noisy
+                 }
+                 Input.cleanup(); // Deactivate input listeners
+                 appState.lastLoopTime = null; // Reset timer
+             }
+
+             // --- Prediction & Reconciliation Functions ---
+             function updatePredictedPosition(deltaTime) {
+                if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return; // Safety check
+
+                const moveVector = Input.getMovementInputVector();
+                const playerState = appState.serverState.players[appState.localPlayerId];
+                // Use default speed if player state or speed property is missing
+                const playerSpeed = playerState?.speed ?? PLAYER_DEFAULTS.base_speed;
+
+                // Only update prediction if moving
+                if (moveVector.dx === 0 && moveVector.dy === 0) return;
+
+                appState.predictedPlayerPos.x += moveVector.dx * playerSpeed * deltaTime;
+                appState.predictedPlayerPos.y += moveVector.dy * playerSpeed * deltaTime;
+
+                // Use default dimensions if player state or dimensions are missing
+                const w_half = (playerState?.width ?? PLAYER_DEFAULTS.width) / 2;
+                const h_half = (playerState?.height ?? PLAYER_DEFAULTS.height) / 2;
+
+                // Clamp prediction to canvas bounds
+                appState.predictedPlayerPos.x = Math.max(w_half, Math.min(CANVAS_WIDTH - w_half, appState.predictedPlayerPos.x));
+                appState.predictedPlayerPos.y = Math.max(h_half, Math.min(CANVAS_HEIGHT - h_half, appState.predictedPlayerPos.y));
+             }
+
+             function reconcileWithServer() {
+                // 1. Safety Checks: Ensure necessary data exists
+                if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return;
+
+                const serverPos = appState.serverState.players[appState.localPlayerId];
+                if (typeof serverPos.x !== 'number' || typeof serverPos.y !== 'number') {
+                    log("Reconciliation skipped: Invalid server position data.");
+                    return;
+                }
+
+                // 2. Get References & Calculate Difference
+                const predictedPos = appState.predictedPlayerPos;
+                const renderedPos = appState.renderedPlayerPos;
+                const dist = distance(predictedPos.x, predictedPos.y, serverPos.x, serverPos.y);
+
+                // 3. Get Tuning Parameters (from CSS Vars or defaults)
+                const threshold = parseFloat(getCssVar('--reconciliation-threshold')) || 5;
+                const lerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.2;
+
+                // 4. Snapping Logic: If prediction is WAY off server position...
+                if (dist > threshold * 2) { // Note the '* 2' makes this a large distance snap
+                    // log(`Reconciliation SNAP! Dist: ${dist.toFixed(1)}`); // Uncomment for debugging snaps
+                    // Force both predicted and rendered position to match the server immediately
+                    predictedPos.x = serverPos.x;
+                    predictedPos.y = serverPos.y;
+                    renderedPos.x = serverPos.x;
+                    renderedPos.y = serverPos.y;
+                } else {
+                    // 5. Smoothing Logic: If prediction is reasonably close...
+                    // Smoothly move the VISIBLE (rendered) position towards the PREDICTED position
+                    renderedPos.x = lerp(renderedPos.x, predictedPos.x, lerpFactor);
+                    renderedPos.y = lerp(renderedPos.y, predictedPos.y, lerpFactor);
+
+                    // 6. Gentle Nudge (Subtle Correction): If prediction is slightly off (but not snapping)...
+                    if (dist > 2.0) { // Hardcoded small distance check
+                         // Gently pull the PREDICTED position towards the SERVER position
+                         // This uses a very small factor (lerpFactor * 0.1)
+                         predictedPos.x = lerp(predictedPos.x, serverPos.x, lerpFactor * 0.1);
+                         predictedPos.y = lerp(predictedPos.y, serverPos.y, lerpFactor * 0.1);
+                    }
+                }
+             }
+
+             // Accessor not strictly needed if SP uses server state directly
+             function getLocalGameState() { return appState.serverState; }
+
+             // Setup button listeners (called once on load)
+             function initListeners() {
+                 log("Initializing button listeners...");
+                 DOM.singlePlayerBtn.onclick = startSinglePlayer;
+                 DOM.multiplayerBtn.onclick = () => UI.showSection('multiplayer-menu-section');
+                 DOM.hostGameBtn2.onclick = () => hostMultiplayer(2);
+                 DOM.hostGameBtn3.onclick = () => hostMultiplayer(3);
+                 DOM.hostGameBtn4.onclick = () => hostMultiplayer(4);
+                 DOM.showJoinUIBtn.onclick = () => UI.showSection('join-code-section');
+                 DOM.cancelHostBtn.onclick = leaveGame;
+                 DOM.joinGameSubmitBtn.onclick = joinMultiplayer;
+                 DOM.sendChatBtn.onclick = sendChatMessage;
+                 DOM.leaveGameBtn.onclick = leaveGame;
+                 DOM.gameOverBackBtn.onclick = () => resetClientState(true);
+
+                 // Back buttons using class
+                 DOM.gameContainer.querySelectorAll('.back-button').forEach(btn => {
+                     const targetSectionMatch = btn.getAttribute('onclick')?.match(/'([^']+)'/);
+                     if (targetSectionMatch && targetSectionMatch[1]) {
+                         const targetSectionId = targetSectionMatch[1];
+                         // Ensure valid section ID before overriding
+                         if (DOM[targetSectionId] || document.getElementById(targetSectionId)) {
+                              btn.onclick = (e) => { e.preventDefault(); UI.showSection(targetSectionId); }; // Override inline
+                         } else {
+                              log(`Warning: Back button target section invalid: ${targetSectionId}`);
+                         }
+                     } else {
+                         log("Warning: Back button found without valid target in onclick:", btn);
+                     }
+                 });
+             }
+
+
+            function hostMultiplayer(maxPlayers) {
+                log(`Requesting to Host Multiplayer game for ${maxPlayers} players...`);
+                // Validate maxPlayers briefly on client side
+                if (![2, 3, 4].includes(maxPlayers)) {
+                    error("Invalid max player count requested:", maxPlayers);
+                    UI.updateStatus("Invalid player count.", true);
+                    return;
+                }
+                appState.mode = 'multiplayer-host';
+                resetClientState(false); // Reset state but don't show menu yet
+                UI.updateStatus(`Creating ${maxPlayers}-player game...`);
+                // Send max_players value to server
+                Network.sendMessage({ type: 'create_game', max_players: maxPlayers });
+                // UI transition happens on 'game_created' response
+            }
+
+
+
+            // --- Expose necessary functions from Game module ---
+            return {
+                 resetClientState,
+                 startGameLoop,
+                 cleanupLoop,
+                 sendChatMessage,
+                 getLocalGameState,
+                 initListeners // Expose initListeners to be called on load
+            };
+        })(); // End Game module IIFE
+
+        // --- Global Server Message Handler ---
+        function handleServerMessage(event) {
+            let data;
+            try {
+                data = JSON.parse(event.data);
+                // Using a more concise log for received messages
+                // console.log(`[Client] Received: ${data.type}`); // Can uncomment for detailed tracing
+
+            } catch (err) {
+                console.error("[Client] Failed to parse server message:", err, event.data);
+                UI.updateStatus("Received invalid data from server.", true);
+                return;
+            }
+
+            try {
+                switch (data.type) {
+                    // --- Case: HOST Creates Game ---
+                    case 'game_created':
+                        log("[handleServerMessage] Processing 'game_created'");
+                        appState.localPlayerId = data.player_id;
+                        appState.currentGameId = data.game_id;
+                        appState.serverState = data.initial_state;
+
+                        // Critical: Store max players received from server
+                        appState.maxPlayersInGame = data.max_players;
+                        if (!appState.maxPlayersInGame) { // Log error if missing
+                            error("'game_created' message missing 'max_players'!");
+                            appState.maxPlayersInGame = '?'; // Use placeholder
+                        }
+                        log(`-> Stored maxPlayersInGame: ${appState.maxPlayersInGame}`);
+
+                        // Initialize player positions
+                        const hostPlayer = appState.serverState?.players[appState.localPlayerId];
+                        if (hostPlayer) {
+                            appState.predictedPlayerPos = { x: hostPlayer.x, y: hostPlayer.y };
+                            appState.renderedPlayerPos = { x: hostPlayer.x, y: hostPlayer.y };
+                        }
+
+                        // Update UI for waiting host
+                        if (DOM.gameCodeDisplay) {
+                            DOM.gameCodeDisplay.textContent = appState.currentGameId || 'ERROR_ID';
+                        } else { error("DOM.gameCodeDisplay not found!"); }
+
+                        const currentPlayers = Object.keys(appState.serverState?.players || {}).length;
+                        if (DOM.waitingMessage) {
+                            DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentPlayers}/${appState.maxPlayersInGame})`;
+                        } else { error("DOM.waitingMessage not found!"); }
+
+                        UI.updateStatus(`Game hosted. Code: ${appState.currentGameId}`);
+                        UI.showSection('host-wait-section');
+
+                        // --- DO NOT START THE GAME LOOP HERE FOR THE HOST ---
+                        // Host loop starts only when game status changes via 'game_state'
+                        log("-> Host waiting, loop NOT started yet.");
+                        break; // End game_created
+
+                    // --- Case: CLIENT Joins Game ---
+                    case 'game_joined':
+                        log("[handleServerMessage] Processing 'game_joined'");
+                        appState.localPlayerId = data.player_id;
+                        appState.currentGameId = data.game_id;
+                        appState.serverState = data.initial_state;
+
+                        // Store max players (also sent in initial state for joiner)
+                        appState.maxPlayersInGame = appState.serverState?.max_players;
+                         if (!appState.maxPlayersInGame) { // Log error if missing
+                             error("'game_joined' initial_state missing 'max_players'!");
+                             appState.maxPlayersInGame = '?';
+                         }
+                         log(`-> Stored maxPlayersInGame: ${appState.maxPlayersInGame}`);
+
+
+                        // Initialize player positions
+                        const joinedPlayer = appState.serverState?.players[appState.localPlayerId];
+                        if (joinedPlayer) {
+                            appState.predictedPlayerPos = { x: joinedPlayer.x, y: joinedPlayer.y };
+                            appState.renderedPlayerPos = { x: joinedPlayer.x, y: joinedPlayer.y };
+                        }
+
+                        UI.updateStatus(`Joined game ${appState.currentGameId}. Get ready!`);
+                        UI.showSection('game-area');
+
+                        // --- START LOOP FOR JOINING CLIENT ---
+                        log("-> Join successful, starting loop for client.");
+                        Game.startGameLoop();
+                        // -------------------------------------
+                        break; // End game_joined
+
+                    // --- Case: SINGLE PLAYER Starts Game ---
+                    case 'sp_game_started':
+                        log("[handleServerMessage] Processing 'sp_game_started'");
+                        appState.localPlayerId = data.player_id;
+                        appState.currentGameId = data.game_id;
+                        appState.serverState = data.initial_state;
+                        appState.maxPlayersInGame = 1; // SP is always 1
+
+                        // Initialize player positions
+                        const spPlayer = appState.serverState?.players[appState.localPlayerId];
+                        if (spPlayer) {
+                            appState.predictedPlayerPos = { x: spPlayer.x, y: spPlayer.y };
+                            appState.renderedPlayerPos = { x: spPlayer.x, y: spPlayer.y };
+                        }
+
+                        UI.updateStatus("Single Player Game Started!");
+                        UI.showSection('game-area');
+
+                        // --- START LOOP FOR SINGLE PLAYER ---
+                        log("-> SP started, starting loop.");
+                        Game.startGameLoop();
+                        // ----------------------------------
+                        break; // End sp_game_started
+
+                    // --- Case: Receiving Game State Updates ---
+                    case 'game_state':
+                        // Minimal log for game state to avoid flooding console
+                        // if (Math.random() < 0.05) log("[handleServerMessage] Processing 'game_state'");
+
+                        // 1. Store previous state info
+                        const previousStatus = appState.serverState?.status;
+                        const wasGameOver = appState.serverState?.game_over;
+                        appState.previousServerState = appState.lastServerState;
+                        appState.lastServerState = appState.serverState;
+
+                        // 2. Update the core server state
+                        appState.serverState = data.state;
+                        const newState = appState.serverState;
+
+                        // 3. Update maxPlayers if needed (e.g., first state update for host)
+                        if (!appState.maxPlayersInGame && newState.max_players) {
+                             appState.maxPlayersInGame = newState.max_players;
+                             log(`-> Max players set from game_state: ${appState.maxPlayersInGame}`);
+                        }
+
+                        // 4. Handle Hit Pause trigger
+                         const localPlayerStateHit = newState?.players?.[appState.localPlayerId];
+                         if (localPlayerStateHit?.hit_flash_this_tick && hitPauseFrames <= 0) {
+                             hitPauseFrames = 3;
+                         }
+
+                        // 5. *** Handle Game Status Changes and Loop Control ***
+                        if (newState.status !== previousStatus) {
+                            log(`[Client State Change] From ${previousStatus || 'null'} to ${newState.status}`);
+
+                            if (newState.status === 'waiting') {
+                                // This only happens if game was active/countdown and player left
+                                if (appState.mode === 'multiplayer-host') {
+                                    log("-> Handling transition TO waiting (player left?)");
+                                    UI.updateStatus("Teammate left. Waiting...", true);
+                                    UI.showSection('host-wait-section');
+                                    const currentPlayersWaiting = Object.keys(newState.players || {}).length;
+                                    if(DOM.waitingMessage) DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentPlayersWaiting}/${appState.maxPlayersInGame || '?'})`;
+                                    Game.cleanupLoop(); // *** Stop the loop ***
+                                } else {
+                                    // Client might get put back to menu? Or show a message.
+                                    log("-> Game returned to waiting (client view).");
+                                    UI.updateStatus("Host or player left. Returning to menu.", true);
+                                    Game.resetClientState(true); // Send client to main menu
+                                }
+
+                            } else if (newState.status === 'countdown') {
+                                log("-> Handling transition TO countdown");
+                                UI.updateStatus("Countdown starting...");
+                                UI.showSection('game-area'); // Show game area
+                                // --- Start loop HERE if not already running ---
+                                if (!appState.animationFrameId) {
+                                    log("--> Starting game loop NOW (triggered by countdown).");
+                                    Game.startGameLoop();
+                                } else {
+                                    log("--> Loop already running (countdown change).");
+                                }
+                                // --------------------------------------------
+                            } else if (newState.status === 'active') {
+                                log("-> Handling transition TO active");
+                                UI.updateStatus("Game active!");
+                                UI.showSection('game-area'); // Ensure game area is shown
+                                // --- Start loop HERE if not already running ---
+                                if (!appState.animationFrameId) {
+                                    log("--> Starting game loop NOW (triggered by active).");
+                                    Game.startGameLoop();
+                                } else {
+                                     log("--> Loop already running (active change).");
+                                }
+                                // --------------------------------------------
+                            } else if (newState.status === 'finished') {
+                                // The gameLoop itself detects 'finished' state and stops,
+                                // no explicit stop needed here unless adding extra UI transition.
+                                log("-> Game status changed to 'finished'.");
+                            }
+                        } // End of status change check
+
+                        // 6. Update HUD/Timers (Only if game is actively running)
+                        if (newState.status === 'countdown' || newState.status === 'active') {
+                            const player = newState.players?.[appState.localPlayerId];
+                            UI.updateHUD(player, newState);
+                            UI.updateCountdown(newState);
+                            UI.updateDayNight(newState);
+                        }
+                        // Update waiting message if status is waiting (even if status didn't change)
+                        else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') {
+                            const playerCount = Object.keys(newState.players || {}).length;
+                            if(DOM.waitingMessage) DOM.waitingMessage.textContent = `Waiting for Team Mate... (${playerCount}/${appState.maxPlayersInGame || '?'})`;
+                        }
+
+                        // 7. Check for Game Over Transition (Primarily for logging)
+                        if (newState.game_over && !wasGameOver) {
+                            log("-> Game Over signal received from server.");
+                            // Loop detects newState.game_over and handles stopping/showing screen
+                        }
+
+                        // 8. Handle Enemy Speech
+                        const serverSpeakerId = newState.enemy_speaker_id;
+                        const serverSpeechText = newState.enemy_speech_text;
+                        if (serverSpeakerId && serverSpeechText) {
+                            const bubbleText = serverSpeechText.substring(0, 50);
+                            activeEnemyBubbles[serverSpeakerId] = {
+                                text: bubbleText, endTime: performance.now() + 3000
+                            };
+                        }
+                        break; // End game_state case
+
+                    // Default case and other cases ('chat_message', 'error') remain the same...
+                     case 'chat_message':
+                         const senderId = data.sender_id;
+                         const messageText = data.message;
+                         const isSelf = senderId === appState.localPlayerId;
+                         UI.addChatMessage(senderId, messageText, isSelf);
+                         if (senderId && messageText) {
+                             const bubbleText = messageText.substring(0, 50);
+                             activeSpeechBubbles[senderId] = {
+                                 text: bubbleText, endTime: performance.now() + 4000
+                             };
+                         }
+                         break;
+                     case 'error':
+                         console.error("[Client] Server Error Message:", data.message);
+                         UI.updateStatus(`Server Error: ${data.message}`, true);
+                         if (appState.mode === 'multiplayer-client' && (data.message.includes('not found') || data.message.includes('not waiting') || data.message.includes('full') || data.message.includes('finished'))) {
+                             UI.showSection('join-code-section');
+                             appState.mode = 'menu';
+                         } else if (appState.mode === 'multiplayer-host' && data.message.includes('Creation Error')) {
+                             Game.resetClientState(true);
+                         } else if (data.message === 'Please create or join a game first.') {
+                              log("Received 'join first' error unexpectedly, resetting state.");
+                              Game.resetClientState(true);
+                         }
+                         break;
+
+                    default:
+                        log(`Unknown message type received: ${data.type}`);
+                } // End switch
+            } catch (handlerError) {
+                console.error("[Client] Error inside handleServerMessage logic:", handlerError);
+                UI.updateStatus("Client error processing message.", true);
+            }
+        } // End handleServerMessage
+
+
+        // --- Global Init ---
+        // Wrapper for inline HTML button compatibility
+        function showSection(sectionId) { UI.showSection(sectionId); }
+
+        window.onload = () => {
+            log("Window loaded.");
+            UI.updateStatus("Initializing...");
+
+            // Define appState *before* initializing modules that might use it
+             // --- Global Client State --- <<< IMPORTANT PLACEMENT
+             appState = { // Use global scope assignment since it's used everywhere
+                 mode: 'menu',
+                 localPlayerId: null,
+                 currentGameId: null,
+                 serverState: null,
+                 animationFrameId: null,
+                 isConnected: false,
+                 renderedPlayerPos: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 },
+                 predictedPlayerPos: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 },
+                 lastServerState: null,
+                 previousServerState: null,
+                 lastLoopTime: null, // Initialize as null
+             };
+             socket = null; // Also define socket globally
+
+            // Now safe to initialize listeners and connect
+            try {
+                 Game.initListeners();
+                 Network.connect(() => {
+                     // This callback runs *after* WebSocket opens
+                     UI.updateStatus("Connected. Select Mode.");
+                     // Show main menu only *after* connection is confirmed open
+                     UI.showSection('main-menu-section');
+                 });
+                 UI.updateStatus("Connecting..."); // Initial status while connecting
+            } catch (initError) {
+                 console.error("Initialization failed:", initError);
+                 UI.updateStatus("Error initializing game. Please refresh.", true);
+            }
+        };
+
+    </script>
+</body>
+</html>
