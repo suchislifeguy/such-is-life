@@ -390,6 +390,8 @@
             display: none;
             box-sizing: border-box;
         }
+        /* --- Game Over Screen (Positioning relative to game-container) --- */
+
         /* Apply original styles */
         #game-over-screen h2 {
             color: var(--player-color);
@@ -2408,6 +2410,7 @@
                  DOM.cancelHostBtn.onclick = leaveGame;
                  DOM.joinGameSubmitBtn.onclick = joinMultiplayer;
                  DOM.sendChatBtn.onclick = sendChatMessage;
+                 DOM.leaveGameBtn.onclick = leaveGame;
                  DOM.gameOverBackBtn.onclick = () => resetClientState(true);
 
                  // Back buttons using class
