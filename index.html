@@ -1465,114 +1465,186 @@
             } // End drawGame function
 
             function getInterpolatedState(now) {
-                const { serverState, lastServerState, previousServerState } = appState;
-                // Need at least two distinct states for interpolation
-                if (!serverState || !lastServerState || serverState.timestamp === lastServerState.timestamp) {
-                    return serverState; // Use latest known state if no interpolation possible
-                }
-                // If previous is missing, can't interpolate, use latest
-                if (!previousServerState) {
-                    return serverState;
-                }
+                const { serverState, lastServerState, previousServerState, localPlayerId, renderedPlayerPos } = appState;
 
+                // --- Guard Clauses (remain the same) ---
+                if (!serverState) {
+                    // console.warn("getInterpolatedState: No serverState available.");
+                    return null; // Return null or an empty object if no state exists yet
+                }
+                if (!lastServerState || !previousServerState || serverState.timestamp === lastServerState.timestamp) {
+                    // Not enough history for interpolation, return the latest state directly
+                    // Return a shallow copy to prevent accidental modification of the original appState.serverState
+                    // elsewhere if the caller modifies the returned object.
+                    // return { ...serverState }; // Simple shallow copy (careful with nested objects if they exist)
+                    // OR more robustly copy only known top-level properties needed for rendering:
+                     const latestStateCopy = {
+                         timestamp: serverState.timestamp,
+                         status: serverState.status,
+                         score: serverState.score,
+                         level: serverState.level,
+                         is_night: serverState.is_night,
+                         day_night_timer_remaining: serverState.day_night_timer_remaining,
+                         countdown: serverState.countdown,
+                         game_over: serverState.game_over,
+                         max_players: serverState.max_players,
+                         // Deep copy potentially complex objects if needed, shallow otherwise
+                         players: serverState.players ? { ...serverState.players } : {},
+                         enemies: serverState.enemies ? { ...serverState.enemies } : {},
+                         bullets: serverState.bullets ? { ...serverState.bullets } : {},
+                         powerups: serverState.powerups ? { ...serverState.powerups } : {},
+                         damage_texts: serverState.damage_texts ? { ...serverState.damage_texts } : {},
+                         campfire: serverState.campfire ? { ...serverState.campfire } : null,
+                         enemy_speaker_id: serverState.enemy_speaker_id,
+                         enemy_speech_text: serverState.enemy_speech_text,
+                     };
+                    // Crucially, still adjust local player pos in this non-interpolated state
+                    if (localPlayerId && latestStateCopy.players[localPlayerId]) {
+                        latestStateCopy.players[localPlayerId] = {
+                             ...latestStateCopy.players[localPlayerId], // Copy existing player props
+                             x: renderedPlayerPos.x, // Override with rendered pos
+                             y: renderedPlayerPos.y
+                         };
+                    }
+                    return latestStateCopy;
+                 }
+                // --- End Guard Clauses ---
+
+
+                // --- Interpolation Factor Calculation (remains the same) ---
                 const timeBetweenServerUpdates = lastServerState.timestamp - previousServerState.timestamp;
-                const timeSinceLastServerUpdate = (now / 1000) - lastServerState.timestamp; // Client time (ms) vs Server time (s)
-
-                // Prevent division by zero and handle potential timing issues
+                const timeSinceLastServerUpdate = (now / 1000) - lastServerState.timestamp;
                 let factor = 0;
-                if (timeBetweenServerUpdates > 0.001) { // Avoid division by zero or tiny intervals
+                if (timeBetweenServerUpdates > 0.001) {
                     factor = timeSinceLastServerUpdate / timeBetweenServerUpdates;
                 }
+                factor = Math.max(0, Math.min(factor, 1.5)); // Clamp factor (allow slight extrapolation)
+                // --- End Factor Calculation ---
 
-                // Clamp factor: Usually 0-1, allow slight extrapolation (e.g., up to 1.5) if needed for smoothness
-                factor = Math.max(0, Math.min(factor, 1.5));
 
-                // Create a deep copy to avoid modifying original states
-                let iState = JSON.parse(JSON.stringify(serverState)); // Start with latest as base
+                // --- Build the Interpolated State (NEW LOGIC) ---
+                // Start with an empty object
+                const iState = {};
 
-                // Interpolate entities present in both last two states
-                ['players', 'enemies', 'bullets', 'powerups'].forEach(key => {
-                    if (!iState[key] || !lastServerState[key] || !previousServerState[key]) return;
+                // 1. Copy non-entity, top-level properties from the latest serverState
+                //    (Assume these don't need interpolation themselves)
+                iState.timestamp = serverState.timestamp; // Keep latest timestamp
+                iState.status = serverState.status;
+                iState.score = serverState.score;
+                iState.level = serverState.level;
+                iState.is_night = serverState.is_night;
+                iState.day_night_timer_remaining = serverState.day_night_timer_remaining;
+                iState.countdown = serverState.countdown;
+                iState.game_over = serverState.game_over;
+                iState.max_players = serverState.max_players;
+                // Copy objects that aren't interpolated entity containers (shallow copy is usually fine)
+                // Make sure damage_texts are handled correctly - they have timestamps but aren't lerped
+                iState.damage_texts = serverState.damage_texts ? { ...serverState.damage_texts } : {};
+                iState.campfire = serverState.campfire ? { ...serverState.campfire } : null;
+                iState.enemy_speaker_id = serverState.enemy_speaker_id;
+                iState.enemy_speech_text = serverState.enemy_speech_text;
 
-                    Object.keys(iState[key]).forEach(id => {
-                        const current = iState[key][id]; // Entity in the latest state
-                        const previous = previousServerState[key]?.[id]; // Entity in the state before last
-                        const last = lastServerState[key]?.[id]; // Entity in the last state
 
-                        // Check if entity exists in the necessary states for interpolation
-                        if (previous && last && current) {
-                            // Interpolate position if available in all three relevant states
-                            if (current.x !== undefined && previous.x !== undefined && last.x !== undefined &&
-                                current.y !== undefined && previous.y !== undefined && last.y !== undefined)
-                            {
-                                // Don't interpolate the local player - use reconciled render position
-                                if (key === 'players' && id === appState.localPlayerId) {
-                                    current.x = appState.renderedPlayerPos.x;
-                                    current.y = appState.renderedPlayerPos.y;
-                                }
-                                // Interpolate other entities based on *previous* and *last* states
-                                else {
-                                    current.x = lerp(previous.x, last.x, factor);
-                                    current.y = lerp(previous.y, last.y, factor);
-                                }
-                           }
+                // 2. Process Entity Collections (Players, Enemies, Bullets, Powerups)
+                const entityKeys = ['players', 'enemies', 'bullets', 'powerups'];
+                entityKeys.forEach(key => {
+                    // Initialize the collection in iState
+                    iState[key] = {};
+
+                    // Iterate through entities present in the *latest* server state for this key
+                    const currentEntities = serverState[key] || {};
+                    Object.keys(currentEntities).forEach(id => {
+                        const currentEntity = currentEntities[id];
+                        const lastEntity = lastServerState[key]?.[id];
+                        const previousEntity = previousServerState[key]?.[id];
+
+                        // Create a shallow copy of the current entity state first
+                        // This ensures all non-positional data from the latest state is preserved
+                        const interpolatedEntity = { ...currentEntity };
+
+                        // Check if interpolation is possible for this entity's position
+                        const canInterpolate = previousEntity && lastEntity &&
+                                               previousEntity.x !== undefined && previousEntity.y !== undefined &&
+                                               lastEntity.x !== undefined && lastEntity.y !== undefined;
+
+                        // Apply interpolation or specific logic
+                        if (key === 'players' && id === localPlayerId) {
+                            // --- Local Player ---
+                            // Use the reconciled rendered position, not interpolated server position
+                            interpolatedEntity.x = renderedPlayerPos.x;
+                            interpolatedEntity.y = renderedPlayerPos.y;
+                        } else if (canInterpolate) {
+                            // --- Remote Entity - Interpolate ---
+                            interpolatedEntity.x = lerp(previousEntity.x, lastEntity.x, factor);
+                            interpolatedEntity.y = lerp(previousEntity.y, lastEntity.y, factor);
                         }
-                        // If entity wasn't in previous states, just use its current position from serverState
+                        // --- Else (New Entity or Not Interpolatable) ---
+                        // No position change needed, the shallow copy already has the latest x, y
+
+                        // Assign the processed entity (copied/interpolated) to our iState
+                        iState[key][id] = interpolatedEntity;
                     });
                 });
-                return iState; // Return the interpolated state object
+                // --- End Build ---
+
+                return iState; // Return the newly constructed state object
             }
 
+            // No changes needed for drawPlayers - it already correctly consumes
+            // the state object passed to it (which will now be the efficiently interpolated one)
+            // and uses appState.renderedPlayerPos for the local player.
             function drawPlayers(players) {
-                if (!players) return;
-                Object.values(players).forEach(player => {
-                    // Skip if player data is invalid or status is fully DEAD
-                    if (!player || player.player_status === PLAYER_STATUS_DEAD) {
-                        return;
-                    }
+                 if (!players) return;
+                 Object.values(players).forEach(player => {
+                     // Skip if player data is invalid or status is fully DEAD
+                     if (!player || player.player_status === PLAYER_STATUS_DEAD) {
+                         return;
+                     }
 
-                    const isSelf = player.id === appState.localPlayerId;
-                    const playerStatus = player.player_status || PLAYER_STATUS_ALIVE; // Default to alive if missing
+                     const isSelf = player.id === appState.localPlayerId;
+                     const playerStatus = player.player_status || PLAYER_STATUS_ALIVE; // Default to alive if missing
 
-                    // Determine draw position (use prediction/reconciliation for self)
-                    const drawX = isSelf ? appState.renderedPlayerPos.x : player.x;
-                    const drawY = isSelf ? appState.renderedPlayerPos.y : player.y;
+                     // Determine draw position (use prediction/reconciliation for self)
+                     // This logic correctly uses appState.renderedPlayerPos for self,
+                     // and the (now interpolated) player.x/y for others.
+                     const drawX = isSelf ? appState.renderedPlayerPos.x : player.x;
+                     const drawY = isSelf ? appState.renderedPlayerPos.y : player.y;
 
-                    // Get dimensions and health info
-                    const width = player.width ?? PLAYER_DEFAULTS.width;
-                    const height = player.height ?? PLAYER_DEFAULTS.height;
-                    const maxHealth = player.max_health ?? PLAYER_DEFAULTS.max_health;
-                    const currentArmor = player.armor ?? 0;
+                     // Get dimensions and health info
+                     const width = player.width ?? PLAYER_DEFAULTS.width;
+                     const height = player.height ?? PLAYER_DEFAULTS.height;
+                     const maxHealth = player.max_health ?? PLAYER_DEFAULTS.max_health;
+                     const currentArmor = player.armor ?? 0;
 
-                    // --- GHOST STATE LOGIC ---
-                    let isDown = (playerStatus === PLAYER_STATUS_DOWN);
-                    let alpha = isDown ? 0.4 : 1.0; // Set transparency if down
-                    // --- END GHOST STATE LOGIC ---
+                     // --- GHOST STATE LOGIC ---
+                     let isDown = (playerStatus === PLAYER_STATUS_DOWN);
+                     let alpha = isDown ? 0.4 : 1.0; // Set transparency if down
+                     // --- END GHOST STATE LOGIC ---
 
-                    // --- DRAW PLAYER ---
-                    ctx.save(); // Save context before applying alpha
-                    ctx.globalAlpha = alpha; // Apply calculated alpha
+                     // --- DRAW PLAYER ---
+                     ctx.save(); // Save context before applying alpha
+                     ctx.globalAlpha = alpha; // Apply calculated alpha
 
-                    // Pass aim direction only for self (unchanged)
-                    const aimDx = isSelf ? localPlayerMuzzleFlash.aimDx : 0;
-                    const aimDy = isSelf ? localPlayerMuzzleFlash.aimDy : 0;
+                     // Pass aim direction only for self (unchanged)
+                     const aimDx = isSelf ? localPlayerMuzzleFlash.aimDx : 0;
+                     const aimDy = isSelf ? localPlayerMuzzleFlash.aimDy : 0;
 
-                    // Draw the character shape
-                    drawPlayerCharacter(drawX, drawY, width, height, isSelf, player, aimDx, aimDy);
+                     // Draw the character shape
+                     drawPlayerCharacter(drawX, drawY, width, height, isSelf, player, aimDx, aimDy);
 
-                    ctx.restore(); // Restore context (resets globalAlpha)
-                    // --- END DRAW PLAYER ---
+                     ctx.restore(); // Restore context (resets globalAlpha)
+                     // --- END DRAW PLAYER ---
 
-                    // --- DRAW BARS (Only if ALIVE) ---
-                    if (playerStatus === PLAYER_STATUS_ALIVE) {
-                        drawHealthBar(drawX, drawY, width, player.health, maxHealth);
-                        if (currentArmor > 0) { // Only draw armor bar if armor exists
-                            drawArmorBar(drawX, drawY, width, currentArmor);
-                        }
-                    }
-                    // --- END BARS ---
-                });
-            } 
+                     // --- DRAW BARS (Only if ALIVE) ---
+                     if (playerStatus === PLAYER_STATUS_ALIVE) {
+                         drawHealthBar(drawX, drawY, width, player.health, maxHealth);
+                         if (currentArmor > 0) { // Only draw armor bar if armor exists
+                             drawArmorBar(drawX, drawY, width, currentArmor);
+                         }
+                     }
+                     // --- END BARS ---
+                 });
+            }
 
             function drawPlayerCharacter(x, y, w, h, isSelf, playerState, aimDx, aimDy) {
                 // --- Colors ---
@@ -2639,7 +2711,6 @@
         function showSection(sectionId) { UI.showSection(sectionId); }
 
         window.onload = () => {
-            log("Window loaded.");
             log("Window loaded.");
             UI.updateStatus("Initializing...");
 
