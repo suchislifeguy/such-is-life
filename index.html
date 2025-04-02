@@ -216,12 +216,13 @@
             /* Inherits general button styles (background, color, border etc.) */
         }
 
-        /* --- Chat Log Styling (Moved Position & Resized) --- */
+        /* --- Chat Log Styling (Height Increased Again) --- */
         #left-panel #chat-log {
-            height: 150px; /* Increased height (120 * 1.25) */
+            /* height: 150px; */ /* OLD HEIGHT */
+            height: 190px; /* NEW HEIGHT (150 * 1.25 = 187.5 -> 190) */
             overflow-y: scroll;
             border: 1px solid var(--primary-color);
-            margin-bottom: 8px; /* Space below log, before input row */
+            margin-bottom: 8px; /* Space below log, before input */
             padding: 5px;
             text-align: left;
             background: rgba(10, 20, 25, 0.5);
@@ -247,29 +248,29 @@
         #game-container.night-mode #left-panel #chat-log .other-message { color: #C0C0FF; }
         #game-container.night-mode #left-panel #chat-log .system-message { color: var(--accent-color); }
 
-        /* --- Chat Input Row Styling --- */
-        #left-panel .chat-input-row {
-            display: flex;
-            align-items: center; /* Vertically align input and button */
-            width: 100%;
-            /* No margin needed below as it's the last element */
-        }
-
-        /* Chat Input Styling (Resized) */
+        /* Chat Input Styling (Now Block Element) */
         #left-panel #chatInput {
-            flex-grow: 1; /* Take available horizontal space */
-            margin-right: 5px; /* Space between input and button */
-            padding: 12px 8px; /* Increased vertical padding (8px * 1.5 = 12px) */
+            /* REMOVE flex-grow: 1; */
+            /* REMOVE margin-right: 5px; */
+            display: block; /* Make it a block element */
+            width: 100%;    /* Take full width */
+            padding: 12px 8px; /* Keep increased vertical padding */
             font-size: 0.9rem;
+            box-sizing: border-box; /* Include padding/border in width */
+            margin-bottom: 8px; /* Space below input, above send button */
             /* Inherits general input styles (background, color, border etc.) */
         }
 
-        /* Send Chat Button Styling (Resized) */
+        /* Send Chat Button Styling (Now Block Element, Matching Leave Button) */
         #left-panel #sendChatBtn {
-            padding: 12px 15px; /* Match Leave button vertical padding */
-            font-size: 1rem; /* Match Leave button font size */
-            flex-shrink: 0; /* Prevent button shrinking */
-            width: auto; /* Width determined by content and padding */
+            display: block; /* Make it a block element */
+            width: 100%;    /* Take full width */
+            padding: 12px 10px; /* Match Leave button padding */
+            font-size: 1rem;    /* Match Leave button font size */
+            box-sizing: border-box; /* Include padding/border in width */
+            flex-shrink: 0;
+            /* REMOVE width: auto; */
+            /* No margin needed below as it's the last element in the flex column */
             /* Inherits general button styles (background, color, border etc.) */
         }
 
@@ -382,24 +383,24 @@
         <div id="game-area">
             <!-- Left Panel -->
             <div id="left-panel">
-                <!-- Grid Container for Player Stats (Stays First) -->
+                <!-- Grid Container for Player Stats -->
                 <div id="player-stats-grid">
                     Loading Stats...
                 </div>
-                <!-- Day/Night Indicator (Stays Second) -->
+                <!-- Day/Night Indicator -->
                 <div id="day-night-indicator" style="display: none;">Day --:--</div>
 
-                <!-- Leave Button (MOVED HERE - Third) -->
+                <!-- Leave Button -->
                 <button id="leaveGameBtn">Leave Game</button>
 
-                <!-- Chat Log (MOVED HERE - Fourth) -->
+                <!-- Chat Log -->
                 <div id="chat-log"></div>
 
-                <!-- Wrapper for Input and Button (MOVED HERE - Last) -->
-                <div class="chat-input-row">
-                    <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="50">
-                    <button id="sendChatBtn">Send</button>
-                </div>
+                <!-- Chat Input (NOW A DIRECT CHILD) -->
+                <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="50">
+
+                <!-- Send Chat Button (NOW A DIRECT CHILD) -->
+                <button id="sendChatBtn">Send</button>
 
             </div> <!-- End left-panel -->
 
