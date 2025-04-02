@@ -72,9 +72,8 @@
         #top-bar {
             display: flex;
             flex-direction: row;
-            align-items: center; /* Vertically center everything */
-            /* Default justification for menu view */
-            justify-content: space-between;
+            align-items: center;
+            justify-content: space-between; /* Default for menu */
             padding: 0 10px 5px 10px;
             margin-bottom: 5px;
             border-bottom: 2px solid var(--primary-color);
@@ -83,9 +82,10 @@
             min-height: 50px;
             box-sizing: border-box;
             width: 100%;
-            gap: 15px; /* Gap between direct children (Title/DayNight, StatsContainer) */
-            position: relative; /* Needed for positioning downed timer later if desired */
-        }   
+            gap: 15px;
+            position: relative;
+        }
+
 
         /* Title Styling (Stays the same size) */
         #top-bar h1 {
@@ -100,25 +100,23 @@
             white-space: nowrap;
         }
 
-        /* Day/Night Indicator Styling (No change needed here) */
+        /* Day/Night Indicator Styling */
         #day-night-indicator {
-            font-size: 14px;
+            font-size: 14px; /* Use 14px OR 15px consistently */
             color: var(--text-color);
             background: rgba(0, 0, 0, 0.5);
             padding: 4px 8px;
             border-radius: 5px;
             z-index: 5;
-            display: none; /* Hidden by default */
+            display: none; /* Hide by default */
             flex-shrink: 0;
-            /* margin: 0 auto; REMOVED - Rely on parent justify-content */
-            white-space: nowrap; /* Prevent wrapping */
+            white-space: nowrap;
         }
 
         /* Container for Multiplayer Stats */
         #player-stats-container {
             flex-grow: 1; /* Allow it to take remaining space */
             display: flex;
-            /* CHANGE: Justify content to the end (right) */
             justify-content: flex-end;
             align-items: center;
             min-width: 0; /* Prevent overflow issues */
@@ -189,16 +187,6 @@
             /* Center the remaining items (Day/Night, Stats Container) */
             justify-content: center;
          }
-
-        #day-night-indicator {
-            font-size: 15px;
-            color: var(--text-color);
-            background: rgba(0, 0, 0, 0.5);
-            padding: 4px 8px;
-            border-radius: 5px;
-            z-index: 5;
-            display: none;
-        }
 
         /* --- Visibility Control --- */
         #main-menu-section,
@@ -760,13 +748,14 @@
             return {
                 showSection,
                 updateStatus,
-                updateHUD, // Ensure this is the updated one
+                updateHUD,
                 addChatMessage,
                 updateCountdown,
                 updateDayNight,
-                showGameOver // Expose the simplified function
+                showGameOver,
+                updateDownedTimer
             };
-        })(); // <-- This closes the UI IIFEw
+        })(); // <-- This closes the UI IIFE
 
 
         // --- Network "Module" ---
