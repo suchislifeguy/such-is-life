@@ -117,7 +117,7 @@
             display: flex;
             flex-direction: row;    /* Side-by-side */
             align-items: flex-start; /* Align top */
-            flex-wrap: wrap;        /* Allow chat wrap */
+            /* REMOVED flex-wrap: wrap; - No longer needed at this level */
             width: 100%;
         }
 
@@ -131,7 +131,7 @@
             padding: 15px;
             box-sizing: border-box;
             display: flex;
-            flex-direction: column;
+            flex-direction: column; /* Children stack vertically */
             color: var(--text-color);
             font-size: 13px; /* Base size, can be overridden */
             overflow-y: auto;
@@ -147,86 +147,121 @@
             width: 100%;
             box-sizing: border-box;
             margin-bottom: 20px;
+            flex-shrink: 0; /* Prevent grid shrinking */
         }
 
-        /* Player Stat Box Styling */
-        .player-stats-box {
-            display: block;
-            color: var(--text-color);
-            /* --- INCREASE BASE FONT FOR BOX --- */
-            font-size: 14px; /* Example: Increased from 11px */
-            background: rgba(10, 20, 25, 0.6);
-            /* --- (Optional) INCREASE PADDING --- */
-            padding: 8px 10px; /* Example: Slightly increased */
-            border-radius: 4px;
-            text-align: left;
-            border: 1px solid var(--dusty-green);
-            box-sizing: border-box;
-            box-shadow: inset 0 0 4px rgba(0,0,0,0.4);
-            overflow: hidden; /* Keep this to clip if absolutely necessary */
-            /* Height will grow automatically */
-        }
+        /* Player Stat Box Styling (Unchanged) */
+        .player-stats-box { display: block; color: var(--text-color); font-size: 14px; background: rgba(10, 20, 25, 0.6); padding: 8px 10px; border-radius: 4px; text-align: left; border: 1px solid var(--dusty-green); box-sizing: border-box; box-shadow: inset 0 0 4px rgba(0,0,0,0.4); overflow: hidden; }
+        .player-stats-box .stats-header { font-size: 15px; font-weight: bold; color: var(--accent-color); text-align: center; padding-bottom: 4px; margin-bottom: 5px; border-bottom: 1px dashed var(--primary-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box; }
+        .player-stats-box .stats-content { line-height: 1.5; overflow-wrap: break-word; word-wrap: break-word; }
+        .player-stats-box .stats-content span { display: inline-block; min-width: 40px; font-weight: bold; color: var(--dusty-green); vertical-align: top; }
 
-        /* Stat Box Header */
-        .player-stats-box .stats-header {
-            /* --- INCREASE HEADER FONT --- */
-            font-size: 15px; /* Example: Increased from 12px */
-            font-weight: bold;
-            color: var(--accent-color);
-            text-align: center;
-            padding-bottom: 4px; /* Adjust spacing */
-            margin-bottom: 5px;  /* Adjust spacing */
-            border-bottom: 1px dashed var(--primary-color);
-            white-space: nowrap;     /* Keep header on one line */
-            overflow: hidden;        /* Hide overflow */
-            text-overflow: ellipsis; /* Show ... if too long */
-            box-sizing: border-box;
-        }
-
-        /* Stat Box Content */
-        .player-stats-box .stats-content {
-            /* --- INCREASE LINE HEIGHT --- */
-            line-height: 1.5; /* Example: Increased for better spacing */
-            /* --- ENSURE WRAPPING --- */
-            overflow-wrap: break-word; /* Allow long words/values to break */
-            word-wrap: break-word; /* Legacy fallback */
-        }
-
-        .player-stats-box .stats-content span {
-            display: inline-block;
-            min-width: 40px; /* Example: Slightly wider label space */
-            font-weight: bold;
-            color: var(--dusty-green);
-            vertical-align: top; /* Helps align labels and values */
-        }
 
         /* Day/Night Indicator in Left Panel */
         #left-panel #day-night-indicator {
             display: none; /* Shown by JS */
             text-align: center;
-            margin: 15px 0;
+            margin: 0 0 15px 0; /* Remove top margin, keep bottom for spacing */
             font-size: 1.1em;
             padding: 5px;
             background: rgba(0, 0, 0, 0.5);
             border-radius: 5px;
-            box-sizing: border-box; /* Ensures padding is included */
-            /* No width: 100% needed, block will fill */
+            box-sizing: border-box;
+            width: 100%; /* Make it fill width */
             color: var(--text-color);
-            flex-shrink: 0;
+            flex-shrink: 0; /* Prevent shrinking */
         }
+
+        /* --- Chat Section (NEW POSITION INSIDE LEFT PANEL) --- */
+        #left-panel #chat-section {
+            /* REMOVED: flex-basis, order (no longer relevant) */
+            margin-top: 0; /* Space handled by day-night margin bottom */
+            margin-bottom: 15px; /* Space before leave button */
+            display: flex;
+            flex-direction: column; /* Stack input row and log vertically */
+            align-items: stretch;   /* Make children fill width */
+            /* REMOVED: flex-wrap, padding (panel has padding) */
+            width: 100%;
+            box-sizing: border-box;
+            flex-shrink: 0; /* Prevent shrinking */
+        }
+
+        /* Wrapper for Input and Button */
+        #left-panel .chat-input-row {
+            display: flex;       /* Arrange input/button horizontally */
+            align-items: center; /* Vertically align */
+            width: 100%;
+            margin-bottom: 8px;  /* Space below input row, above log */
+        }
+
+        /* Chat Input Styling (NEW CONTEXT) */
+        #left-panel #chatInput {
+            flex-grow: 1;           /* Take available space */
+            margin-right: 5px;      /* Space to button */
+            /* REMOVED: min-width (unneeded with flex-grow) */
+            /* REMOVED: margin-bottom (handled by row margin) */
+            padding: 8px;
+            font-size: 0.9rem;
+            /* Inherits general input styles */
+        }
+
+        /* Send Button Styling (NEW CONTEXT) */
+        #left-panel #sendChatBtn {
+            /* REMOVED: margin-left (unneeded) */
+            /* REMOVED: margin-bottom (handled by row margin) */
+            padding: 8px 15px;
+            font-size: 0.9rem;
+            flex-shrink: 0; /* Don't shrink button */
+            /* Inherits general button styles */
+        }
+
+        /* Chat Log Styling (NEW CONTEXT) */
+        #left-panel #chat-log {
+            height: 120px; /* Slightly increased height */
+            overflow-y: scroll;
+            border: 1px solid var(--primary-color);
+            /* REMOVED: margin-top (handled by row margin) */
+            padding: 5px;
+            text-align: left;
+            background: rgba(10, 20, 25, 0.5);
+            font-size: 13px;
+            border-radius: 5px;
+            /* REMOVED: flex-basis, order */
+            width: 100%; /* Ensure full width */
+            transition: background-color 0.5s ease, border-color 0.5s ease;
+            color: var(--dark-text);
+            box-sizing: border-box;
+            flex-shrink: 0; /* Prevent shrinking */
+        }
+        #left-panel #chat-log div { margin-bottom: 3px; word-wrap: break-word; }
+        #left-panel #chat-log .my-message { color: var(--bullet-player-color); }
+        #left-panel #chat-log .other-message { color: var(--text-color); }
+        #left-panel #chat-log .system-message { color: var(--accent-color); font-style: italic; }
+
+        /* Night Mode Chat Styling (Selector updated for left-panel context) */
+        #game-container.night-mode #left-panel #chat-log {
+            background-color: rgba(10, 20, 25, 0.7);
+            border-color: var(--accent-color);
+        }
+        #game-container.night-mode #left-panel #chat-log .my-message { color: #FFFF99; }
+        #game-container.night-mode #left-panel #chat-log .other-message { color: #C0C0FF; }
+        #game-container.night-mode #left-panel #chat-log .system-message { color: var(--accent-color); }
+        /* --- END CHAT SECTION STYLES --- */
 
         /* Leave Button in Left Panel */
         #left-panel #leaveGameBtn {
             display: block;
             width: 100%;
             margin-top: auto; /* Push to bottom */
-            margin-bottom: 0;
+            margin-bottom: 0; /* Flush bottom */
+            margin-left: 0;   /* Align left */
+            margin-right: 0;  /* Align right */
             padding: 12px 10px;
             font-size: 1rem;
-            box-sizing: border-box; /* Ensures padding is included */
-            flex-shrink: 0;
-            /* Inherits general button styles */
+            box-sizing: border-box;
+            flex-shrink: 0; /* Prevent shrinking */
         }
+
 
         /* Canvas Container Styling */
         #canvas-container {
@@ -237,166 +272,44 @@
             min-width: 0; /* Important for flex sizing */
         }
 
-        /* Canvas Styling */
-        #gameCanvas {
-            border: 3px solid var(--primary-color);
-            background-color: #a0522d; /* Day background (JS may override) */
-            display: block;
-            width: 1600px; /* Match game constant */
-            height: 900px; /* Match game constant */
-            max-width: 100%; /* Allow shrinking if container is smaller */
-            margin: 0;
-            box-sizing: border-box;
-        }
+        /* Canvas Styling (Unchanged) */
+        #gameCanvas { border: 3px solid var(--primary-color); background-color: #a0522d; display: block; width: 1600px; height: 900px; max-width: 100%; margin: 0; box-sizing: border-box; }
+        #countdown { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 72px; color: var(--player-color); text-shadow: 3px 3px 6px black; z-index: 10; pointer-events: none; display: none; }
 
-        /* Countdown Styling */
-        #countdown {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            font-size: 72px; color: var(--player-color);
-            text-shadow: 3px 3px 6px black; z-index: 10; pointer-events: none; display: none;
-        }
-
-        /* Chat Section Layout (Below the main row) */
-        #chat-section {
-            flex-basis: 100%; /* Full width */
-            order: 3;         /* Place below panel/canvas */
-            margin-top: 10px;
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            width: 100%;
-            padding: 0 5px;
-            box-sizing: border-box;
-        }
-
-        /* Chat Input/Button Styling */
-        #chatInput {
-            flex-grow: 1; margin-right: 5px; min-width: 200px;
-            padding: 8px; font-size: 0.9rem; margin-bottom: 5px;
-        }
-        #sendChatBtn {
-            margin-left: 5px; padding: 8px 15px; font-size: 0.9rem; margin-bottom: 5px;
-        }
-
-        /* Chat Log Styling */
-        #chat-log {
-            height: 80px; overflow-y: scroll; border: 1px solid var(--primary-color);
-            margin-top: 5px;
-            padding: 5px; text-align: left; background: rgba(10, 20, 25, 0.5);
-            font-size: 13px; border-radius: 5px; flex-basis: 100%; order: 3;
-            transition: background-color 0.5s ease, border-color 0.5s ease;
-            color: var(--dark-text);
-        }
-        #chat-log div { margin-bottom: 3px; word-wrap: break-word; }
-        #chat-log .my-message { color: var(--bullet-player-color); }
-        #chat-log .other-message { color: var(--text-color); }
-        #chat-log .system-message { color: var(--accent-color); font-style: italic; }
-
-        /* Night Mode Chat Styling */
-        #game-container.night-mode #chat-log {
-            background-color: rgba(10, 20, 25, 0.7);
-            border-color: var(--accent-color);
-        }
-        #game-container.night-mode #chat-log .my-message { color: #FFFF99; }
-        #game-container.night-mode #chat-log .other-message { color: #C0C0FF; }
-        #game-container.night-mode #chat-log .system-message { color: var(--accent-color); }
+        /* --- OBSOLETE Chat Section Layout (Remove styles that targeted old position) --- */
+        /* #chat-section { ... remove old rules ... } */
+        /* #chatInput { ... remove old rules if conflicting ... } */
+        /* #sendChatBtn { ... remove old rules if conflicting ... } */
+        /* #chat-log { ... remove old rules like flex-basis, order, margin-top ... } */
+        /* #game-container.night-mode #chat-log { ... remove old rule ... } */
 
 
-        /* --- Common Elements --- */
-        button {
-            background-color: var(--primary-color);
-            color: var(--dark-bg);
-            border: 2px solid var(--container-border);
-            padding: 10px 20px; margin: 10px 5px; cursor: pointer; font-family: var(--font-family);
-            font-size: 1rem; transition: background-color 0.2s ease, color 0.2s ease; border-radius: 5px;
-            font-weight: bold;
-            box-sizing: border-box; /* Ensure general buttons have this */
-        }
-        button:hover:not(:disabled) {
-            background-color: #9cb49a;
-            color: #000;
-        }
-        button:disabled {
-            background-color: #555; color: #aaa; cursor: not-allowed; border-color: #444;
-        }
+        /* --- Common Elements (Unchanged) --- */
+        button { background-color: var(--primary-color); color: var(--dark-bg); border: 2px solid var(--container-border); padding: 10px 20px; margin: 10px 5px; cursor: pointer; font-family: var(--font-family); font-size: 1rem; transition: background-color 0.2s ease, color 0.2s ease; border-radius: 5px; font-weight: bold; box-sizing: border-box; }
+        button:hover:not(:disabled) { background-color: #9cb49a; color: #000; }
+        button:disabled { background-color: #555; color: #aaa; cursor: not-allowed; border-color: #444; }
+        input[type="text"] { padding: 10px; margin: 10px 5px; font-family: var(--font-family); font-size: 1rem; border: 2px solid var(--primary-color); border-radius: 5px; background-color: var(--dark-text); color: var(--dark-bg); text-transform: uppercase; box-sizing: border-box; }
 
-        input[type="text"] {
-            padding: 10px; margin: 10px 5px;
-            font-family: var(--font-family); font-size: 1rem;
-            border: 2px solid var(--primary-color);
-            border-radius: 5px; background-color: var(--dark-text);
-            color: var(--dark-bg);
-            text-transform: uppercase;
-            box-sizing: border-box;
-        }
-
-        /* --- Menu Sections --- */
-        .menu-section {
-            padding: 30px; text-align: center;
-            box-sizing: border-box;
-            width: 100%;
-            color: var(--text-color);
-        }
+        /* --- Menu Sections (Unchanged) --- */
+        .menu-section { padding: 30px; text-align: center; box-sizing: border-box; width: 100%; color: var(--text-color); }
         .menu-section h2 { color: var(--accent-color); margin-bottom: 20px; }
-        .menu-section button {
-            display: block; width: 80%; max-width: 300px;
-            margin: 15px auto; padding: 15px 20px; font-size: 1.2rem;
-        }
+        .menu-section button { display: block; width: 80%; max-width: 300px; margin: 15px auto; padding: 15px 20px; font-size: 1.2rem; }
         .menu-section input[type="text"] { display: inline-block; width: auto; min-width: 180px; }
 
-        /* --- Host/Join Specific --- */
+        /* --- Host/Join Specific (Unchanged) --- */
         #host-wait-section p, #join-code-section p { font-size: 1.1rem; margin-bottom: 10px; }
-        #game-code-display {
-            font-size: 1.8rem; font-weight: bold;
-            color: var(--accent-color);
-            background-color: var(--dark-bg);
-            padding: 5px 15px; border-radius: 5px; display: inline-block;
-            margin: 10px 0; user-select: all; border: 1px solid var(--primary-color);
-        }
+        #game-code-display { font-size: 1.8rem; font-weight: bold; color: var(--accent-color); background-color: var(--dark-bg); padding: 5px 15px; border-radius: 5px; display: inline-block; margin: 10px 0; user-select: all; border: 1px solid var(--primary-color); }
         #waiting-message { margin-top: 15px; font-style: italic;}
 
-
-        /* --- Game Over Screen --- */
-        #game-over-screen {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background-color: rgba(10, 20, 25, 0.9);
-            padding: 25px;
-            border: 3px solid var(--player-color);
-            border-radius: 10px; color: var(--accent-color);
-            text-align: center; z-index: 20;
-            width: 80%; max-width: 350px;
-            box-sizing: border-box;
-        }
-        #game-over-screen h2 {
-            color: var(--player-color);
-            margin-top: 0;
-            margin-bottom: 20px;
-            font-size: 1.8em;
-        }
-        #final-stats {
-            margin-bottom: 25px;
-            text-align: center;
-            color: var(--text-color);
-            font-size: 1.3em;
-            line-height: 1.6;
-        }
-        .final-stat-item strong {
-            color: var(--accent-color);
-            margin-right: 8px;
-            display: inline-block;
-            min-width: 70px;
-            text-align: right;
-        }
-        #game-over-screen button {
-            margin-top: 10px;
-            padding: 12px 25px;
-            font-size: 1.1rem;
-        }
+        /* --- Game Over Screen (Unchanged) --- */
+        #game-over-screen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(10, 20, 25, 0.9); padding: 25px; border: 3px solid var(--player-color); border-radius: 10px; color: var(--accent-color); text-align: center; z-index: 20; width: 80%; max-width: 350px; box-sizing: border-box; display: none; } /* Ensure display: none */
+        #game-over-screen h2 { color: var(--player-color); margin-top: 0; margin-bottom: 20px; font-size: 1.8em; }
+        #final-stats { margin-bottom: 25px; text-align: center; color: var(--text-color); font-size: 1.3em; line-height: 1.6; }
+        .final-stat-item strong { color: var(--accent-color); margin-right: 8px; display: inline-block; min-width: 70px; text-align: right; }
+        #game-over-screen button { margin-top: 10px; padding: 12px 25px; font-size: 1.1rem; }
 
         /* --- REMOVE OBSOLETE --- */
-        /* Hide any remnants of old top-bar stats structures */
         #player-stats-container, #mp-stats-display { display: none !important; }
-        /* #player-hud { display: none !important; } /* Remove this if still present */
 
     </style>
 </head>
@@ -442,16 +355,26 @@
 
         <!-- Game Area -->
         <div id="game-area">
-            <!-- Left Panel (Wider, contains grid) -->
+            <!-- Left Panel -->
             <div id="left-panel">
                 <!-- Grid Container for Player Stats -->
                 <div id="player-stats-grid">
-                    <!-- Player stat boxes (.player-stats-box) injected here by JS -->
                     Loading Stats...
                 </div>
-                <!-- Other elements below the grid -->
+                <!-- Day/Night Indicator -->
                 <div id="day-night-indicator" style="display: none;">Day --:--</div>
-                <!-- Leave Button at bottom -->
+
+                <!-- === Chat Section MOVED HERE === -->
+                <div id="chat-section">
+                    <div class="chat-input-row"> <!-- Wrapper added -->
+                        <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="50">
+                        <button id="sendChatBtn">Send</button>
+                    </div>
+                    <div id="chat-log"></div>
+                </div>
+                <!-- === End Moved Chat Section === -->
+
+                <!-- Leave Button (Stays at bottom due to CSS) -->
                 <button id="leaveGameBtn">Leave Game</button>
             </div>
 
@@ -463,12 +386,8 @@
                  </div>
             </div>
 
-            <!-- Chat Section (Below everything) -->
-             <div id="chat-section">
-                 <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="50">
-                 <button id="sendChatBtn">Send</button>
-                 <div id="chat-log"></div>
-            </div>
+            <!-- Chat Section (REMOVED FROM ORIGINAL POSITION) -->
+
         </div>
 
         <!-- Game Over Screen -->
@@ -493,12 +412,13 @@
         const MAX_PLAYERS = 4;
         const RECONNECT_DELAY = 3000; // ms
         // Default player state values needed for rendering/prediction before server state arrives
-        const PLAYER_DEFAULTS = { width: 20, height: 20, max_health: 100 };
+        const PLAYER_DEFAULTS = { width: 20, height: 20, max_health: 100, base_speed: 150 }; // Added base_speed
         const ENEMY_DEFAULTS = { width: 25, height: 25, max_health: 50 };
         const BULLET_DEFAULTS = { radius: 4 };
-        const ENEMY_TYPE_CHASER = 'chaser'; 
-        const ENEMY_TYPE_SHOOTER = 'shooter'; 
-        const BULLET_TYPE_STANDARD = 'standard'; 
+        const POWERUP_DEFAULTS = { size: 12 }; // Added powerup defaults
+        const ENEMY_TYPE_CHASER = 'chaser';
+        const ENEMY_TYPE_SHOOTER = 'shooter';
+        const BULLET_TYPE_STANDARD = 'standard';
         const BULLET_TYPE_STANDARD_ENEMY = 'standard_enemy';
         const PLAYER_STATUS_ALIVE = 'alive';
         const PLAYER_STATUS_DOWN = 'down';
@@ -527,8 +447,8 @@
             gameIdInput: document.getElementById('gameIdInput'),
             canvas: document.getElementById('gameCanvas'),
             ctx: document.getElementById('gameCanvas').getContext('2d'),
-            gameScoreDiv: document.getElementById('game-score'),
-            dayNightIndicator: document.getElementById('day-night-indicator'), 
+            // gameScoreDiv: document.getElementById('game-score'), // Obsolete?
+            dayNightIndicator: document.getElementById('day-night-indicator'),
             countdownDiv: document.getElementById('countdown'),
             finalStatsDiv: document.getElementById('final-stats'),
             chatInput: document.getElementById('chatInput'),
@@ -551,9 +471,9 @@
         let appState = {
             mode: 'menu', // Start in menu
             localPlayerId: null,
-            maxPlayersInGame: null, 
+            maxPlayersInGame: null,
             currentGameId: null,
-            serverState: null, 
+            serverState: null,
             animationFrameId: null,
             isConnected: false,
             // Interpolation/Prediction State
@@ -561,7 +481,7 @@
             predictedPlayerPos: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 },
             lastServerState: null,     // State before latest
             previousServerState: null, // State before that
-            lastLoopTime: performance.now(),
+            lastLoopTime: null, // Changed from performance.now() to null
             lastStateReceiveTime: performance.now(), // Initialize with current time
 
         };
@@ -626,7 +546,7 @@
                 return `${minutes}:${paddedSeconds}`;
             }
 
-// --- REVISED UI.updateHUD function ---
+            // --- REVISED UI.updateHUD function ---
             function updateHUD(serverState) {
                 const gridContainer = document.getElementById('player-stats-grid');
                 if (!gridContainer) {
@@ -717,7 +637,8 @@
                         DOM.dayNightIndicator.style.display = 'none';
                     } else {
                         DOM.countdownDiv.style.display = 'none';
-                        DOM.dayNightIndicator.style.display = (serverState?.status === 'active') ? 'inline-block' : 'none'; // Use inline-block for day/night
+                        // Updated display style for day/night indicator
+                        DOM.dayNightIndicator.style.display = (serverState?.status === 'active') ? 'block' : 'none'; // Use block to take full width
                     }
                 } else {
                     error("DOM.countdownDiv or DOM.dayNightIndicator not found.");
@@ -731,7 +652,7 @@
                         const isNight = serverState.is_night;
                         DOM.dayNightIndicator.textContent = isNight ? 'Night' : 'Day';
                         DOM.canvas.style.backgroundColor = isNight ? (getCssVar('--bg-color') || '#3E2723') : '#A0522D';
-                        DOM.dayNightIndicator.style.display = 'inline-block'; // Use inline-block
+                        DOM.dayNightIndicator.style.display = 'block'; // Use block
 
                         if (isNight) {
                             DOM.gameContainer.classList.add('night-mode');
@@ -747,18 +668,14 @@
                  }
              }
 
+             // Simplified showGameOver remains the same
             function showGameOver(finalState) {
-                // Add checks for DOM elements
                 if (!DOM.finalStatsDiv || !DOM.gameOverScreen) {
                      error("DOM.finalStatsDiv or DOM.gameOverScreen not found."); return;
                 }
-
-                // --- SIMPLIFIED STATS LOGIC ---
-                const player = finalState?.players?.[appState.localPlayerId]; // Get local player data
-                let statsHtml = "Stats Unavailable"; // Default message
-
+                const player = finalState?.players?.[appState.localPlayerId];
+                let statsHtml = "Stats Unavailable";
                 if (player) {
-                     // Generate simple HTML for Score and Kills
                      statsHtml = `
                         <div class="final-stat-item">
                              <strong>Score:</strong> ${player.score ?? 0}
@@ -767,31 +684,26 @@
                              <strong>Kills:</strong> ${player.kills ?? 0}
                         </div>
                      `;
-                     // Optional: Add Level if desired
-                     // statsHtml += `<div class="final-stat-item"><strong>Level Reached:</strong> ${finalState?.level ?? 1}</div>`;
                 }
-                // --- END SIMPLIFIED STATS ---
-
                 DOM.finalStatsDiv.innerHTML = statsHtml;
-
                 log("UI: Attempting to show simple game over screen.");
-                 // Hide other sections (keep this logic)
                  [DOM.mainMenuSection, DOM.multiplayerMenuSection, DOM.hostWaitSection,
                   DOM.joinCodeSection, DOM.gameArea].forEach(s => { if (s) s.style.display = 'none'; });
-                        } 
-                        
+                // Show the game over screen itself
+                DOM.gameOverScreen.style.display = 'block';
+            }
+
             // Expose necessary UI functions
             return {
                 showSection,
                 updateStatus,
-                updateHUD, // Ensure this is the updated one
+                updateHUD,
                 addChatMessage,
                 updateCountdown,
                 updateDayNight,
-                showGameOver // Expose the simplified function
+                showGameOver
             };
         })(); // <-- This closes the UI IIFEw
-
 
         // --- Network "Module" ---
         const Network = (() => {
