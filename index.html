@@ -71,19 +71,18 @@
         /* --- Top Bar Styling --- */
         #top-bar {
             display: flex;
-            /* CHANGE: Arrange items horizontally, align vertically */
-            flex-direction: row; /* Changed from column */
-            align-items: center; /* Vertically center items */
-            justify-content: space-between; /* Push Title (when visible) & Stats apart */
-            /* CHANGE: Reduced padding slightly */
-            padding: 0 10px 5px 10px; /* Reduced top/bottom padding */
-            margin-bottom: 5px; /* Reduced margin slightly */
+            flex-direction: row;
+            align-items: center;
+            /* Ensure this is space-between to push Title left, Day/Night right */
+            justify-content: space-between;
+            padding: 0 10px 5px 10px;
+            margin-bottom: 5px;
             border-bottom: 2px solid var(--primary-color);
             background-color: var(--top-bar-bg);
             border-radius: 10px 10px 0 0;
-            min-height: 50px; /* Ensure a minimum height */
-            box-sizing: border-box; /* Include padding in height */
-            width: 100%; /* Ensure it spans the container */
+            min-height: 50px;
+            box-sizing: border-box;
+            width: 100%;
         }
 
         /* Title Styling */
@@ -101,16 +100,6 @@
         #player-stats-container {
             width: 100%;
         }
-
-                /* --- NEW RULE: Hide title when game is active --- */
-                #game-container.in-game #top-bar h1 {
-            display: none; /* Hide the H1 */
-        }
-        /* --- NEW RULE: Adjust top-bar justification when title is hidden --- */
-         #game-container.in-game #top-bar {
-            justify-content: center; /* Center the stats when title is gone */
-         }
-
 
         /* Container for Multiplayer Stats */
         #player-stats-container {
@@ -202,9 +191,10 @@
             padding: 4px 8px;
             border-radius: 5px;
             z-index: 5;
-            display: none;
+            display: none; /* Keep hidden initially, JS will show it */
+            margin-left: 15px; /* Add space to its left */
+            flex-shrink: 0; /* Prevent shrinking */
         }
-
 
         /* --- Visibility Control --- */
         #main-menu-section,
@@ -375,16 +365,13 @@
         <div id="top-bar">
             <h1>SUCH IS LIFE</h1>
             <div id="player-stats-container">
-    <!-- Container for ALL player stats displays -->
-    <div id="mp-stats-display" style="display: flex; justify-content: flex-start; gap: 15px; flex-wrap: wrap;">
-    </div>
-</div>
-<!-- Game Info Container remains the same -->
-<div id="game-info-container">
-    <div id="day-night-indicator">Day --:--</div> 
-</div>
+                <!-- Container for ALL player stats displays -->
+                <div id="mp-stats-display" style="display: flex; justify-content: center; /* Adjusted justification */ gap: 8px; flex-wrap: wrap;">
+                <!-- Stat boxes will be generated here by JS -->
+                </div>
+            </div>
+            <div id="day-night-indicator" style="display: none;">Day --:--</div> 
         </div>
-
         <div id="game-status">Initializing...</div>
 
         <!-- Menu Sections -->
