@@ -379,7 +379,6 @@
         /* --- REMOVE OBSOLETE --- */
         /* Hide any remnants of old top-bar stats structures */
         #player-stats-container, #mp-stats-display { display: none !important; }
-        #player-hud { display: none !important; } /* Hide old single div if it exists */
 
     </style>
 </head>
@@ -2516,9 +2515,6 @@
             let data;
             try {
                 data = JSON.parse(event.data);
-                // Using a more concise log for received messages
-                // console.log(`[Client] Received: ${data.type}`); // Can uncomment for detailed tracing
-
             } catch (err) {
                 console.error("[Client] Failed to parse server message:", err, event.data);
                 UI.updateStatus("Received invalid data from server.", true);
@@ -2604,8 +2600,8 @@
                         log("[handleServerMessage] Processing 'sp_game_started'");
                         appState.localPlayerId = data.player_id;
                         appState.currentGameId = data.game_id;
-                        appState.serverState = data.initial_state;
-                        appState.maxPlayersInGame = 1; // SP is always 1
+                        appState.serverState = data.initial_state; // Set initial state
+                        appState.maxPlayersInGame = 1;
 
                         // Initialize player positions
                         const spPlayer = appState.serverState?.players[appState.localPlayerId];
@@ -2616,6 +2612,13 @@
 
                         UI.updateStatus("Single Player Game Started!");
                         UI.showSection('game-area');
+
+                        // --- ADD INITIAL HUD UPDATE ---
+                        if (appState.serverState) {
+                            UI.updateHUD(appState.serverState); // Update HUD with initial state
+                            UI.updateCountdown(appState.serverState); // Also update countdown/day-night
+                            UI.updateDayNight(appState.serverState);
+                        }
 
                         // --- START LOOP FOR SINGLE PLAYER ---
                         log("-> SP started, starting loop.");
@@ -2703,9 +2706,10 @@
 
                         // 6. Update HUD/Timers (Only if game is actively running)
                         if (newState.status === 'countdown' || newState.status === 'active') {
-                            const player = newState.players?.[appState.localPlayerId];
-                            UI.updateHUD(player, newState);
-                            UI.updateCountdown(newState);
+                            // --- FIX HUD CALL SIGNATURE ---
+                            UI.updateHUD(newState); // <-- Pass ONLY newState
+                            // --- END FIX ---
+                            UI.updateCountdown(newState); // Update other UI elements
                             UI.updateDayNight(newState);
                         }
                         // Update waiting message if status is waiting (even if status didn't change)
