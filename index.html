@@ -574,14 +574,15 @@
             active: false,
             x: -50,
             y: 0,
-            segmentLength: 0.7,
-            maxSegments: 33,
-            amplitude: 17,
+            segmentLength: 1,   // Original value
+            segments: [],
+            maxSegments: 25,     // Original value
             baseY: 0,
             direction: 1,
-            speed: 85,
+            speed: 60,
             frequency: 0.1,
-            lineWidth: 1.0,
+            amplitude: 25,      // Original value
+            lineWidth: 1.5,     // Original value
 
             update: function(currentTime) {
                 snake.x += snake.direction * snake.speed * 0.05;
@@ -599,15 +600,15 @@
                 }
 
                 for (let i = 1; i < snake.segments.length; i++) {
-                     const segment = snake.segments[i];
-                     if (!segment || typeof segment.time === 'undefined') continue;
+                    const segment = snake.segments[i];
+                    if (!segment || typeof segment.time === 'undefined') continue;
 
-                     const timeOffset = (currentTime - segment.time) * 0.001;
-                     const segmentWave = Math.sin(segment.x * snake.frequency + waveTime - timeOffset * 3);
+                    const timeOffset = (currentTime - segment.time) * 0.001;
+                    const segmentWave = Math.sin(segment.x * snake.frequency + waveTime - timeOffset * 3);
 
-                     if (typeof segment.y !== 'undefined') {
-                         snake.segments[i].y = snake.baseY + segmentWave * snake.amplitude * (1 - (i / snake.segments.length) * 0.2);
-                     }
+                    if (typeof segment.y !== 'undefined') {
+                        snake.segments[i].y = snake.baseY + segmentWave * snake.amplitude * (1 - (i / snake.segments.length) * 0.2);
+                    }
                 }
             }
         };
@@ -1501,26 +1502,35 @@
                 playerIdsToRemove.forEach(id => { delete activeSpeechBubbles[id]; });
             }
 
+            // --- drawSnake function (Matching original lineWidth) ---
             function drawSnake() {
-                if (snake.segments.length === 0) return;
+                if (!snake || !Array.isArray(snake.segments) || snake.segments.length === 0) {
+                    return;
+                }
 
                 const snakeLineColor = '#261a0d';
 
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
                 ctx.strokeStyle = snakeLineColor;
-                ctx.lineWidth = snake.lineWidth;
+                ctx.lineWidth = snake.lineWidth; // Uses the lineWidth from the snake object (1.5)
 
                 ctx.beginPath();
 
                 const tailSegment = snake.segments[snake.segments.length - 1];
-                const tailAmplitudeFactor = 1.2;
+                if (!tailSegment) return;
+
+                const tailAmplitudeFactor = 1.5;
                 const tailY = snake.baseY + Math.sin(tailSegment.x * snake.frequency) * (snake.amplitude * tailAmplitudeFactor);
                 ctx.moveTo(tailSegment.x, tailY);
 
                 for (let i = snake.segments.length - 2; i >= 0; i--) {
                     const segment = snake.segments[i];
-                    const progress = i / (snake.segments.length - 1);
+                    if (!segment) continue;
+
+                    const denominator = snake.segments.length - 1;
+                    const progress = (denominator > 0) ? (i / denominator) : 0;
+
                     const segmentAmplitudeFactor = 1.0 + (progress * progress * 0.5);
                     const segmentY = snake.baseY + Math.sin(segment.x * snake.frequency) * (snake.amplitude * segmentAmplitudeFactor);
                     ctx.lineTo(segment.x, segmentY);
@@ -1530,40 +1540,6 @@
 
                 ctx.stroke();
             }
-            
-            // --- Drawing Entities ---
-            function drawPlayers(players) {
-                 // This function remains the same - it calls the updated drawPlayerCharacter
-                 if (!players) return;
-                 Object.values(players).forEach(player => {
-                     if (!player || player.player_status === PLAYER_STATUS_DEAD) return; // Use constant
-                     const isSelf = player.id === appState.localPlayerId;
-                     const playerStatus = player.player_status || PLAYER_STATUS_ALIVE; // Use constant
-                     const drawX = isSelf ? appState.renderedPlayerPos.x : player.x;
-                     const drawY = isSelf ? appState.renderedPlayerPos.y : player.y;
-                     const width = player.width ?? PLAYER_DEFAULTS.width;
-                     const height = player.height ?? PLAYER_DEFAULTS.height;
-                     const maxHealth = player.max_health ?? PLAYER_DEFAULTS.max_health;
-                     const currentArmor = player.armor ?? 0;
-                     let isDown = (playerStatus === PLAYER_STATUS_DOWN); // Use constant
-                     let alpha = isDown ? 0.4 : 1.0;
-
-                     ctx.save();
-                     ctx.globalAlpha = alpha;
-                     // Get aim direction for local player muzzle flash/gun angle
-                     const aimDx = isSelf ? localPlayerMuzzleFlash.aimDx : 0;
-                     const aimDy = isSelf ? localPlayerMuzzleFlash.aimDy : 0;
-                     // Call the updated drawing function below
-                     drawPlayerCharacter(drawX, drawY, width, height, isSelf, player, aimDx, aimDy);
-                     ctx.restore();
-
-                     // Only draw bars if alive
-                     if (playerStatus === PLAYER_STATUS_ALIVE) {
-                         drawHealthBar(drawX, drawY, width, player.health, maxHealth);
-                         if (currentArmor > 0) drawArmorBar(drawX, drawY, width, currentArmor);
-                     }
-                 });
-             }
 
             function generateBackground(targetIsNight) {
                 console.log(`[Renderer] Generating background for ${targetIsNight ? 'Night' : 'Day'}`);
