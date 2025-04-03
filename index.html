@@ -513,23 +513,28 @@
         let activeEnemyBubbles = {};  // { enemyId: { text: "Grrr!", endTime: 123456789 } }
         let socket = null; // Single WebSocket connection reference
 
-        // --- ADD SNAKE STATE HERE ---
+// --- ADD SNAKE STATE HERE ---
         let snake = {
-            active: false,      // Is the snake currently on screen?
-            x: -50,             // Current horizontal position
-            y: 0,               // Current vertical position (calculated with sin wave)
-            segmentLength: 8,  // Visual length of a snake segment
-            segments: [],       // Array to store previous positions for drawing a body [{x,y}, {x,y}, ...]
-            maxSegments: 10,    // How many segments make up the body
-            baseY: 0,           // The straight-line Y position it's slithering along
-            direction: 1,       // 1 for right, -1 for left
-            speed: 60,          // Pixels per second
-            frequency: 0.04,    // Controls how tight the 'S' curve is (lower is wider)
-            amplitude: 6        // Controls how high/low the 'S' curve goes
+            active: false,
+            x: -50,
+            y: 0,
+            // --- ADJUST THESE ---
+            segmentLength: 6,   // Smaller segments
+            segments: [],
+            maxSegments: 15,     // More segments for a longer body
+            // --------------------
+            baseY: 0,
+            direction: 1,
+            speed: 70,           // Slightly faster? Or keep at 60? Test this.
+            // --- ADJUST THESE ---
+            frequency: 0.03,     // Lower frequency = Wider curves
+            amplitude: 3         // MUCH smaller amplitude = Less vertical movement
+            // --------------------
         };
-        let snakeSpawnTimer = 5 + Math.random() * 10; // Initial delay 5-15 seconds
-        const SNAKE_SPAWN_INTERVAL_MIN = 15; // Minimum seconds between snakes
-        const SNAKE_SPAWN_INTERVAL_MAX = 35; // Maximum seconds between snakes
+        // --- Spawn timers remain the same ---
+        let snakeSpawnTimer = 5 + Math.random() * 10;
+        const SNAKE_SPAWN_INTERVAL_MIN = 15;
+        const SNAKE_SPAWN_INTERVAL_MAX = 35;
         // --------------------------
 
         // --- Logging Wrapper ---
@@ -1401,42 +1406,38 @@
             }
 
             function drawSnake() {
-                 // Only draw if active and has at least 2 points to make a line
                  if (!snake.active || snake.segments.length < 2) return;
 
-                 const snakeBodyColor = '#331a00'; // Dark brown
-                 const snakeOutlineColor = '#1a0d00'; // Darker outline
+                 const snakeBodyColor = '#331a00';
+                 const snakeOutlineColor = '#1a0d00';
 
-                 ctx.lineCap = 'round'; // Makes the connections smooth
-                 ctx.lineJoin = 'round'; // Makes bends smooth
+                 ctx.lineCap = 'round';
+                 ctx.lineJoin = 'round';
                  ctx.strokeStyle = snakeOutlineColor;
-                 ctx.lineWidth = snake.segmentLength + 2; // Outline slightly thicker
+                 // --- ADJUST THICKNESS ---
+                 ctx.lineWidth = snake.segmentLength + 1; 
 
                  // Draw the outline first
                  ctx.beginPath();
-                 ctx.moveTo(snake.segments[0].x, snake.segments[0].y); // Start at the tail
+                 ctx.moveTo(snake.segments[0].x, snake.segments[0].y);
                  for (let i = 1; i < snake.segments.length; i++) {
                      ctx.lineTo(snake.segments[i].x, snake.segments[i].y);
                  }
-                 // Add the current head position to the end of the path
                  ctx.lineTo(snake.x, snake.y);
-                 ctx.stroke(); // Draw the thick outline
+                 ctx.stroke();
 
-                 // Draw the inner body color slightly thinner
+                 // Draw the inner body color
                  ctx.strokeStyle = snakeBodyColor;
-                 ctx.lineWidth = snake.segmentLength; // Body thickness
-                 ctx.stroke(); // Draw the inner color over the outline path
+                 // --- ADJUST THICKNESS ---
+                 ctx.lineWidth = snake.segmentLength; 
+                 ctx.stroke();
 
-                 // Optional: Draw a distinct head (e.g., slightly larger circle)
-                 ctx.fillStyle = '#4d2800'; // Slightly lighter head color
+                 // Optional: Draw a distinct head
+                 ctx.fillStyle = '#4d2800';
                  ctx.beginPath();
-                 // Draw head at the current calculated snake.x, snake.y
-                 ctx.arc(snake.x, snake.y, snake.segmentLength / 1.5, 0, Math.PI*2);
+                 // --- ADJUST HEAD SIZE ---
+                 ctx.arc(snake.x, snake.y, snake.segmentLength / 1.2, 0, Math.PI*2); 
                  ctx.fill();
-
-                 // Reset line cap/join if needed elsewhere, though probably fine
-                 // ctx.lineCap = 'butt';
-                 // ctx.lineJoin = 'miter';
             }
 
             // --- Drawing Entities ---
