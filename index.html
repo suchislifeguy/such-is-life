@@ -1807,7 +1807,7 @@
                      const spPlayer = stateToRender?.players[appState.localPlayerId];
                      if (spPlayer) { appState.renderedPlayerPos.x = spPlayer.x; appState.renderedPlayerPos.y = spPlayer.y; }
                 } else {
-                    stateToRender = getInterpolatedState(now); // Assumes getInterpolatedState is defined elsewhere
+                    stateToRender = Game.getInterpolatedState(now); // Call via the Game module
                 }
 
                 if (!stateToRender || !appState.localPlayerId || !stateToRender.players) {
@@ -2276,7 +2276,8 @@
                  cleanupLoop,
                  sendChatMessage,
                  getLocalGameState,
-                 initListeners // Expose initListeners to be called on load
+                 initListeners, 
+                 getInterpolatedState: getInterpolatedState
             };
         })(); // End Game module IIFE
 
@@ -2581,4 +2582,3 @@
     </script>
 </body>
 </html>
-
