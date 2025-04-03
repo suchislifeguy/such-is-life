@@ -2091,18 +2091,41 @@
 
                     // --- Case: Receiving Game State Updates ---
                     case 'game_state':
-                        // Minimal log for game state to avoid flooding console
-                        // if (Math.random() < 0.05) log("[handleServerMessage] Processing 'game_state'");
-
-                        // 1. Store previous state info
+                        // 1. Store previous state info **and extract previous player health FIRST**
                         const previousStatus = appState.serverState?.status;
                         const wasGameOver = appState.serverState?.game_over;
-                        appState.previousServerState = appState.lastServerState;
-                        appState.lastServerState = appState.serverState;
+                        
+                        // --- FIX: Get previous player state BEFORE updating lastServerState ---
+                        const previousPlayerState = appState.serverState?.players?.[appState.localPlayerId]; 
+                        // --------------------------------------------------------------------
 
-                        // 2. Update the core server state
+                        // Now update the state history
+                        appState.previousServerState = appState.lastServerState;
+                        appState.lastServerState = appState.serverState; // Store the state we just read from
+
+                        // 2. Update the core server state with the NEW data
                         appState.serverState = data.state;
-                        const newState = appState.serverState;
+                        const newState = appState.serverState; // This is the absolute latest state
+                        const currentPlayerState = newState?.players?.[appState.localPlayerId]; // Get current player data from the latest state
+
+                        // --- TRIGGER SHAKE ON DAMAGE (Now uses correct previousPlayerState) ---
+                        if (previousPlayerState && // Check if previous state existed
+                            currentPlayerState && // Check if current state exists
+                            typeof currentPlayerState.health === 'number' && // Ensure health is valid
+                            typeof previousPlayerState.health === 'number' && // Ensure health is valid
+                            currentPlayerState.health < previousPlayerState.health) // Compare health
+                        {
+                            const damageTaken = previousPlayerState.health - currentPlayerState.health;
+                            const baseMagnitude = 3;
+                            const damageScale = 0.1;
+                            const maxMagnitude = 10;
+                            const shakeMagnitude = Math.min(maxMagnitude, baseMagnitude + damageTaken * damageScale);
+                            const shakeDuration = 250; // ms duration
+
+                            log(`Damage detected! Taken: ${damageTaken.toFixed(1)}, Triggering Shake: Mag=${shakeMagnitude.toFixed(1)}, Dur=${shakeDuration}`); // Debug log
+                            Renderer.triggerShake(shakeMagnitude, shakeDuration);
+                        }
+                        // --- END SHAKE TRIGGER ---
 
                         // 3. Update maxPlayers if needed (e.g., first state update for host)
                         if (!appState.maxPlayersInGame && newState.max_players) {
