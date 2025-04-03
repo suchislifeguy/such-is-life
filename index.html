@@ -1400,35 +1400,43 @@
                 playerIdsToRemove.forEach(id => { delete activeSpeechBubbles[id]; });
             }
 
-            function drawSnake() { // Takes no arguments, uses global 'snake' state
-                 if (!snake.active || snake.segments.length === 0) return;
+            function drawSnake() {
+                 // Only draw if active and has at least 2 points to make a line
+                 if (!snake.active || snake.segments.length < 2) return;
 
-                 ctx.fillStyle = '#331a00'; // Dark brown color for snake
-                 ctx.strokeStyle = '#1a0d00'; // Even darker outline
-                 ctx.lineWidth = 1;
+                 const snakeBodyColor = '#331a00'; // Dark brown
+                 const snakeOutlineColor = '#1a0d00'; // Darker outline
 
-                 // Draw segments from tail to head
-                 for (let i = 0; i < snake.segments.length; i++) {
-                     const segment = snake.segments[i];
-                     const size = snake.segmentLength * (0.5 + 0.5 * (i / snake.segments.length)); // Taper slightly towards tail
-                     ctx.beginPath();
-                     // Draw slightly overlapping circles for a smoother look
-                     ctx.arc(segment.x, segment.y, size / 2, 0, Math.PI * 2);
-                     ctx.fill();
-                     ctx.stroke();
+                 ctx.lineCap = 'round'; // Makes the connections smooth
+                 ctx.lineJoin = 'round'; // Makes bends smooth
+                 ctx.strokeStyle = snakeOutlineColor;
+                 ctx.lineWidth = snake.segmentLength + 2; // Outline slightly thicker
+
+                 // Draw the outline first
+                 ctx.beginPath();
+                 ctx.moveTo(snake.segments[0].x, snake.segments[0].y); // Start at the tail
+                 for (let i = 1; i < snake.segments.length; i++) {
+                     ctx.lineTo(snake.segments[i].x, snake.segments[i].y);
                  }
+                 // Add the current head position to the end of the path
+                 ctx.lineTo(snake.x, snake.y);
+                 ctx.stroke(); // Draw the thick outline
 
-                 // Draw the head slightly larger/differently (optional)
-                 const head = snake.segments[snake.segments.length - 1]; // Last added is current head approx
-                 if(head){ // Check if head exists
-                      ctx.fillStyle = '#4d2800'; // Slightly lighter head
-                      ctx.beginPath();
-                      ctx.arc(snake.x, snake.y, snake.segmentLength / 1.8, 0, Math.PI*2); // Current actual head pos
-                      ctx.fill();
-                      ctx.stroke();
-                 }
+                 // Draw the inner body color slightly thinner
+                 ctx.strokeStyle = snakeBodyColor;
+                 ctx.lineWidth = snake.segmentLength; // Body thickness
+                 ctx.stroke(); // Draw the inner color over the outline path
 
+                 // Optional: Draw a distinct head (e.g., slightly larger circle)
+                 ctx.fillStyle = '#4d2800'; // Slightly lighter head color
+                 ctx.beginPath();
+                 // Draw head at the current calculated snake.x, snake.y
+                 ctx.arc(snake.x, snake.y, snake.segmentLength / 1.5, 0, Math.PI*2);
+                 ctx.fill();
 
+                 // Reset line cap/join if needed elsewhere, though probably fine
+                 // ctx.lineCap = 'butt';
+                 // ctx.lineJoin = 'miter';
             }
 
             // --- Drawing Entities ---
