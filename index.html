@@ -1369,62 +1369,87 @@
                  });
              }
 
-             function drawPlayerCharacter(x, y, w, h, isSelf, playerState, aimDx, aimDy) {
-                 // Use cached colors
-                 const headColor = playerHeadColor; const helmetColor = playerHelmetColor; const slitColor = playerSlitColor;
-                 const coatColor = playerCoatColor; const torsoColor = isSelf ? playerTorsoSelfColor : playerTorsoOtherColor;
-                 const bootColor = playerBootColor; const gunColor = playerGunColor;
+            function drawPlayerCharacter(x, y, w, h, isSelf, playerState, aimDx, aimDy) {
+                // --- Get Hit Flash State ---
+                const justHit = playerState?.hit_flash_this_tick ?? false;
+                const flashColor = enemyHitFlashColor; // Reuse the white flash color from enemies
 
+                // Use cached colors (as before)
+                const originalCoatColor = playerCoatColor;
+                const originalTorsoColor = isSelf ? playerTorsoSelfColor : playerTorsoOtherColor;
+                const originalHelmetColor = playerHelmetColor;
+                const originalSlitColor = playerSlitColor;
+                const originalGunColor = playerGunColor;
+                const originalBootColor = playerBootColor;
+                // headColor (skin) usually isn't flashed
+
+                // Idle Bobbing Calculation (as implemented before)
                 const isIdle = (playerState?.input_vector?.dx ?? 0) === 0 && (playerState?.input_vector?.dy ?? 0) === 0;
-                // Calculate offset only if idle, otherwise it's 0
-                const bobOffset = isIdle
-                                  ? Math.sin(performance.now() / IDLE_BOB_SPEED) * IDLE_BOB_AMPLITUDE
-                                  : 0;
+                const bobOffset = isIdle ? Math.sin(performance.now() / IDLE_BOB_SPEED) * IDLE_BOB_AMPLITUDE : 0;
 
-                 // Geometry calculations
-                 const headRadius = h * 0.2; const bodyHeight = h * 0.5; const coatLengthBonus = h * 0.15;
-                 const bodyWidthTop = w * 0.9; const bodyWidthBottom = w * 0.7; const coatWidth = w * 1.1;
-                 const armWidth = w * 0.2; const armLength = h * 0.4; const helmetWidth = w * 0.85;
-                 const helmetHeight = h * 0.5; const slitWidth = helmetWidth * 0.75; const slitHeight = helmetHeight * 0.2;
-                 const bootSize = 5; const bootSpacing = w * 0.3;
-                // --- APPLY bobOffset to calculated Y positions ---
+                // Geometry calculations with bobOffset (as implemented before)
+                const headRadius = h * 0.2; const bodyHeight = h * 0.5; const coatLengthBonus = h * 0.15;
+                const bodyWidthTop = w * 0.9; const bodyWidthBottom = w * 0.7; const coatWidth = w * 1.1;
+                const armWidth = w * 0.2; const armLength = h * 0.4; const helmetWidth = w * 0.85;
+                const helmetHeight = h * 0.5; const slitWidth = helmetWidth * 0.75; const slitHeight = helmetHeight * 0.2;
+                const bootSize = 5; const bootSpacing = w * 0.3;
                 const headCenterY = y - (h / 2) + headRadius + bobOffset;
-                const bodyTopY = headCenterY + headRadius * 0.8; // Inherits bobOffset via headCenterY
+                const bodyTopY = headCenterY + headRadius * 0.8;
                 const bodyBottomY = bodyTopY + bodyHeight;
                 const coatTopY = bodyTopY + bodyHeight * 0.1;
                 const coatBottomY = bodyBottomY + coatLengthBonus;
-                const helmetTopY = headCenterY - helmetHeight * 0.4; // Inherits bobOffset via headCenterY
+                const helmetTopY = headCenterY - helmetHeight * 0.4;
                 const slitY = helmetTopY + (helmetHeight / 2) - (slitHeight / 2);
-                const bootOffsetY = coatBottomY + 2; // Relative to coatBottomY which inherited offset
-                 
-                 // Drawing with cached colors
-                 ctx.fillStyle = coatColor; ctx.fillRect(x - coatWidth / 2, coatTopY, coatWidth, coatBottomY - coatTopY);
-                 ctx.fillStyle = torsoColor;
-                 ctx.beginPath(); ctx.moveTo(x - bodyWidthTop / 2, bodyTopY); ctx.lineTo(x + bodyWidthTop / 2, bodyTopY);
-                 ctx.lineTo(x + bodyWidthBottom / 2, bodyBottomY); ctx.lineTo(x - bodyWidthBottom / 2, bodyBottomY); ctx.closePath(); ctx.fill();
-                 ctx.fillRect(x - bodyWidthTop / 2 - armWidth, bodyTopY, armWidth, armLength); ctx.fillRect(x + bodyWidthTop / 2, bodyTopY, armWidth, armLength);
-                 ctx.fillStyle = helmetColor; ctx.fillRect(x - helmetWidth / 2, helmetTopY, helmetWidth, helmetHeight);
-                 ctx.fillStyle = slitColor; ctx.fillRect(x - slitWidth / 2, slitY, slitWidth, slitHeight);
+                const bootOffsetY = coatBottomY + 2;
 
-                 if (isSelf && aimDx !== 0 && aimDy !== 0) { // Only draw gun if aiming direction is known
-                     const gunLevel = playerState?.gun ?? 1; const gunLengthBase = 12;
-                     const gunLengthBonus = (gunLevel - 1) * 3; const gunLength = gunLengthBase + gunLengthBonus;
-                     const gunThickness = 5; const gunOriginY = bodyTopY + bodyHeight / 2;
-                     ctx.save(); ctx.translate(x, gunOriginY); const angle = Math.atan2(aimDy, aimDx);
-                     ctx.rotate(angle); ctx.fillStyle = gunColor; ctx.fillRect(w * 0.1, -gunThickness / 2, gunLength, gunThickness); ctx.restore();
-                 }
+                // --- Drawing with Temporary Flash Color Override ---
 
-                 ctx.fillStyle = bootColor;
-                 const dx = playerState?.input_vector?.dx ?? 0; const dy = playerState?.input_vector?.dy ?? 0;
-                 const isMoving = (dx !== 0 || dy !== 0);
-                 if (isMoving) {
-                     const stepDuration = 250; const stepPhase = Math.floor(performance.now() / stepDuration) % 2;
-                     if (stepPhase === 0) ctx.fillRect(x - bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
-                     else ctx.fillRect(x + bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
-                 } else {
-                     ctx.fillRect(x - bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize); ctx.fillRect(x + bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
-                 }
-             }
+                // Coat
+                ctx.fillStyle = justHit ? flashColor : originalCoatColor;
+                ctx.fillRect(x - coatWidth / 2, coatTopY, coatWidth, coatBottomY - coatTopY);
+
+                // Torso & Arms
+                ctx.fillStyle = justHit ? flashColor : originalTorsoColor;
+                ctx.beginPath(); // Torso shape
+                ctx.moveTo(x - bodyWidthTop / 2, bodyTopY); ctx.lineTo(x + bodyWidthTop / 2, bodyTopY);
+                ctx.lineTo(x + bodyWidthBottom / 2, bodyBottomY); ctx.lineTo(x - bodyWidthBottom / 2, bodyBottomY);
+                ctx.closePath(); ctx.fill();
+                ctx.fillRect(x - bodyWidthTop / 2 - armWidth, bodyTopY, armWidth, armLength); // Left arm
+                ctx.fillRect(x + bodyWidthTop / 2, bodyTopY, armWidth, armLength); // Right arm
+
+                // Helmet (Draw normally, no flash)
+                ctx.fillStyle = originalHelmetColor; // Set back to original color
+                ctx.fillRect(x - helmetWidth / 2, helmetTopY, helmetWidth, helmetHeight);
+
+                // Slit (Draw normally, no flash)
+                ctx.fillStyle = originalSlitColor; // Set back to original color
+                ctx.fillRect(x - slitWidth / 2, slitY, slitWidth, slitHeight);
+
+                // Gun (Draw normally, no flash)
+                if (isSelf && aimDx !== 0 && aimDy !== 0) {
+                    const gunLevel = playerState?.gun ?? 1; const gunLengthBase = 12;
+                    const gunLengthBonus = (gunLevel - 1) * 3; const gunLength = gunLengthBase + gunLengthBonus;
+                    const gunThickness = 5;
+                    const gunOriginY = bodyTopY + bodyHeight / 2;
+                    ctx.save(); ctx.translate(x, gunOriginY); const angle = Math.atan2(aimDy, aimDx);
+                    ctx.rotate(angle);
+                    ctx.fillStyle = originalGunColor; // Set back to original color
+                    ctx.fillRect(w * 0.1, -gunThickness / 2, gunLength, gunThickness); ctx.restore();
+                }
+
+                // Boots (Draw normally, no flash)
+                ctx.fillStyle = originalBootColor; // Set back to original color
+                const dx = playerState?.input_vector?.dx ?? 0; const dy = playerState?.input_vector?.dy ?? 0;
+                const isMoving = !isIdle;
+                if (isMoving) {
+                    const stepDuration = 250; const stepPhase = Math.floor(performance.now() / stepDuration) % 2;
+                    if (stepPhase === 0) ctx.fillRect(x - bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
+                    else ctx.fillRect(x + bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
+                } else {
+                    ctx.fillRect(x - bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
+                    ctx.fillRect(x + bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
+                }
+            } // End drawPlayerCharacter
 
             function drawEnemies(enemies) {
                 if (!enemies) return;
