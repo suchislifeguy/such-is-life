@@ -611,21 +611,21 @@
                 }
             }
         };
-                    function initSnake() {
-                        snake.x = -50;
-                        snake.y = snake.baseY;
-                        snake.segments = [];
-                        
-                        // Add a few initial segments
-                        for (let i = 1; i <= 10; i++) {
-                            snake.segments.push({
-                                x: snake.x - (i * snake.segmentLength),
-                                y: snake.baseY
-                            });
-                        }
-                        
-                        snake.active = true;
-                    }
+        function initSnake() {
+            snake.x = -50;
+            snake.y = snake.baseY;
+            snake.segments = [];
+            
+            // Add a few initial segments
+            for (let i = 1; i <= 10; i++) {
+                snake.segments.push({
+                    x: snake.x - (i * snake.segmentLength),
+                    y: snake.baseY
+                });
+            }
+            
+            snake.active = true;
+        }
 
         // --- Spawn timers remain the same ---
         let snakeSpawnTimer = 5 + Math.random() * 10;
