@@ -1425,65 +1425,63 @@
 
                 // 2. Draw details (Patches, Grass Tufts, etc.)
                 if (!targetIsNight) {
-                    // Draw Day Details (Example: Patches & Grass)
+                    // Draw Day Details (MAKE MORE OBVIOUS)
                     // Patches
-                    const numPatches = 150;
+                    const numPatches = 100; // Fewer, but make them bigger/more opaque
                     for (let i = 0; i < numPatches; i++) {
                         const x = Math.random() * CANVAS_WIDTH;
                         const y = Math.random() * CANVAS_HEIGHT;
-                        const radius = Math.random() * 20 + 5; // 5 to 25 radius
-                        // Slightly darker/lighter shade of the base day color
-                        const r = 143 + Math.random() * 20 - 10; // Base R of DarkSeaGreen
-                        const g = 188 + Math.random() * 20 - 10; // Base G
-                        const b = 143 + Math.random() * 20 - 10; // Base B
-                        const alpha = Math.random() * 0.1 + 0.05; // 5% to 15% opacity
+                        const radius = Math.random() * 40 + 15; // Larger: 15 to 55 radius
+                        // Darker Brown - More Contrast
+                        const r = 101 + Math.random() * 20 - 10;
+                        const g = 67 + Math.random() * 20 - 10;
+                        const b = 33 + Math.random() * 20 - 10;
+                        const alpha = Math.random() * 0.25 + 0.20; // More Opaque: 20% to 45%
                         offscreenCtx.fillStyle = `rgba(${r.toFixed(0)}, ${g.toFixed(0)}, ${b.toFixed(0)}, ${alpha.toFixed(2)})`;
                         offscreenCtx.beginPath();
                         offscreenCtx.arc(x, y, radius, 0, Math.PI * 2);
                         offscreenCtx.fill();
                     }
                     // Grass Tufts
-                    const numTufts = 250;
-                    offscreenCtx.lineWidth = 2;
-                    offscreenCtx.strokeStyle = 'rgba(0, 80, 0, 0.3)'; // Darker green, lower opacity
+                    const numTufts = 150; // Fewer but thicker/brighter
+                    offscreenCtx.lineWidth = 3; // Thicker
+                    offscreenCtx.strokeStyle = 'rgba(34, 139, 34, 0.6)'; // Brighter ForestGreen, More Opaque (60%)
                     for (let i = 0; i < numTufts; i++) {
                         const x = Math.random() * CANVAS_WIDTH;
                         const y = Math.random() * CANVAS_HEIGHT;
                         offscreenCtx.beginPath();
                         offscreenCtx.moveTo(x, y);
-                        ctx.lineTo(x + (Math.random()*4-2), y - (Math.random()*4 + 3)); // Slightly angled tuft
+                        offscreenCtx.lineTo(x + (Math.random()*6-3), y - (Math.random()*6 + 5)); // Slightly longer tufts
                         offscreenCtx.stroke();
                     }
 
                 } else {
-                    // Draw Night Details (Example: Fewer/Darker Patches, Stars?)
+                    // Draw Night Details (MAKE MORE OBVIOUS)
                     // Darker Patches
-                    const numPatches = 80;
+                    const numPatches = 60; // Fewer, larger, more opaque
                     for (let i = 0; i < numPatches; i++) {
                         const x = Math.random() * CANVAS_WIDTH;
                         const y = Math.random() * CANVAS_HEIGHT;
-                        const radius = Math.random() * 30 + 10; // 10 to 40 radius
-                        // Even darker shade
-                        const alpha = Math.random() * 0.1 + 0.03; // 3% to 13% opacity
-                        offscreenCtx.fillStyle = `rgba(10, 5, 5, ${alpha.toFixed(2)})`; // Very dark brown/black patches
+                        const radius = Math.random() * 50 + 20; // Larger: 20 to 70 radius
+                        const alpha = Math.random() * 0.15 + 0.1; // More Opaque: 10% to 25%
+                        offscreenCtx.fillStyle = `rgba(5, 2, 2, ${alpha.toFixed(2)})`; // Very dark near-black patches
                         offscreenCtx.beginPath();
                         offscreenCtx.arc(x, y, radius, 0, Math.PI * 2);
                         offscreenCtx.fill();
                     }
-                    // Optional: Draw stars
-                    const numStars = 100;
-                    offscreenCtx.fillStyle = 'rgba(255, 255, 220, 0.6)'; // Faint yellow
+                    // Stars
+                    const numStars = 150; // More stars
+                    offscreenCtx.fillStyle = 'rgba(255, 255, 240, 0.8)'; // Brighter Ivory, More Opaque (80%)
                     for (let i = 0; i < numStars; i++) {
                         const starX = Math.random() * CANVAS_WIDTH;
-                        const starY = Math.random() * CANVAS_HEIGHT * 0.8; // Bias towards top 80%
-                        const starR = Math.random() * 1.5;
-                        offscreenCtx.fillRect(starX, starY, starR, starR); // Small squares
+                        const starY = Math.random() * CANVAS_HEIGHT; // Allow stars lower down too
+                        const starR = Math.random() * 1.5 + 0.5; // Slightly larger stars (0.5 to 2.0)
+                        offscreenCtx.fillRect(starX, starY, starR, starR);
                     }
                 }
 
                 console.log("[Renderer] Background generation complete.");
-                currentBackgroundIsNight = targetIsNight; // Update what's on the canvas
-                // Don't set isBackgroundReady here, we set it after the *first* generation
+                currentBackgroundIsNight = targetIsNight;
             }
 
             // --- Trigger Background Update Function ---
@@ -1907,27 +1905,70 @@
                 ctx.fillStyle = armorBarColor; // Use cached armor color
                 ctx.fillRect(barX, barY, currentWidth, armorBarHeight);
             }
-
             // --- Main Draw Call ---
             function drawGame() {
-                ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                // Keep now calculation at the top
                 const now = performance.now();
 
-                // Screen Shake
+                // 1. --- Draw Background (Replaces clearRect) ---
+                if (!isBackgroundReady) {
+                     // Draw a fallback solid color if background isn't generated yet
+                     // Use the main ctx here
+                     ctx.fillStyle = dayBaseColor; // Or some loading color
+                     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                     // console.log("Waiting for background generation...");
+                } else if (isTransitioningBackground) {
+                     // Handle the fade transition
+                     const elapsed = now - transitionStartTime;
+                     const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS);
+
+                     // Draw the OLD background (fully opaque) onto main canvas
+                     ctx.globalAlpha = 1.0;
+                     ctx.drawImage(oldOffscreenCanvas, 0, 0);
+
+                     // Draw the NEW background on top, fading it in
+                     ctx.globalAlpha = progress; // Alpha goes from 0 to 1
+                     ctx.drawImage(offscreenCanvas, 0, 0); // Draw NEW onto main canvas
+
+                     // Reset alpha for subsequent drawing this frame
+                     ctx.globalAlpha = 1.0;
+
+                     // Check if transition finished
+                     if (progress >= 1.0) {
+                         console.log("[Renderer] Background transition finished.");
+                         isTransitioningBackground = false;
+                     }
+                } else {
+                     // Normal state: Just draw the current offscreen background onto the main canvas
+                     // No need to clearRect first, drawImage covers the whole canvas
+                     ctx.drawImage(offscreenCanvas, 0, 0);
+                }
+                // --- END Background Drawing ---
+
+                // 2. --- Screen Shake (Apply *after* background is drawn) ---
                 let shakeOffsetX = 0, shakeOffsetY = 0, shakeApplied = false;
                 if (now < shakeEndTime && currentShakeMagnitude > 0) {
                     const remainingTime = shakeEndTime - now;
-                    const estimatedTotalDuration = Math.max(1, shakeEndTime - (now - 300));
+                    const estimatedTotalDuration = Math.max(1, shakeEndTime - (now - 300)); // Estimate based on potential remaining time
                     const decay = Math.max(0, remainingTime / estimatedTotalDuration);
                     const currentMagnitude = currentShakeMagnitude * decay * decay;
                     if (currentMagnitude > 0.5) {
                         shakeOffsetX = (Math.random() * 2 - 1) * currentMagnitude;
                         shakeOffsetY = (Math.random() * 2 - 1) * currentMagnitude;
-                        ctx.save(); ctx.translate(shakeOffsetX, shakeOffsetY); shakeApplied = true;
-                    } else { currentShakeMagnitude = 0; shakeEndTime = 0; }
-                } else { currentShakeMagnitude = 0; shakeEndTime = 0; }
+                        // Apply the translation *before* drawing entities
+                        ctx.save();
+                        ctx.translate(shakeOffsetX, shakeOffsetY);
+                        shakeApplied = true;
+                    } else {
+                        currentShakeMagnitude = 0; shakeEndTime = 0;
+                     }
+                } else {
+                     currentShakeMagnitude = 0; shakeEndTime = 0;
+                 }
+                // --- END Screen Shake Setup ---
 
-                // Get State to Render
+
+                // 3. --- Get State to Render (Your existing logic) ---
                 let stateToRender;
                 if (appState.mode === 'singleplayer') {
                     stateToRender = appState.serverState;
@@ -1937,18 +1978,23 @@
                     stateToRender = Game.getInterpolatedState(now); // Call via the Game module
                 }
 
+                // 4. --- Guard Clause (Your existing logic + alpha reset) ---
                 if (!stateToRender || !appState.localPlayerId || !stateToRender.players) {
-                    if (shakeApplied) ctx.restore(); return;
+                    // Reset alpha before returning if shake was applied
+                    ctx.globalAlpha = 1.0; // Ensure alpha is reset
+                    if (shakeApplied) { ctx.restore(); } // Restore if transform was applied
+                    return;
                 }
 
-                // Muzzle Flash Check
+                // 5. --- Muzzle Flash Check (Your existing logic) ---
                 let shouldDrawMuzzleFlash = false;
                 if (localPlayerMuzzleFlash.active) {
                     if (now < localPlayerMuzzleFlash.endTime) { shouldDrawMuzzleFlash = true; }
                     else { localPlayerMuzzleFlash.active = false; }
                 }
 
-                // --- DRAWING ORDER ---
+                // 6. --- DRAWING ORDER (Your existing logic) ---
+                // These are now drawn *after* the background and *with* the shake transform applied (if active)
                 drawCampfire(stateToRender.campfire);
 
                 if (shouldDrawMuzzleFlash) {
@@ -1965,7 +2011,8 @@
 
                 drawDamageTexts(stateToRender.damage_texts);
 
-                // Vignette
+                // 7. --- Vignette (Your existing logic) ---
+                // Drawn last, potentially over everything else
                 let vignetteIntensity = 0;
                 const localPlayer = stateToRender.players[appState.localPlayerId];
                 if (localPlayer && localPlayer.max_health > 0) {
@@ -1973,9 +2020,20 @@
                     if (healthPercentage <= 0.33) { vignetteIntensity = Math.min(1.0, Math.max(0, 0.6 + (0.4 * (1 - (healthPercentage / 0.33))))); }
                     else if (healthPercentage <= 0.66) { vignetteIntensity = Math.max(0, 0.4 * (1 - ((healthPercentage - 0.33) / (0.66 - 0.33)))); }
                 }
-                drawDamageVignette(vignetteIntensity);
+                // Vignette should probably be drawn *after* restoring the shake transform
+                // Let's move drawDamageVignette after the ctx.restore()
 
-                if (shakeApplied) { ctx.restore(); }
+                // 8. --- Restore Shake Transform (Your existing logic) ---
+                if (shakeApplied) {
+                     ctx.restore(); // Restore the translation back to normal
+                 }
+
+                // --- Draw Vignette AFTER restoring shake ---
+                drawDamageVignette(vignetteIntensity);
+                // -------------------------------------------
+
+                // Final safety alpha reset
+                ctx.globalAlpha = 1.0;
             }
 
              return {
