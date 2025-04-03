@@ -27,16 +27,16 @@
             /* Other Colors */
             --player-color: #DC143C;
             --other-player-color: #4682B4;
-            --enemy-color: #556B2F;
-            --bullet-player-color: #FFEB3B;
-            --bullet-enemy-color: #C0C0C0;
+            --enemy-color: #18315f;
+            --bullet-player-color: #ffed4a;
+            --bullet-enemy-color: #ff0000;
             --health-bar-bg: #444;
             --health-bar-high: #66bb6a;
             --health-bar-medium: var(--accent-gold);
             --health-bar-low: var(--player-color);
             --powerup-health: #81c784;
-            --powerup-gun: #ba68c8;
-            --powerup-speed: #4dd0e1;
+            --powerup-gun: #442848;
+            --powerup-speed: #3edef3;
             --powerup-armor: #9e9e9e;
             --night-overlay: rgba(0, 0, 10, 0.3);
 
@@ -1751,7 +1751,7 @@
 
                  // 1. Shadow
                  ctx.beginPath();
-                 const shadowY = bootBottomY + 5;
+                 const shadowY = bootBottomY + 1;
                  ctx.ellipse(x, shadowY, w * 0.45, h * 0.05, 0, 0, Math.PI * 2);
                  ctx.fillStyle = backgroundShadowColor;
                  ctx.fill();
@@ -1768,26 +1768,17 @@
                      const stepDuration = 250;
                      const stepPhase = Math.floor(time / stepDuration) % 2;
                      if (stepPhase === 0) { // Left boot steps
-                         ctx.fillRect(x - bootSpacing - bootWidth/2, bootTopY - 1, bootWidth, bootHeight);
+                         ctx.fillRect(x - bootSpacing - bootWidth/2, bootTopY - 2, bootWidth, bootHeight);
                          ctx.fillRect(x + bootSpacing - bootWidth/2, bootTopY, bootWidth, bootHeight);
                      } else { // Right boot steps
                          ctx.fillRect(x - bootSpacing - bootWidth/2, bootTopY, bootWidth, bootHeight);
-                         ctx.fillRect(x + bootSpacing - bootWidth/2, bootTopY - 1, bootWidth, bootHeight);
+                         ctx.fillRect(x + bootSpacing - bootWidth/2, bootTopY - 2, bootWidth, bootHeight);
                      }
                  } else { // Idle
                      ctx.fillRect(x - bootSpacing - bootWidth/2, bootTopY, bootWidth, bootHeight);
                      ctx.fillRect(x + bootSpacing - bootWidth/2, bootTopY, bootWidth, bootHeight);
                  }
 
-                 // 4. Coat --- USE DUSTY COLOR ---
-                 ctx.fillStyle = distinguishingColor;
-                 ctx.beginPath();
-                 ctx.moveTo(x - coatWidthVisual / 2, coatTopY);
-                 ctx.lineTo(x + coatWidthVisual / 2, coatTopY);
-                 ctx.lineTo(x + w * 0.70, coatBottomY);
-                 ctx.lineTo(x - w * 0.70, coatBottomY);
-                 ctx.closePath();
-                 ctx.fill();
 
                  // 5. Belt
                  ctx.fillStyle = beltColor; // Keep belt brown
@@ -2027,7 +2018,7 @@
                 if (maxHealth <= 0) return;
                 const barHeight = 5;
                 // Adjust Y offset based on entity width/height (assuming width is more representative for placement)
-                const yOffset = -( (width / 2) + 23 ); // Place above entity
+                const yOffset = -( (width / 2) + 27 ); // Place above entity
                 const barWidth = Math.max(20, width * 0.8);
                 const currentWidth = Math.max(0, (currentHealth / maxHealth) * barWidth);
                 const healthPercentage = currentHealth / maxHealth;
@@ -2049,7 +2040,7 @@
                 if (currentArmor <= 0) return;
                 const armorBarHeight = 4; const healthBarHeight = 5; const barSpacing = 1;
                 // Calculate Y position relative to the health bar's position
-                const healthBarYOffset = -( (width / 2) + 23 );
+                const healthBarYOffset = -( (width / 2) + 30 );
                 const healthBarTopY = y + healthBarYOffset;
                 const armorBarTopY = healthBarTopY + healthBarHeight + barSpacing; // Position below health bar
 
