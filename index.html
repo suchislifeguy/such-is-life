@@ -43,7 +43,7 @@
             /* Other variables */
             --font-family: 'Courier New', monospace;
             --reconciliation-threshold: 15;
-            --lerp-factor: 0.1;
+            --lerp-factor: 0.07;
             --damage-text-color: #FFFFFF;
             --damage-text-crit-color: var(--accent-gold);
             --damage-text-font-size: 14px;
@@ -2577,10 +2577,10 @@
 
                     // Gentle Nudge: Only correct prediction if error is > 4.0 pixels
                     // --- CHANGE HERE: Increased threshold ---
-                    if (dist > 10.0) { // Was 2.0
+                    if (dist > 2.0) { // Was 2.0
                          // Use the halved nudge factor
-                         predictedPos.x = lerp(predictedPos.x, serverPos.x, lerpFactor * 0.1);
-                         predictedPos.y = lerp(predictedPos.y, serverPos.y, lerpFactor * 0.1);
+                         predictedPos.x = lerp(predictedPos.x, serverPos.x, lerpFactor * 0.04);
+                         predictedPos.y = lerp(predictedPos.y, serverPos.y, lerpFactor * 0.04);
                          // log(`Reconciliation Nudge: Dist=${dist.toFixed(1)}`); // Optional debug
                     }
                     // --- End Change ---
@@ -2792,10 +2792,9 @@
                             typeof previousPlayerState.health === 'number' &&
                             currentPlayerState.health < previousPlayerState.health)
                         {
-                            const damageTaken = previousPlayerState.health - currentPlayerState.health;
-                            const baseMagnitude = 3; const damageScale = 0.1; const maxMagnitude = 10;
-                            const shakeMagnitude = Math.min(maxMagnitude, baseMagnitude + damageTaken * damageScale);
-                            const shakeDuration = 250;
+                            const baseMagnitude = 5;    // Increased from 3 (more shake on any hit)
+                            const damageScale = 0.18;   // Increased from 0.1 (shake scales more with damage)
+                            const maxMagnitude = 18;    // Increased from 10 (higher potential peak shake)
                             // log(`Damage detected! Taken: ${damageTaken.toFixed(1)}, Triggering Shake: Mag=${shakeMagnitude.toFixed(1)}, Dur=${shakeDuration}`);
                             Renderer.triggerShake(shakeMagnitude, shakeDuration);
                         }
