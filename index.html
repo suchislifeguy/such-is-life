@@ -518,14 +518,53 @@
             active: false,
             x: -50,
             y: 0,
-            segmentLength: 3,   // Keep it thin conceptually for physics/overlap calculation later if needed
+            segmentLength: 2,   
             segments: [],
-            maxSegments: 100,    
+            maxSegments: 50,
             baseY: 0,
             direction: 1,
-            speed: 85,           // Keep Fast
-            frequency: 0.06,     // Keep Wavy
-            amplitude: 50        // Keep High Amplitude
+            speed: 85,
+            baseSpeed: 85,           
+            frequency: 0.06,
+            amplitude: 50,
+            baseThickness: 3,
+            phase: 0,
+            lastUpdateTime: 0,
+            
+            // Add update method to handle realistic movement
+            update: function(deltaTime) {
+                // Update phase for continuous wave motion
+                this.phase += deltaTime * 0.003;
+                
+                // Calculate new head position with natural forward movement
+                this.x += this.direction * this.speed * deltaTime * 0.001;
+                
+                // Calculate y position with more natural S-curve
+                const waveOffset = Math.sin(this.phase);
+                const headWave = Math.sin(this.x * this.frequency + this.phase);
+                this.y = this.baseY + headWave * this.amplitude;
+                
+                // Add new segment at current head position
+                this.segments.unshift({x: this.x, y: this.y, time: Date.now()});
+                
+                // Trim excess segments
+                if (this.segments.length > this.maxSegments) {
+                    this.segments.pop();
+                }
+                
+                // Vary speed based on snake's body curve (snakes speed up when straightening)
+                const currentCurvature = Math.abs(headWave);
+                this.speed = this.baseSpeed * (1 - currentCurvature * 0.3);
+                
+                // Update existing segments to create more natural wave propagation
+                for (let i = 1; i < this.segments.length; i++) {
+                    const segment = this.segments[i];
+                    const timeFactor = (Date.now() - segment.time) * 0.0005;
+                    const segmentPhase = this.phase - timeFactor;
+                    const segWave = Math.sin(segment.x * this.frequency + segmentPhase);
+                    segment.y = this.baseY + segWave * this.amplitude * (1 - (i / this.segments.length) * 0.3);
+                }
+            }
         };
         // --- Spawn timers remain the same ---
         let snakeSpawnTimer = 5 + Math.random() * 10;
@@ -1403,52 +1442,35 @@
 
             // --- REWRITTEN drawSnake function ---
             function drawSnake() {
-                 // Add log to check actual segment count being drawn
-                 if (snake.active) {
-                     // console.log("Drawing snake with segments:", snake.segments.length);
-                 }
-
-                 // Only draw if active and has at least 2 points
-                 if (!snake.active || snake.segments.length < 2) return;
-
-                 const snakeLineColor = '#261a0d'; // Dark brown
-
-                 ctx.lineCap = 'round';
-                 ctx.lineJoin = 'round';
-                 ctx.strokeStyle = snakeLineColor;
-                 ctx.lineWidth = 5; // Keep the visible thickness
-
-                 ctx.beginPath();
-
-                 // --- Calculate Tail Position with Max Amplitude ---
-                 // The oldest point (tail end) uses the most exaggerated amplitude
-                 const tailSegment = snake.segments[snake.segments.length - 1];
-                 // Increase amplitude slightly more for the very tail? Experiment factor: 1.2
-                 const tailAmplitudeFactor = 1.2;
-                 const tailY = snake.baseY + Math.sin(tailSegment.x * snake.frequency) * (snake.amplitude * tailAmplitudeFactor);
-                 ctx.moveTo(tailSegment.x, tailY); // Start path at the tail point with calculated Y
-
-                 // --- Draw Segments with Decreasing Amplitude Towards Head ---
-                 // Loop from the second-to-last segment up towards the head
-                 for (let i = snake.segments.length - 2; i >= 0; i--) {
-                     const segment = snake.segments[i];
-                     // Calculate an amplitude factor: closer to 1 near tail, closer to 0 near head
-                     // Let's use a squared factor for more pronounced effect near the tail
-                     const progress = i / (snake.segments.length - 1); // 0 near head, 1 near tail
-                     const segmentAmplitudeFactor = 1.0 + (progress * progress * 0.5); // Factor from 1.0 (head) to 1.5 (tail)
-
-                     // Calculate the Y position for this segment using the modified amplitude
-                     const segmentY = snake.baseY + Math.sin(segment.x * snake.frequency) * (snake.amplitude * segmentAmplitudeFactor);
-
-                     ctx.lineTo(segment.x, segmentY); // Draw line to the calculated position
-                 }
-
-                 // --- End at the Current Head Position ---
-                 // The head uses the 'natural' amplitude calculated in gameLoop
-                 ctx.lineTo(snake.x, snake.y);
-
-                 // --- Draw the entire path ---
-                 ctx.stroke();
+                const snakeLineColor = '#261a0d'; // Dark brown
+                const snakeHeadColor = '#3d2915'; // Slightly darker for the head
+                
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                
+                // Draw snake body with gradient thickness
+                for (let i = snake.segments.length - 1; i >= 0; i--) {
+                    const segment = snake.segments[i];
+                    const nextSegment = snake.segments[i - 1] || {x: snake.x, y: snake.y};
+                    
+                    // Calculate segment thickness based on position (thicker in middle)
+                    const normalizedPos = i / snake.segments.length;
+                    const bodyThickness = snake.baseThickness * (1 + Math.sin(normalizedPos * Math.PI) * 0.5);
+                    
+                    // Draw segment
+                    ctx.beginPath();
+                    ctx.strokeStyle = snakeLineColor;
+                    ctx.lineWidth = bodyThickness;
+                    ctx.moveTo(segment.x, segment.y);
+                    ctx.lineTo(nextSegment.x, nextSegment.y);
+                    ctx.stroke();
+                }
+                
+                // Draw snake head
+                ctx.beginPath();
+                ctx.fillStyle = snakeHeadColor;
+                ctx.arc(snake.x, snake.y, snake.baseThickness * 1.5, 0, Math.PI * 2);
+                ctx.fill();
             }
 
 
