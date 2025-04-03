@@ -574,42 +574,40 @@
             active: false,
             x: -50,
             y: 0,
-            segmentLength: 1,   // Reduced from 2 to 1 (50% smaller)
-            segments: [],
-            maxSegments: 50,     
+            segmentLength: 0.7,
+            maxSegments: 33,
+            amplitude: 17,
             baseY: 0,
             direction: 1,
-            speed: 85,           
-            frequency: 0.1,     // Increased frequency for tighter curves
-            amplitude: 25,      // Reduced from 50 to 25 (50% smaller)
-            
+            speed: 85,
+            frequency: 0.1,
+            lineWidth: 1.0,
+
             update: function(currentTime) {
-                // Update head position
                 snake.x += snake.direction * snake.speed * 0.05;
-                
-                // Calculate realistic serpentine motion with time-based wave
+
                 const waveTime = currentTime * 0.005;
                 snake.y = snake.baseY + Math.sin(snake.x * snake.frequency + waveTime) * snake.amplitude;
-                
-                // Add new segment at current head position
-                if (snake.segments.length === 0 || 
+
+                if (snake.segments.length === 0 ||
                     Math.hypot(snake.x - snake.segments[0].x, snake.y - snake.segments[0].y) > snake.segmentLength) {
                     snake.segments.unshift({x: snake.x, y: snake.y, time: currentTime});
-                    
-                    // Trim excess segments
-                    if (snake.segments.length > snake.maxSegments) {
+
+                    while (snake.segments.length > snake.maxSegments) {
                         snake.segments.pop();
                     }
                 }
-                
-                // Update existing segments for a propagating wave effect
+
                 for (let i = 1; i < snake.segments.length; i++) {
-                    const segment = snake.segments[i];
-                    const timeOffset = (currentTime - segment.time) * 0.001;
-                    const segmentWave = Math.sin(segment.x * snake.frequency + waveTime - timeOffset * 3);
-                    
-                    // Wave that moves from head to tail
-                    snake.segments[i].y = snake.baseY + segmentWave * snake.amplitude * (1 - (i / snake.segments.length) * 0.2);
+                     const segment = snake.segments[i];
+                     if (!segment || typeof segment.time === 'undefined') continue;
+
+                     const timeOffset = (currentTime - segment.time) * 0.001;
+                     const segmentWave = Math.sin(segment.x * snake.frequency + waveTime - timeOffset * 3);
+
+                     if (typeof segment.y !== 'undefined') {
+                         snake.segments[i].y = snake.baseY + segmentWave * snake.amplitude * (1 - (i / snake.segments.length) * 0.2);
+                     }
                 }
             }
         };
@@ -1503,27 +1501,23 @@
                 playerIdsToRemove.forEach(id => { delete activeSpeechBubbles[id]; });
             }
 
-            // --- REWRITTEN drawSnake function ---
             function drawSnake() {
-                // Check if the snake has any segments first
                 if (snake.segments.length === 0) return;
 
-                const snakeLineColor = '#261a0d'; // Dark brown
+                const snakeLineColor = '#261a0d';
 
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
                 ctx.strokeStyle = snakeLineColor;
-                ctx.lineWidth = 1.5; // Reduced from 3 to 1.5 (50% smaller)
+                ctx.lineWidth = snake.lineWidth;
 
                 ctx.beginPath();
 
-                // --- Calculate Tail Position with Max Amplitude ---
                 const tailSegment = snake.segments[snake.segments.length - 1];
                 const tailAmplitudeFactor = 1.2;
                 const tailY = snake.baseY + Math.sin(tailSegment.x * snake.frequency) * (snake.amplitude * tailAmplitudeFactor);
                 ctx.moveTo(tailSegment.x, tailY);
 
-                // --- Draw Segments with Decreasing Amplitude Towards Head ---
                 for (let i = snake.segments.length - 2; i >= 0; i--) {
                     const segment = snake.segments[i];
                     const progress = i / (snake.segments.length - 1);
@@ -1532,14 +1526,11 @@
                     ctx.lineTo(segment.x, segmentY);
                 }
 
-                // --- End at the Current Head Position ---
                 ctx.lineTo(snake.x, snake.y);
 
-                // --- Draw the entire path ---
                 ctx.stroke();
             }
             
-
             // --- Drawing Entities ---
             function drawPlayers(players) {
                  // This function remains the same - it calls the updated drawPlayerCharacter
@@ -2027,7 +2018,7 @@
                 if (maxHealth <= 0) return;
                 const barHeight = 5;
                 // Adjust Y offset based on entity width/height (assuming width is more representative for placement)
-                const yOffset = -( (width / 2) + 18 ); // Place above entity
+                const yOffset = -( (width / 2) + 23 ); // Place above entity
                 const barWidth = Math.max(20, width * 0.8);
                 const currentWidth = Math.max(0, (currentHealth / maxHealth) * barWidth);
                 const healthPercentage = currentHealth / maxHealth;
@@ -2049,7 +2040,7 @@
                 if (currentArmor <= 0) return;
                 const armorBarHeight = 4; const healthBarHeight = 5; const barSpacing = 1;
                 // Calculate Y position relative to the health bar's position
-                const healthBarYOffset = -( (width / 2) + 18 );
+                const healthBarYOffset = -( (width / 2) + 23 );
                 const healthBarTopY = y + healthBarYOffset;
                 const armorBarTopY = healthBarTopY + healthBarHeight + barSpacing; // Position below health bar
 
