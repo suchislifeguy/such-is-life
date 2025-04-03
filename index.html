@@ -574,15 +574,15 @@
             active: false,
             x: -50,
             y: 0,
-            segmentLength: 1,   // Original value
+            segmentLength: 0.8,   // Original value
             segments: [],
-            maxSegments: 25,     // Original value
+            maxSegments: 33,     // Original value
             baseY: 0,
             direction: 1,
             speed: 60,
-            frequency: 0.1,
-            amplitude: 15,      // Original value
-            lineWidth: 3,     // Original value
+            frequency: 0.3,
+            amplitude: 18,      // Original value
+            lineWidth: 2,     // Original value
 
             update: function(currentTime) {
                 snake.x += snake.direction * snake.speed * 0.05;
