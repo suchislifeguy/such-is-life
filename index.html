@@ -207,18 +207,17 @@
         #left-panel #leaveGameBtn {
             display: block;
             width: 100%;
-            margin: 0 0 15px 0; /* Top, R/L, Bottom - Space below button */
-            padding: 12px 10px; /* Keep original padding */
-            font-size: 1rem;    /* Keep original font size */
+            margin-top: auto;      
+            margin-bottom: 15px;   
+            padding: 12px 10px; 
+            font-size: 1rem;    
             box-sizing: border-box;
             flex-shrink: 0;
-            /* Inherits general button styles (background, color, border etc.) */
         }
 
         /* --- Chat Log Styling (Height Increased Again) --- */
         #left-panel #chat-log {
-            /* height: 150px; */ /* OLD HEIGHT */
-            height: 190px; /* NEW HEIGHT (150 * 1.25 = 187.5 -> 190) */
+            height: 190px; 
             overflow-y: scroll;
             border: 1px solid var(--primary-color);
             margin-bottom: 8px; /* Space below log, before input */
