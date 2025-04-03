@@ -63,7 +63,6 @@
             border-radius: 15px; padding: 20px; padding-top: 15px; /* Keep padding */
             text-align: center; max-width: 1980px; /* Increased max-width for wider layout */
             width: calc(100% - 40px); position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.7);
-            overflow: hidden;
         }
 
         /* --- Top Bar Styling (Simplified) --- */
@@ -1850,11 +1849,11 @@
                      ctx.restore();
                  }
 
-                 // 13. Hit Feedback --- USE DUSTY FLASH COLOR ---
+                 // 13. Hit Feedback
                  if (justHit) {
                      // Overlay Flash using the dusty gold color
-                     ctx.fillStyle = dustyHitFlashColor; // USE DUSTY FLASH
-                     ctx.fillRect(x - shoulderPlateWidth / 2, helmetTopY - 5, shoulderPlateWidth, h * 0.9);
+                     // ctx.fillStyle = dustyHitFlashColor; // USE DUSTY FLASH
+                     // ctx.fillRect(x - shoulderPlateWidth / 2, helmetTopY - 5, shoulderPlateWidth, h * 0.9); // <<< LINE COMMENTED OUT TO REMOVE FLASH
 
                      // Spark Particles (Keep as they are - orange/yellow)
                      ctx.save();
