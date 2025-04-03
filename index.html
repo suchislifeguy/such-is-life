@@ -581,8 +581,8 @@
             direction: 1,
             speed: 60,
             frequency: 0.1,
-            amplitude: 25,      // Original value
-            lineWidth: 1.5,     // Original value
+            amplitude: 20,      // Original value
+            lineWidth: 1.8,     // Original value
 
             update: function(currentTime) {
                 snake.x += snake.direction * snake.speed * 0.05;
@@ -1502,7 +1502,6 @@
                 playerIdsToRemove.forEach(id => { delete activeSpeechBubbles[id]; });
             }
 
-            // --- drawSnake function (Matching original lineWidth) ---
             function drawSnake() {
                 if (!snake || !Array.isArray(snake.segments) || snake.segments.length === 0) {
                     return;
@@ -1540,6 +1539,40 @@
 
                 ctx.stroke();
             }
+            
+            // --- Drawing Entities ---
+            function drawPlayers(players) {
+                 // This function remains the same - it calls the updated drawPlayerCharacter
+                 if (!players) return;
+                 Object.values(players).forEach(player => {
+                     if (!player || player.player_status === PLAYER_STATUS_DEAD) return; // Use constant
+                     const isSelf = player.id === appState.localPlayerId;
+                     const playerStatus = player.player_status || PLAYER_STATUS_ALIVE; // Use constant
+                     const drawX = isSelf ? appState.renderedPlayerPos.x : player.x;
+                     const drawY = isSelf ? appState.renderedPlayerPos.y : player.y;
+                     const width = player.width ?? PLAYER_DEFAULTS.width;
+                     const height = player.height ?? PLAYER_DEFAULTS.height;
+                     const maxHealth = player.max_health ?? PLAYER_DEFAULTS.max_health;
+                     const currentArmor = player.armor ?? 0;
+                     let isDown = (playerStatus === PLAYER_STATUS_DOWN); // Use constant
+                     let alpha = isDown ? 0.4 : 1.0;
+
+                     ctx.save();
+                     ctx.globalAlpha = alpha;
+                     // Get aim direction for local player muzzle flash/gun angle
+                     const aimDx = isSelf ? localPlayerMuzzleFlash.aimDx : 0;
+                     const aimDy = isSelf ? localPlayerMuzzleFlash.aimDy : 0;
+                     // Call the updated drawing function below
+                     drawPlayerCharacter(drawX, drawY, width, height, isSelf, player, aimDx, aimDy);
+                     ctx.restore();
+
+                     // Only draw bars if alive
+                     if (playerStatus === PLAYER_STATUS_ALIVE) {
+                         drawHealthBar(drawX, drawY, width, player.health, maxHealth);
+                         if (currentArmor > 0) drawArmorBar(drawX, drawY, width, currentArmor);
+                     }
+                 });
+             }
 
             function generateBackground(targetIsNight) {
                 console.log(`[Renderer] Generating background for ${targetIsNight ? 'Night' : 'Day'}`);
