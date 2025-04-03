@@ -1370,215 +1370,226 @@
              }
 
              function drawPlayerCharacter(x, y, w, h, isSelf, playerState, aimDx, aimDy) {
-                 // --- Color Definitions (Adopted from Example, some cached) ---
-                 const ironHelmetColor = '#3d3d3d';       // Dark metal
-                 const ironHelmetHighlight = '#666666';  // Metal highlight
-                 const ironHelmetShadow = '#1a1a1a';     // Metal shadow
-                 const coatColor = '#8B0000';           // Dark red coat (replaces playerCoatColor)
-                 // const vestColor = '#A52A2A';           // Not explicitly used in this simplified version
-                 const beltColor = '#412a19';           // Leather belt
-                 const pantsColor = '#5a4030';          // Dark brown trousers (distinct from coat)
-                 const bootColor = '#241c1c';           // Dark leather boots (replaces playerBootColor)
-                 // const chainColor = '#777777';          // Not used
-                 // const leatherStrapColor = '#3c2a20';   // Not used
-                 const backgroundShadowColor = 'rgba(0,0,0,0.3)'; // Shadow under character
-                 const simpleChestPlateColor = '#777777'; // Simple grey chest plate
-                 const chestPlateHighlight = '#999999'; // Lighter grey
-                 const slitColor = '#000000'; // Black slit
-                 const gunColor = '#444444'; // Existing gun color (cached playerGunColor could be used)
-                 const hitFlashOverlayColor = 'rgba(255, 255, 150, 0.4)'; // Yellowish flash overlay
+                 // --- Color Definitions (Same as before) ---
+                 const ironHelmetColor = '#3d3d3d';
+                 const ironHelmetHighlight = '#666666';
+                 const ironHelmetShadow = '#1a1a1a';
+                 const coatColor = '#8B0000';
+                 const beltColor = '#412a19';
+                 const pantsColor = '#5a4030';
+                 const bootColor = '#241c1c';
+                 const backgroundShadowColor = 'rgba(0,0,0,0.3)';
+                 const simpleChestPlateColor = '#777777';
+                 const chestPlateHighlight = '#999999';
+                 const slitColor = '#000000';
+                 const gunColor = '#444444';
+                 const hitFlashOverlayColor = 'rgba(255, 255, 150, 0.4)';
                  const sparkColors = ['rgba(255, 100, 0, 0.8)', 'rgba(255, 165, 0, 0.9)', 'rgba(255, 220, 50, 0.7)'];
 
-                 // --- State variables ---
+                 // --- State variables (Same as before) ---
                  const justHit = playerState?.hit_flash_this_tick ?? false;
                  const isIdle = (playerState?.input_vector?.dx ?? 0) === 0 && (playerState?.input_vector?.dy ?? 0) === 0;
-                 const isMoving = !isIdle; // Simplified check for stepping animation
+                 const isMoving = !isIdle;
 
-                 // --- Bobbing/Breathing Constants & Calculation ---
-                 const IDLE_BOB_SPEED = 800; // From example
-                 const IDLE_BOB_AMPLITUDE = 1.2; // From example
-                 const BREATHE_SPEED = 1200; // From example
-                 const BREATHE_AMPLITUDE = 0.8; // From example
+                 // --- Bobbing/Breathing Constants & Calculation (Same as before) ---
+                 const IDLE_BOB_SPEED = 800;
+                 const IDLE_BOB_AMPLITUDE = 1.2;
+                 // const BREATHE_SPEED = 1200; // Breathing effect can be subtle, skip for now if causing issues
+                 // const BREATHE_AMPLITUDE = 0.8;
                  const time = performance.now();
                  const bobOffset = isIdle ? Math.sin(time / IDLE_BOB_SPEED) * IDLE_BOB_AMPLITUDE : 0;
-                 const breatheOffset = Math.sin(time / BREATHE_SPEED) * BREATHE_AMPLITUDE; // Add slight horizontal expansion/contraction maybe?
+                 // const breatheOffset = Math.sin(time / BREATHE_SPEED) * BREATHE_AMPLITUDE;
 
-                 // --- Kelly's Iconic Armor Dimensions (Relative to w, h) ---
-                 const helmetHeight = h * 0.33;
+                 // --- Revised Kelly Dimensions (Adjusted Vertical Proportions) ---
+                 const helmetHeight = h * 0.30; // Slightly smaller helmet
                  const helmetWidth = w * 0.95;
                  const slitHeight = helmetHeight * 0.15;
                  const slitWidth = helmetWidth * 0.8;
-                 const neckGuardHeight = h * 0.07;
-                 const shoulderPlateWidth = w * 1.25; // Wider shoulders
-                 const shoulderPlateHeight = h * 0.12;
-                 const chestPlateHeight = h * 0.35;
+                 const neckGuardHeight = h * 0.06; // Slightly smaller neck guard
+                 const shoulderPlateWidth = w * 1.25;
+                 const shoulderPlateHeight = h * 0.10; // Slightly smaller shoulders
+                 const chestPlateHeight = h * 0.30; // Smaller chest plate
                  const chestPlateWidth = w * 0.9;
                  const armWidth = w * 0.2;
-                 const armLength = h * 0.4;
-                 const coatWidthVisual = shoulderPlateWidth * 1.1; // Slightly less wide than example for less overlap
-                 const coatHeight = h * 0.55;
-                 const beltHeight = h * 0.06;
-                 const pantsHeight = h * 0.38;
-                 const bootHeight = h * 0.12;
+                 const armLength = h * 0.4; // Keep arms same length relative to h
+                 const coatHeight = h * 0.50; // Slightly shorter coat body relative to h
+                 const coatWidthVisual = shoulderPlateWidth * 1.1;
+                 const beltHeight = h * 0.05; // Thinner belt
+                 const pantsHeight = h * 0.35; // Adjust pants height
+                 const bootHeight = h * 0.10; // Shorter boots
                  const bootWidth = w * 0.32;
-                 const bootSpacing = w * 0.4; // Adjusted spacing for visual fit
+                 const bootSpacing = w * 0.4;
 
-                 // --- Calculate Y Positions (with Bobbing) ---
-                 // Using helmet as the anchor point
-                 const helmetTopY = y - (h * 0.55) + bobOffset; // Adjusted anchor slightly higher
+                 // --- Revised Y Position Calculation (More separation) ---
+                 // Anchor calculations relative to the character's center 'y' and total height 'h'
+                 const totalDrawHeight = helmetHeight + neckGuardHeight + chestPlateHeight + pantsHeight + bootHeight; // Approximate total, ignoring overlap for now
+                 const topOffset = h * 0.5; // Offset from center y to visual top
+
+                 const helmetTopY = y - topOffset + bobOffset;
                  const helmetBottomY = helmetTopY + helmetHeight;
-                 const slitY = helmetTopY + (helmetHeight * 0.4);
-                 const neckGuardTopY = helmetBottomY - 5; // Slightly overlap helmet bottom
-                 const shoulderTopY = neckGuardTopY + neckGuardHeight * 0.5; // Start shoulders mid-neck guard
-                 const chestPlateTopY = shoulderTopY + shoulderPlateHeight * 0.2; // Overlap shoulders slightly
-                 const armTopY = shoulderTopY + 3;
-                 const coatTopY = chestPlateTopY; // Coat starts near top of chest plate visually
-                 const coatBottomY = coatTopY + coatHeight;
-                 const beltY = coatTopY + coatHeight * 0.6; // Position belt appropriately on coat
-                 const pantsTopY = beltY + beltHeight * 0.3; // Pants start under belt
+                 const slitY = helmetTopY + helmetHeight * 0.4; // Position slit within helmet
+
+                 // Give neck some space
+                 const neckGuardTopY = helmetBottomY - 3; // Slight overlap with helmet bottom
+                 const neckGuardBottomY = neckGuardTopY + neckGuardHeight;
+
+                 // Shoulders start below neck guard
+                 const shoulderTopY = neckGuardBottomY - 2; // Slight overlap with neck guard bottom
+                 const shoulderBottomY = shoulderTopY + shoulderPlateHeight;
+
+                 // Chest plate starts below shoulder top
+                 const chestPlateTopY = shoulderTopY + shoulderPlateHeight * 0.15;
+                 const chestPlateBottomY = chestPlateTopY + chestPlateHeight;
+
+                 // Arms positioned relative to shoulders
+                 const armTopY = shoulderTopY + shoulderPlateHeight * 0.2;
+
+                 // Coat starts visually high, around shoulder level
+                 const coatTopY = shoulderTopY + 2;
+                 const coatBottomY = coatTopY + coatHeight; // Calculated based on its own height
+
+                 // Belt positioned relative to coat top and height
+                 const beltY = coatTopY + coatHeight * 0.55; // Adjust belt position on coat
+
+                 // Pants start below the belt
+                 const pantsTopY = beltY + beltHeight * 0.4;
                  const pantsBottomY = pantsTopY + pantsHeight;
-                 const bootTopY = pantsBottomY - 5; // Boots slightly overlap pants bottom
 
-                 // --- Start Drawing ---
-                 ctx.save(); // Save context for potential flash overlay
+                 // Boots start slightly overlapping pants bottom
+                 const bootTopY = pantsBottomY - 5;
+                 const bootBottomY = bootTopY + bootHeight; // Used for shadow positioning if needed
 
-                 // --- 1. Draw Shadow ---
+                 // --- Start Drawing (Order matters for layering) ---
+                 ctx.save();
+
+                 // 1. Shadow (Positioned relative to calculated bottom)
                  ctx.beginPath();
-                 ctx.ellipse(x, y + h/2 - 10, w * 0.45, h * 0.05, 0, 0, Math.PI * 2);
+                 // Place shadow slightly above the visual bottom (bootBottomY)
+                 const shadowY = bootBottomY + 5; // Adjust offset as needed
+                 ctx.ellipse(x, shadowY, w * 0.45, h * 0.05, 0, 0, Math.PI * 2);
                  ctx.fillStyle = backgroundShadowColor;
                  ctx.fill();
 
-                 // --- 2. Draw Pants (Furthest Back Layer) ---
+                 // 2. Pants
                  ctx.fillStyle = pantsColor;
                  const legWidth = w * 0.4;
-                 // Left leg
                  ctx.fillRect(x - w * 0.45, pantsTopY, legWidth, pantsHeight);
-                 // Right leg
                  ctx.fillRect(x + w * 0.05, pantsTopY, legWidth, pantsHeight);
 
-                 // --- 3. Draw Boots (Incorporate Stepping) ---
+                 // 3. Boots (with Stepping)
                  ctx.fillStyle = bootColor;
                  if (isMoving) {
-                     const stepDuration = 250; // From original logic
+                     const stepDuration = 250;
                      const stepPhase = Math.floor(time / stepDuration) % 2;
-                     // Draw the stepping boot slightly forward/higher? (optional refinement)
                      if (stepPhase === 0) { // Left boot steps
-                         ctx.fillRect(x - bootSpacing - bootWidth/2, bootTopY - 1, bootWidth, bootHeight); // Stepping boot
-                         ctx.fillRect(x + bootSpacing - bootWidth/2, bootTopY, bootWidth, bootHeight); // Stationary boot
+                         ctx.fillRect(x - bootSpacing - bootWidth/2, bootTopY - 1, bootWidth, bootHeight);
+                         ctx.fillRect(x + bootSpacing - bootWidth/2, bootTopY, bootWidth, bootHeight);
                      } else { // Right boot steps
-                         ctx.fillRect(x - bootSpacing - bootWidth/2, bootTopY, bootWidth, bootHeight); // Stationary boot
-                         ctx.fillRect(x + bootSpacing - bootWidth/2, bootTopY - 1, bootWidth, bootHeight); // Stepping boot
+                         ctx.fillRect(x - bootSpacing - bootWidth/2, bootTopY, bootWidth, bootHeight);
+                         ctx.fillRect(x + bootSpacing - bootWidth/2, bootTopY - 1, bootWidth, bootHeight);
                      }
-                 } else { // Idle - both boots down
+                 } else { // Idle
                      ctx.fillRect(x - bootSpacing - bootWidth/2, bootTopY, bootWidth, bootHeight);
                      ctx.fillRect(x + bootSpacing - bootWidth/2, bootTopY, bootWidth, bootHeight);
                  }
 
-                 // --- 4. Draw Coat ---
+                 // 4. Coat
                  ctx.fillStyle = coatColor;
-                 // Main coat body shape (simplified trapezoid)
                  ctx.beginPath();
-                 ctx.moveTo(x - coatWidthVisual / 2, coatTopY); // Top edge
+                 ctx.moveTo(x - coatWidthVisual / 2, coatTopY);
                  ctx.lineTo(x + coatWidthVisual / 2, coatTopY);
-                 ctx.lineTo(x + w * 0.75, coatBottomY); // Wider bottom edge
-                 ctx.lineTo(x - w * 0.75, coatBottomY);
+                 // Taper slightly towards bottom
+                 ctx.lineTo(x + w * 0.70, coatBottomY);
+                 ctx.lineTo(x - w * 0.70, coatBottomY);
                  ctx.closePath();
                  ctx.fill();
 
-                 // --- 5. Draw Belt ---
+                 // 5. Belt
                  ctx.fillStyle = beltColor;
                  ctx.fillRect(x - w * 0.65, beltY - beltHeight/2, w * 1.3, beltHeight);
 
-                 // --- 6. Draw Simplified Chest Plate (Armor Layer) ---
+                 // 6. Chest Plate
                  ctx.fillStyle = simpleChestPlateColor;
                  ctx.fillRect(x - chestPlateWidth/2, chestPlateTopY, chestPlateWidth, chestPlateHeight);
-                 // Simple highlight
+                 // Highlight
                  ctx.fillStyle = chestPlateHighlight;
                  ctx.fillRect(x - chestPlateWidth/2 + 5, chestPlateTopY + 5, chestPlateWidth - 10, 3);
 
-                 // --- 7. Draw Shoulder Plates ---
-                 ctx.fillStyle = ironHelmetColor; // Use helmet color for consistency
+                 // 7. Shoulder Plates
+                 ctx.fillStyle = ironHelmetColor;
                  ctx.fillRect(x - shoulderPlateWidth/2, shoulderTopY, shoulderPlateWidth, shoulderPlateHeight);
-                 // Highlight on shoulder plates
+                 // Highlight
                  ctx.fillStyle = ironHelmetHighlight;
                  ctx.fillRect(x - shoulderPlateWidth/2 + 3, shoulderTopY + 2, shoulderPlateWidth - 6, 2);
 
-                 // --- 8. Draw Arms (Over coat/chest, under shoulders) ---
-                 ctx.fillStyle = coatColor; // Arms match coat color
-                 // Left arm
+                 // 8. Arms
+                 ctx.fillStyle = coatColor;
                  ctx.fillRect(x - shoulderPlateWidth * 0.45, armTopY, armWidth, armLength);
-                 // Right arm
                  ctx.fillRect(x + shoulderPlateWidth * 0.45 - armWidth, armTopY, armWidth, armLength);
 
-                 // --- 9. Draw Neck Guard ---
+                 // 9. Neck Guard
                  ctx.fillStyle = ironHelmetColor;
                  ctx.fillRect(x - helmetWidth * 0.4, neckGuardTopY, helmetWidth * 0.8, neckGuardHeight);
 
-                 // --- 10. Draw Helmet ---
-                 // Main helmet shape
+                 // 10. Helmet
                  ctx.fillStyle = ironHelmetColor;
                  ctx.fillRect(x - helmetWidth/2, helmetTopY, helmetWidth, helmetHeight);
-                 // Helmet top rim highlight
+                 // Highlight
                  ctx.fillStyle = ironHelmetHighlight;
                  ctx.fillRect(x - helmetWidth/2, helmetTopY, helmetWidth, 3);
-                 // Simple shadow under rim
+                 // Shadow
                  ctx.fillStyle = ironHelmetShadow;
                  ctx.fillRect(x - helmetWidth / 2 + 1, helmetTopY + 3, helmetWidth - 2, 2);
 
-                 // --- 11. Draw Slit ---
-                 ctx.fillStyle = slitColor; // Black
+                 // 11. Slit
+                 ctx.fillStyle = slitColor;
                  ctx.fillRect(x - slitWidth/2, slitY, slitWidth, slitHeight);
 
-                 // --- 12. Draw Gun (Integrated from original) ---
+                 // 12. Gun (Position relative to new arm/body placement)
                  if (isSelf && aimDx !== 0 && aimDy !== 0) {
                      const gunLevel = playerState?.gun ?? 1;
                      const gunLengthBase = 12;
                      const gunLengthBonus = (gunLevel - 1) * 3;
                      const gunLength = gunLengthBase + gunLengthBonus;
-                     const gunThickness = 5 + (gunLevel - 1) * 0.5; // Gun gets thicker
-                     // Position gun origin relative to new body shape (e.g., near shoulder/arm level)
-                     const gunOriginY = armTopY + armLength * 0.3; // Adjust vertical position
-                     const gunOriginXOffset = w * 0.1; // How far from center X to start gun
+                     const gunThickness = 5 + (gunLevel - 1) * 0.5;
+                     // Adjust gun origin - maybe slightly lower, aligned with arm center?
+                     const gunOriginY = armTopY + armLength * 0.4;
+                     const gunOriginXOffset = w * 0.1;
 
-                     ctx.save(); // Save context for gun rotation
+                     ctx.save();
                      ctx.translate(x, gunOriginY);
                      const angle = Math.atan2(aimDy, aimDx);
                      ctx.rotate(angle);
-                     // Draw gun relative to the translated/rotated origin
                      ctx.fillStyle = gunColor;
                      ctx.fillRect(gunOriginXOffset, -gunThickness / 2, gunLength, gunThickness);
-                     ctx.restore(); // Restore context after gun drawing
+                     ctx.restore();
                  }
 
-                 // --- 13. Hit Feedback (Flash Overlay and Sparks) ---
+                 // 13. Hit Feedback
                  if (justHit) {
-                     // A. Apply Semi-Transparent Overlay Flash
+                     // Overlay Flash
                      ctx.fillStyle = hitFlashOverlayColor;
-                     ctx.fillRect(x - shoulderPlateWidth / 2, helmetTopY - 5, shoulderPlateWidth, h + 10); // Cover approx bounds
+                     // Approximate bounds covering the character visually
+                     ctx.fillRect(x - shoulderPlateWidth / 2, helmetTopY - 5, shoulderPlateWidth, h * 0.9);
 
-                     // B. Draw Spark Particles (from example, adapted)
-                     ctx.save(); // Save context for particles
-                     const numSparks = 15 + Math.random() * 10; // Randomize spark count
+                     // Spark Particles
+                     ctx.save();
+                     const numSparks = 15 + Math.random() * 10;
                      for (let i = 0; i < numSparks; i++) {
-                         // Sparks emanate from center, spread outwards
                          const angle = Math.random() * Math.PI * 2;
-                         const radius = Math.random() * w * 0.8 + w*0.2; // Spread radius
+                         const radius = Math.random() * w * 0.8 + w*0.2;
                          const particleX = x + Math.cos(angle) * radius;
-                         const particleY = y + Math.sin(angle) * radius * 0.7; // Slightly elliptical spread
-                         const particleSize = Math.random() * 3.5 + 1.5; // Size range 1.5 to 5
-
-                         ctx.fillStyle = sparkColors[Math.floor(Math.random() * sparkColors.length)]; // Random spark color
+                         const particleY = y + Math.sin(angle) * radius * 0.7 - h * 0.1; // Shift sparks slightly upwards
+                         const particleSize = Math.random() * 3.5 + 1.5;
+                         ctx.fillStyle = sparkColors[Math.floor(Math.random() * sparkColors.length)];
                          ctx.beginPath();
-                         // Simple circle sparks
                          ctx.arc(particleX, particleY, particleSize / 2, 0, Math.PI * 2);
-                         // Or could use tiny rectangles ctx.fillRect(particleX - particleSize / 2, particleY - particleSize / 2, particleSize, particleSize);
                          ctx.fill();
                      }
-                     ctx.restore(); // Restore context after particles
+                     ctx.restore();
                  }
 
-                 // --- Restore initial context save if flash wasn't applied ---
-                 // Note: The save was done at the very beginning before any drawing
+                 // --- Restore initial context save ---
                  ctx.restore();
              }
 
