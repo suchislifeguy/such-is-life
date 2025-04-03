@@ -2634,7 +2634,6 @@
         })(); // End Game module IIFE
 
         // --- Global Server Message Handler ---
-        // --- Global Server Message Handler ---
         function handleServerMessage(event) {
             let data;
             try {
@@ -2846,10 +2845,11 @@
                             if(DOM.waitingMessage) DOM.waitingMessage.textContent = `Waiting for Team Mate... (${playerCount}/${appState.maxPlayersInGame || '?'})`;
                         }
 
-                        // Check for game over signal (loop handles showing screen)
+                        // --- Fallback Check for game over signal ---
                         if (newState.game_over && !wasGameOver) {
-                            log("-> Game Over signal received from server.");
-                            // UI.showGameOver(newState); // Moved to gameLoop check
+                            log("-> Game Over signal received from server via regular state update (Fallback).");
+                            UI.showGameOver(newState); // Show using the state data received
+                            Game.cleanupLoop(); // Stop the loop
                         }
 
                         // Handle enemy speech bubble updates
@@ -2862,6 +2862,25 @@
                             };
                         }
                         break; // End game_state
+
+                    // --- NEW CASE: Explicit Game Over Notification ---
+                    case 'game_over_notification':
+                        log("[handleServerMessage] Processing 'game_over_notification'");
+                        // Ensure we have final state data
+                        if (data.final_state) {
+                            // Update the client's state representation immediately
+                            appState.serverState = data.final_state;
+                            UI.updateStatus("Game Over!"); // Update status text
+                            UI.showGameOver(data.final_state); // Show the game over screen with final stats
+                            Game.cleanupLoop(); // Stop the client's game loop
+                            log("-> Game Over screen displayed via notification, loop stopped.");
+                        } else {
+                            error("Received 'game_over_notification' without final_state data.");
+                            // Fallback? Maybe just show basic game over or go to menu?
+                            Game.resetClientState(true); // Go back to menu as a safety measure
+                        }
+                        break; // End game_over_notification
+                    // --- END NEW CASE ---
 
                      // --- Case: Chat Message ---
                      case 'chat_message':
