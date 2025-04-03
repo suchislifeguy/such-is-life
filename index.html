@@ -651,24 +651,43 @@
                 }
              }
 
-            function updateDayNight(serverState) {
-                 if (DOM.dayNightIndicator && DOM.canvas && DOM.gameContainer) {
-                     if (serverState?.status === 'active') {
-                        const isNight = serverState.is_night;
-                        DOM.dayNightIndicator.textContent = isNight ? 'Night' : 'Day';
-                        DOM.canvas.style.backgroundColor = isNight ? (getCssVar('--bg-color') || '#3E2723') : '#A0522D';
-                        DOM.dayNightIndicator.style.display = 'block';
-                        if (isNight) {
-                            DOM.gameContainer.classList.add('night-mode');
-                        } else {
-                            DOM.gameContainer.classList.remove('night-mode');
-                        }
+             function updateDayNight(serverState) {
+                 // Check if necessary DOM elements exist
+                 if (!DOM.dayNightIndicator || !DOM.canvas || !DOM.gameContainer) {
+                     error("DOM.dayNightIndicator, DOM.canvas, or DOM.gameContainer not found for day/night update.");
+                     return;
+                 }
+
+                 // Only process if the game status is active
+                 if (serverState?.status === 'active') {
+                     const isNight = serverState.is_night; // Determine if it's night from server state
+
+                     // Update the text indicator
+                     DOM.dayNightIndicator.textContent = isNight ? 'Night' : 'Day';
+                     DOM.dayNightIndicator.style.display = 'block'; // Make sure indicator is visible
+
+                     // ---- Trigger the background update in the Renderer ----
+                     // This function (exposed from Renderer) handles regeneration/transition
+                     Renderer.updateGeneratedBackground(isNight);
+                     // -----------------------------------------------------
+
+                     // Add/Remove CSS class for potential night-mode specific styling (e.g., chat colors)
+                     if (isNight) {
+                         DOM.gameContainer.classList.add('night-mode');
                      } else {
-                        DOM.dayNightIndicator.style.display = 'none';
-                        DOM.gameContainer.classList.remove('night-mode');
+                         DOM.gameContainer.classList.remove('night-mode');
                      }
                  } else {
-                      error("DOM.dayNightIndicator, DOM.canvas, or DOM.gameContainer not found for day/night update.");
+                     // If game status is not 'active' (e.g., waiting, countdown, finished)
+                     // Hide the day/night indicator and remove night-mode class
+                     DOM.dayNightIndicator.style.display = 'none';
+                     DOM.gameContainer.classList.remove('night-mode');
+
+                     // Optional: You might want to ensure a default background state (e.g., day)
+                     // is generated if the game resets or goes to a non-active state,
+                     // although the initial generation triggers should handle most cases.
+                     // If needed, uncomment the line below:
+                     // Renderer.updateGeneratedBackground(false); // Force day background if not active?
                  }
              }
 
@@ -1085,6 +1104,28 @@
             const ctx = DOM.ctx;
             const lerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.2;
 
+             // --- Offscreen Canvas Setup ---
+            const offscreenCanvas = document.createElement('canvas');
+            offscreenCanvas.width = CANVAS_WIDTH;
+            offscreenCanvas.height = CANVAS_HEIGHT;
+            const offscreenCtx = offscreenCanvas.getContext('2d', { alpha: false }); // Use its context
+            let isBackgroundReady = false; // Flag: Has the initial background been generated?
+            let currentBackgroundIsNight = null; // Track what the offscreenCanvas currently holds (null, true for night, false for day)
+
+            // --- Transition State ---
+            let isTransitioningBackground = false;
+            let transitionStartTime = 0;
+            const BACKGROUND_FADE_DURATION_MS = 1000; // 1 second fade
+            const oldOffscreenCanvas = document.createElement('canvas'); // Temp canvas for fade
+            oldOffscreenCanvas.width = CANVAS_WIDTH;
+            oldOffscreenCanvas.height = CANVAS_HEIGHT;
+            const oldOffscreenCtx = oldOffscreenCanvas.getContext('2d', { alpha: false });
+            // -------------------------
+
+            // Base background colors for generation
+            const dayBaseColor = '#8FBC8F'; // DarkSeaGreen (or your choice)
+            const nightBaseColor = '#3E2723'; // Dark Brown/Grey (or getCssVar('--bg-color'))
+
             // --- CACHE ALL CSS Variables Used for Drawing ---
             const fontFamily = getCssVar('--font-family') || 'monospace';
             // Damage Text
@@ -1373,6 +1414,108 @@
                      }
                  });
              }
+
+            function generateBackground(targetIsNight) {
+                console.log(`[Renderer] Generating background for ${targetIsNight ? 'Night' : 'Day'}`);
+                const baseColor = targetIsNight ? nightBaseColor : dayBaseColor;
+
+                // 1. Fill base color
+                offscreenCtx.fillStyle = baseColor;
+                offscreenCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+                // 2. Draw details (Patches, Grass Tufts, etc.)
+                if (!targetIsNight) {
+                    // Draw Day Details (Example: Patches & Grass)
+                    // Patches
+                    const numPatches = 150;
+                    for (let i = 0; i < numPatches; i++) {
+                        const x = Math.random() * CANVAS_WIDTH;
+                        const y = Math.random() * CANVAS_HEIGHT;
+                        const radius = Math.random() * 20 + 5; // 5 to 25 radius
+                        // Slightly darker/lighter shade of the base day color
+                        const r = 143 + Math.random() * 20 - 10; // Base R of DarkSeaGreen
+                        const g = 188 + Math.random() * 20 - 10; // Base G
+                        const b = 143 + Math.random() * 20 - 10; // Base B
+                        const alpha = Math.random() * 0.1 + 0.05; // 5% to 15% opacity
+                        offscreenCtx.fillStyle = `rgba(${r.toFixed(0)}, ${g.toFixed(0)}, ${b.toFixed(0)}, ${alpha.toFixed(2)})`;
+                        offscreenCtx.beginPath();
+                        offscreenCtx.arc(x, y, radius, 0, Math.PI * 2);
+                        offscreenCtx.fill();
+                    }
+                    // Grass Tufts
+                    const numTufts = 250;
+                    offscreenCtx.lineWidth = 2;
+                    offscreenCtx.strokeStyle = 'rgba(0, 80, 0, 0.3)'; // Darker green, lower opacity
+                    for (let i = 0; i < numTufts; i++) {
+                        const x = Math.random() * CANVAS_WIDTH;
+                        const y = Math.random() * CANVAS_HEIGHT;
+                        offscreenCtx.beginPath();
+                        offscreenCtx.moveTo(x, y);
+                        ctx.lineTo(x + (Math.random()*4-2), y - (Math.random()*4 + 3)); // Slightly angled tuft
+                        offscreenCtx.stroke();
+                    }
+
+                } else {
+                    // Draw Night Details (Example: Fewer/Darker Patches, Stars?)
+                    // Darker Patches
+                    const numPatches = 80;
+                    for (let i = 0; i < numPatches; i++) {
+                        const x = Math.random() * CANVAS_WIDTH;
+                        const y = Math.random() * CANVAS_HEIGHT;
+                        const radius = Math.random() * 30 + 10; // 10 to 40 radius
+                        // Even darker shade
+                        const alpha = Math.random() * 0.1 + 0.03; // 3% to 13% opacity
+                        offscreenCtx.fillStyle = `rgba(10, 5, 5, ${alpha.toFixed(2)})`; // Very dark brown/black patches
+                        offscreenCtx.beginPath();
+                        offscreenCtx.arc(x, y, radius, 0, Math.PI * 2);
+                        offscreenCtx.fill();
+                    }
+                    // Optional: Draw stars
+                    const numStars = 100;
+                    offscreenCtx.fillStyle = 'rgba(255, 255, 220, 0.6)'; // Faint yellow
+                    for (let i = 0; i < numStars; i++) {
+                        const starX = Math.random() * CANVAS_WIDTH;
+                        const starY = Math.random() * CANVAS_HEIGHT * 0.8; // Bias towards top 80%
+                        const starR = Math.random() * 1.5;
+                        offscreenCtx.fillRect(starX, starY, starR, starR); // Small squares
+                    }
+                }
+
+                console.log("[Renderer] Background generation complete.");
+                currentBackgroundIsNight = targetIsNight; // Update what's on the canvas
+                // Don't set isBackgroundReady here, we set it after the *first* generation
+            }
+
+            // --- Trigger Background Update Function ---
+            // This needs to be called from outside the Renderer when needed
+            function updateGeneratedBackground(targetIsNight) {
+                // Only regenerate if the desired state is different from the current one
+                if (targetIsNight === currentBackgroundIsNight && isBackgroundReady) {
+                    // console.log("[Renderer] Background update skipped, already correct state.");
+                    return;
+                }
+
+                console.log(`[Renderer] Received request to update background to ${targetIsNight ? 'Night' : 'Day'}.`);
+
+                // --- Handle Transition ---
+                if (isBackgroundReady) { // Only transition if we have a previous background
+                    console.log("[Renderer] Starting background transition...");
+                    isTransitioningBackground = true;
+                    transitionStartTime = performance.now();
+                    // Copy the *current* offscreenCanvas to the *old* one
+                    oldOffscreenCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); // Clear old canvas first
+                    oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0);
+                    // Now, generate the *new* background onto the main offscreenCanvas
+                    generateBackground(targetIsNight);
+                } else {
+                    // First time generation, no transition needed
+                    console.log("[Renderer] First background generation.");
+                    generateBackground(targetIsNight);
+                    isBackgroundReady = true; // Mark background as ready AFTER first generation
+                    console.log("[Renderer] isBackgroundReady set to true.");
+                }
+            }
+
 
              // --- UPDATED drawPlayerCharacter Function ---
              function drawPlayerCharacter(x, y, w, h, isSelf, playerState, aimDx, aimDy) {
@@ -2266,6 +2409,7 @@
         })(); // End Game module IIFE
 
         // --- Global Server Message Handler ---
+        // --- Global Server Message Handler ---
         function handleServerMessage(event) {
             let data;
             try {
@@ -2283,38 +2427,32 @@
                         log("[handleServerMessage] Processing 'game_created'");
                         appState.localPlayerId = data.player_id;
                         appState.currentGameId = data.game_id;
-                        appState.serverState = data.initial_state;
+                        appState.serverState = data.initial_state; // Host receives initial state here
+                        appState.maxPlayersInGame = data.max_players; // Store max players
 
-                        // Critical: Store max players received from server
-                        appState.maxPlayersInGame = data.max_players;
-                        if (!appState.maxPlayersInGame) { // Log error if missing
+                        if (!appState.maxPlayersInGame) {
                             error("'game_created' message missing 'max_players'!");
-                            appState.maxPlayersInGame = '?'; // Use placeholder
+                            appState.maxPlayersInGame = '?';
                         }
                         log(`-> Stored maxPlayersInGame: ${appState.maxPlayersInGame}`);
 
-                        // Initialize player positions
                         const hostPlayer = appState.serverState?.players[appState.localPlayerId];
                         if (hostPlayer) {
                             appState.predictedPlayerPos = { x: hostPlayer.x, y: hostPlayer.y };
                             appState.renderedPlayerPos = { x: hostPlayer.x, y: hostPlayer.y };
                         }
 
-                        // Update UI for waiting host
-                        if (DOM.gameCodeDisplay) {
-                            DOM.gameCodeDisplay.textContent = appState.currentGameId || 'ERROR_ID';
-                        } else { error("DOM.gameCodeDisplay not found!"); }
+                        if (DOM.gameCodeDisplay) DOM.gameCodeDisplay.textContent = appState.currentGameId || 'ERROR_ID';
+                        else error("DOM.gameCodeDisplay not found!");
 
                         const currentPlayers = Object.keys(appState.serverState?.players || {}).length;
-                        if (DOM.waitingMessage) {
-                            DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentPlayers}/${appState.maxPlayersInGame})`;
-                        } else { error("DOM.waitingMessage not found!"); }
+                        if (DOM.waitingMessage) DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentPlayers}/${appState.maxPlayersInGame})`;
+                        else error("DOM.waitingMessage not found!");
 
                         UI.updateStatus(`Game hosted. Code: ${appState.currentGameId}`);
                         UI.showSection('host-wait-section');
 
-                        // --- DO NOT START THE GAME LOOP HERE FOR THE HOST ---
-                        // Host loop starts only when game status changes via 'game_state'
+                        // Host loop starts via 'game_state' update when game becomes active/countdown
                         log("-> Host waiting, loop NOT started yet.");
                         break; // End game_created
 
@@ -2323,18 +2461,15 @@
                         log("[handleServerMessage] Processing 'game_joined'");
                         appState.localPlayerId = data.player_id;
                         appState.currentGameId = data.game_id;
-                        appState.serverState = data.initial_state;
+                        appState.serverState = data.initial_state; // Client receives initial state here
 
-                        // Store max players (also sent in initial state for joiner)
                         appState.maxPlayersInGame = appState.serverState?.max_players;
-                         if (!appState.maxPlayersInGame) { // Log error if missing
-                             error("'game_joined' initial_state missing 'max_players'!");
-                             appState.maxPlayersInGame = '?';
-                         }
-                         log(`-> Stored maxPlayersInGame: ${appState.maxPlayersInGame}`);
+                        if (!appState.maxPlayersInGame) {
+                            error("'game_joined' initial_state missing 'max_players'!");
+                            appState.maxPlayersInGame = '?';
+                        }
+                        log(`-> Stored maxPlayersInGame: ${appState.maxPlayersInGame}`);
 
-
-                        // Initialize player positions
                         const joinedPlayer = appState.serverState?.players[appState.localPlayerId];
                         if (joinedPlayer) {
                             appState.predictedPlayerPos = { x: joinedPlayer.x, y: joinedPlayer.y };
@@ -2344,10 +2479,20 @@
                         UI.updateStatus(`Joined game ${appState.currentGameId}. Get ready!`);
                         UI.showSection('game-area');
 
-                        // --- START LOOP FOR JOINING CLIENT ---
+                        // --- TRIGGER INITIAL BACKGROUND GENERATION ---
+                        if (appState.serverState) {
+                            log("[handleServerMessage] Triggering initial background gen for joined client.");
+                            Renderer.updateGeneratedBackground(appState.serverState.is_night);
+                            // Also update HUD immediately
+                            UI.updateHUD(appState.serverState);
+                            UI.updateCountdown(appState.serverState);
+                        } else {
+                            log("[handleServerMessage] Warning: No server state available on game_joined to generate initial background.");
+                        }
+                        // -------------------------------------------
+
                         log("-> Join successful, starting loop for client.");
-                        Game.startGameLoop();
-                        // -------------------------------------
+                        Game.startGameLoop(); // Start loop immediately for joining client
                         break; // End game_joined
 
                     // --- Case: SINGLE PLAYER Starts Game ---
@@ -2355,10 +2500,9 @@
                         log("[handleServerMessage] Processing 'sp_game_started'");
                         appState.localPlayerId = data.player_id;
                         appState.currentGameId = data.game_id;
-                        appState.serverState = data.initial_state; // Set initial state
+                        appState.serverState = data.initial_state; // SP receives initial state here
                         appState.maxPlayersInGame = 1;
 
-                        // Initialize player positions
                         const spPlayer = appState.serverState?.players[appState.localPlayerId];
                         if (spPlayer) {
                             appState.predictedPlayerPos = { x: spPlayer.x, y: spPlayer.y };
@@ -2368,57 +2512,63 @@
                         UI.updateStatus("Single Player Game Started!");
                         UI.showSection('game-area');
 
-                        // --- ADD INITIAL HUD UPDATE ---
+                        // --- TRIGGER INITIAL BACKGROUND & HUD UPDATE ---
                         if (appState.serverState) {
-                            UI.updateHUD(appState.serverState); // Update HUD with initial state
-                            UI.updateCountdown(appState.serverState); // Also update countdown/day-night
-                            UI.updateDayNight(appState.serverState);
+                             log("[handleServerMessage] Triggering initial background gen for SP client.");
+                             Renderer.updateGeneratedBackground(appState.serverState.is_night); // Trigger background gen
+                             UI.updateHUD(appState.serverState);
+                             UI.updateCountdown(appState.serverState);
+                             // UI.updateDayNight(appState.serverState); // No need, background gen handles initial visual state
+                        } else {
+                             log("[handleServerMessage] Warning: No server state available on sp_game_started to generate initial background.");
                         }
+                        // ---------------------------------------------
 
-                        // --- START LOOP FOR SINGLE PLAYER ---
                         log("-> SP started, starting loop.");
-                        Game.startGameLoop();
-                        // ----------------------------------
+                        Game.startGameLoop(); // Start loop immediately for SP
                         break; // End sp_game_started
 
                     // --- Case: Receiving Game State Updates ---
                     case 'game_state':
+                        // Store previous state info before updating
                         const previousStatus = appState.serverState?.status;
                         const wasGameOver = appState.serverState?.game_over;
                         const previousPlayerState = appState.serverState?.players?.[appState.localPlayerId];
 
+                        // Update state history for interpolation
                         appState.previousServerState = appState.lastServerState;
                         appState.lastServerState = appState.serverState;
-                        appState.serverState = data.state;
-                        const newState = appState.serverState;
+                        appState.serverState = data.state; // Update to the new state
+                        const newState = appState.serverState; // Use newState for clarity
                         const currentPlayerState = newState?.players?.[appState.localPlayerId];
 
-                        if (previousPlayerState &&
-                            currentPlayerState &&
+                        // --- Handle hit shake ---
+                        if (previousPlayerState && currentPlayerState &&
                             typeof currentPlayerState.health === 'number' &&
                             typeof previousPlayerState.health === 'number' &&
                             currentPlayerState.health < previousPlayerState.health)
                         {
                             const damageTaken = previousPlayerState.health - currentPlayerState.health;
-                            const baseMagnitude = 3;
-                            const damageScale = 0.1;
-                            const maxMagnitude = 10;
+                            const baseMagnitude = 3; const damageScale = 0.1; const maxMagnitude = 10;
                             const shakeMagnitude = Math.min(maxMagnitude, baseMagnitude + damageTaken * damageScale);
                             const shakeDuration = 250;
-                            log(`Damage detected! Taken: ${damageTaken.toFixed(1)}, Triggering Shake: Mag=${shakeMagnitude.toFixed(1)}, Dur=${shakeDuration}`);
+                            // log(`Damage detected! Taken: ${damageTaken.toFixed(1)}, Triggering Shake: Mag=${shakeMagnitude.toFixed(1)}, Dur=${shakeDuration}`);
                             Renderer.triggerShake(shakeMagnitude, shakeDuration);
                         }
 
+                         // --- Handle hit pause ---
+                         const localPlayerStateHit = newState?.players?.[appState.localPlayerId];
+                         if (localPlayerStateHit?.hit_flash_this_tick && hitPauseFrames <= 0) {
+                             hitPauseFrames = 3; // Apply hit pause frames
+                         }
+
+                        // --- Update max players if missing ---
                         if (!appState.maxPlayersInGame && newState.max_players) {
                              appState.maxPlayersInGame = newState.max_players;
                              log(`-> Max players set from game_state: ${appState.maxPlayersInGame}`);
                         }
 
-                         const localPlayerStateHit = newState?.players?.[appState.localPlayerId];
-                         if (localPlayerStateHit?.hit_flash_this_tick && hitPauseFrames <= 0) {
-                             hitPauseFrames = 3;
-                         }
-
+                        // --- Handle Game Status Changes ---
                         if (newState.status !== previousStatus) {
                             log(`[Client State Change] From ${previousStatus || 'null'} to ${newState.status}`);
 
@@ -2429,89 +2579,97 @@
                                     UI.showSection('host-wait-section');
                                     const currentPlayersWaiting = Object.keys(newState.players || {}).length;
                                     if(DOM.waitingMessage) DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentPlayersWaiting}/${appState.maxPlayersInGame || '?'})`;
-                                    Game.cleanupLoop();
+                                    Game.cleanupLoop(); // Stop loop if returning to wait
                                 } else {
                                     log("-> Game returned to waiting (client view).");
                                     UI.updateStatus("Host or player left. Returning to menu.", true);
-                                    Game.resetClientState(true);
+                                    Game.resetClientState(true); // Go back to menu
                                 }
 
-                            } else if (newState.status === 'countdown') {
-                                log("-> Handling transition TO countdown");
-                                UI.updateStatus("Countdown starting...");
-                                UI.showSection('game-area');
+                            } else if (newState.status === 'countdown' || newState.status === 'active') {
+                                UI.updateStatus(newState.status === 'countdown' ? "Countdown starting..." : "Game active!");
+                                UI.showSection('game-area'); // Ensure game area is shown
+
+                                // --- START LOOP & TRIGGER INITIAL BACKGROUND IF NEEDED ---
                                 if (!appState.animationFrameId) {
-                                    log("--> Starting game loop NOW (triggered by countdown).");
+                                    log(`--> Starting game loop NOW (triggered by ${newState.status} state update).`);
+                                     // Generate background only if loop is just starting
+                                    if (newState) {
+                                         log("[handleServerMessage] Triggering initial background gen on loop start from game_state.");
+                                         Renderer.updateGeneratedBackground(newState.is_night);
+                                    }
                                     Game.startGameLoop();
                                 } else {
-                                    log("--> Loop already running (countdown change).");
+                                     // log(`--> Loop already running (${newState.status} change).`); // Can be noisy
                                 }
-                            } else if (newState.status === 'active') {
-                                log("-> Handling transition TO active");
-                                UI.updateStatus("Game active!");
-                                UI.showSection('game-area');
-                                if (!appState.animationFrameId) {
-                                    log("--> Starting game loop NOW (triggered by active).");
-                                    Game.startGameLoop();
-                                } else {
-                                     log("--> Loop already running (active change).");
-                                }
+                                // -------------------------------------------------------
+
                             } else if (newState.status === 'finished') {
-                                log("-> Game status changed to 'finished'.");
+                                log("-> Game status changed to 'finished'. Game loop will stop or show game over screen.");
                             }
-                        }
+                        } // End status change check
 
+                        // --- Update UI based on current state (even if status didn't change) ---
                         if (newState.status === 'countdown' || newState.status === 'active') {
-                            UI.updateHUD(newState);
-                            UI.updateCountdown(newState);
-                            UI.updateDayNight(newState);
+                            UI.updateHUD(newState); // Update stats, etc.
+                            UI.updateCountdown(newState); // Update visual countdown timer
+                            UI.updateDayNight(newState); // Update Day/Night indicator text AND trigger background changes if needed
                         }
                         else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') {
+                            // Update waiting message for host if player count changes
                             const playerCount = Object.keys(newState.players || {}).length;
                             if(DOM.waitingMessage) DOM.waitingMessage.textContent = `Waiting for Team Mate... (${playerCount}/${appState.maxPlayersInGame || '?'})`;
                         }
 
+                        // Check for game over signal (loop handles showing screen)
                         if (newState.game_over && !wasGameOver) {
                             log("-> Game Over signal received from server.");
+                            // UI.showGameOver(newState); // Moved to gameLoop check
                         }
 
+                        // Handle enemy speech bubble updates
                         const serverSpeakerId = newState.enemy_speaker_id;
                         const serverSpeechText = newState.enemy_speech_text;
                         if (serverSpeakerId && serverSpeechText) {
-                            const bubbleText = serverSpeechText.substring(0, 50);
+                            const bubbleText = serverSpeechText.substring(0, 50); // Limit length
                             activeEnemyBubbles[serverSpeakerId] = {
-                                text: bubbleText, endTime: performance.now() + 3000
+                                text: bubbleText, endTime: performance.now() + 3000 // Show for 3 seconds
                             };
                         }
-                        break;
+                        break; // End game_state
 
-                    // Default case and other cases ('chat_message', 'error') remain the same...
+                     // --- Case: Chat Message ---
                      case 'chat_message':
                          const senderId = data.sender_id;
                          const messageText = data.message;
                          const isSelf = senderId === appState.localPlayerId;
                          UI.addChatMessage(senderId, messageText, isSelf);
+                         // Add speech bubble for chat message
                          if (senderId && messageText) {
-                             const bubbleText = messageText.substring(0, 50);
+                             const bubbleText = messageText.substring(0, 50); // Limit length
                              activeSpeechBubbles[senderId] = {
-                                 text: bubbleText, endTime: performance.now() + 4000
+                                 text: bubbleText, endTime: performance.now() + 4000 // Show for 4 seconds
                              };
                          }
-                         break;
+                         break; // End chat_message
+
+                     // --- Case: Server Error Message ---
                      case 'error':
                          console.error("[Client] Server Error Message:", data.message);
                          UI.updateStatus(`Server Error: ${data.message}`, true);
+                         // Handle specific errors that might require UI changes
                          if (appState.mode === 'multiplayer-client' && (data.message.includes('not found') || data.message.includes('not waiting') || data.message.includes('full') || data.message.includes('finished'))) {
-                             UI.showSection('join-code-section');
-                             appState.mode = 'menu';
+                             UI.showSection('join-code-section'); // Go back to join input
+                             appState.mode = 'menu'; // Reset mode conceptually
                          } else if (appState.mode === 'multiplayer-host' && data.message.includes('Creation Error')) {
-                             Game.resetClientState(true);
+                             Game.resetClientState(true); // Back to main menu on host creation error
                          } else if (data.message === 'Please create or join a game first.') {
-                              log("Received 'join first' error unexpectedly, resetting state.");
-                              Game.resetClientState(true);
+                              log("Received 'join first' error unexpectedly, maybe disconnected? Resetting state.");
+                              Game.resetClientState(true); // Back to main menu
                          }
-                         break;
+                         break; // End error
 
+                    // --- Default Case: Unknown Message Type ---
                     default:
                         log(`Unknown message type received: ${data.type}`);
                 } // End switch
@@ -2566,3 +2724,4 @@
     </script>
 </body>
 </html>
+
