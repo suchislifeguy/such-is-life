@@ -1458,6 +1458,8 @@
                  // Boots start slightly overlapping pants bottom
                  const bootTopY = pantsBottomY - 5;
                  const bootBottomY = bootTopY + bootHeight; // Used for shadow positioning if needed
+                
+                 const distinguishingColor = isSelf ? playerColor : otherPlayerColor;
 
                  // --- Start Drawing (Order matters for layering) ---
                  ctx.save();
@@ -2582,3 +2584,4 @@
     </script>
 </body>
 </html>
+
