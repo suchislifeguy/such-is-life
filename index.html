@@ -513,6 +513,25 @@
         let activeEnemyBubbles = {};  // { enemyId: { text: "Grrr!", endTime: 123456789 } }
         let socket = null; // Single WebSocket connection reference
 
+        // --- ADD SNAKE STATE HERE ---
+        let snake = {
+            active: false,      // Is the snake currently on screen?
+            x: -50,             // Current horizontal position
+            y: 0,               // Current vertical position (calculated with sin wave)
+            segmentLength: 8,  // Visual length of a snake segment
+            segments: [],       // Array to store previous positions for drawing a body [{x,y}, {x,y}, ...]
+            maxSegments: 10,    // How many segments make up the body
+            baseY: 0,           // The straight-line Y position it's slithering along
+            direction: 1,       // 1 for right, -1 for left
+            speed: 60,          // Pixels per second
+            frequency: 0.04,    // Controls how tight the 'S' curve is (lower is wider)
+            amplitude: 6        // Controls how high/low the 'S' curve goes
+        };
+        let snakeSpawnTimer = 5 + Math.random() * 10; // Initial delay 5-15 seconds
+        const SNAKE_SPAWN_INTERVAL_MIN = 15; // Minimum seconds between snakes
+        const SNAKE_SPAWN_INTERVAL_MAX = 35; // Maximum seconds between snakes
+        // --------------------------
+
         // --- Logging Wrapper ---
         function log(...args) { console.log("[Client]", ...args); }
         function error(...args) { console.error("[Client]", ...args); }
@@ -1381,6 +1400,37 @@
                 playerIdsToRemove.forEach(id => { delete activeSpeechBubbles[id]; });
             }
 
+            function drawSnake() { // Takes no arguments, uses global 'snake' state
+                 if (!snake.active || snake.segments.length === 0) return;
+
+                 ctx.fillStyle = '#331a00'; // Dark brown color for snake
+                 ctx.strokeStyle = '#1a0d00'; // Even darker outline
+                 ctx.lineWidth = 1;
+
+                 // Draw segments from tail to head
+                 for (let i = 0; i < snake.segments.length; i++) {
+                     const segment = snake.segments[i];
+                     const size = snake.segmentLength * (0.5 + 0.5 * (i / snake.segments.length)); // Taper slightly towards tail
+                     ctx.beginPath();
+                     // Draw slightly overlapping circles for a smoother look
+                     ctx.arc(segment.x, segment.y, size / 2, 0, Math.PI * 2);
+                     ctx.fill();
+                     ctx.stroke();
+                 }
+
+                 // Draw the head slightly larger/differently (optional)
+                 const head = snake.segments[snake.segments.length - 1]; // Last added is current head approx
+                 if(head){ // Check if head exists
+                      ctx.fillStyle = '#4d2800'; // Slightly lighter head
+                      ctx.beginPath();
+                      ctx.arc(snake.x, snake.y, snake.segmentLength / 1.8, 0, Math.PI*2); // Current actual head pos
+                      ctx.fill();
+                      ctx.stroke();
+                 }
+
+
+            }
+
             // --- Drawing Entities ---
             function drawPlayers(players) {
                  // This function remains the same - it calls the updated drawPlayerCharacter
@@ -1944,7 +1994,7 @@
                      ctx.drawImage(offscreenCanvas, 0, 0);
                 }
                 // --- END Background Drawing ---
-
+                drawSnake();
                 // 2. --- Screen Shake (Apply *after* background is drawn) ---
                 let shakeOffsetX = 0, shakeOffsetY = 0, shakeApplied = false;
                 if (now < shakeEndTime && currentShakeMagnitude > 0) {
@@ -2128,55 +2178,116 @@
              // --- Game Loop Management ---
 
              // Define the main loop function at this scope level
-             function gameLoop(currentTime) {
-    // Check for active hit pause
-    if (hitPauseFrames > 0) {
-        hitPauseFrames--;
-        if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
-            appState.animationFrameId = requestAnimationFrame(gameLoop);
-        }
-        return; // Skip rendering and logic this frame
-    }
+            function gameLoop(currentTime) {
+                // Check for active hit pause
+                if (hitPauseFrames > 0) {
+                    hitPauseFrames--;
+                    if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
+                        appState.animationFrameId = requestAnimationFrame(gameLoop);
+                    }
+                    return; // Skip rendering and logic this frame
+                }
 
-    // Original game loop logic continues if not paused
-    if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
-        const finalStateForDisplay = appState.serverState;
-        if (finalStateForDisplay?.game_over) {
-            UI.updateStatus("Game Over!");
-            UI.showGameOver(finalStateForDisplay); // Show game over screen here
-        } else if (appState.mode === 'menu') {
-            UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
-        }
-        cleanupLoop();
-        return;
-    }
+                // Original game loop logic continues if not paused
+                if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
+                    const finalStateForDisplay = appState.serverState;
+                    if (finalStateForDisplay?.game_over) {
+                        UI.updateStatus("Game Over!");
+                        UI.showGameOver(finalStateForDisplay); // Show game over screen here
+                    } else if (appState.mode === 'menu') {
+                        UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
+                    }
+                    cleanupLoop();
+                    return;
+                }
 
-    if (!appState.serverState && appState.mode !== 'singleplayer') {
-        appState.animationFrameId = requestAnimationFrame(gameLoop);
-        return;
-    }
+                // Wait for initial server state in multiplayer before proceeding
+                if (!appState.serverState && appState.mode !== 'singleplayer') {
+                    appState.animationFrameId = requestAnimationFrame(gameLoop);
+                    return;
+                }
 
-    if (appState.lastLoopTime === null) { appState.lastLoopTime = currentTime; }
-    const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000);
-    appState.lastLoopTime = currentTime;
+                // Calculate delta time
+                if (appState.lastLoopTime === null) { appState.lastLoopTime = currentTime; }
+                const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000);
+                appState.lastLoopTime = currentTime;
 
-    if (appState.serverState?.status === 'active' && Input.isShootHeld()) {
-        Input.handleShooting();
-    }
+                // --- SNAKE TIMER & SPAWN LOGIC (Run only during Day and if game is active) ---
+                if (appState.serverState?.status === 'active' && appState.serverState && !appState.serverState.is_night) {
+                    if (!snake.active) {
+                        snakeSpawnTimer -= deltaTime;
+                        if (snakeSpawnTimer <= 0) {
+                            // Activate the snake!
+                            snake.active = true;
+                            snake.segments = []; // Clear old segments
+                            // Choose starting side and Y
+                            const startLeft = Math.random() < 0.5;
+                            snake.direction = startLeft ? 1 : -1;
+                            snake.x = startLeft ? -snake.segmentLength * snake.maxSegments : CANVAS_WIDTH + snake.segmentLength * snake.maxSegments; // Start off-screen
+                            snake.baseY = Math.random() * (CANVAS_HEIGHT - 40) + 20; // Random Y, avoiding very top/bottom
+                            snake.y = snake.baseY; // Initial Y
+                            log("[Effect] Snake activated!");
+                            // Reset timer for next spawn
+                            snakeSpawnTimer = SNAKE_SPAWN_INTERVAL_MIN + Math.random() * (SNAKE_SPAWN_INTERVAL_MAX - SNAKE_SPAWN_INTERVAL_MIN);
+                        }
+                    }
+                } else if (snake.active && appState.serverState?.is_night) {
+                     // If it becomes night while snake is active, deactivate it (optional refinement)
+                     // snake.active = false; // Or let it finish its current run
+                }
+                // --- END SNAKE TIMER LOGIC ---
 
-    if (appState.mode !== 'singleplayer' && appState.serverState?.status === 'active') {
-        updatePredictedPosition(deltaTime);
-        reconcileWithServer();
-    }
 
-    Renderer.drawGame();
+                // --- SNAKE MOVEMENT LOGIC (Run only if snake is active) ---
+                if (snake.active) {
+                    // Calculate target X for this frame
+                    const targetX = snake.x + snake.direction * snake.speed * deltaTime;
 
-    if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
-        appState.animationFrameId = requestAnimationFrame(gameLoop);
-    } else {
-        if(appState.animationFrameId) cleanupLoop();
-    }
-} // End gameLoop
+                    // Store current head position before moving, add to front for correct drawing order
+                    snake.segments.unshift({ x: snake.x, y: snake.y }); // Add to beginning
+                    // Keep segment array length limited
+                    while (snake.segments.length > snake.maxSegments) {
+                        snake.segments.pop(); // Remove the oldest segment from the end
+                    }
+
+                    // Update head position
+                    snake.x = targetX;
+                    snake.y = snake.baseY + Math.sin(snake.x * snake.frequency) * snake.amplitude;
+
+                    // Check if snake head is fully off-screen
+                    const offscreenMargin = snake.segmentLength * snake.maxSegments * 1.5; // Generous margin
+                    if ((snake.direction === 1 && snake.x > CANVAS_WIDTH + offscreenMargin) ||
+                        (snake.direction === -1 && snake.x < -offscreenMargin))
+                    {
+                        snake.active = false;
+                        log("[Effect] Snake deactivated (off-screen).");
+                    }
+                }
+                // --- END SNAKE MOVEMENT LOGIC ---
+
+                // --- Existing Game Logic ---
+                // Handle shooting input
+                if (appState.serverState?.status === 'active' && Input.isShootHeld()) {
+                    Input.handleShooting();
+                }
+
+                // Handle prediction & reconciliation for multiplayer
+                if (appState.mode !== 'singleplayer' && appState.serverState?.status === 'active') {
+                    updatePredictedPosition(deltaTime);
+                    reconcileWithServer();
+                }
+
+                // --- Render the frame ---
+                Renderer.drawGame(); // This will now draw the snake if snake.active is true
+
+                // --- Request next frame ---
+                if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
+                    appState.animationFrameId = requestAnimationFrame(gameLoop);
+                } else {
+                    // Cleanup if loop should stop
+                    if(appState.animationFrameId) cleanupLoop();
+                }
+            } // End gameLoop
 
             function startGameLoop() {
                 // --- Initial Checks ---
