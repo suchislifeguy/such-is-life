@@ -123,28 +123,40 @@
         /* --- Left Panel Styling --- */
         #left-panel {
             width: 360px;
-            max-height: 910px; /* Max height before scrolling */
-            flex-shrink: 0; /* Prevent panel shrinking */
+            max-height: 910px;
+            flex-shrink: 0;
             background-color: var(--container-bg);
             padding: 15px;
             box-sizing: border-box;
             display: flex;
-            flex-direction: column; /* Stack children vertically */
+            flex-direction: column;
             color: var(--text-color);
-            font-size: 13px; /* Base size, can be overridden */
-            overflow-y: auto; /* Enable vertical scroll if content exceeds max-height */
-            overflow-x: hidden; /* Prevent horizontal scroll */
-            margin-right: 10px; /* Space between panel and canvas container */
+            font-size: 13px;
+            overflow-y: auto;
+            overflow-x: hidden;
         }
 
-        /* --- Player Stats Grid Styling --- */
+
+        #left-panel .left-panel-top-group {
+            flex-grow: 1;
+            flex-shrink: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #left-panel .left-panel-bottom-group {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
         #player-stats-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr); /* Two equal columns */
+            grid-template-columns: repeat(2, 1fr);
             gap: 8px;
             width: 100%;
             box-sizing: border-box;
-            margin-bottom: 15px; /* Space below stats */
+            margin-bottom: 15px;
             flex-shrink: 0;
         }
 
@@ -217,10 +229,10 @@
 
         /* --- Chat Log Styling (Height Increased Again) --- */
         #left-panel #chat-log {
-            height: 190px; 
+            height: 190px;
             overflow-y: scroll;
             border: 1px solid var(--primary-color);
-            margin-bottom: 8px; /* Space below log, before input */
+            margin-bottom: 8px;
             padding: 5px;
             text-align: left;
             background: rgba(10, 20, 25, 0.5);
@@ -248,28 +260,21 @@
 
         /* Chat Input Styling (Now Block Element) */
         #left-panel #chatInput {
-            /* REMOVE flex-grow: 1; */
-            /* REMOVE margin-right: 5px; */
-            display: block; /* Make it a block element */
-            width: 100%;    /* Take full width */
-            padding: 12px 8px; /* Keep increased vertical padding */
+            display: block;
+            width: 100%;
+            padding: 12px 8px;
             font-size: 0.9rem;
-            box-sizing: border-box; /* Include padding/border in width */
-            margin-bottom: 8px; /* Space below input, above send button */
-            /* Inherits general input styles (background, color, border etc.) */
+            box-sizing: border-box;
+            margin-bottom: 8px;
         }
 
-        /* Send Chat Button Styling (Now Block Element, Matching Leave Button) */
         #left-panel #sendChatBtn {
-            display: block; /* Make it a block element */
-            width: 100%;    /* Take full width */
-            padding: 12px 10px; /* Match Leave button padding */
-            font-size: 1rem;    /* Match Leave button font size */
-            box-sizing: border-box; /* Include padding/border in width */
+            display: block;
+            width: 100%;
+            padding: 12px 10px;
+            font-size: 1rem;
+            box-sizing: border-box;
             flex-shrink: 0;
-            /* REMOVE width: auto; */
-            /* No margin needed below as it's the last element in the flex column */
-            /* Inherits general button styles (background, color, border etc.) */
         }
 
 
@@ -381,26 +386,22 @@
         <div id="game-area">
             <!-- Left Panel -->
             <div id="left-panel">
-                <!-- Grid Container for Player Stats -->
-                <div id="player-stats-grid">
-                    Loading Stats...
+
+                <div class="left-panel-top-group">
+                    <div id="player-stats-grid">
+                        Loading Stats...
+                    </div>
+                    <div id="day-night-indicator" style="display: none;">Day --:--</div>
                 </div>
-                <!-- Day/Night Indicator -->
-                <div id="day-night-indicator" style="display: none;">Day --:--</div>
-
-                <!-- Leave Button -->
-                <button id="leaveGameBtn">Leave Game</button>
-
-                <!-- Chat Log -->
-                <div id="chat-log"></div>
-
-                <!-- Chat Input (NOW A DIRECT CHILD) -->
-                <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="300">
-
-                <!-- Send Chat Button (NOW A DIRECT CHILD) -->
-                <button id="sendChatBtn">Send</button>
-
-            </div> <!-- End left-panel -->
+            
+                <div class="left-panel-bottom-group">
+                    <button id="leaveGameBtn">Leave Game</button>
+                    <div id="chat-log"></div>
+                    <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="100">
+                    <button id="sendChatBtn">Send</button>
+                </div>
+            
+            </div>
 
             <!-- Canvas Container (Takes remaining width) -->
             <div id="canvas-container">
