@@ -1337,8 +1337,8 @@
             }
 
             // --- Drawing Entities ---
-
-             function drawPlayers(players) {
+            function drawPlayers(players) {
+                 // This function remains the same - it calls the updated drawPlayerCharacter
                  if (!players) return;
                  Object.values(players).forEach(player => {
                      if (!player || player.player_status === PLAYER_STATUS_DEAD) return; // Use constant
@@ -1356,8 +1356,9 @@
                      ctx.save();
                      ctx.globalAlpha = alpha;
                      // Get aim direction for local player muzzle flash/gun angle
-                     const aimDx = isSelf ? localPlayerMuzzleFlash.aimDx : 0; // Assumes localPlayerMuzzleFlash is global/accessible
+                     const aimDx = isSelf ? localPlayerMuzzleFlash.aimDx : 0;
                      const aimDy = isSelf ? localPlayerMuzzleFlash.aimDy : 0;
+                     // Call the updated drawing function below
                      drawPlayerCharacter(drawX, drawY, width, height, isSelf, player, aimDx, aimDy);
                      ctx.restore();
 
@@ -1369,35 +1370,34 @@
                  });
              }
 
+             // --- UPDATED drawPlayerCharacter Function ---
              function drawPlayerCharacter(x, y, w, h, isSelf, playerState, aimDx, aimDy) {
-                 // --- Color Definitions (Keep original ones for other parts) ---
+                 // --- Color Definitions ---
                  const ironHelmetColor = '#3d3d3d';
                  const ironHelmetHighlight = '#666666';
                  const ironHelmetShadow = '#1a1a1a';
-                 // const coatColor = '#8B0000'; // No longer needed directly for coat/arms fill
-                 const beltColor = '#412a19';
-                 // const pantsColor = '#5a4030'; // No longer needed directly for pants fill
-                 const bootColor = '#241c1c';
+                 const beltColor = '#412a19';    // Dark Brown Belt
+                 const bootColor = '#241c1c';    // Very Dark Brown/Black Boots
                  const backgroundShadowColor = 'rgba(0,0,0,0.3)';
-                 const simpleChestPlateColor = '#777777'; // Chest plate remains grey
+                 const simpleChestPlateColor = '#777777'; // Grey Chest plate
                  const chestPlateHighlight = '#999999';
                  const slitColor = '#000000';
-                 const gunColor = '#444444';
-                 const hitFlashOverlayColor = 'rgba(255, 255, 150, 0.4)';
-                 const sparkColors = ['rgba(255, 100, 0, 0.8)', 'rgba(255, 165, 0, 0.9)', 'rgba(255, 220, 50, 0.7)'];
+                 const gunColor = '#444444';     // Grey Gun
+                 // Note: hitFlashOverlayColor is replaced by dustyHitFlashColor later
+                 const sparkColors = ['rgba(255, 100, 0, 0.8)', 'rgba(255, 165, 0, 0.9)', 'rgba(255, 220, 50, 0.7)']; // Keep sparks orange/yellow
 
-                 // --- State variables (Same as before) ---
+                 // --- State variables ---
                  const justHit = playerState?.hit_flash_this_tick ?? false;
                  const isIdle = (playerState?.input_vector?.dx ?? 0) === 0 && (playerState?.input_vector?.dy ?? 0) === 0;
                  const isMoving = !isIdle;
 
-                 // --- Bobbing/Breathing Constants & Calculation (Same as before) ---
+                 // --- Bobbing/Breathing ---
                  const IDLE_BOB_SPEED = 800;
                  const IDLE_BOB_AMPLITUDE = 1.2;
                  const time = performance.now();
                  const bobOffset = isIdle ? Math.sin(time / IDLE_BOB_SPEED) * IDLE_BOB_AMPLITUDE : 0;
 
-                 // --- Revised Kelly Dimensions (Adjusted Vertical Proportions) ---
+                 // --- Dimensions ---
                  const helmetHeight = h * 0.30;
                  const helmetWidth = w * 0.95;
                  const slitHeight = helmetHeight * 0.15;
@@ -1417,7 +1417,7 @@
                  const bootWidth = w * 0.32;
                  const bootSpacing = w * 0.4;
 
-                 // --- Revised Y Position Calculation (More separation) ---
+                 // --- Y Position Calculation ---
                  const totalDrawHeight = helmetHeight + neckGuardHeight + chestPlateHeight + pantsHeight + bootHeight;
                  const topOffset = h * 0.5;
                  const helmetTopY = y - topOffset + bobOffset;
@@ -1438,29 +1438,28 @@
                  const bootTopY = pantsBottomY - 5;
                  const bootBottomY = bootTopY + bootHeight;
 
-                 // --- Define the Distinguishing Color based on isSelf ---
-                 // Uses cached CSS variables: playerColor (red), otherPlayerColor (blue)
-                 // These must be defined/accessible in the Renderer scope (likely via getCssVar calls earlier)
-                 const distinguishingColor = isSelf ? playerColor : otherPlayerColor;
+                 // --- Define the Distinguishing Dusty Color based on isSelf ---
+                 // Uses the 'dusty' color variables assumed to be defined in Renderer scope
+                 const distinguishingColor = isSelf ? dustyPlayerSelfColor : dustyPlayerOtherColor;
 
                  // --- Start Drawing (Order matters for layering) ---
                  ctx.save();
 
-                 // 1. Shadow (Positioned relative to calculated bottom)
+                 // 1. Shadow
                  ctx.beginPath();
                  const shadowY = bootBottomY + 5;
                  ctx.ellipse(x, shadowY, w * 0.45, h * 0.05, 0, 0, Math.PI * 2);
                  ctx.fillStyle = backgroundShadowColor;
                  ctx.fill();
 
-                 // 2. Pants --- MODIFIED ---
-                 ctx.fillStyle = distinguishingColor; // USE RED/BLUE
+                 // 2. Pants --- USE DUSTY COLOR ---
+                 ctx.fillStyle = distinguishingColor;
                  const legWidth = w * 0.4;
                  ctx.fillRect(x - w * 0.45, pantsTopY, legWidth, pantsHeight);
                  ctx.fillRect(x + w * 0.05, pantsTopY, legWidth, pantsHeight);
 
                  // 3. Boots (with Stepping)
-                 ctx.fillStyle = bootColor; // Keep boots black/dark
+                 ctx.fillStyle = bootColor; // Keep boots dark
                  if (isMoving) {
                      const stepDuration = 250;
                      const stepPhase = Math.floor(time / stepDuration) % 2;
@@ -1476,8 +1475,8 @@
                      ctx.fillRect(x + bootSpacing - bootWidth/2, bootTopY, bootWidth, bootHeight);
                  }
 
-                 // 4. Coat --- MODIFIED ---
-                 ctx.fillStyle = distinguishingColor; // USE RED/BLUE
+                 // 4. Coat --- USE DUSTY COLOR ---
+                 ctx.fillStyle = distinguishingColor;
                  ctx.beginPath();
                  ctx.moveTo(x - coatWidthVisual / 2, coatTopY);
                  ctx.lineTo(x + coatWidthVisual / 2, coatTopY);
@@ -1504,8 +1503,8 @@
                  ctx.fillStyle = ironHelmetHighlight;
                  ctx.fillRect(x - shoulderPlateWidth/2 + 3, shoulderTopY + 2, shoulderPlateWidth - 6, 2);
 
-                 // 8. Arms --- MODIFIED ---
-                 ctx.fillStyle = distinguishingColor; // USE RED/BLUE
+                 // 8. Arms --- USE DUSTY COLOR ---
+                 ctx.fillStyle = distinguishingColor;
                  ctx.fillRect(x - shoulderPlateWidth * 0.45, armTopY, armWidth, armLength);
                  ctx.fillRect(x + shoulderPlateWidth * 0.45 - armWidth, armTopY, armWidth, armLength);
 
@@ -1527,7 +1526,7 @@
                  ctx.fillStyle = slitColor; // Keep slit black
                  ctx.fillRect(x - slitWidth/2, slitY, slitWidth, slitHeight);
 
-                 // 12. Gun (Position relative to new arm/body placement)
+                 // 12. Gun
                  if (isSelf && aimDx !== 0 && aimDy !== 0) {
                      const gunLevel = playerState?.gun ?? 1;
                      const gunLengthBase = 12;
@@ -1541,18 +1540,18 @@
                      ctx.translate(x, gunOriginY);
                      const angle = Math.atan2(aimDy, aimDx);
                      ctx.rotate(angle);
-                     ctx.fillStyle = gunColor; // Keep gun grey/metallic
+                     ctx.fillStyle = gunColor; // Keep gun grey
                      ctx.fillRect(gunOriginXOffset, -gunThickness / 2, gunLength, gunThickness);
                      ctx.restore();
                  }
 
-                 // 13. Hit Feedback
+                 // 13. Hit Feedback --- USE DUSTY FLASH COLOR ---
                  if (justHit) {
-                     // Overlay Flash
-                     ctx.fillStyle = hitFlashOverlayColor;
+                     // Overlay Flash using the dusty gold color
+                     ctx.fillStyle = dustyHitFlashColor; // USE DUSTY FLASH
                      ctx.fillRect(x - shoulderPlateWidth / 2, helmetTopY - 5, shoulderPlateWidth, h * 0.9);
 
-                     // Spark Particles
+                     // Spark Particles (Keep as they are - orange/yellow)
                      ctx.save();
                      const numSparks = 15 + Math.random() * 10;
                      for (let i = 0; i < numSparks; i++) {
@@ -1572,6 +1571,7 @@
                  // --- Restore initial context save ---
                  ctx.restore();
              }
+             // --- END OF UPDATED drawPlayerCharacter ---
 
 
             function drawEnemies(enemies) {
