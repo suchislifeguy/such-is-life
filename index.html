@@ -2110,126 +2110,98 @@
 
                     // --- Case: Receiving Game State Updates ---
                     case 'game_state':
-                        // 1. Store previous state info **and extract previous player health FIRST**
                         const previousStatus = appState.serverState?.status;
                         const wasGameOver = appState.serverState?.game_over;
-                        
-                        // --- FIX: Get previous player state BEFORE updating lastServerState ---
-                        const previousPlayerState = appState.serverState?.players?.[appState.localPlayerId]; 
-                        // --------------------------------------------------------------------
+                        const previousPlayerState = appState.serverState?.players?.[appState.localPlayerId];
 
-                        // Now update the state history
                         appState.previousServerState = appState.lastServerState;
-                        appState.lastServerState = appState.serverState; // Store the state we just read from
-
-                        // 2. Update the core server state with the NEW data
+                        appState.lastServerState = appState.serverState;
                         appState.serverState = data.state;
-                        const newState = appState.serverState; // This is the absolute latest state
-                        const currentPlayerState = newState?.players?.[appState.localPlayerId]; // Get current player data from the latest state
+                        const newState = appState.serverState;
+                        const currentPlayerState = newState?.players?.[appState.localPlayerId];
 
-                        // --- TRIGGER SHAKE ON DAMAGE (Now uses correct previousPlayerState) ---
-                        if (previousPlayerState && // Check if previous state existed
-                            currentPlayerState && // Check if current state exists
-                            typeof currentPlayerState.health === 'number' && // Ensure health is valid
-                            typeof previousPlayerState.health === 'number' && // Ensure health is valid
-                            currentPlayerState.health < previousPlayerState.health) // Compare health
+                        if (previousPlayerState &&
+                            currentPlayerState &&
+                            typeof currentPlayerState.health === 'number' &&
+                            typeof previousPlayerState.health === 'number' &&
+                            currentPlayerState.health < previousPlayerState.health)
                         {
                             const damageTaken = previousPlayerState.health - currentPlayerState.health;
                             const baseMagnitude = 3;
                             const damageScale = 0.1;
                             const maxMagnitude = 10;
                             const shakeMagnitude = Math.min(maxMagnitude, baseMagnitude + damageTaken * damageScale);
-                            const shakeDuration = 250; // ms duration
-
-                            log(`Damage detected! Taken: ${damageTaken.toFixed(1)}, Triggering Shake: Mag=${shakeMagnitude.toFixed(1)}, Dur=${shakeDuration}`); // Debug log
+                            const shakeDuration = 250;
+                            log(`Damage detected! Taken: ${damageTaken.toFixed(1)}, Triggering Shake: Mag=${shakeMagnitude.toFixed(1)}, Dur=${shakeDuration}`);
                             Renderer.triggerShake(shakeMagnitude, shakeDuration);
                         }
-                        // --- END SHAKE TRIGGER ---
 
-                        // 3. Update maxPlayers if needed (e.g., first state update for host)
                         if (!appState.maxPlayersInGame && newState.max_players) {
                              appState.maxPlayersInGame = newState.max_players;
                              log(`-> Max players set from game_state: ${appState.maxPlayersInGame}`);
                         }
 
-                        // 4. Handle Hit Pause trigger
                          const localPlayerStateHit = newState?.players?.[appState.localPlayerId];
                          if (localPlayerStateHit?.hit_flash_this_tick && hitPauseFrames <= 0) {
                              hitPauseFrames = 3;
                          }
 
-                        // 5. *** Handle Game Status Changes and Loop Control ***
                         if (newState.status !== previousStatus) {
                             log(`[Client State Change] From ${previousStatus || 'null'} to ${newState.status}`);
 
                             if (newState.status === 'waiting') {
-                                // This only happens if game was active/countdown and player left
                                 if (appState.mode === 'multiplayer-host') {
                                     log("-> Handling transition TO waiting (player left?)");
                                     UI.updateStatus("Teammate left. Waiting...", true);
                                     UI.showSection('host-wait-section');
                                     const currentPlayersWaiting = Object.keys(newState.players || {}).length;
                                     if(DOM.waitingMessage) DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentPlayersWaiting}/${appState.maxPlayersInGame || '?'})`;
-                                    Game.cleanupLoop(); // *** Stop the loop ***
+                                    Game.cleanupLoop();
                                 } else {
-                                    // Client might get put back to menu? Or show a message.
                                     log("-> Game returned to waiting (client view).");
                                     UI.updateStatus("Host or player left. Returning to menu.", true);
-                                    Game.resetClientState(true); // Send client to main menu
+                                    Game.resetClientState(true);
                                 }
 
                             } else if (newState.status === 'countdown') {
                                 log("-> Handling transition TO countdown");
                                 UI.updateStatus("Countdown starting...");
-                                UI.showSection('game-area'); // Show game area
-                                // --- Start loop HERE if not already running ---
+                                UI.showSection('game-area');
                                 if (!appState.animationFrameId) {
                                     log("--> Starting game loop NOW (triggered by countdown).");
                                     Game.startGameLoop();
                                 } else {
                                     log("--> Loop already running (countdown change).");
                                 }
-                                // --------------------------------------------
                             } else if (newState.status === 'active') {
                                 log("-> Handling transition TO active");
                                 UI.updateStatus("Game active!");
-                                UI.showSection('game-area'); // Ensure game area is shown
-                                // --- Start loop HERE if not already running ---
+                                UI.showSection('game-area');
                                 if (!appState.animationFrameId) {
                                     log("--> Starting game loop NOW (triggered by active).");
                                     Game.startGameLoop();
                                 } else {
                                      log("--> Loop already running (active change).");
                                 }
-                                // --------------------------------------------
                             } else if (newState.status === 'finished') {
-                                // The gameLoop itself detects 'finished' state and stops,
-                                // no explicit stop needed here unless adding extra UI transition.
                                 log("-> Game status changed to 'finished'.");
                             }
-                        } // End of status change check
+                        }
 
-                        // 6. Update HUD/Timers (Only if game is actively running)
                         if (newState.status === 'countdown' || newState.status === 'active') {
-                            // --- FIX HUD CALL SIGNATURE ---
-                            UI.updateHUD(newState); // <-- Pass ONLY newState
-                            // --- END FIX ---
-                            UI.updateCountdown(newState); // Update other UI elements
+                            UI.updateHUD(newState);
+                            UI.updateCountdown(newState);
                             UI.updateDayNight(newState);
                         }
-                        // Update waiting message if status is waiting (even if status didn't change)
                         else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') {
                             const playerCount = Object.keys(newState.players || {}).length;
                             if(DOM.waitingMessage) DOM.waitingMessage.textContent = `Waiting for Team Mate... (${playerCount}/${appState.maxPlayersInGame || '?'})`;
                         }
 
-                        // 7. Check for Game Over Transition (Primarily for logging)
                         if (newState.game_over && !wasGameOver) {
                             log("-> Game Over signal received from server.");
-                            // Loop detects newState.game_over and handles stopping/showing screen
                         }
 
-                        // 8. Handle Enemy Speech
                         const serverSpeakerId = newState.enemy_speaker_id;
                         const serverSpeechText = newState.enemy_speech_text;
                         if (serverSpeakerId && serverSpeechText) {
@@ -2238,7 +2210,7 @@
                                 text: bubbleText, endTime: performance.now() + 3000
                             };
                         }
-                        break; // End game_state case
+                        break;
 
                     // Default case and other cases ('chat_message', 'error') remain the same...
                      case 'chat_message':
