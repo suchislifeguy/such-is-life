@@ -331,33 +331,53 @@
 
         /* --- Game Over Screen  --- */
         #game-over-screen {
-                    position: absolute;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    background-color: rgba(10, 20, 25, 0.9);
-                    padding: 25px;
-                    border: 3px solid var(--player-color);
-                    border-radius: 10px;
-                    /* color: var(--accent-color); /* Base text color is often inherited */
-                    text-align: center; /* Centers text *within* block elements like h2/p */
-                    z-index: 20;
-                    width: 80%;
-                    max-width: 350px; /* Keeps it from getting too wide */
-                    box-sizing: border-box;
-                    display: none; /* Keep initially hidden */
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(10, 20, 25, 0.9);
+            padding: 25px; /* Keep padding */
+            border: 3px solid var(--player-color);
+            border-radius: 10px;
+            text-align: center; /* Center text within elements */
+            z-index: 20;
+            width: 80%;
+            max-width: 350px;
+            min-height: 220px; /* <<< ADDED: Guarantee some vertical space */
+            box-sizing: border-box;
+            /* display: none; /* JS will handle showing/hiding */
 
-                    /* --- ADD THESE LINES --- */
-                    display: flex;          /* Use flexbox for layout */
-                    flex-direction: column; /* Stack children vertically */
-                    align-items: center;    /* Center children horizontally */
-                    /* --- END ADDED LINES --- */
-                }
-                /* Other game over styles remain the same */
-                #game-over-screen h2 { color: var(--player-color); margin-top: 0; margin-bottom: 20px; font-size: 1.8em; }
-                #final-stats { margin-bottom: 25px; text-align: center; color: var(--text-color); font-size: 1.3em; line-height: 1.6; width: 100%; /* Ensure stats block can take width */ }
-                .final-stat-item strong { color: var(--accent-color); margin-right: 8px; display: inline-block; min-width: 70px; text-align: right; }
-                #game-over-screen button { margin-top: 10px; padding: 12px 25px; font-size: 1.1rem; }
+            /* --- Flexbox for vertical layout --- */
+            display: flex;          /* Enable Flexbox */
+            flex-direction: column; /* Stack children vertically */
+            align-items: center;    /* Center children horizontally */
+            justify-content: space-around; /* <<< ADDED: Distribute space vertically */
+        }
+        /* Other game over styles (h2, #final-stats, button) remain the same */
+        #game-over-screen h2 {
+             color: var(--player-color);
+             margin-top: 0; /* Remove default top margin */
+             margin-bottom: 15px; /* Adjust spacing */
+             font-size: 1.8em;
+             flex-shrink: 0; /* Prevent shrinking */
+        }
+        #final-stats {
+             margin-bottom: 20px; /* Adjust spacing */
+             text-align: center;
+             color: var(--text-color);
+             font-size: 1.3em;
+             line-height: 1.6;
+             width: 100%; /* Take available width */
+             flex-shrink: 0; /* Prevent shrinking */
+        }
+        #game-over-screen button {
+            margin-top: 15px; /* Adjust spacing */
+            padding: 12px 25px;
+            font-size: 1.1rem;
+            flex-shrink: 0; /* Prevent shrinking */
+        }
+        /* .final-stat-item and strong rules remain the same */
+         .final-stat-item strong { color: var(--accent-color); margin-right: 8px; display: inline-block; min-width: 70px; text-align: right; }
 
     </style>
 </head>
@@ -2553,40 +2573,47 @@
 
                 const serverPos = appState.serverState.players[appState.localPlayerId];
                 if (typeof serverPos.x !== 'number' || typeof serverPos.y !== 'number') {
-                    // log("Reconciliation skipped: Invalid server position data."); // Keep logging minimal
-                    return;
+                    return; // Invalid server data
                 }
 
                 const predictedPos = appState.predictedPlayerPos;
                 const renderedPos = appState.renderedPlayerPos;
                 const dist = distance(predictedPos.x, predictedPos.y, serverPos.x, serverPos.y);
 
-                const threshold = parseFloat(getCssVar('--reconciliation-threshold')) || 10; // This threshold is for SNAPPING
-                const lerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.1; // This is for VISIBLE smoothing
+                // --- Key Tuning Values ---
+                // Snap Threshold (via CSS --reconciliation-threshold): How large error must be to teleport. Higher = less snapping.
+                const snapThreshold = (parseFloat(getCssVar('--reconciliation-threshold')) || 15) * 2.0; // Default 30px
+                // Render Lerp Factor (via CSS --lerp-factor): How quickly visuals catch up. Smaller = smoother but more visual lag.
+                const renderLerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.1;
+                // Nudge Threshold (JS): How large error must be before prediction correction starts. Smaller = corrects sooner.
+                const nudgeThreshold = 2.5; // <<< DECREASED (was 10.0, originally 4.0) - Start nudging much sooner
+                // Nudge Strength (JS): How strongly prediction pulls towards server pos. Smaller = gentler nudge.
+                const nudgeMultiplier = 0.06; // <<< ADJUSTED (was 0.1, originally 0.05) - Gentle nudge strength
+                // --- End Tuning Values ---
 
-                if (dist > threshold * 2) { // Large error -> Snap
-                    // log(`Reconciliation SNAP! Dist: ${dist.toFixed(1)}`);
+                // --- Snapping Logic ---
+                if (dist > snapThreshold) {
+                    // log(`Reconciliation SNAP! Dist: ${dist.toFixed(1)} > ${snapThreshold.toFixed(1)}`);
                     predictedPos.x = serverPos.x;
                     predictedPos.y = serverPos.y;
                     renderedPos.x = serverPos.x;
                     renderedPos.y = serverPos.y;
-                } else {
-                    // Smooth visible position towards prediction
-                    renderedPos.x = lerp(renderedPos.x, predictedPos.x, lerpFactor);
-                    renderedPos.y = lerp(renderedPos.y, predictedPos.y, lerpFactor);
+                }
+                // --- Regular Smoothing & Nudging Logic ---
+                else {
+                    // Always smooth the *visual* position towards the *predicted* position
+                    renderedPos.x = lerp(renderedPos.x, predictedPos.x, renderLerpFactor);
+                    renderedPos.y = lerp(renderedPos.y, predictedPos.y, renderLerpFactor);
 
-                    // Gentle Nudge: Only correct prediction if error is > 4.0 pixels
-                    // --- CHANGE HERE: Increased threshold ---
-                    if (dist > 2.0) { // Was 2.0
-                         // Use the halved nudge factor
-                         predictedPos.x = lerp(predictedPos.x, serverPos.x, lerpFactor * 0.04);
-                         predictedPos.y = lerp(predictedPos.y, serverPos.y, lerpFactor * 0.04);
-                         // log(`Reconciliation Nudge: Dist=${dist.toFixed(1)}`); // Optional debug
+                    // Nudge the *prediction* towards the *server* position only if error is significant enough
+                    if (dist > nudgeThreshold) {
+                         // log(`Reconciliation Nudge: Dist=${dist.toFixed(1)} > ${nudgeThreshold.toFixed(1)}`);
+                         predictedPos.x = lerp(predictedPos.x, serverPos.x, renderLerpFactor * nudgeMultiplier); // Gentle pull
+                         predictedPos.y = lerp(predictedPos.y, serverPos.y, renderLerpFactor * nudgeMultiplier); // Gentle pull
                     }
-                    // --- End Change ---
                 }
              }
-
+             
              // Accessor not strictly needed if SP uses server state directly
              function getLocalGameState() { return appState.serverState; }
 
