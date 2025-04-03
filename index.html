@@ -518,17 +518,14 @@
             active: false,
             x: -50,
             y: 0,
-            // --- MORE RADICAL ADJUSTMENTS ---
-            segmentLength: 3,   // MUCH Thinner segments (like a pencil lead)
+            segmentLength: 3,   // Keep it thin conceptually for physics/overlap calculation later if needed
             segments: [],
-            maxSegments: 45,     // MUCH MUCH Longer body (triple the previous length!)
-            // ---------------------------
+            maxSegments: 100,    
             baseY: 0,
             direction: 1,
-            speed: 85,           // Even Faster? Test this.
-            // --- MORE RADICAL ADJUSTMENTS ---
-            frequency: 0.025,   
-            amplitude: 50        
+            speed: 85,           // Keep Fast
+            frequency: 0.06,     // Keep Wavy
+            amplitude: 50        // Keep High Amplitude
         };
         // --- Spawn timers remain the same ---
         let snakeSpawnTimer = 5 + Math.random() * 10;
@@ -1406,42 +1403,39 @@
 
             // --- REWRITTEN drawSnake function ---
             function drawSnake() {
+                 // Add log to check actual segment count being drawn
+                 if (snake.active) {
+                     // console.log("Drawing snake with segments:", snake.segments.length); // Optional: Uncomment for debugging length
+                 }
+
+                 // Only draw if active and has at least 2 points
                  if (!snake.active || snake.segments.length < 2) return;
 
-                 const snakeBodyColor = '#261a0d'; // Even darker brown, almost black
-                 const snakeOutlineColor = '#1a0d00'; // Very dark outline
+                 const snakeLineColor = '#261a0d'; // Dark brown
 
                  ctx.lineCap = 'round';
                  ctx.lineJoin = 'round';
-                 ctx.strokeStyle = snakeOutlineColor;
-                 // --- ADJUST THICKNESS (Tiny) ---
-                 ctx.lineWidth = snake.segmentLength + 1; // Outline just 1px thicker than body
+                 ctx.strokeStyle = snakeLineColor;
+                 // --- SET A VISIBLE THICKNESS ---
+                 ctx.lineWidth = 5; // Hardcoded thickness for now (ignore segmentLength visually)
                  // -----------------------------
 
-                 // Draw the outline first
+                 // Draw the single line connecting all points
                  ctx.beginPath();
-                 ctx.moveTo(snake.segments[0].x, snake.segments[0].y);
-                 for (let i = 1; i < snake.segments.length; i++) {
+                 // Start at the oldest point (tail)
+                 ctx.moveTo(snake.segments[snake.segments.length - 1].x, snake.segments[snake.segments.length - 1].y);
+                 // Draw backwards through history towards the head
+                 for (let i = snake.segments.length - 2; i >= 0; i--) {
                      ctx.lineTo(snake.segments[i].x, snake.segments[i].y);
                  }
+                 // End at the current head position
                  ctx.lineTo(snake.x, snake.y);
-                 ctx.stroke();
+                 ctx.stroke(); // Draw the single thick line
 
-                 // Draw the inner body color
-                 ctx.strokeStyle = snakeBodyColor;
-                 // --- ADJUST THICKNESS (Tiny) ---
-                 ctx.lineWidth = snake.segmentLength; // Body thickness matches state variable (now 3px)
-                 // -----------------------------
-                 ctx.stroke();
-
-                 // Optional: Draw a distinct head (still slightly larger than body)
-                 ctx.fillStyle = '#331a00'; // Dark brown head
-                 ctx.beginPath();
-                 // --- ADJUST HEAD SIZE (Relative to tiny body) ---
-                 ctx.arc(snake.x, snake.y, snake.segmentLength, 0, Math.PI*2); // Head ~ same size as body thickness
-                 // --------------------------------------------
-                 ctx.fill();
+                 // Reset line width if it affects other drawing (unlikely but safe)
+                 // ctx.lineWidth = 1;
             }
+
 
             // --- Drawing Entities ---
             function drawPlayers(players) {
