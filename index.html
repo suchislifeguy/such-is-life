@@ -513,6 +513,9 @@
         let activeEnemyBubbles = {};  // { enemyId: { text: "Grrr!", endTime: 123456789 } }
         let socket = null; // Single WebSocket connection reference
 
+        let localPlayerFlashEndTime = 0;
+        const PLAYER_FLASH_DURATION_MS = 120; // How long the flash lasts (milliseconds)
+
         // --- Logging Wrapper ---
         function log(...args) { console.log("[Client]", ...args); }
         function error(...args) { console.error("[Client]", ...args); }
@@ -1371,7 +1374,7 @@
 
             function drawPlayerCharacter(x, y, w, h, isSelf, playerState, aimDx, aimDy) {
                 // --- Get Hit Flash State ---
-                const justHit = playerState?.hit_flash_this_tick ?? false;
+                const justHit = performance.now() < localPlayerFlashEndTime; 
                 const flashColor = enemyHitFlashColor; // Reuse the white flash color from enemies
 
                 // Use cached colors (as before)
@@ -2177,10 +2180,18 @@
                              log(`-> Max players set from game_state: ${appState.maxPlayersInGame}`);
                         }
 
-                        // 4. Handle Hit Pause trigger
-                         const localPlayerStateHit = newState?.players?.[appState.localPlayerId];
-                         if (localPlayerStateHit?.hit_flash_this_tick && hitPauseFrames <= 0) {
-                             hitPauseFrames = 3;
+                        // --- MODIFIED: Handle Hit Pause AND Trigger Client Flash Timer ---
+                        const localPlayerStateHit = newState?.players?.[appState.localPlayerId];
+                         // Check if the flag is true in the *newly received state*
+                         if (localPlayerStateHit?.hit_flash_this_tick) {
+                             // 1. Trigger Hit Pause (only if not already pausing)
+                             if (hitPauseFrames <= 0) {
+                                 hitPauseFrames = 3; // Start the pause
+                             }
+                             // 2. Set the client-side flash timer
+                             localPlayerFlashEndTime = performance.now() + PLAYER_FLASH_DURATION_MS;
+                             // Optional Log:
+                             // log("Hit flash flag received, setting client flash timer.");
                          }
 
                         // 5. *** Handle Game Status Changes and Loop Control ***
