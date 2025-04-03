@@ -515,6 +515,7 @@
 
         let localPlayerFlashEndTime = 0;
         const PLAYER_FLASH_DURATION_MS = 120; // How long the flash lasts (milliseconds)
+        let scheduleHitPause = false;
 
         // --- Logging Wrapper ---
         function log(...args) { console.log("[Client]", ...args); }
@@ -1803,55 +1804,58 @@
 
              // Define the main loop function at this scope level
              function gameLoop(currentTime) {
-    // Check for active hit pause
-    if (hitPauseFrames > 0) {
-        hitPauseFrames--;
-        if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
-            appState.animationFrameId = requestAnimationFrame(gameLoop);
-        }
-        return; // Skip rendering and logic this frame
-    }
+                if (hitPauseFrames > 0) {
+                    hitPauseFrames--;
+                    if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
+                        appState.animationFrameId = requestAnimationFrame(gameLoop);
+                    }
+                    return;
+                }
 
-    // Original game loop logic continues if not paused
-    if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
-        const finalStateForDisplay = appState.serverState;
-        if (finalStateForDisplay?.game_over) {
-            UI.updateStatus("Game Over!");
-            UI.showGameOver(finalStateForDisplay); // Show game over screen here
-        } else if (appState.mode === 'menu') {
-            UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
-        }
-        cleanupLoop();
-        return;
-    }
+                if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
+                    const finalStateForDisplay = appState.serverState;
+                    if (finalStateForDisplay?.game_over) {
+                        UI.updateStatus("Game Over!");
+                        UI.showGameOver(finalStateForDisplay);
+                    } else if (appState.mode === 'menu') {
+                        UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
+                    }
+                    cleanupLoop();
+                    return;
+                }
 
-    if (!appState.serverState && appState.mode !== 'singleplayer') {
-        appState.animationFrameId = requestAnimationFrame(gameLoop);
-        return;
-    }
+                if (!appState.serverState && appState.mode !== 'singleplayer') {
+                    appState.animationFrameId = requestAnimationFrame(gameLoop);
+                    return;
+                }
 
-    if (appState.lastLoopTime === null) { appState.lastLoopTime = currentTime; }
-    const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000);
-    appState.lastLoopTime = currentTime;
+                if (appState.lastLoopTime === null) { appState.lastLoopTime = currentTime; }
+                const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000);
+                appState.lastLoopTime = currentTime;
 
-    if (appState.serverState?.status === 'active' && Input.isShootHeld()) {
-        Input.handleShooting();
-    }
+                if (appState.serverState?.status === 'active' && Input.isShootHeld()) {
+                    Input.handleShooting();
+                }
 
-    if (appState.mode !== 'singleplayer' && appState.serverState?.status === 'active') {
-        updatePredictedPosition(deltaTime);
-        reconcileWithServer();
-    }
+                if (appState.mode !== 'singleplayer' && appState.serverState?.status === 'active') {
+                    updatePredictedPosition(deltaTime);
+                    reconcileWithServer();
+                }
 
-    Renderer.drawGame();
+                Renderer.drawGame();
 
-    if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
-        appState.animationFrameId = requestAnimationFrame(gameLoop);
-    } else {
-        if(appState.animationFrameId) cleanupLoop();
-    }
-} // End gameLoop
+                if (scheduleHitPause) {
+                    hitPauseFrames = 3;
+                    scheduleHitPause = false;
+                }
 
+                if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
+                    appState.animationFrameId = requestAnimationFrame(gameLoop);
+                } else {
+                    if(appState.animationFrameId) cleanupLoop();
+                }
+            }
+            
             function startGameLoop() {
                 // --- Initial Checks ---
                 // Don't start if explicitly in menu mode
@@ -2180,19 +2184,20 @@
                              log(`-> Max players set from game_state: ${appState.maxPlayersInGame}`);
                         }
 
-                        // --- MODIFIED: Handle Hit Pause AND Trigger Client Flash Timer ---
+                        // --- REVISED: Handle Hit Flash Trigger & Schedule Hit Pause ---
                         const localPlayerStateHit = newState?.players?.[appState.localPlayerId];
                          // Check if the flag is true in the *newly received state*
                          if (localPlayerStateHit?.hit_flash_this_tick) {
-                             // 1. Trigger Hit Pause (only if not already pausing)
-                             if (hitPauseFrames <= 0) {
-                                 hitPauseFrames = 3; // Start the pause
-                             }
-                             // 2. Set the client-side flash timer
+                             // 1. Set the client-side flash timer (immediately)
                              localPlayerFlashEndTime = performance.now() + PLAYER_FLASH_DURATION_MS;
-                             // Optional Log:
-                             // log("Hit flash flag received, setting client flash timer.");
+                             // 2. Schedule Hit Pause for the *next* frame (only if not already paused)
+                             if (hitPauseFrames <= 0) {
+                                 scheduleHitPause = true;
+                                 // Optional log: log("Hit registered. Scheduling hit pause for next frame.");
+                             }
+                             // Optional log: log("Hit flash flag received, setting client flash timer.");
                          }
+
 
                         // 5. *** Handle Game Status Changes and Loop Control ***
                         if (newState.status !== previousStatus) {
