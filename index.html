@@ -2786,16 +2786,18 @@
                         const newState = appState.serverState; // Use newState for clarity
                         const currentPlayerState = newState?.players?.[appState.localPlayerId];
 
-                        // --- Handle hit shake ---
+                        // Handle hit shake
                         if (previousPlayerState && currentPlayerState &&
                             typeof currentPlayerState.health === 'number' &&
                             typeof previousPlayerState.health === 'number' &&
                             currentPlayerState.health < previousPlayerState.health)
                         {
-                            const baseMagnitude = 5;    // Increased from 3 (more shake on any hit)
-                            const damageScale = 0.18;   // Increased from 0.1 (shake scales more with damage)
-                            const maxMagnitude = 18;    // Increased from 10 (higher potential peak shake)
-                            // log(`Damage detected! Taken: ${damageTaken.toFixed(1)}, Triggering Shake: Mag=${shakeMagnitude.toFixed(1)}, Dur=${shakeDuration}`);
+                            const damageTaken = previousPlayerState.health - currentPlayerState.health;
+                            const baseMagnitude = 5;
+                            const damageScale = 0.18;
+                            const maxMagnitude = 18;
+                            const shakeMagnitude = Math.min(maxMagnitude, baseMagnitude + damageTaken * damageScale);
+                            const shakeDuration = 250;
                             Renderer.triggerShake(shakeMagnitude, shakeDuration);
                         }
 
