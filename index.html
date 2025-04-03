@@ -602,7 +602,7 @@
                      } else if (status === PLAYER_STATUS_DEAD || healthValue <= 0) {
                          healthDisplay = `<span style='color: var(--health-bar-low);'>DEAD</span>`;
                      } else {
-                        healthDisplay = `${healthValue.toFixed(3)} / ${maxHealth}`;
+                        healthDisplay = `${healthValue.toFixed(3)}`;
                     }
 
                     const armorDisplay = Math.round(armorValue);
