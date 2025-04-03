@@ -513,23 +513,23 @@
         let activeEnemyBubbles = {};  // { enemyId: { text: "Grrr!", endTime: 123456789 } }
         let socket = null; // Single WebSocket connection reference
 
-// --- ADD SNAKE STATE HERE ---
+        // --- ADD SNAKE STATE HERE ---
         let snake = {
             active: false,
             x: -50,
             y: 0,
-            // --- ADJUST THESE ---
-            segmentLength: 6,   // Smaller segments
+            // --- MORE RADICAL ADJUSTMENTS ---
+            segmentLength: 3,   // MUCH Thinner segments (like a pencil lead)
             segments: [],
-            maxSegments: 15,     // More segments for a longer body
-            // --------------------
+            maxSegments: 45,     // MUCH MUCH Longer body (triple the previous length!)
+            // ---------------------------
             baseY: 0,
             direction: 1,
-            speed: 70,           // Slightly faster? Or keep at 60? Test this.
-            // --- ADJUST THESE ---
-            frequency: 0.03,     // Lower frequency = Wider curves
-            amplitude: 3         // MUCH smaller amplitude = Less vertical movement
-            // --------------------
+            speed: 85,           // Even Faster? Test this.
+            // --- MORE RADICAL ADJUSTMENTS ---
+            frequency: 0.02,     // EVEN Lower frequency = Really wide, slow curves
+            amplitude: 6         // Keep amplitude fairly low, maybe increase slightly if TOO flat now?
+            // ---------------------------
         };
         // --- Spawn timers remain the same ---
         let snakeSpawnTimer = 5 + Math.random() * 10;
@@ -1405,17 +1405,19 @@
                 playerIdsToRemove.forEach(id => { delete activeSpeechBubbles[id]; });
             }
 
+            // --- REWRITTEN drawSnake function ---
             function drawSnake() {
                  if (!snake.active || snake.segments.length < 2) return;
 
-                 const snakeBodyColor = '#331a00';
-                 const snakeOutlineColor = '#1a0d00';
+                 const snakeBodyColor = '#261a0d'; // Even darker brown, almost black
+                 const snakeOutlineColor = '#1a0d00'; // Very dark outline
 
                  ctx.lineCap = 'round';
                  ctx.lineJoin = 'round';
                  ctx.strokeStyle = snakeOutlineColor;
-                 // --- ADJUST THICKNESS ---
-                 ctx.lineWidth = snake.segmentLength + 1; 
+                 // --- ADJUST THICKNESS (Tiny) ---
+                 ctx.lineWidth = snake.segmentLength + 1; // Outline just 1px thicker than body
+                 // -----------------------------
 
                  // Draw the outline first
                  ctx.beginPath();
@@ -1428,15 +1430,17 @@
 
                  // Draw the inner body color
                  ctx.strokeStyle = snakeBodyColor;
-                 // --- ADJUST THICKNESS ---
-                 ctx.lineWidth = snake.segmentLength; 
+                 // --- ADJUST THICKNESS (Tiny) ---
+                 ctx.lineWidth = snake.segmentLength; // Body thickness matches state variable (now 3px)
+                 // -----------------------------
                  ctx.stroke();
 
-                 // Optional: Draw a distinct head
-                 ctx.fillStyle = '#4d2800';
+                 // Optional: Draw a distinct head (still slightly larger than body)
+                 ctx.fillStyle = '#331a00'; // Dark brown head
                  ctx.beginPath();
-                 // --- ADJUST HEAD SIZE ---
-                 ctx.arc(snake.x, snake.y, snake.segmentLength / 1.2, 0, Math.PI*2); 
+                 // --- ADJUST HEAD SIZE (Relative to tiny body) ---
+                 ctx.arc(snake.x, snake.y, snake.segmentLength, 0, Math.PI*2); // Head ~ same size as body thickness
+                 // --------------------------------------------
                  ctx.fill();
             }
 
