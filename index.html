@@ -1405,7 +1405,7 @@
             function drawSnake() {
                  // Add log to check actual segment count being drawn
                  if (snake.active) {
-                     // console.log("Drawing snake with segments:", snake.segments.length); // Optional: Uncomment for debugging length
+                     // console.log("Drawing snake with segments:", snake.segments.length);
                  }
 
                  // Only draw if active and has at least 2 points
@@ -1416,24 +1416,39 @@
                  ctx.lineCap = 'round';
                  ctx.lineJoin = 'round';
                  ctx.strokeStyle = snakeLineColor;
-                 // --- SET A VISIBLE THICKNESS ---
-                 ctx.lineWidth = 5; // Hardcoded thickness for now (ignore segmentLength visually)
-                 // -----------------------------
+                 ctx.lineWidth = 5; // Keep the visible thickness
 
-                 // Draw the single line connecting all points
                  ctx.beginPath();
-                 // Start at the oldest point (tail)
-                 ctx.moveTo(snake.segments[snake.segments.length - 1].x, snake.segments[snake.segments.length - 1].y);
-                 // Draw backwards through history towards the head
-                 for (let i = snake.segments.length - 2; i >= 0; i--) {
-                     ctx.lineTo(snake.segments[i].x, snake.segments[i].y);
-                 }
-                 // End at the current head position
-                 ctx.lineTo(snake.x, snake.y);
-                 ctx.stroke(); // Draw the single thick line
 
-                 // Reset line width if it affects other drawing (unlikely but safe)
-                 // ctx.lineWidth = 1;
+                 // --- Calculate Tail Position with Max Amplitude ---
+                 // The oldest point (tail end) uses the most exaggerated amplitude
+                 const tailSegment = snake.segments[snake.segments.length - 1];
+                 // Increase amplitude slightly more for the very tail? Experiment factor: 1.2
+                 const tailAmplitudeFactor = 1.2;
+                 const tailY = snake.baseY + Math.sin(tailSegment.x * snake.frequency) * (snake.amplitude * tailAmplitudeFactor);
+                 ctx.moveTo(tailSegment.x, tailY); // Start path at the tail point with calculated Y
+
+                 // --- Draw Segments with Decreasing Amplitude Towards Head ---
+                 // Loop from the second-to-last segment up towards the head
+                 for (let i = snake.segments.length - 2; i >= 0; i--) {
+                     const segment = snake.segments[i];
+                     // Calculate an amplitude factor: closer to 1 near tail, closer to 0 near head
+                     // Let's use a squared factor for more pronounced effect near the tail
+                     const progress = i / (snake.segments.length - 1); // 0 near head, 1 near tail
+                     const segmentAmplitudeFactor = 1.0 + (progress * progress * 0.5); // Factor from 1.0 (head) to 1.5 (tail)
+
+                     // Calculate the Y position for this segment using the modified amplitude
+                     const segmentY = snake.baseY + Math.sin(segment.x * snake.frequency) * (snake.amplitude * segmentAmplitudeFactor);
+
+                     ctx.lineTo(segment.x, segmentY); // Draw line to the calculated position
+                 }
+
+                 // --- End at the Current Head Position ---
+                 // The head uses the 'natural' amplitude calculated in gameLoop
+                 ctx.lineTo(snake.x, snake.y);
+
+                 // --- Draw the entire path ---
+                 ctx.stroke();
             }
 
 
