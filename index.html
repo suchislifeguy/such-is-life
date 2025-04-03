@@ -1085,50 +1085,122 @@
             const ctx = DOM.ctx;
             const lerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.2;
 
+            // --- CACHE ALL CSS Variables Used for Drawing ---
+            const fontFamily = getCssVar('--font-family') || 'monospace';
+            // Damage Text
+            const damageTextColor = getCssVar('--damage-text-color') || '#FFFFFF';
+            const damageTextCritColor = getCssVar('--damage-text-crit-color') || '#FFD700';
+            const damageTextFontSize = parseInt(getCssVar('--damage-text-font-size'), 10) || 14;
+            const damageTextCritFontSize = parseInt(getCssVar('--damage-text-crit-font-size'), 10) || 18;
+            // Player / Enemy Colors (base character)
+            const playerColor = getCssVar('--player-color') || '#DC143C'; // Used for health bar low, maybe torso
+            const otherPlayerColor = getCssVar('--other-player-color') || '#4682B4'; // Maybe torso
+            const playerHeadColor = '#D2B48C'; // Assuming constant
+            const playerHelmetColor = '#CCCCCC'; // Assuming constant
+            const playerSlitColor = '#222222'; // Assuming constant
+            const playerCoatColor = '#8B4513'; // Assuming constant
+            const playerBootColor = '#222222'; // Assuming constant
+            const playerGunColor = '#444444'; // Assuming constant
+            const playerTorsoSelfColor = '#A00000'; // Specific for self
+            const playerTorsoOtherColor = '#004488'; // Specific for other
+            const enemyColor = getCssVar('--enemy-color') || '#556B2F'; // Fallback if needed
+            const enemySkinColor = '#D2B48C'; // Assuming constant
+            const enemyCoatColor = '#8B4513'; // Assuming constant
+            const enemyTorsoChaserColor = '#2F4F4F'; // Assuming constant
+            const enemyTorsoShooterColor = '#4682B4'; // Assuming constant
+            const enemyBootColor = '#222222'; // Assuming constant
+            const enemyCapColor = '#111111'; // Assuming constant
+            const enemyHitFlashColor = 'rgba(255, 255, 255, 0.7)'; // Assuming constant
+            // Bullets
+            const bulletPlayerColor = getCssVar('--bullet-player-color') || '#FFEB3B';
+            const bulletEnemyColor = getCssVar('--bullet-enemy-color') || '#C0C0C0';
+            // Health & Armor Bars
+            const healthBarBg = getCssVar('--health-bar-bg') || '#444';
+            const healthBarHigh = getCssVar('--health-bar-high') || '#66bb6a';
+            const healthBarMedium = getCssVar('--health-bar-medium') || '#FFD700';
+            const healthBarLow = playerColor; // Use cached playerColor '#DC143C'
+            const armorBarColor = getCssVar('--powerup-armor') || '#C0C0C0'; // Use powerup color
+            // Powerups
+            const powerupHealthColor = getCssVar('--powerup-health') || 'lime';
+            const powerupGunColor = getCssVar('--powerup-gun') || 'fuchsia';
+            const powerupSpeedColor = getCssVar('--powerup-speed') || 'aqua';
+            const powerupArmorColor = armorBarColor; // Use same cached color '#C0C0C0';
+            const powerupShotgunColor = '#FFA500'; // Specific colors
+            const powerupSlugColor = '#A0522D';
+            const powerupRapidColor = '#FFFF00';
+            const powerupScoreColor = '#FFD700';
+            const powerupDefaultColor = '#888'; // Fallback
+            // Speech Bubbles
+            const playerSpeechBubbleColor = getCssVar('--text-color') || '#FFF8DC';
+            const playerSpeechBubbleBg = 'rgba(0, 0, 0, 0.7)';
+            const playerSpeechBubbleOutline = 'rgba(200, 200, 200, 0.5)';
+            const enemySpeechBubbleColor = '#FFAAAA';
+            const enemySpeechBubbleBg = 'rgba(70, 0, 0, 0.7)';
+            const enemySpeechBubbleOutline = 'rgba(200, 150, 150, 0.5)';
+            // Campfire
+            const campfireAuraColor = getCssVar('--campfire-aura-color') || 'rgba(255, 255, 0, 0.15)';
+            const campfireStickColor = '#8B4513'; // Constant
+            const campfireFlameOuterColor = 'rgba(255, 165, 0, 0.6)'; // Constant
+            const campfireFlameInnerColor = 'rgba(255, 255, 0, 0.7)'; // Constant
+            // Muzzle Flash
+            const muzzleFlashColor = 'rgba(255, 220, 50, 0.9)'; // Constant
+
             // --- Screen Shake State ---
             let currentShakeMagnitude = 0;
             let shakeEndTime = 0;
-            // -------------------------
 
-            // --- Function to Trigger Screen Shake ---
             function triggerShake(magnitude, durationMs) {
                 const now = performance.now();
                 const newEndTime = now + durationMs;
-                // Apply if new shake is stronger or lasts longer
                 if (magnitude >= currentShakeMagnitude || newEndTime >= shakeEndTime) {
                      currentShakeMagnitude = Math.max(magnitude, currentShakeMagnitude);
                      shakeEndTime = Math.max(newEndTime, shakeEndTime);
                 }
             }
-            // --- End Trigger Function ---
+
+            // --- Helper to draw rounded rectangles ---
+            function drawRoundedRect(x, y, width, height, radius) {
+                if (width < 2 * radius) radius = width / 2;
+                if (height < 2 * radius) radius = height / 2;
+                ctx.beginPath();
+                ctx.moveTo(x + radius, y);
+                ctx.arcTo(x + width, y, x + width, y + height, radius);
+                ctx.arcTo(x + width, y + height, x, y + height, radius);
+                ctx.arcTo(x, y + height, x, y, radius);
+                ctx.arcTo(x, y, x + width, y, radius);
+                ctx.closePath();
+            }
 
             const ENEMY_TYPE_CHASER = 'chaser';
             const ENEMY_TYPE_SHOOTER = 'shooter';
             const BULLET_TYPE_STANDARD = 'standard';
             const BULLET_TYPE_STANDARD_ENEMY = 'standard_enemy';
+            const PLAYER_STATUS_ALIVE = 'alive'; // Assuming these constants exist globally
+            const PLAYER_STATUS_DOWN = 'down';
+            const PLAYER_STATUS_DEAD = 'dead';
+            const PLAYER_DEFAULTS = { width: 20, height: 20, max_health: 100, base_speed: 150 }; // From global
+            const ENEMY_DEFAULTS = { width: 25, height: 25, max_health: 50 }; // From global
+            const BULLET_DEFAULTS = { radius: 4 }; // From global
+            const POWERUP_DEFAULTS = { size: 20 }; // From global
+
 
             function drawDamageTexts(damageTexts) {
                 if (!damageTexts) return;
                 const now = performance.now();
-                const normalColor = getCssVar('--damage-text-color') || '#FFFFFF';
-                const critColor = getCssVar('--damage-text-crit-color') || '#FFD700';
-                const normalFontSizeBase = 14;
-                const critFontSizeBase = 18;
-                const fontFamily = getCssVar('--font-family') || 'monospace';
+                const normalColor = damageTextColor; // Use cached
+                const critColor = damageTextCritColor; // Use cached
                 const pulseDuration = 250;
                 const pulseMaxSizeIncrease = 4;
-                const normalFontSize = parseInt(getCssVar('--damage-text-font-size'), 10) || normalFontSizeBase;
-                const critFontSize = parseInt(getCssVar('--damage-text-crit-font-size'), 10) || critFontSizeBase;
+                const normalFontSize = damageTextFontSize; // Use cached
+                const critFontSize = damageTextCritFontSize; // Use cached
 
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'bottom';
 
                 Object.values(damageTexts).forEach(dmgText => {
                     if (!dmgText) return;
-                    const x = dmgText.x ?? 0;
-                    const y = dmgText.y ?? 0;
-                    const text = dmgText.text ?? '?';
-                    const isCrit = dmgText.is_crit ?? false;
+                    const x = dmgText.x ?? 0; const y = dmgText.y ?? 0;
+                    const text = dmgText.text ?? '?'; const isCrit = dmgText.is_crit ?? false;
                     const spawnTime = dmgText.spawn_time ? dmgText.spawn_time * 1000 : now;
                     const timeSinceSpawn = now - spawnTime;
                     let currentFontSize = isCrit ? critFontSize : normalFontSize;
@@ -1138,14 +1210,9 @@
                         const pulseProgress = Math.sin((timeSinceSpawn / pulseDuration) * Math.PI);
                         currentFontSize += pulseProgress * pulseMaxSizeIncrease;
                     }
-
-                    ctx.font = `bold ${Math.round(currentFontSize)}px ${fontFamily}`;
+                    ctx.font = `bold ${Math.round(currentFontSize)}px ${fontFamily}`; // Use cached font
                     ctx.fillStyle = currentFillColor;
-                    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-                    ctx.shadowBlur = 3; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 1;
-                    ctx.fillText(text, x, y);
-                    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
-                    ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+                    ctx.fillText(text, x, y); // Removed shadows
                 });
             }
 
@@ -1156,11 +1223,11 @@
                 const radius = campfireData.radius ?? 0;
                 if (radius <= 0) return;
 
-                const auraColor = getCssVar('--campfire-aura-color') || 'rgba(255, 255, 0, 0.15)';
-                const stickColor = '#8B4513';
+                const auraColor = campfireAuraColor; // Use cached
+                const stickColor = campfireStickColor; // Use cached
                 const stickWidth = 20; const stickHeight = 4;
-                const flameColorOuter = 'rgba(255, 165, 0, 0.6)';
-                const flameColorInner = 'rgba(255, 255, 0, 0.7)';
+                const flameColorOuter = campfireFlameOuterColor; // Use cached
+                const flameColorInner = campfireFlameInnerColor; // Use cached
                 const flameWidth = 15; const flameHeight = 25;
 
                 ctx.save();
@@ -1182,7 +1249,7 @@
 
             function drawMuzzleFlash(playerX, playerY, aimDx, aimDy) {
                 const flashSizeBase = 10; const flashSizeVariation = 5;
-                const flashColor = 'rgba(255, 220, 50, 0.9)';
+                const flashColor = muzzleFlashColor; // Use cached
                 const offsetDistance = 12;
                 const flashX = playerX + aimDx * offsetDistance;
                 const flashY = playerY + aimDy * offsetDistance;
@@ -1199,7 +1266,7 @@
                 const redAlpha = 0.4 * intensity;
                 gradient.addColorStop(0, 'rgba(255, 0, 0, 0)');
                 gradient.addColorStop(0.75, 'rgba(255, 0, 0, 0)');
-                gradient.addColorStop(1, `rgba(255, 0, 0, ${redAlpha.toFixed(2)})`);
+                gradient.addColorStop(1, `rgba(255, 0, 0, ${redAlpha.toFixed(2)})`); // playerColor could potentially be used here if desired theme
                 ctx.fillStyle = gradient;
                 ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
                 ctx.restore();
@@ -1207,11 +1274,11 @@
 
             function drawEnemySpeechBubbles(enemiesToRender) {
                 const now = performance.now();
-                const bubbleFont = 'italic 11px ' + (getCssVar('--font-family') || 'monospace');
-                const bubbleColor = '#FFAAAA';
-                const bubbleBgColor = 'rgba(50, 0, 0, 0.6)';
-                const textPadding = 3;
-                const bubbleOffset = 20;
+                const bubbleFont = 'italic 11px ' + fontFamily; // Use cached
+                const bubbleColor = enemySpeechBubbleColor; // Use cached
+                const bubbleBgColor = enemySpeechBubbleBg; // Use cached
+                const bubbleOutlineColor = enemySpeechBubbleOutline; // Use cached
+                const cornerRadius = 4; const textPadding = 3; const bubbleOffset = 20;
                 ctx.font = bubbleFont; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
                 const enemyIdsToRemove = [];
 
@@ -1226,8 +1293,10 @@
                         const textMetrics = ctx.measureText(bubble.text);
                         const textWidth = textMetrics.width; const boxWidth = textWidth + textPadding * 2;
                         const approxFontHeight = 11; const boxHeight = approxFontHeight + textPadding * 2;
-                        const boxX = enemyDrawX - boxWidth / 2;
-                        ctx.fillStyle = bubbleBgColor; ctx.fillRect(boxX, bubbleY - boxHeight, boxWidth, boxHeight);
+                        const boxX = enemyDrawX - boxWidth / 2; const boxY = bubbleY - boxHeight;
+
+                        ctx.fillStyle = bubbleBgColor; drawRoundedRect(boxX, boxY, boxWidth, boxHeight, cornerRadius); ctx.fill();
+                        ctx.strokeStyle = bubbleOutlineColor; ctx.lineWidth = 1; ctx.stroke();
                         ctx.fillStyle = bubbleColor; ctx.fillText(bubble.text, enemyDrawX, bubbleY - textPadding);
                     } else { enemyIdsToRemove.push(enemyId); }
                 }
@@ -1236,10 +1305,11 @@
 
             function drawSpeechBubbles(playersToRender) {
                 const now = performance.now();
-                const bubbleFont = 'bold 12px ' + (getCssVar('--font-family') || 'monospace');
-                const bubbleColor = getCssVar('--text-color') || '#FFF8DC';
-                const bubbleBgColor = 'rgba(0, 0, 0, 0.6)';
-                const textPadding = 4; const bubbleOffset = 30;
+                const bubbleFont = 'bold 12px ' + fontFamily; // Use cached
+                const bubbleColor = playerSpeechBubbleColor; // Use cached
+                const bubbleBgColor = playerSpeechBubbleBg; // Use cached
+                const bubbleOutlineColor = playerSpeechBubbleOutline; // Use cached
+                const cornerRadius = 5; const textPadding = 4; const bubbleOffset = 30;
                 ctx.font = bubbleFont; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
                 const playerIdsToRemove = [];
 
@@ -1247,7 +1317,7 @@
                     const bubble = activeSpeechBubbles[playerId];
                     if (now >= bubble.endTime) { playerIdsToRemove.push(playerId); continue; }
                     const player = playersToRender?.[playerId];
-                    if (player && player.health > 0) {
+                    if (player && player.player_status !== PLAYER_STATUS_DEAD && player.health > 0) {
                         const playerDrawX = (playerId === appState.localPlayerId) ? appState.renderedPlayerPos.x : player.x;
                         const playerDrawY = (playerId === appState.localPlayerId) ? appState.renderedPlayerPos.y : player.y;
                         const playerHeight = player.height ?? PLAYER_DEFAULTS.height;
@@ -1255,252 +1325,94 @@
                         const textMetrics = ctx.measureText(bubble.text);
                         const textWidth = textMetrics.width; const boxWidth = textWidth + textPadding * 2;
                         const approxFontHeight = 12; const boxHeight = approxFontHeight + textPadding * 2;
-                        const boxX = playerDrawX - boxWidth / 2;
-                        ctx.fillStyle = bubbleBgColor; ctx.fillRect(boxX, bubbleY - boxHeight, boxWidth, boxHeight);
+                        const boxX = playerDrawX - boxWidth / 2; const boxY = bubbleY - boxHeight;
+
+                        ctx.fillStyle = bubbleBgColor; drawRoundedRect(boxX, boxY, boxWidth, boxHeight, cornerRadius); ctx.fill();
+                        ctx.strokeStyle = bubbleOutlineColor; ctx.lineWidth = 1; ctx.stroke();
                         ctx.fillStyle = bubbleColor; ctx.fillText(bubble.text, playerDrawX, bubbleY - textPadding);
                     }
                 }
                 playerIdsToRemove.forEach(id => { delete activeSpeechBubbles[id]; });
             }
 
-            function drawGame() {
-                ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-                const now = performance.now();
+            // --- Drawing Entities ---
 
-                // --- Screen Shake Calculation & Application ---
-                let shakeOffsetX = 0;
-                let shakeOffsetY = 0;
-                let shakeApplied = false;
-
-                if (now < shakeEndTime && currentShakeMagnitude > 0) {
-                    const remainingTime = shakeEndTime - now;
-                    // Simple approximation of original duration for decay
-                    const estimatedTotalDuration = Math.max(1, shakeEndTime - (now - 300));
-                    const decay = Math.max(0, remainingTime / estimatedTotalDuration);
-                    const currentMagnitude = currentShakeMagnitude * decay * decay; // Squared decay
-
-                    if (currentMagnitude > 0.5) {
-                        shakeOffsetX = (Math.random() * 2 - 1) * currentMagnitude;
-                        shakeOffsetY = (Math.random() * 2 - 1) * currentMagnitude;
-                        ctx.save();
-                        ctx.translate(shakeOffsetX, shakeOffsetY);
-                        shakeApplied = true;
-                    } else {
-                        currentShakeMagnitude = 0; shakeEndTime = 0;
-                    }
-                } else {
-                     currentShakeMagnitude = 0; shakeEndTime = 0;
-                 }
-                 // --- End Screen Shake ---
-
-                let stateToRender;
-                if (appState.mode === 'singleplayer') {
-                    stateToRender = appState.serverState;
-                    const spPlayer = stateToRender?.players[appState.localPlayerId];
-                    if (spPlayer) {
-                        appState.renderedPlayerPos.x = spPlayer.x;
-                        appState.renderedPlayerPos.y = spPlayer.y;
-                    }
-                } else {
-                    stateToRender = getInterpolatedState(now);
-                }
-
-                if (!stateToRender || !appState.localPlayerId || !stateToRender.players) {
-                    // Restore context if only shake was applied before returning
-                    if (shakeApplied) ctx.restore();
-                    return;
-                }
-
-                let shouldDrawMuzzleFlash = false;
-                if (localPlayerMuzzleFlash.active) {
-                    if (now < localPlayerMuzzleFlash.endTime) { shouldDrawMuzzleFlash = true; }
-                    else { localPlayerMuzzleFlash.active = false; }
-                }
-
-                // --- START DRAWING (Potentially translated) ---
-                drawCampfire(stateToRender.campfire);
-
-                if (shouldDrawMuzzleFlash) {
-                    drawMuzzleFlash(
-                        appState.renderedPlayerPos.x, appState.renderedPlayerPos.y,
-                        localPlayerMuzzleFlash.aimDx, localPlayerMuzzleFlash.aimDy
-                    );
-                }
-
-                drawPowerups(stateToRender.powerups);
-                drawBullets(stateToRender.bullets);
-                drawEnemies(stateToRender.enemies);
-                drawPlayers(stateToRender.players);
-                drawSpeechBubbles(stateToRender.players);
-                drawEnemySpeechBubbles(stateToRender.enemies);
-                drawDamageTexts(stateToRender.damage_texts);
-
-                let vignetteIntensity = 0;
-                const localPlayer = stateToRender?.players?.[appState.localPlayerId];
-                if (localPlayer && localPlayer.max_health > 0) {
-                    const healthPercentage = localPlayer.health / localPlayer.max_health;
-                    if (healthPercentage <= 0.33) {
-                        vignetteIntensity = 0.6 + (0.4 * (1 - (healthPercentage / 0.33)));
-                        vignetteIntensity = Math.min(1.0, Math.max(0, vignetteIntensity));
-                    } else if (healthPercentage <= 0.66) {
-                        vignetteIntensity = 0.4 * (1 - ((healthPercentage - 0.33) / (0.66 - 0.33)));
-                        vignetteIntensity = Math.max(0, vignetteIntensity);
-                    }
-                }
-                drawDamageVignette(vignetteIntensity);
-                // --- END DRAWING ---
-
-                // --- Restore Context if Shake was Applied ---
-                if (shakeApplied) {
-                    ctx.restore();
-                }
-                // --- End Restore ---
-            }
-
-            function getInterpolatedState(now) {
-                const { serverState, lastServerState, previousServerState, localPlayerId, renderedPlayerPos } = appState;
-
-                if (!serverState) return null;
-                if (!lastServerState || !previousServerState || serverState.timestamp === lastServerState.timestamp) {
-                     const latestStateCopy = {
-                         timestamp: serverState.timestamp, status: serverState.status, score: serverState.score,
-                         level: serverState.level, is_night: serverState.is_night,
-                         day_night_timer_remaining: serverState.day_night_timer_remaining,
-                         countdown: serverState.countdown, game_over: serverState.game_over,
-                         max_players: serverState.max_players,
-                         players: serverState.players ? { ...serverState.players } : {},
-                         enemies: serverState.enemies ? { ...serverState.enemies } : {},
-                         bullets: serverState.bullets ? { ...serverState.bullets } : {},
-                         powerups: serverState.powerups ? { ...serverState.powerups } : {},
-                         damage_texts: serverState.damage_texts ? { ...serverState.damage_texts } : {},
-                         campfire: serverState.campfire ? { ...serverState.campfire } : null,
-                         enemy_speaker_id: serverState.enemy_speaker_id,
-                         enemy_speech_text: serverState.enemy_speech_text,
-                     };
-                    if (localPlayerId && latestStateCopy.players[localPlayerId]) {
-                        latestStateCopy.players[localPlayerId] = {
-                             ...latestStateCopy.players[localPlayerId],
-                             x: renderedPlayerPos.x, y: renderedPlayerPos.y
-                         };
-                    }
-                    return latestStateCopy;
-                 }
-
-                const timeBetweenServerUpdates = lastServerState.timestamp - previousServerState.timestamp;
-                const timeSinceLastServerUpdate = (now / 1000) - lastServerState.timestamp;
-                let factor = 0;
-                if (timeBetweenServerUpdates > 0.001) factor = timeSinceLastServerUpdate / timeBetweenServerUpdates;
-                factor = Math.max(0, Math.min(factor, 1.5));
-
-                const iState = {};
-                iState.timestamp = serverState.timestamp; iState.status = serverState.status;
-                iState.score = serverState.score; iState.level = serverState.level; iState.is_night = serverState.is_night;
-                iState.day_night_timer_remaining = serverState.day_night_timer_remaining;
-                iState.countdown = serverState.countdown; iState.game_over = serverState.game_over;
-                iState.max_players = serverState.max_players;
-                iState.damage_texts = serverState.damage_texts ? { ...serverState.damage_texts } : {};
-                iState.campfire = serverState.campfire ? { ...serverState.campfire } : null;
-                iState.enemy_speaker_id = serverState.enemy_speaker_id;
-                iState.enemy_speech_text = serverState.enemy_speech_text;
-
-                const entityKeys = ['players', 'enemies', 'bullets', 'powerups'];
-                entityKeys.forEach(key => {
-                    iState[key] = {};
-                    const currentEntities = serverState[key] || {};
-                    Object.keys(currentEntities).forEach(id => {
-                        const currentEntity = currentEntities[id];
-                        const lastEntity = lastServerState[key]?.[id];
-                        const previousEntity = previousServerState[key]?.[id];
-                        const interpolatedEntity = { ...currentEntity };
-                        const canInterpolate = previousEntity && lastEntity &&
-                                               previousEntity.x !== undefined && previousEntity.y !== undefined &&
-                                               lastEntity.x !== undefined && lastEntity.y !== undefined;
-
-                        if (key === 'players' && id === localPlayerId) {
-                            interpolatedEntity.x = renderedPlayerPos.x;
-                            interpolatedEntity.y = renderedPlayerPos.y;
-                        } else if (canInterpolate) {
-                            interpolatedEntity.x = lerp(previousEntity.x, lastEntity.x, factor);
-                            interpolatedEntity.y = lerp(previousEntity.y, lastEntity.y, factor);
-                        }
-                        iState[key][id] = interpolatedEntity;
-                    });
-                });
-                return iState;
-            }
-
-            function drawPlayers(players) {
+             function drawPlayers(players) {
                  if (!players) return;
                  Object.values(players).forEach(player => {
-                     if (!player || player.player_status === PLAYER_STATUS_DEAD) return;
+                     if (!player || player.player_status === PLAYER_STATUS_DEAD) return; // Use constant
                      const isSelf = player.id === appState.localPlayerId;
-                     const playerStatus = player.player_status || PLAYER_STATUS_ALIVE;
+                     const playerStatus = player.player_status || PLAYER_STATUS_ALIVE; // Use constant
                      const drawX = isSelf ? appState.renderedPlayerPos.x : player.x;
                      const drawY = isSelf ? appState.renderedPlayerPos.y : player.y;
                      const width = player.width ?? PLAYER_DEFAULTS.width;
                      const height = player.height ?? PLAYER_DEFAULTS.height;
                      const maxHealth = player.max_health ?? PLAYER_DEFAULTS.max_health;
                      const currentArmor = player.armor ?? 0;
-                     let isDown = (playerStatus === PLAYER_STATUS_DOWN);
+                     let isDown = (playerStatus === PLAYER_STATUS_DOWN); // Use constant
                      let alpha = isDown ? 0.4 : 1.0;
 
                      ctx.save();
                      ctx.globalAlpha = alpha;
-                     const aimDx = isSelf ? localPlayerMuzzleFlash.aimDx : 0;
+                     // Get aim direction for local player muzzle flash/gun angle
+                     const aimDx = isSelf ? localPlayerMuzzleFlash.aimDx : 0; // Assumes localPlayerMuzzleFlash is global/accessible
                      const aimDy = isSelf ? localPlayerMuzzleFlash.aimDy : 0;
                      drawPlayerCharacter(drawX, drawY, width, height, isSelf, player, aimDx, aimDy);
                      ctx.restore();
 
+                     // Only draw bars if alive
                      if (playerStatus === PLAYER_STATUS_ALIVE) {
                          drawHealthBar(drawX, drawY, width, player.health, maxHealth);
                          if (currentArmor > 0) drawArmorBar(drawX, drawY, width, currentArmor);
                      }
                  });
-            }
+             }
 
-            function drawPlayerCharacter(x, y, w, h, isSelf, playerState, aimDx, aimDy) {
-                const headColor = '#D2B48C'; const helmetColor = '#CCCCCC'; const slitColor = '#222222';
-                const coatColor = '#8B4513'; const torsoColor = isSelf ? '#A00000' : '#004488';
-                const bootColor = '#222222'; const gunColor = '#444444';
+             function drawPlayerCharacter(x, y, w, h, isSelf, playerState, aimDx, aimDy) {
+                 // Use cached colors
+                 const headColor = playerHeadColor; const helmetColor = playerHelmetColor; const slitColor = playerSlitColor;
+                 const coatColor = playerCoatColor; const torsoColor = isSelf ? playerTorsoSelfColor : playerTorsoOtherColor;
+                 const bootColor = playerBootColor; const gunColor = playerGunColor;
 
-                const headRadius = h * 0.2; const bodyHeight = h * 0.5; const coatLengthBonus = h * 0.15;
-                const bodyWidthTop = w * 0.9; const bodyWidthBottom = w * 0.7; const coatWidth = w * 1.1;
-                const armWidth = w * 0.2; const armLength = h * 0.4; const helmetWidth = w * 0.85;
-                const helmetHeight = h * 0.5; const slitWidth = helmetWidth * 0.75; const slitHeight = helmetHeight * 0.2;
-                const bootSize = 5; const bootSpacing = w * 0.3;
+                 // Geometry calculations (remain the same)
+                 const headRadius = h * 0.2; const bodyHeight = h * 0.5; const coatLengthBonus = h * 0.15;
+                 const bodyWidthTop = w * 0.9; const bodyWidthBottom = w * 0.7; const coatWidth = w * 1.1;
+                 const armWidth = w * 0.2; const armLength = h * 0.4; const helmetWidth = w * 0.85;
+                 const helmetHeight = h * 0.5; const slitWidth = helmetWidth * 0.75; const slitHeight = helmetHeight * 0.2;
+                 const bootSize = 5; const bootSpacing = w * 0.3;
+                 const headCenterY = y - (h / 2) + headRadius; const bodyTopY = headCenterY + headRadius * 0.8;
+                 const bodyBottomY = bodyTopY + bodyHeight; const coatTopY = bodyTopY + bodyHeight * 0.1;
+                 const coatBottomY = bodyBottomY + coatLengthBonus; const helmetTopY = headCenterY - helmetHeight * 0.4;
+                 const slitY = helmetTopY + (helmetHeight / 2) - (slitHeight / 2); const bootOffsetY = coatBottomY + 2;
 
-                const headCenterY = y - (h / 2) + headRadius; const bodyTopY = headCenterY + headRadius * 0.8;
-                const bodyBottomY = bodyTopY + bodyHeight; const coatTopY = bodyTopY + bodyHeight * 0.1;
-                const coatBottomY = bodyBottomY + coatLengthBonus; const helmetTopY = headCenterY - helmetHeight * 0.4;
-                const slitY = helmetTopY + (helmetHeight / 2) - (slitHeight / 2); const bootOffsetY = coatBottomY + 2;
+                 // Drawing with cached colors
+                 ctx.fillStyle = coatColor; ctx.fillRect(x - coatWidth / 2, coatTopY, coatWidth, coatBottomY - coatTopY);
+                 ctx.fillStyle = torsoColor;
+                 ctx.beginPath(); ctx.moveTo(x - bodyWidthTop / 2, bodyTopY); ctx.lineTo(x + bodyWidthTop / 2, bodyTopY);
+                 ctx.lineTo(x + bodyWidthBottom / 2, bodyBottomY); ctx.lineTo(x - bodyWidthBottom / 2, bodyBottomY); ctx.closePath(); ctx.fill();
+                 ctx.fillRect(x - bodyWidthTop / 2 - armWidth, bodyTopY, armWidth, armLength); ctx.fillRect(x + bodyWidthTop / 2, bodyTopY, armWidth, armLength);
+                 ctx.fillStyle = helmetColor; ctx.fillRect(x - helmetWidth / 2, helmetTopY, helmetWidth, helmetHeight);
+                 ctx.fillStyle = slitColor; ctx.fillRect(x - slitWidth / 2, slitY, slitWidth, slitHeight);
 
-                ctx.fillStyle = coatColor; ctx.fillRect(x - coatWidth / 2, coatTopY, coatWidth, coatBottomY - coatTopY);
-                ctx.fillStyle = torsoColor;
-                ctx.beginPath(); ctx.moveTo(x - bodyWidthTop / 2, bodyTopY); ctx.lineTo(x + bodyWidthTop / 2, bodyTopY);
-                ctx.lineTo(x + bodyWidthBottom / 2, bodyBottomY); ctx.lineTo(x - bodyWidthBottom / 2, bodyBottomY); ctx.closePath(); ctx.fill();
-                ctx.fillRect(x - bodyWidthTop / 2 - armWidth, bodyTopY, armWidth, armLength); ctx.fillRect(x + bodyWidthTop / 2, bodyTopY, armWidth, armLength);
-                ctx.fillStyle = helmetColor; ctx.fillRect(x - helmetWidth / 2, helmetTopY, helmetWidth, helmetHeight);
-                ctx.fillStyle = slitColor; ctx.fillRect(x - slitWidth / 2, slitY, slitWidth, slitHeight);
+                 if (isSelf && aimDx !== 0 && aimDy !== 0) { // Only draw gun if aiming direction is known
+                     const gunLevel = playerState?.gun ?? 1; const gunLengthBase = 12;
+                     const gunLengthBonus = (gunLevel - 1) * 3; const gunLength = gunLengthBase + gunLengthBonus;
+                     const gunThickness = 5; const gunOriginY = bodyTopY + bodyHeight / 2;
+                     ctx.save(); ctx.translate(x, gunOriginY); const angle = Math.atan2(aimDy, aimDx);
+                     ctx.rotate(angle); ctx.fillStyle = gunColor; ctx.fillRect(w * 0.1, -gunThickness / 2, gunLength, gunThickness); ctx.restore();
+                 }
 
-                if (isSelf) {
-                    const gunLevel = playerState?.gun ?? 1; const gunLengthBase = 12;
-                    const gunLengthBonus = (gunLevel - 1) * 3; const gunLength = gunLengthBase + gunLengthBonus;
-                    const gunThickness = 5; const gunOriginY = bodyTopY + bodyHeight / 2;
-                    ctx.save(); ctx.translate(x, gunOriginY); const angle = Math.atan2(aimDy, aimDx);
-                    ctx.rotate(angle); ctx.fillStyle = gunColor; ctx.fillRect(w * 0.1, -gunThickness / 2, gunLength, gunThickness); ctx.restore();
-                }
-
-                ctx.fillStyle = bootColor;
-                const dx = playerState?.input_vector?.dx ?? 0; const dy = playerState?.input_vector?.dy ?? 0;
-                const isMoving = (dx !== 0 || dy !== 0);
-                if (isMoving) {
-                    const stepDuration = 250; const stepPhase = Math.floor(performance.now() / stepDuration) % 2;
-                    if (stepPhase === 0) ctx.fillRect(x - bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
-                    else ctx.fillRect(x + bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
-                } else {
-                    ctx.fillRect(x - bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize); ctx.fillRect(x + bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
-                }
-            }
+                 ctx.fillStyle = bootColor;
+                 const dx = playerState?.input_vector?.dx ?? 0; const dy = playerState?.input_vector?.dy ?? 0;
+                 const isMoving = (dx !== 0 || dy !== 0);
+                 if (isMoving) {
+                     const stepDuration = 250; const stepPhase = Math.floor(performance.now() / stepDuration) % 2;
+                     if (stepPhase === 0) ctx.fillRect(x - bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
+                     else ctx.fillRect(x + bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
+                 } else {
+                     ctx.fillRect(x - bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize); ctx.fillRect(x + bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
+                 }
+             }
 
             function drawEnemies(enemies) {
                 if (!enemies) return;
@@ -1514,7 +1426,7 @@
 
                     if (enemy.health <= 0 && enemy.death_timestamp) {
                         isDying = true; const elapsed = now - enemy.death_timestamp;
-                        if (elapsed < FADE_DURATION) alpha = 0.4;
+                        if (elapsed < FADE_DURATION) alpha = 0.4; // Fade slightly before disappearing
                         else shouldDraw = false;
                     }
 
@@ -1523,27 +1435,31 @@
                         drawEnemyRect(enemy.x, enemy.y, width, height, enemy.type, enemy);
                         ctx.restore();
                     }
-                    if (!isDying && enemy.health > 0) drawHealthBar(enemy.x, enemy.y, width, enemy.health, maxHealth);
+                    // Only draw health bar if not dying and visible health > 0
+                    if (!isDying && enemy.health > 0 && shouldDraw) {
+                         drawHealthBar(enemy.x, enemy.y, width, enemy.health, maxHealth);
+                    }
                 });
             }
 
             function drawEnemyRect(x, y, w, h, type, enemyState) {
-                const skinColor = '#D2B48C'; const coatColor = '#8B4513';
-                const torsoColorChaser = '#2F4F4F'; const torsoColorShooter = '#4682B4';
-                const bootColor = '#222222'; const capColor = '#111111'; const hitFlashColor = 'rgba(255, 255, 255, 0.7)';
-                const isShooter = type === ENEMY_TYPE_SHOOTER;
-                const torsoColor = isShooter ? torsoColorShooter : torsoColorChaser;
+                 // Use cached colors
+                const skinColor = enemySkinColor; const coatColor = enemyCoatColor;
+                const torsoColor = type === ENEMY_TYPE_SHOOTER ? enemyTorsoShooterColor : enemyTorsoChaserColor;
+                const bootColor = enemyBootColor; const capColor = enemyCapColor;
+                const hitFlashColor = enemyHitFlashColor;
 
+                // Geometry (remains the same)
                 const headRadius = h * 0.18; const bodyHeight = h * 0.5; const coatLengthBonus = h * 0.15;
                 const bodyWidthTop = w * 0.9; const bodyWidthBottom = w * 0.7; const coatWidth = w * 1.1;
                 const armWidth = w * 0.2; const armLength = h * 0.4; const capHeight = headRadius * 0.8;
                 const capWidth = headRadius * 2.2; const bootSize = 5; const bootSpacing = w * 0.3;
-
                 const headCenterY = y - (h / 2) + headRadius; const bodyTopY = headCenterY + headRadius * 0.8;
                 const bodyBottomY = bodyTopY + bodyHeight; const coatTopY = bodyTopY + bodyHeight * 0.1;
                 const coatBottomY = bodyBottomY + coatLengthBonus; const armTopY = bodyTopY + bodyHeight * 0.05;
                 const capTopY = headCenterY - headRadius; const bootOffsetY = coatBottomY + 2;
 
+                // Drawing with cached colors
                 ctx.save();
                 ctx.fillStyle = coatColor; ctx.fillRect(x - coatWidth / 2, coatTopY, coatWidth, coatBottomY - coatTopY);
                 ctx.fillStyle = torsoColor;
@@ -1586,7 +1502,7 @@
             }
 
             function drawBulletCircle(x, y, r, isPlayerBullet) {
-                ctx.fillStyle = isPlayerBullet ? (getCssVar('--bullet-player-color') || 'yellow') : (getCssVar('--bullet-enemy-color') || '#C0C0C0');
+                ctx.fillStyle = isPlayerBullet ? bulletPlayerColor : bulletEnemyColor; // Use cached
                 ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
             }
 
@@ -1595,7 +1511,7 @@
                 const ownerType = bullet.owner_type; const radius = bullet.radius || BULLET_DEFAULTS.radius;
                 const baseLength = 8; const baseWidth = 4; const scaleFactor = radius / BULLET_DEFAULTS.radius;
                 const length = baseLength * scaleFactor; const width = baseWidth * scaleFactor;
-                const color = (ownerType === 'player') ? (getCssVar('--bullet-player-color') || 'yellow') : (getCssVar('--bullet-enemy-color') || '#C0C0C0');
+                const color = (ownerType === 'player') ? bulletPlayerColor : bulletEnemyColor; // Use cached
                 const angle = Math.atan2(vy, vx);
 
                 ctx.save(); ctx.translate(x, y); ctx.rotate(angle);
@@ -1617,49 +1533,141 @@
             }
 
             function drawPowerupSquare(x, y, size, type) {
-                 const baseColors = { 'health': getCssVar('--powerup-health') || 'lime', 'gun_upgrade': getCssVar('--powerup-gun') || 'fuchsia', 'speed_boost': getCssVar('--powerup-speed') || 'aqua', 'armor': getCssVar('--powerup-armor') || 'silver', };
-                 let fillColor = baseColors[type] || '#888'; let symbol = '?';
-                 if (type === 'health') symbol = '+';
-                 else if (type === 'gun_upgrade') symbol = 'G'; else if (type === 'speed_boost') symbol = 'S';
-                 else if (type === 'armor') symbol = '#'; else if (type === 'ammo_shotgun') { symbol = '::'; fillColor = '#FFA500'; }
-                 else if (type === 'ammo_heavy_slug') { symbol = '■'; fillColor = '#A0522D'; }
-                 else if (type === 'ammo_rapid_fire') { symbol = '>'; fillColor = '#FFFF00'; }
-                 else if (type === 'bonus_score') { symbol = '$'; fillColor = '#FFD700'; }
+                 // Use cached colors
+                 let fillColor = powerupDefaultColor; let symbol = '?';
+                 if (type === 'health') { symbol = '+'; fillColor = powerupHealthColor; }
+                 else if (type === 'gun_upgrade') { symbol = 'G'; fillColor = powerupGunColor; }
+                 else if (type === 'speed_boost') { symbol = 'S'; fillColor = powerupSpeedColor; }
+                 else if (type === 'armor') { symbol = '#'; fillColor = powerupArmorColor; }
+                 else if (type === 'ammo_shotgun') { symbol = '::'; fillColor = powerupShotgunColor; }
+                 else if (type === 'ammo_heavy_slug') { symbol = '■'; fillColor = powerupSlugColor; }
+                 else if (type === 'ammo_rapid_fire') { symbol = '>'; fillColor = powerupRapidColor; }
+                 else if (type === 'bonus_score') { symbol = '$'; fillColor = powerupScoreColor; }
 
                  ctx.fillStyle = fillColor; ctx.fillRect(x - size / 2, y - size / 2, size, size);
-                 ctx.fillStyle = '#000'; let fontSize = Math.round(size * 0.7);
-                 ctx.font = `bold ${fontSize}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                 ctx.fillText(symbol, x, y + (size * 0.05));
+                 ctx.fillStyle = '#000'; // Symbol color (assuming black is ok)
+                 let fontSize = Math.round(size * 0.7);
+                 ctx.font = `bold ${fontSize}px ${fontFamily}`; // Use cached font
+                 ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                 ctx.fillText(symbol, x, y + (size * 0.05)); // Slight offset for better centering
             }
 
             function drawHealthBar(x, y, width, currentHealth, maxHealth) {
                 if (maxHealth <= 0) return;
-                const barHeight = 5; const yOffset = -( (width/2) + 18);
-                const barWidth = Math.max(20, width * 0.8); const currentWidth = Math.max(0, (currentHealth / maxHealth) * barWidth);
-                const healthPercentage = currentHealth / maxHealth; const barX = x - barWidth / 2; const barY = y + yOffset - barHeight;
-                ctx.fillStyle = getCssVar('--health-bar-bg') || '#555'; ctx.fillRect(barX, barY, barWidth, barHeight);
-                let barColor = getCssVar('--health-bar-low') || '#F44336';
-                if (healthPercentage > 0.66) barColor = getCssVar('--health-bar-high') || '#4CAF50';
-                else if (healthPercentage > 0.33) barColor = getCssVar('--health-bar-medium') || '#FFC107';
-                ctx.fillStyle = barColor; ctx.fillRect(barX, barY, currentWidth, barHeight);
+                const barHeight = 5;
+                // Adjust Y offset based on entity width/height (assuming width is more representative for placement)
+                const yOffset = -( (width / 2) + 18 ); // Place above entity
+                const barWidth = Math.max(20, width * 0.8);
+                const currentWidth = Math.max(0, (currentHealth / maxHealth) * barWidth);
+                const healthPercentage = currentHealth / maxHealth;
+                const barX = x - barWidth / 2;
+                const barY = y + yOffset; // Use consistent Y position
+
+                // Use cached colors
+                ctx.fillStyle = healthBarBg;
+                ctx.fillRect(barX, barY, barWidth, barHeight);
+                let barColor = healthBarLow; // Default to low
+                if (healthPercentage > 0.66) barColor = healthBarHigh;
+                else if (healthPercentage > 0.33) barColor = healthBarMedium;
+                ctx.fillStyle = barColor;
+                ctx.fillRect(barX, barY, currentWidth, barHeight);
             }
 
             function drawArmorBar(x, y, width, currentArmor) {
-                const maxArmor = 100; if (currentArmor <= 0) return;
+                const maxArmor = 100; // Assuming max armor is 100
+                if (currentArmor <= 0) return;
                 const armorBarHeight = 4; const healthBarHeight = 5; const barSpacing = 1;
-                const healthBarYOffset = -( (width / 2) + 20); const healthBarTopY = y + healthBarYOffset;
-                const healthBarBottomY = healthBarTopY + healthBarHeight; const armorBarTopY = healthBarBottomY + barSpacing;
-                const barWidth = Math.max(20, width * 0.8); const currentWidth = Math.max(0, (currentArmor / maxArmor) * barWidth);
-                const barX = x - barWidth / 2; const barY = armorBarTopY;
-                ctx.fillStyle = getCssVar('--health-bar-bg') || '#555'; ctx.fillRect(barX, barY, barWidth, armorBarHeight);
-                ctx.fillStyle = getCssVar('--powerup-armor') || '#C0C0C0'; ctx.fillRect(barX, barY, currentWidth, armorBarHeight);
+                // Calculate Y position relative to the health bar's position
+                const healthBarYOffset = -( (width / 2) + 18 );
+                const healthBarTopY = y + healthBarYOffset;
+                const armorBarTopY = healthBarTopY + healthBarHeight + barSpacing; // Position below health bar
+
+                const barWidth = Math.max(20, width * 0.8); // Match health bar width
+                const currentWidth = Math.max(0, (currentArmor / maxArmor) * barWidth);
+                const barX = x - barWidth / 2;
+                const barY = armorBarTopY; // Use calculated Y
+
+                // Use cached colors
+                ctx.fillStyle = healthBarBg; // Use same background as health bar
+                ctx.fillRect(barX, barY, barWidth, armorBarHeight);
+                ctx.fillStyle = armorBarColor; // Use cached armor color
+                ctx.fillRect(barX, barY, currentWidth, armorBarHeight);
             }
 
-            // Expose necessary functions
-            return {
+            // --- Main Draw Call ---
+            function drawGame() {
+                ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                const now = performance.now();
+
+                // Screen Shake
+                let shakeOffsetX = 0, shakeOffsetY = 0, shakeApplied = false;
+                if (now < shakeEndTime && currentShakeMagnitude > 0) {
+                    const remainingTime = shakeEndTime - now;
+                    const estimatedTotalDuration = Math.max(1, shakeEndTime - (now - 300));
+                    const decay = Math.max(0, remainingTime / estimatedTotalDuration);
+                    const currentMagnitude = currentShakeMagnitude * decay * decay;
+                    if (currentMagnitude > 0.5) {
+                        shakeOffsetX = (Math.random() * 2 - 1) * currentMagnitude;
+                        shakeOffsetY = (Math.random() * 2 - 1) * currentMagnitude;
+                        ctx.save(); ctx.translate(shakeOffsetX, shakeOffsetY); shakeApplied = true;
+                    } else { currentShakeMagnitude = 0; shakeEndTime = 0; }
+                } else { currentShakeMagnitude = 0; shakeEndTime = 0; }
+
+                // Get State to Render
+                let stateToRender;
+                if (appState.mode === 'singleplayer') {
+                    stateToRender = appState.serverState;
+                     const spPlayer = stateToRender?.players[appState.localPlayerId];
+                     if (spPlayer) { appState.renderedPlayerPos.x = spPlayer.x; appState.renderedPlayerPos.y = spPlayer.y; }
+                } else {
+                    stateToRender = getInterpolatedState(now); // Assumes getInterpolatedState is defined elsewhere
+                }
+
+                if (!stateToRender || !appState.localPlayerId || !stateToRender.players) {
+                    if (shakeApplied) ctx.restore(); return;
+                }
+
+                // Muzzle Flash Check
+                let shouldDrawMuzzleFlash = false;
+                if (localPlayerMuzzleFlash.active) {
+                    if (now < localPlayerMuzzleFlash.endTime) { shouldDrawMuzzleFlash = true; }
+                    else { localPlayerMuzzleFlash.active = false; }
+                }
+
+                // --- DRAWING ORDER ---
+                drawCampfire(stateToRender.campfire);
+
+                if (shouldDrawMuzzleFlash) {
+                    drawMuzzleFlash( appState.renderedPlayerPos.x, appState.renderedPlayerPos.y, localPlayerMuzzleFlash.aimDx, localPlayerMuzzleFlash.aimDy );
+                }
+
+                drawPowerups(stateToRender.powerups);
+                drawBullets(stateToRender.bullets);
+                drawEnemies(stateToRender.enemies);
+                drawPlayers(stateToRender.players); // Includes health/armor bars
+
+                drawSpeechBubbles(stateToRender.players);
+                drawEnemySpeechBubbles(stateToRender.enemies);
+
+                drawDamageTexts(stateToRender.damage_texts);
+
+                // Vignette
+                let vignetteIntensity = 0;
+                const localPlayer = stateToRender.players[appState.localPlayerId];
+                if (localPlayer && localPlayer.max_health > 0) {
+                    const healthPercentage = localPlayer.health / localPlayer.max_health;
+                    if (healthPercentage <= 0.33) { vignetteIntensity = Math.min(1.0, Math.max(0, 0.6 + (0.4 * (1 - (healthPercentage / 0.33))))); }
+                    else if (healthPercentage <= 0.66) { vignetteIntensity = Math.max(0, 0.4 * (1 - ((healthPercentage - 0.33) / (0.66 - 0.33)))); }
+                }
+                drawDamageVignette(vignetteIntensity);
+
+                if (shakeApplied) { ctx.restore(); }
+            }
+
+             return {
                  drawGame,
-                 triggerShake // <-- Expose triggerShake
-            };
+                 triggerShake
+             };
         })(); // End Renderer module IIFE
 
         const Game = (() => {
