@@ -519,39 +519,31 @@
         function log(...args) { console.log("[Client]", ...args); }
         function error(...args) { console.error("[Client]", ...args); }
 
-        // --- UI Management "Module" ---
+// --- UI Management "Module" ---
         const UI = (() => {
             const allSections = [
                 DOM.mainMenuSection, DOM.multiplayerMenuSection, DOM.hostWaitSection,
                 DOM.joinCodeSection, DOM.gameArea, DOM.gameOverScreen
             ];
-
-            const gameSections = ['game-area']; // Sections that mean the game is "active" visually
+            const gameSections = ['game-area'];
 
             function showSection(sectionId) {
                 allSections.forEach(s => { if(s) s.style.display = 'none'; });
                 const sectionToShow = DOM[sectionId] || document.getElementById(sectionId);
                 if (sectionToShow) {
-                    // --- CHANGE HERE ---
-                    // Use 'flex' for game-area, 'block' for others
                     sectionToShow.style.display = (sectionId === 'game-area') ? 'flex' : 'block';
-                    // --- END CHANGE ---
-
                     log(`UI: Showing section: ${sectionId}`);
-
-                    // Class toggle logic remains the same
                     if (gameSections.includes(sectionId)) {
                         DOM.gameContainer.classList.add('in-game');
                     } else {
                         DOM.gameContainer.classList.remove('in-game');
                     }
-
                 } else {
                      error(`UI: Section not found: ${sectionId}`);
                 }
             }
 
-            function updateStatus(message, isError = false) { // Keep this function
+            function updateStatus(message, isError = false) {
                  if (DOM.gameStatus) {
                      DOM.gameStatus.textContent = message;
                      DOM.gameStatus.style.color = isError ? (getCssVar('--player-color') || 'red') : (getCssVar('--accent-color') || 'yellow');
@@ -562,7 +554,7 @@
                  }
             }
 
-            function formatTime(totalSeconds) { // Keep this function
+            function formatTime(totalSeconds) {
                 if (totalSeconds < 0) totalSeconds = 0;
                 const minutes = Math.floor(totalSeconds / 60);
                 const seconds = Math.floor(totalSeconds % 60);
@@ -570,7 +562,6 @@
                 return `${minutes}:${paddedSeconds}`;
             }
 
-            // --- REVISED UI.updateHUD function ---
             function updateHUD(serverState) {
                 const gridContainer = document.getElementById('player-stats-grid');
                 if (!gridContainer) {
@@ -581,49 +572,47 @@
                 const players = serverState?.players;
                 const localPlayerId = appState.localPlayerId;
 
-                // Clear previous stats
-                gridContainer.innerHTML = ''; // Clear the grid
+                gridContainer.innerHTML = '';
 
                 if (!players || Object.keys(players).length === 0) {
-                     gridContainer.innerHTML = '<span>Waiting for players...</span>'; // Placeholder
+                     gridContainer.innerHTML = '<span>Waiting for players...</span>';
                      return;
                 }
 
-                // Sort players (optional: self first)
                 const sortedPlayerIds = Object.keys(players).sort((a, b) => {
                      if (a === localPlayerId) return -1;
                      if (b === localPlayerId) return 1;
                      return a.localeCompare(b);
                  });
 
-                // Generate a box for each player and add to the grid
                 sortedPlayerIds.forEach(playerId => {
                     const playerData = players[playerId];
                     if (!playerData) return;
 
                     const isSelf = (playerId === localPlayerId);
-                    const headerText = isSelf ? "YOU" : `P:${playerId.substring(0, 4)}`; // Short ID or YOU
+                    const headerText = isSelf ? "YOU" : `P:${playerId.substring(0, 4)}`;
                     const status = playerData.player_status || PLAYER_STATUS_ALIVE;
                     const healthValue = playerData.health ?? 0;
                     const maxHealth = playerData.max_health ?? PLAYER_DEFAULTS.max_health;
+                    const armorValue = playerData.armor ?? 0;
 
-                    // Determine Health Display String
                     let healthDisplay;
                      if (status === PLAYER_STATUS_DOWN) {
                          healthDisplay = `<span style='color: var(--health-bar-medium);'>DOWN</span>`;
                      } else if (status === PLAYER_STATUS_DEAD || healthValue <= 0) {
                          healthDisplay = `<span style='color: var(--health-bar-low);'>DEAD</span>`;
                      } else {
-                        healthDisplay = `${Math.round(healthValue)}/${maxHealth}`;
+                        healthDisplay = `${healthValue.toFixed(3)} / ${maxHealth}`;
                     }
 
-                    // Generate HTML for one stat box
+                    const armorDisplay = Math.round(armorValue);
+
                     const statsBoxHTML = `
                         <div class="player-stats-box">
                             <div class="stats-header">${headerText}</div>
                             <div class="stats-content">
                                 <span>HP:</span> ${healthDisplay}<br>
-                                <span>Armor:</span> ${playerData.armor ?? 0}<br>
+                                <span>Armor:</span> ${armorDisplay}<br>
                                 <span>Gun:</span> ${playerData.gun ?? 1}<br>
                                 <span>Speed:</span> ${playerData.speed ?? PLAYER_DEFAULTS.base_speed}<br>
                                 <span>Kills:</span> ${playerData.kills ?? 0}<br>
@@ -631,29 +620,25 @@
                             </div>
                         </div>
                     `;
-                    // Append the box to the grid container
                     gridContainer.innerHTML += statsBoxHTML;
                 });
 
-            } // --- End of REVISED updateHUD ---
+            }
 
             function addChatMessage(sender, message, isSelf, isSystem = false) {
-                // Add check for DOM.chatLog existence
                 if (!DOM.chatLog) { error("DOM.chatLog not found for chat message."); return; }
                 const div = document.createElement('div');
                 if (isSystem) {
                     div.className = 'system-message'; div.textContent = message;
                 } else {
                     div.className = isSelf ? 'my-message' : 'other-message';
-                    // Use player ID for now, could map to names later
                     div.textContent = `${sender ? `P:${sender.substring(0,4)}` : '???'}: ${message}`;
                 }
                 DOM.chatLog.appendChild(div);
-                DOM.chatLog.scrollTop = DOM.chatLog.scrollHeight; // Scroll to bottom
+                DOM.chatLog.scrollTop = DOM.chatLog.scrollHeight;
             }
 
             function updateCountdown(serverState) {
-                // Add checks for DOM elements
                  if (DOM.countdownDiv && DOM.dayNightIndicator) {
                     if (serverState?.status === 'countdown' && serverState?.countdown >= 0) {
                         DOM.countdownDiv.textContent = Math.ceil(serverState.countdown);
@@ -661,8 +646,7 @@
                         DOM.dayNightIndicator.style.display = 'none';
                     } else {
                         DOM.countdownDiv.style.display = 'none';
-                        // Updated display style for day/night indicator
-                        DOM.dayNightIndicator.style.display = (serverState?.status === 'active') ? 'block' : 'none'; // Use block to take full width
+                        DOM.dayNightIndicator.style.display = (serverState?.status === 'active') ? 'block' : 'none';
                     }
                 } else {
                     error("DOM.countdownDiv or DOM.dayNightIndicator not found.");
@@ -670,14 +654,12 @@
              }
 
             function updateDayNight(serverState) {
-                 // Add checks for DOM elements
                  if (DOM.dayNightIndicator && DOM.canvas && DOM.gameContainer) {
                      if (serverState?.status === 'active') {
                         const isNight = serverState.is_night;
                         DOM.dayNightIndicator.textContent = isNight ? 'Night' : 'Day';
                         DOM.canvas.style.backgroundColor = isNight ? (getCssVar('--bg-color') || '#3E2723') : '#A0522D';
-                        DOM.dayNightIndicator.style.display = 'block'; // Use block
-
+                        DOM.dayNightIndicator.style.display = 'block';
                         if (isNight) {
                             DOM.gameContainer.classList.add('night-mode');
                         } else {
@@ -692,7 +674,6 @@
                  }
              }
 
-             // Simplified showGameOver remains the same
             function showGameOver(finalState) {
                 if (!DOM.finalStatsDiv || !DOM.gameOverScreen) {
                      error("DOM.finalStatsDiv or DOM.gameOverScreen not found."); return;
@@ -713,7 +694,6 @@
                 log("UI: Attempting to show simple game over screen.");
                  [DOM.mainMenuSection, DOM.multiplayerMenuSection, DOM.hostWaitSection,
                   DOM.joinCodeSection, DOM.gameArea].forEach(s => { if (s) s.style.display = 'none'; });
-                // Show the game over screen itself
                 DOM.gameOverScreen.style.display = 'block';
             }
 
@@ -727,7 +707,7 @@
                 updateDayNight,
                 showGameOver
             };
-        })(); // <-- This closes the UI IIFEw
+        })(); // <-- This closes the UI IIFE
 
         // --- Network "Module" ---
         const Network = (() => {
