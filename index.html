@@ -2020,6 +2020,126 @@
                 appState.animationFrameId = requestAnimationFrame(gameLoop);
             }
 
+    // --- Interpolation Function ---
+            function getInterpolatedState(renderTime) {
+                const INTERPOLATION_BUFFER_MS = 100; // Target delay behind server time (e.g., 2 ticks at 30Hz)
+                const serverTime = appState.serverState?.timestamp * 1000; // Convert server seconds to ms
+                const lastServerTime = appState.lastServerState?.timestamp * 1000;
+
+                // Can't interpolate without two states or valid times
+                if (!appState.serverState || !appState.lastServerState || !serverTime || !lastServerTime || serverTime <= lastServerTime) {
+                    // console.warn("Interpolation skipped: Not enough valid state history."); // Can be noisy
+                    return appState.serverState; // Return latest known state directly
+                }
+
+                // Calculate the time point we want to render (slightly behind current time)
+                const renderTargetTime = renderTime - INTERPOLATION_BUFFER_MS;
+
+                // Calculate interpolation factor (t) between lastServerTime and serverTime
+                const timeBetweenStates = serverTime - lastServerTime;
+                const timeSinceLastState = renderTargetTime - lastServerTime;
+
+                // Clamp t between 0 and 1
+                let t = Math.max(0, Math.min(1, timeSinceLastState / timeBetweenStates));
+
+                // Create a new state object to hold interpolated data
+                // Start by cloning the latest state, then overwrite interpolated values
+                // Note: A deep clone might be safer, but shallow is often sufficient here
+                let interpolatedState = { ...appState.serverState };
+                interpolatedState.players = {}; // Clear players, will repopulate
+                interpolatedState.enemies = {}; // Clear enemies
+                interpolatedState.bullets = {}; // Clear bullets
+
+                // --- Interpolate Players ---
+                if (appState.serverState.players) {
+                    for (const pId in appState.serverState.players) {
+                        const currentState = appState.serverState.players[pId];
+                        const lastState = appState.lastServerState.players?.[pId];
+
+                        // Use local predicted/rendered position for OUR player
+                        if (pId === appState.localPlayerId) {
+                            interpolatedState.players[pId] = {
+                                ...currentState, // Copy latest non-positional data
+                                x: appState.renderedPlayerPos.x, // Use smoothed local render position
+                                y: appState.renderedPlayerPos.y
+                            };
+                        }
+                        // Interpolate OTHER players if possible
+                        else if (lastState && typeof currentState.x === 'number' && typeof lastState.x === 'number') {
+                            interpolatedState.players[pId] = {
+                                ...currentState, // Copy latest non-positional data
+                                x: lerp(lastState.x, currentState.x, t),
+                                y: lerp(lastState.y, currentState.y, t)
+                            };
+                        }
+                        // Otherwise, just use the latest known state for the other player
+                        else {
+                            interpolatedState.players[pId] = { ...currentState };
+                        }
+                    }
+                }
+
+                // --- Interpolate Enemies (Example) ---
+                if (appState.serverState.enemies) {
+                    for (const eId in appState.serverState.enemies) {
+                        const currentState = appState.serverState.enemies[eId];
+                        const lastState = appState.lastServerState.enemies?.[eId];
+
+                        // Interpolate if possible and not dead/dying
+                        if (lastState && typeof currentState.x === 'number' && typeof lastState.x === 'number' && currentState.health > 0) {
+                            interpolatedState.enemies[eId] = {
+                                ...currentState,
+                                x: lerp(lastState.x, currentState.x, t),
+                                y: lerp(lastState.y, currentState.y, t)
+                            };
+                        }
+                        // Otherwise, use latest state (handles dead/newly spawned enemies)
+                        else {
+                            interpolatedState.enemies[eId] = { ...currentState };
+                        }
+                    }
+                }
+
+                // --- Interpolate Bullets (Example) ---
+                if (appState.serverState.bullets) {
+                    for (const bId in appState.serverState.bullets) {
+                        const currentState = appState.serverState.bullets[bId];
+                        const lastState = appState.lastServerState.bullets?.[bId];
+
+                        // Interpolate if possible
+                        if (lastState && typeof currentState.x === 'number' && typeof lastState.x === 'number') {
+                            interpolatedState.bullets[bId] = {
+                                ...currentState,
+                                x: lerp(lastState.x, currentState.x, t),
+                                y: lerp(lastState.y, currentState.y, t)
+                            };
+                        }
+                        // Otherwise, use latest state
+                        else {
+                            interpolatedState.bullets[bId] = { ...currentState };
+                        }
+                    }
+                }
+
+                // Copy non-interpolated parts from the latest state
+                interpolatedState.powerups = appState.serverState.powerups;
+                interpolatedState.damage_texts = appState.serverState.damage_texts;
+                // Keep score, status, etc., from the latest state
+                interpolatedState.score = appState.serverState.score;
+                interpolatedState.status = appState.serverState.status;
+                interpolatedState.is_night = appState.serverState.is_night;
+                interpolatedState.game_over = appState.serverState.game_over;
+                interpolatedState.countdown = appState.serverState.countdown;
+                interpolatedState.day_night_timer_remaining = appState.serverState.day_night_timer_remaining;
+                interpolatedState.campfire = appState.serverState.campfire;
+                interpolatedState.enemy_speaker_id = appState.serverState.enemy_speaker_id;
+                interpolatedState.enemy_speech_text = appState.serverState.enemy_speech_text;
+                // Add any other non-positional state fields here
+
+
+                return interpolatedState;
+            }
+
             function cleanupLoop() {
                  if (appState.animationFrameId) {
                      cancelAnimationFrame(appState.animationFrameId);
