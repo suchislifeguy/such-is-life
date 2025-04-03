@@ -1639,42 +1639,45 @@
                 ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
                 const now = performance.now();
 
-                // Screen Shake
                 let shakeOffsetX = 0, shakeOffsetY = 0, shakeApplied = false;
                 if (now < shakeEndTime && currentShakeMagnitude > 0) {
                     const remainingTime = shakeEndTime - now;
-                    const estimatedTotalDuration = Math.max(1, shakeEndTime - (now - 300));
+                    const estimatedTotalDuration = Math.max(1, shakeEndTime - (now - 300)); // Approx original duration
                     const decay = Math.max(0, remainingTime / estimatedTotalDuration);
                     const currentMagnitude = currentShakeMagnitude * decay * decay;
                     if (currentMagnitude > 0.5) {
                         shakeOffsetX = (Math.random() * 2 - 1) * currentMagnitude;
                         shakeOffsetY = (Math.random() * 2 - 1) * currentMagnitude;
-                        ctx.save(); ctx.translate(shakeOffsetX, shakeOffsetY); shakeApplied = true;
-                    } else { currentShakeMagnitude = 0; shakeEndTime = 0; }
-                } else { currentShakeMagnitude = 0; shakeEndTime = 0; }
-
-                // Get State to Render
-                let stateToRender;
-                if (appState.mode === 'singleplayer') {
-                    stateToRender = appState.serverState;
-                     const spPlayer = stateToRender?.players[appState.localPlayerId];
-                     if (spPlayer) { appState.renderedPlayerPos.x = spPlayer.x; appState.renderedPlayerPos.y = spPlayer.y; }
+                        ctx.save();
+                        ctx.translate(shakeOffsetX, shakeOffsetY);
+                        shakeApplied = true;
+                    } else {
+                        currentShakeMagnitude = 0;
+                        shakeEndTime = 0;
+                    }
                 } else {
-                    stateToRender = getInterpolatedState(now); // Assumes getInterpolatedState is defined elsewhere
+                    currentShakeMagnitude = 0;
+                    shakeEndTime = 0;
                 }
+
+                let stateToRender = appState.serverState;
 
                 if (!stateToRender || !appState.localPlayerId || !stateToRender.players) {
-                    if (shakeApplied) ctx.restore(); return;
+                    if (shakeApplied) {
+                         ctx.restore();
+                    }
+                    return;
                 }
 
-                // Muzzle Flash Check
                 let shouldDrawMuzzleFlash = false;
                 if (localPlayerMuzzleFlash.active) {
-                    if (now < localPlayerMuzzleFlash.endTime) { shouldDrawMuzzleFlash = true; }
-                    else { localPlayerMuzzleFlash.active = false; }
+                    if (now < localPlayerMuzzleFlash.endTime) {
+                        shouldDrawMuzzleFlash = true;
+                    } else {
+                        localPlayerMuzzleFlash.active = false;
+                    }
                 }
 
-                // --- DRAWING ORDER ---
                 drawCampfire(stateToRender.campfire);
 
                 if (shouldDrawMuzzleFlash) {
@@ -1684,24 +1687,26 @@
                 drawPowerups(stateToRender.powerups);
                 drawBullets(stateToRender.bullets);
                 drawEnemies(stateToRender.enemies);
-                drawPlayers(stateToRender.players); // Includes health/armor bars
-
+                drawPlayers(stateToRender.players);
                 drawSpeechBubbles(stateToRender.players);
                 drawEnemySpeechBubbles(stateToRender.enemies);
-
                 drawDamageTexts(stateToRender.damage_texts);
 
-                // Vignette
                 let vignetteIntensity = 0;
                 const localPlayer = stateToRender.players[appState.localPlayerId];
                 if (localPlayer && localPlayer.max_health > 0) {
                     const healthPercentage = localPlayer.health / localPlayer.max_health;
-                    if (healthPercentage <= 0.33) { vignetteIntensity = Math.min(1.0, Math.max(0, 0.6 + (0.4 * (1 - (healthPercentage / 0.33))))); }
-                    else if (healthPercentage <= 0.66) { vignetteIntensity = Math.max(0, 0.4 * (1 - ((healthPercentage - 0.33) / (0.66 - 0.33)))); }
+                    if (healthPercentage <= 0.33) {
+                        vignetteIntensity = Math.min(1.0, Math.max(0, 0.6 + (0.4 * (1 - (healthPercentage / 0.33)))));
+                    } else if (healthPercentage <= 0.66) {
+                        vignetteIntensity = Math.max(0, 0.4 * (1 - ((healthPercentage - 0.33) / (0.66 - 0.33))));
+                    }
                 }
                 drawDamageVignette(vignetteIntensity);
 
-                if (shakeApplied) { ctx.restore(); }
+                if (shakeApplied) {
+                     ctx.restore();
+                }
             }
 
              return {
