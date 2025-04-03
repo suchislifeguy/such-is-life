@@ -1144,7 +1144,8 @@
             const campfireFlameInnerColor = 'rgba(255, 255, 0, 0.7)'; // Constant
             // Muzzle Flash
             const muzzleFlashColor = 'rgba(255, 220, 50, 0.9)'; // Constant
-
+            const IDLE_BOB_SPEED = 600; // Divisor for performance.now() - Higher is slower
+            const IDLE_BOB_AMPLITUDE = 3; // Max pixels to move up/down
             // --- Screen Shake State ---
             let currentShakeMagnitude = 0;
             let shakeEndTime = 0;
@@ -1374,17 +1375,28 @@
                  const coatColor = playerCoatColor; const torsoColor = isSelf ? playerTorsoSelfColor : playerTorsoOtherColor;
                  const bootColor = playerBootColor; const gunColor = playerGunColor;
 
-                 // Geometry calculations (remain the same)
+                const isIdle = (playerState?.input_vector?.dx ?? 0) === 0 && (playerState?.input_vector?.dy ?? 0) === 0;
+                // Calculate offset only if idle, otherwise it's 0
+                const bobOffset = isIdle
+                                  ? Math.sin(performance.now() / IDLE_BOB_SPEED) * IDLE_BOB_AMPLITUDE
+                                  : 0;
+
+                 // Geometry calculations
                  const headRadius = h * 0.2; const bodyHeight = h * 0.5; const coatLengthBonus = h * 0.15;
                  const bodyWidthTop = w * 0.9; const bodyWidthBottom = w * 0.7; const coatWidth = w * 1.1;
                  const armWidth = w * 0.2; const armLength = h * 0.4; const helmetWidth = w * 0.85;
                  const helmetHeight = h * 0.5; const slitWidth = helmetWidth * 0.75; const slitHeight = helmetHeight * 0.2;
                  const bootSize = 5; const bootSpacing = w * 0.3;
-                 const headCenterY = y - (h / 2) + headRadius; const bodyTopY = headCenterY + headRadius * 0.8;
-                 const bodyBottomY = bodyTopY + bodyHeight; const coatTopY = bodyTopY + bodyHeight * 0.1;
-                 const coatBottomY = bodyBottomY + coatLengthBonus; const helmetTopY = headCenterY - helmetHeight * 0.4;
-                 const slitY = helmetTopY + (helmetHeight / 2) - (slitHeight / 2); const bootOffsetY = coatBottomY + 2;
-
+                // --- APPLY bobOffset to calculated Y positions ---
+                const headCenterY = y - (h / 2) + headRadius + bobOffset;
+                const bodyTopY = headCenterY + headRadius * 0.8; // Inherits bobOffset via headCenterY
+                const bodyBottomY = bodyTopY + bodyHeight;
+                const coatTopY = bodyTopY + bodyHeight * 0.1;
+                const coatBottomY = bodyBottomY + coatLengthBonus;
+                const helmetTopY = headCenterY - helmetHeight * 0.4; // Inherits bobOffset via headCenterY
+                const slitY = helmetTopY + (helmetHeight / 2) - (slitHeight / 2);
+                const bootOffsetY = coatBottomY + 2; // Relative to coatBottomY which inherited offset
+                 
                  // Drawing with cached colors
                  ctx.fillStyle = coatColor; ctx.fillRect(x - coatWidth / 2, coatTopY, coatWidth, coatBottomY - coatTopY);
                  ctx.fillStyle = torsoColor;
@@ -1448,16 +1460,23 @@
                 const torsoColor = type === ENEMY_TYPE_SHOOTER ? enemyTorsoShooterColor : enemyTorsoChaserColor;
                 const bootColor = enemyBootColor; const capColor = enemyCapColor;
                 const hitFlashColor = enemyHitFlashColor;
+                const bobOffset = Math.sin(performance.now() / IDLE_BOB_SPEED) * IDLE_BOB_AMPLITUDE;
 
-                // Geometry (remains the same)
+                // Geometry 
                 const headRadius = h * 0.18; const bodyHeight = h * 0.5; const coatLengthBonus = h * 0.15;
                 const bodyWidthTop = w * 0.9; const bodyWidthBottom = w * 0.7; const coatWidth = w * 1.1;
                 const armWidth = w * 0.2; const armLength = h * 0.4; const capHeight = headRadius * 0.8;
                 const capWidth = headRadius * 2.2; const bootSize = 5; const bootSpacing = w * 0.3;
-                const headCenterY = y - (h / 2) + headRadius; const bodyTopY = headCenterY + headRadius * 0.8;
-                const bodyBottomY = bodyTopY + bodyHeight; const coatTopY = bodyTopY + bodyHeight * 0.1;
-                const coatBottomY = bodyBottomY + coatLengthBonus; const armTopY = bodyTopY + bodyHeight * 0.05;
-                const capTopY = headCenterY - headRadius; const bootOffsetY = coatBottomY + 2;
+
+                // --- APPLY bobOffset to calculated Y positions ---
+                const headCenterY = y - (h / 2) + headRadius + bobOffset;
+                const bodyTopY = headCenterY + headRadius * 0.8; // Inherits offset
+                const bodyBottomY = bodyTopY + bodyHeight;
+                const coatTopY = bodyTopY + bodyHeight * 0.1;
+                const coatBottomY = bodyBottomY + coatLengthBonus;
+                const armTopY = bodyTopY + bodyHeight * 0.05;
+                const capTopY = headCenterY - headRadius; // Inherits offset
+                const bootOffsetY = coatBottomY + 2; // Inherits offset
 
                 // Drawing with cached colors
                 ctx.save();
