@@ -1190,7 +1190,7 @@
         // --- Rendering "Module" ---
         const Renderer = (() => {
             const ctx = DOM.ctx;
-            const lerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.2;
+            const lerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.1;
 
              // --- Offscreen Canvas Setup ---
             const offscreenCanvas = document.createElement('canvas');
@@ -2561,8 +2561,8 @@
                 const renderedPos = appState.renderedPlayerPos;
                 const dist = distance(predictedPos.x, predictedPos.y, serverPos.x, serverPos.y);
 
-                const threshold = parseFloat(getCssVar('--reconciliation-threshold')) || 5; // This threshold is for SNAPPING
-                const lerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.2; // This is for VISIBLE smoothing
+                const threshold = parseFloat(getCssVar('--reconciliation-threshold')) || 10; // This threshold is for SNAPPING
+                const lerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.1; // This is for VISIBLE smoothing
 
                 if (dist > threshold * 2) { // Large error -> Snap
                     // log(`Reconciliation SNAP! Dist: ${dist.toFixed(1)}`);
@@ -2577,10 +2577,10 @@
 
                     // Gentle Nudge: Only correct prediction if error is > 4.0 pixels
                     // --- CHANGE HERE: Increased threshold ---
-                    if (dist > 4.0) { // Was 2.0
+                    if (dist > 10.0) { // Was 2.0
                          // Use the halved nudge factor
-                         predictedPos.x = lerp(predictedPos.x, serverPos.x, lerpFactor * 0.05);
-                         predictedPos.y = lerp(predictedPos.y, serverPos.y, lerpFactor * 0.05);
+                         predictedPos.x = lerp(predictedPos.x, serverPos.x, lerpFactor * 0.1);
+                         predictedPos.y = lerp(predictedPos.y, serverPos.y, lerpFactor * 0.1);
                          // log(`Reconciliation Nudge: Dist=${dist.toFixed(1)}`); // Optional debug
                     }
                     // --- End Change ---
