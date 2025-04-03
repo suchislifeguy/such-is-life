@@ -876,12 +876,28 @@
                  log("Input listeners cleaned up.");
              }
 
+
              function handleMouseMove(event) {
                  if (!DOM.canvas) return;
                  const rect = DOM.canvas.getBoundingClientRect();
-                 mouseCanvasPos.x = event.clientX - rect.left;
-                 mouseCanvasPos.y = event.clientY - rect.top;
-             }
+
+                 // 1. Get Raw Mouse Position relative to the visual canvas element
+                 const rawMouseX = event.clientX - rect.left;
+                 const rawMouseY = event.clientY - rect.top;
+
+                 // 2. Get Visual and Internal Dimensions
+                 const visualWidth = rect.width;
+                 const visualHeight = rect.height;
+                 const internalWidth = DOM.canvas.width;  // The fixed 1600
+                 const internalHeight = DOM.canvas.height; // The fixed 900
+
+                 // 3. Calculate Scaling Factors (Avoid division by zero if canvas is hidden/tiny)
+                 const scaleX = (visualWidth > 0) ? internalWidth / visualWidth : 1;
+                 const scaleY = (visualHeight > 0) ? internalHeight / visualHeight : 1;
+
+                 // 4. Calculate and Store Scaled Coordinates
+                 mouseCanvasPos.x = rawMouseX * scaleX;
+                 mouseCanvasPos.y = rawMouseY * scaleY;
 
             // --- MODIFIED handleMouseDown: Set flag, don't call handleShooting ---
             function handleMouseDown(event) {
