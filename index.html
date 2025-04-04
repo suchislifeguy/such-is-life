@@ -474,77 +474,90 @@
         let socket = null;                // Global WebSocket instance
 
         // --- Decorative Snake Effect State ---
-        // --- Snake Effect State (Visuals driven by Server Logic) ---
+                // --- Snake Effect State (Visuals driven by Server Logic) ---
         let snake = {
-            // Visual properties
-            segmentLength: 25.0, // Adjusted visual segment length closer to logical
-            segments: [], // Array of {x, y, time} for visual segments
-            maxSegments: 15, // Max visual segments
-            frequency: 0.03, // Visual wave frequency
-            amplitude: 15.0, // Visual wave amplitude
-            lineWidth: 2.5, // Visual line width
+            // Keep existing visual properties: segmentLength, segments, maxSegments, frequency, amplitude, lineWidth
+            segmentLength: 25.0,
+            segments: [],
+            maxSegments: 15,
+            frequency: 0.03, // Frequency for wave calculation
+            amplitude: 15.0,
+            lineWidth: 2.5,
 
-            // State received from server
+            // Keep server state properties
             serverHeadX: 0,
             serverHeadY: 0,
             serverBaseY: 0,
-            isActiveFromServer: false, // Controlled by server's snake_state.active
+            isActiveFromServer: false,
 
-            // Update function for VISUAL segments based on server head position
+            // Replace the existing update function with this one:
             update: function(currentTime) {
                 if (!this.isActiveFromServer) {
-                    this.segments = []; // Clear visuals if server says inactive
-                    return;
+                    this.segments = []; return;
                 }
-                // Ensure lerp is accessible, define locally if needed
                 const lerp = (s, e, a) => s + (e - s) * a;
 
-                // Ensure head segment exists and matches server position
+                // Ensure head segment exists and matches server
                 if (this.segments.length === 0) {
-                     this.segments.push({x: this.serverHeadX, y: this.serverHeadY, time: currentTime});
+                    this.segments.push({ x: this.serverHeadX, y: this.serverHeadY, time: currentTime });
                 } else {
-                     this.segments[0].x = this.serverHeadX;
-                     this.segments[0].y = this.serverHeadY;
-                     this.segments[0].time = currentTime;
+                    this.segments[0].x = this.serverHeadX;
+                    this.segments[0].y = this.serverHeadY;
+                    this.segments[0].time = currentTime;
                 }
 
-                // Update tail segments smoothly
-                const waveTime = currentTime * 0.005;
+                // Update tail segments based on relative position and time/index based wave
+                const waveTime = currentTime * 0.008;
+                const phaseOffsetPerSegment = 0.5;
+                const followLerpFactor = 0.5;
+
                 for (let i = 1; i < this.segments.length; i++) {
                     const seg = this.segments[i];
                     const prevSeg = this.segments[i - 1];
                     if (!seg || !prevSeg) continue;
 
-                    // Simple follow logic with wave influence
-                    const targetX = prevSeg.x - Math.sign(prevSeg.x - seg.x || 1) * this.segmentLength * 0.9;
-                    const targetYBasedOnWave = this.serverBaseY + Math.sin(seg.x * this.frequency + waveTime) * this.amplitude;
-                    const finalTargetY = lerp(prevSeg.y, targetYBasedOnWave, 0.6);
+                    const dx = prevSeg.x - seg.x;
+                    const dy = prevSeg.y - seg.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    const dirX = dist > 0.01 ? dx / dist : 0;
+                    const dirY = dist > 0.01 ? dy / dist : 0;
 
-                    seg.x = lerp(seg.x, targetX, 0.45); // Slightly faster follow
-                    seg.y = lerp(seg.y, finalTargetY, 0.45);
+                    const followTargetX = prevSeg.x - dirX * this.segmentLength;
+                    const followTargetY = prevSeg.y - dirY * this.segmentLength;
+
+                    const wavePhase = waveTime - (i * phaseOffsetPerSegment);
+                    const amplitudeFactor = 1.0 - Math.pow(i / this.segments.length, 1.5);
+                    const waveMagnitude = Math.sin(wavePhase) * this.amplitude * amplitudeFactor;
+
+                    const waveOffsetX = -dirY * waveMagnitude;
+                    const waveOffsetY = dirX * waveMagnitude;
+
+                    const combinedTargetX = followTargetX + waveOffsetX;
+                    const combinedTargetY = followTargetY + waveOffsetY;
+
+                    seg.x = lerp(seg.x, combinedTargetX, followLerpFactor);
+                    seg.y = lerp(seg.y, combinedTargetY, followLerpFactor);
                 }
 
-                // Add new visual segment near head if needed (simplified distance check)
+                // Add new segment near head if distance to neck is too large
                 if (this.segments.length > 0 && this.segments.length < this.maxSegments) {
                     const head = this.segments[0];
-                    const neck = this.segments[1]; // Need at least 2 segments
+                    const neck = this.segments[1];
                     if (neck) {
-                        const headNeckDistSq = (head.x-neck.x)**2 + (head.y-neck.y)**2;
-                        if (headNeckDistSq > (this.segmentLength)**2) { // Add if neck is lagging
-                             // Insert new segment right behind the head
-                             this.segments.splice(1, 0, { x: head.x, y: head.y, time: currentTime });
+                        const headNeckDistSq = (head.x - neck.x)**2 + (head.y - neck.y)**2;
+                        if (headNeckDistSq > (this.segmentLength * 1.2)**2) {
+                            this.segments.splice(1, 0, { x: lerp(neck.x, head.x, 0.5), y: lerp(neck.y, head.y, 0.5), time: currentTime });
                         }
                     } else {
-                         // If only head exists, add first neck segment
-                         this.segments.push({ x: head.x, y: head.y, time: currentTime });
+                        this.segments.push({ x: head.x - (this.segmentLength*0.5), y: head.y, time: currentTime });
                     }
                 }
-                 // Trim excess segments (redundant if maxSegments logic above works)
-                // while (this.segments.length > this.maxSegments) { this.segments.pop(); }
-            }
-        };
-        // Remove old snakeSpawnTimer and related constants if they exist globally
-
+                // Trim excess segments
+                while (this.segments.length > this.maxSegments) {
+                    this.segments.pop();
+                }
+            } // --- End of REVISED update function ---
+        }; // --- End of snake object definition ---
 
         // --- Logging Wrappers ---
         function log(...args) { console.log("[Client]", ...args); }
@@ -1176,39 +1189,41 @@
 
             function drawSnake() {
                 // Draw based on snake.isActiveFromServer flag, controlled by server state
-                if (!snake.isActiveFromServer || !snake.segments || snake.segments.length < 2) return;
+                if (!snake.isActiveFromServer || !snake.segments || snake.segments.length < 2) return; // Need at least 2 points to draw a line
 
                 const snakeLineColor = '#261a0d';
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
                 ctx.strokeStyle = snakeLineColor;
-                ctx.lineWidth = snake.lineWidth;
+                ctx.lineWidth = snake.lineWidth; // Use snake.lineWidth defined in the snake object
                 ctx.beginPath();
 
-                // Start from tail
+                // Start drawing from the tail segment
                 ctx.moveTo(snake.segments[snake.segments.length - 1].x, snake.segments[snake.segments.length - 1].y);
 
-                // Draw smooth curves through segments
+                // Draw lines smoothly through the segments (e.g., using quadratic curves)
                 for (let i = snake.segments.length - 2; i >= 1; i--) {
                     const seg = snake.segments[i];
                     const nextSeg = snake.segments[i - 1];
                     if (!seg || !nextSeg) continue;
+                    // Calculate midpoint for curve control point
                     const xc = (seg.x + nextSeg.x) / 2;
                     const yc = (seg.y + nextSeg.y) / 2;
                     ctx.quadraticCurveTo(seg.x, seg.y, xc, yc);
                 }
-                // Curve / Line to the head
-                if(snake.segments.length > 0) {
+                // Curve/Line to the head segment
+                if (snake.segments.length > 0) {
                     const head = snake.segments[0];
                     if (snake.segments.length > 1) {
-                         const neck = snake.segments[1];
-                         const xc = (neck.x + head.x) / 2;
-                         const yc = (neck.y + head.y) / 2;
-                          ctx.quadraticCurveTo(neck.x, neck.y, xc, yc); // Curve from neck towards midpoint
+                        const neck = snake.segments[1];
+                        // Curve from neck towards midpoint between neck and head for smoother connection
+                        const xc = (neck.x + head.x) / 2;
+                        const yc = (neck.y + head.y) / 2;
+                        ctx.quadraticCurveTo(neck.x, neck.y, xc, yc);
                     }
-                    ctx.lineTo(head.x, head.y); // Final line to head
+                    // Ensure final line goes exactly to the head
+                    ctx.lineTo(head.x, head.y);
                 }
-
 
                 ctx.stroke();
             }
