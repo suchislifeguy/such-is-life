@@ -1974,11 +1974,14 @@ return {
 
                     // --- Game State Update ---
                     case 'game_state':
+                        // If client is in menu mode, ignore state updates entirely.
                         if (appState.mode === 'menu') {
-                                // log("Ignoring game_state message while in menu mode."); // Optional debug log
-                                return; // Stop processing this message
+                            // log("Ignoring game_state message while in menu mode.");
+                            return; // Stop processing this message
                         }
-                        const previousStatus = appState.serverState?.status; // Store previous state info for comparisons
+
+                        // --- Proceed with processing state if not in menu ---
+                        const previousStatus = appState.serverState?.status;
                         const previousPlayerState = appState.serverState?.players?.[appState.localPlayerId];
 
                         // Update state history for interpolation
@@ -2010,21 +2013,12 @@ return {
                              appState.maxPlayersInGame = newState.max_players;
                         }
 
-                        // Handle transitions between game statuses (waiting, countdown, active)
-                        // 'finished' status is primarily handled by game_over_notification
+                        // --- Handle transitions between game statuses ---
                         if (newState.status !== previousStatus) {
                             log(`[Client State Change] From ${previousStatus || 'null'} to ${newState.status}`);
-                            if (newState.status === 'waiting') {
-                                if (appState.mode === 'multiplayer-host') {
-                                    UI.updateStatus("Teammate left. Waiting...", true); UI.showSection('host-wait-section');
-                                    const currentPWaiting = Object.keys(newState.players || {}).length;
-                                    DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentPWaiting}/${appState.maxPlayersInGame || '?'})`;
-                                    Game.cleanupLoop(); // Stop loop if returning to wait
-                                } else { // Client perspective
-                                    UI.updateStatus("Host or player left. Returning to menu.", true);
-                                    Game.resetClientState(true); // Go back to menu
-                                }
-                            } else if (newState.status === 'countdown' || newState.status === 'active') {
+
+                            // Logic for STARTING the game (Countdown or Active)
+                            if ((newState.status === 'countdown' || newState.status === 'active') && previousStatus !== 'active' && previousStatus !== 'countdown') {
                                 UI.updateStatus(newState.status === 'countdown' ? "Countdown starting..." : "Game active!");
                                 UI.showSection('game-area'); // Ensure game area is visible
                                 if (!appState.animationFrameId) { // Start loop if not already running
@@ -2033,14 +2027,32 @@ return {
                                     Game.startGameLoop();
                                 }
                             }
-                            // No explicit 'finished' handling here; rely on notification
+                            // Logic for HOST potentially returning to WAITING state
+                            // (e.g., if server forces it - less likely now but kept for robustness)
+                            else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host' && previousStatus !== 'waiting') {
+                                UI.updateStatus("Game reverted to waiting lobby.", true); // Inform host
+                                UI.showSection('host-wait-section');
+                                const currentPWaiting = Object.keys(newState.players || {}).length;
+                                DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentPWaiting}/${appState.maxPlayersInGame || '?'})`;
+                                Game.cleanupLoop(); // Stop loop if returning to wait
+                            }
+                            // NOTE: We no longer have specific logic here to handle clients (non-hosts)
+                            // receiving a 'waiting' status while they thought the game was active,
+                            // because the server-side change prevents that status transition on player leave.
+                            // If the server *did* send 'waiting' unexpectedly, the client would now
+                            // likely just stop receiving updates, and the user would manually leave.
+
                         } // End status change handling
 
-                        // Update UI elements based on current state (HUD, countdown, day/night) if game is running
-                        if (newState.status === 'countdown' || newState.status === 'active') {
-                            UI.updateHUD(newState); UI.updateCountdown(newState); UI.updateDayNight(newState);
-                        } else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') {
-                            // Update host waiting message if player count changes
+                        // --- Update UI elements based on current state ---
+                        // Only update HUD/Timers if game is actually running client-side
+                        if (appState.animationFrameId && (newState.status === 'countdown' || newState.status === 'active')) {
+                            UI.updateHUD(newState);
+                            UI.updateCountdown(newState);
+                            UI.updateDayNight(newState);
+                        }
+                        // Update waiting message specifically for hosts in waiting state
+                        else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') {
                             const pCount = Object.keys(newState.players || {}).length;
                             DOM.waitingMessage.textContent = `Waiting for Team Mate... (${pCount}/${appState.maxPlayersInGame || '?'})`;
                         }
