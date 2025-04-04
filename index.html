@@ -491,6 +491,7 @@
             isActiveFromServer: false,
 
             // Replace the existing update function with this one:
+            // Replace the existing update function with this one:
             update: function(currentTime) {
                 if (!this.isActiveFromServer) {
                     this.segments = []; return;
@@ -503,52 +504,64 @@
                 } else {
                     this.segments[0].x = this.serverHeadX;
                     this.segments[0].y = this.serverHeadY;
-                    this.segments[0].time = currentTime;
+                    this.segments[0].time = currentTime; // Keep head time updated
                 }
 
-                // Update tail segments based on relative position and time/index based wave
-                const waveTime = currentTime * 0.008;
-                const phaseOffsetPerSegment = 0.5;
-                const followLerpFactor = 0.5;
+                // --- Update tail segments ---
+                const waveTime = currentTime * 0.005; // Base time factor for wave
+                // How much the wave phase shifts per segment (controls wavelength relative to body)
+                const phaseOffsetPerSegment = 0.8;
+                // How quickly segments visually follow the segment in front
+                const followLerp = 0.4;
 
                 for (let i = 1; i < this.segments.length; i++) {
                     const seg = this.segments[i];
                     const prevSeg = this.segments[i - 1];
                     if (!seg || !prevSeg) continue;
 
+                    // 1. Calculate vector and distance towards the segment in front
                     const dx = prevSeg.x - seg.x;
                     const dy = prevSeg.y - seg.y;
                     const dist = Math.sqrt(dx*dx + dy*dy);
                     const dirX = dist > 0.01 ? dx / dist : 0;
                     const dirY = dist > 0.01 ? dy / dist : 0;
 
-                    const followTargetX = prevSeg.x - dirX * this.segmentLength;
-                    const followTargetY = prevSeg.y - dirY * this.segmentLength;
+                    // 2. Calculate the target position purely based on following
+                    // Aim to be 'segmentLength' behind the previous segment along the direction vector
+                    const targetFollowX = prevSeg.x - dirX * this.segmentLength;
+                    const targetFollowY = prevSeg.y - dirY * this.segmentLength;
 
+                    // 3. Calculate the desired Y position based on the SIN wave
+                    // Use time and segment index 'i' for phase, relative to serverBaseY
                     const wavePhase = waveTime - (i * phaseOffsetPerSegment);
+                    // Amplitude decreases towards tail
                     const amplitudeFactor = 1.0 - Math.pow(i / this.segments.length, 1.5);
-                    const waveMagnitude = Math.sin(wavePhase) * this.amplitude * amplitudeFactor;
+                    const targetWaveY = this.serverBaseY + Math.sin(wavePhase) * this.amplitude * amplitudeFactor;
 
-                    const waveOffsetX = -dirY * waveMagnitude;
-                    const waveOffsetY = dirX * waveMagnitude;
+                    // 4. Blend the target Y: Use the following logic for X, but blend the wave Y
+                    // This attempts to keep the horizontal spacing correct while applying the wave vertically
+                    const finalTargetX = targetFollowX; // Use the X calculated from following
+                    const finalTargetY = targetWaveY; // Use the Y calculated purely from the wave relative to base Y
 
-                    const combinedTargetX = followTargetX + waveOffsetX;
-                    const combinedTargetY = followTargetY + waveOffsetY;
 
-                    seg.x = lerp(seg.x, combinedTargetX, followLerpFactor);
-                    seg.y = lerp(seg.y, combinedTargetY, followLerpFactor);
+                    // 5. Lerp segment towards its final target position
+                    seg.x = lerp(seg.x, finalTargetX, followLerp);
+                    seg.y = lerp(seg.y, finalTargetY, followLerp * 1.2); // Maybe lerp Y slightly faster?
                 }
 
-                // Add new segment near head if distance to neck is too large
+                // --- Add new segment near head if distance to neck is too large ---
                 if (this.segments.length > 0 && this.segments.length < this.maxSegments) {
                     const head = this.segments[0];
                     const neck = this.segments[1];
                     if (neck) {
                         const headNeckDistSq = (head.x - neck.x)**2 + (head.y - neck.y)**2;
-                        if (headNeckDistSq > (this.segmentLength * 1.2)**2) {
+                        if (headNeckDistSq > (this.segmentLength * 1.1)**2) {
+                            // Add segment midway between head and neck for smoother addition
                             this.segments.splice(1, 0, { x: lerp(neck.x, head.x, 0.5), y: lerp(neck.y, head.y, 0.5), time: currentTime });
                         }
-                    } else {
+                    } else { // Only head exists, add first neck segment
+                        // Place initial neck slightly behind head based on approx direction (needs server direction ideally)
+                        // For now, just place it offset slightly based on previous attempts
                         this.segments.push({ x: head.x - (this.segmentLength*0.5), y: head.y, time: currentTime });
                     }
                 }
