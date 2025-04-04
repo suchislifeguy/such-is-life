@@ -1594,9 +1594,18 @@ function hostMultiplayer(maxPlayers) {
 // --- In-Game Actions ---
 
 function leaveGame() {
-    log("Leaving current game / Cancelling host...");
-    Network.closeConnection(1000, "User action (leave/cancel)"); // Close connection normally
-    resetClientState(true); // Reset state fully and return to main menu UI
+    log("Leaving current game...");
+    // Notify the server the player is leaving the current game instance
+    if (appState.isConnected && appState.currentGameId && appState.localPlayerId) {
+        Network.sendMessage({ type: 'leave_game' });
+    } else {
+        log("Cannot send leave_game message: Not connected or not in a game.");
+    }
+
+    // --- DO NOT close the WebSocket connection ---
+
+    // Reset client state fully and return to main menu UI
+    resetClientState(true);
 }
 
 function sendChatMessage() {
