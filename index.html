@@ -534,8 +534,12 @@
                     // 3. Calculate the desired Y position based on the SIN wave
                     // Use time and segment index 'i' for phase, relative to serverBaseY
                     const wavePhase = waveTime - (i * phaseOffsetPerSegment);
-                    // Amplitude decreases towards tail
-                    const amplitudeFactor = Math.pow(i / this.segments.length, 1.5); 
+                    const midPoint = (this.segments.length - 1) / 2.0; // Center index (can be float)
+                    const distanceFromMid = Math.abs(i - midPoint);
+                    // Normalize distance relative to half the length (ensures value goes from 0 at center to 1 at ends)
+                    const normDist = midPoint > 0 ? distanceFromMid / midPoint : 0;
+                    // Use cosine curve: Peaks at 1 (cos(0)) in middle, falls to 0 (cos(PI/2)) at ends
+                    const amplitudeFactor = Math.cos(normDist * (Math.PI / 2)); 
                     const targetWaveY = this.serverBaseY + Math.sin(wavePhase) * this.amplitude * amplitudeFactor;
 
                     // 4. Blend the target Y: Use the following logic for X, but blend the wave Y
