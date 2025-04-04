@@ -42,8 +42,8 @@
 
             /* Config & Text */
             --font-family: 'Courier New', monospace;
-            --reconciliation-threshold: 15; /* Client-side prediction snap distance */
-            --lerp-factor: 0.07;            /* Client-side interpolation speed */
+            --reconciliation-threshold: 25; /* Increased to reduce snapping frequency */
+            --lerp-factor: 0.1;            /* Slightly increased for faster visual smoothing */
             --damage-text-color: #FFFFFF;
             --damage-text-crit-color: var(--accent-gold);
             --damage-text-font-size: 14px;
@@ -1919,52 +1919,60 @@ function cleanupLoop() {
 
  // --- Client-Side Prediction & Reconciliation ---
 
- // Updates the predicted position based on local input
  function updatePredictedPosition(deltaTime) {
-    if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return;
+    if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) {
+        return;
+    }
     const moveVector = Input.getMovementInputVector();
     const playerState = appState.serverState.players[appState.localPlayerId];
     const playerSpeed = playerState?.speed ?? PLAYER_DEFAULTS.base_speed;
-    if (moveVector.dx === 0 && moveVector.dy === 0) return; // Only predict if moving
 
-    // Apply movement based on input and speed
-    appState.predictedPlayerPos.x += moveVector.dx * playerSpeed * deltaTime;
-    appState.predictedPlayerPos.y += moveVector.dy * playerSpeed * deltaTime;
+    if (moveVector.dx === 0 && moveVector.dy === 0) {
+            // Don't apply prediction if there's no new input, let reconciliation handle drifts.
+            // Or optionally: return; // if you want prediction *only* when actively moving. Test both.
+    } else {
+            // Apply movement prediction based on input
+            appState.predictedPlayerPos.x += moveVector.dx * playerSpeed * deltaTime;
+            appState.predictedPlayerPos.y += moveVector.dy * playerSpeed * deltaTime;
+    }
 
-    // Clamp to canvas bounds
+    // Always clamp the predicted position to canvas bounds
     const w_half = (playerState?.width ?? PLAYER_DEFAULTS.width) / 2;
     const h_half = (playerState?.height ?? PLAYER_DEFAULTS.height) / 2;
     appState.predictedPlayerPos.x = Math.max(w_half, Math.min(CANVAS_WIDTH - w_half, appState.predictedPlayerPos.x));
     appState.predictedPlayerPos.y = Math.max(h_half, Math.min(CANVAS_HEIGHT - h_half, appState.predictedPlayerPos.y));
- }
+}
 
- // Adjusts local predicted/rendered position based on server state to correct discrepancies
- function reconcileWithServer() {
-    if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return;
-    const serverPos = appState.serverState.players[appState.localPlayerId];
-    if (typeof serverPos.x !== 'number' || typeof serverPos.y !== 'number') return; // Invalid server data
-
-    const predictedPos = appState.predictedPlayerPos; const renderedPos = appState.renderedPlayerPos;
-    const dist = distance(predictedPos.x, predictedPos.y, serverPos.x, serverPos.y); // Error distance
-
-    // Tunable thresholds from CSS variables / JS constants
-    const snapThreshold = (parseFloat(getCssVar('--reconciliation-threshold')) || 15) * 2.0; // Large error -> snap
-    const renderLerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.1; // Visual smoothing speed
-    const nudgeThreshold = 2.5;   // Small error threshold to start correcting prediction
-    const nudgeMultiplier = 0.06; // Strength of prediction correction towards server state
-
-    if (dist > snapThreshold) { // Snap if error is very large
-        predictedPos.x = serverPos.x; predictedPos.y = serverPos.y;
-        renderedPos.x = serverPos.x; renderedPos.y = serverPos.y;
-    } else { // Smooth visual position and nudge prediction if needed
-        renderedPos.x = lerp(renderedPos.x, predictedPos.x, renderLerpFactor); // Always smooth visuals
-        renderedPos.y = lerp(renderedPos.y, predictedPos.y, renderLerpFactor);
-        if (dist > nudgeThreshold) { // Gently pull prediction towards server state if error exceeds threshold
-             predictedPos.x = lerp(predictedPos.x, serverPos.x, renderLerpFactor * nudgeMultiplier);
-             predictedPos.y = lerp(predictedPos.y, serverPos.y, renderLerpFactor * nudgeMultiplier);
-        }
+function reconcileWithServer() {
+    if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) {
+        return;
     }
- }
+    const serverPos = appState.serverState.players[appState.localPlayerId];
+    if (typeof serverPos.x !== 'number' || typeof serverPos.y !== 'number') {
+        return;
+    }
+
+    const predictedPos = appState.predictedPlayerPos;
+    const renderedPos = appState.renderedPlayerPos;
+    const dist = distance(predictedPos.x, predictedPos.y, serverPos.x, serverPos.y);
+
+    const snapThreshold = (parseFloat(getCssVar('--reconciliation-threshold')) || 25); // Using default 25 now
+    const renderLerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.1; // Using default 0.1 now
+
+    if (dist > snapThreshold) {
+        // Snap Prediction: Error is too large, force prediction to match server
+        predictedPos.x = serverPos.x;
+        predictedPos.y = serverPos.y;
+        // Snap Rendering: Also force visuals to match immediately
+        renderedPos.x = serverPos.x;
+        renderedPos.y = serverPos.y;
+    } else {
+        // Smooth Rendering Only: Error is within tolerance, smoothly move visuals
+        // towards the current predicted position. Prediction itself is not modified here.
+        renderedPos.x = lerp(renderedPos.x, predictedPos.x, renderLerpFactor);
+        renderedPos.y = lerp(renderedPos.y, predictedPos.y, renderLerpFactor);
+    }
+}
 
  // Sets up initial button listeners
  function initListeners() {
