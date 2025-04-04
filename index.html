@@ -1658,7 +1658,7 @@ function resetClientState(showMenu = true) {
 
     // Reset mode and show main menu only if explicitly requested (e.g., leaving game, game over button)
     if (showMenu) {
-        appState.mode = 'menu'; // <<< Set mode back to menu ONLY when returning to menu
+        appState.mode = 'menu'; // --- Set mode back to menu ONLY when returning to menu
         UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
         UI.showSection('main-menu-section'); // Show the main menu UI
     }
@@ -1897,7 +1897,7 @@ function cleanupLoop() {
     DOM.cancelHostBtn.onclick = leaveGame; DOM.joinGameSubmitBtn.onclick = joinMultiplayer;
     DOM.sendChatBtn.onclick = sendChatMessage; DOM.leaveGameBtn.onclick = leaveGame;
     // Ensure Game Over button correctly calls resetClientState with true
-    DOM.gameOverBackBtn.onclick = () => resetClientState(true); // <<< Confirmed line
+    DOM.gameOverBackBtn.onclick = () => resetClientState(true); // --- Confirmed line
 
     // Make back buttons work generically based on their onclick attribute target
     DOM.gameContainer.querySelectorAll('.back-button').forEach(btn => {
@@ -1974,6 +1974,10 @@ return {
 
                     // --- Game State Update ---
                     case 'game_state':
+                        if (appState.mode === 'menu') {
+                                // log("Ignoring game_state message while in menu mode."); // Optional debug log
+                                return; // Stop processing this message
+                        }
                         const previousStatus = appState.serverState?.status; // Store previous state info for comparisons
                         const previousPlayerState = appState.serverState?.players?.[appState.localPlayerId];
 
@@ -2054,8 +2058,8 @@ return {
                         if (data.final_state) {
                             appState.serverState = data.final_state; // Store final state
                             UI.updateStatus("Game Over!");
-                            Game.cleanupLoop(); // <<< Stop the game loop FIRST
-                            UI.showGameOver(data.final_state); // <<< THEN show the game over screen
+                            Game.cleanupLoop(); // --- Stop the game loop FIRST
+                            UI.showGameOver(data.final_state); // --- THEN show the game over screen
                             log("-> Game Over sequence initiated by notification.");
                         } else {
                             error("Received 'game_over_notification' without final_state data.");
