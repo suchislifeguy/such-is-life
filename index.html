@@ -474,39 +474,77 @@
         let socket = null;                // Global WebSocket instance
 
         // --- Decorative Snake Effect State ---
+        // --- Snake Effect State (Visuals driven by Server Logic) ---
         let snake = {
-            active: false, x: -50, y: 0, segmentLength: 0.8, segments: [],
-            maxSegments: 33, baseY: 0, direction: 1, speed: 60, frequency: 0.2,
-            amplitude: 12, lineWidth: 1.5,
-            update: function(currentTime) { // Simplified update logic description
-                // Moves horizontally, oscillates vertically based on sin wave and time
-                // Adds segments to the front, removes from the back to maintain length
-                // Applies wave effect along the body segments
-                snake.x += snake.direction * snake.speed * 0.05;
-                const waveTime = currentTime * 0.005;
-                snake.y = snake.baseY + Math.sin(snake.x * snake.frequency + waveTime) * snake.amplitude;
-                if (snake.segments.length === 0 || Math.hypot(snake.x - snake.segments[0].x, snake.y - snake.segments[0].y) > snake.segmentLength) {
-                    snake.segments.unshift({x: snake.x, y: snake.y, time: currentTime});
-                    while (snake.segments.length > snake.maxSegments) { snake.segments.pop(); }
+            // Visual properties
+            segmentLength: 25.0, // Adjusted visual segment length closer to logical
+            segments: [], // Array of {x, y, time} for visual segments
+            maxSegments: 15, // Max visual segments
+            frequency: 0.03, // Visual wave frequency
+            amplitude: 15.0, // Visual wave amplitude
+            lineWidth: 2.5, // Visual line width
+
+            // State received from server
+            serverHeadX: 0,
+            serverHeadY: 0,
+            serverBaseY: 0,
+            isActiveFromServer: false, // Controlled by server's snake_state.active
+
+            // Update function for VISUAL segments based on server head position
+            update: function(currentTime) {
+                if (!this.isActiveFromServer) {
+                    this.segments = []; // Clear visuals if server says inactive
+                    return;
                 }
-                for (let i = 1; i < snake.segments.length; i++) {
-                    const seg = snake.segments[i]; if (!seg || typeof seg.time === 'undefined') continue;
-                    const timeOffset = (currentTime - seg.time) * 0.001;
-                    const segWave = Math.sin(seg.x * snake.frequency + waveTime - timeOffset * 3);
-                    if (typeof seg.y !== 'undefined') {
-                        snake.segments[i].y = snake.baseY + segWave * snake.amplitude * (1 - (i / snake.segments.length) * 0.2);
+                // Ensure lerp is accessible, define locally if needed
+                const lerp = (s, e, a) => s + (e - s) * a;
+
+                // Ensure head segment exists and matches server position
+                if (this.segments.length === 0) {
+                     this.segments.push({x: this.serverHeadX, y: this.serverHeadY, time: currentTime});
+                } else {
+                     this.segments[0].x = this.serverHeadX;
+                     this.segments[0].y = this.serverHeadY;
+                     this.segments[0].time = currentTime;
+                }
+
+                // Update tail segments smoothly
+                const waveTime = currentTime * 0.005;
+                for (let i = 1; i < this.segments.length; i++) {
+                    const seg = this.segments[i];
+                    const prevSeg = this.segments[i - 1];
+                    if (!seg || !prevSeg) continue;
+
+                    // Simple follow logic with wave influence
+                    const targetX = prevSeg.x - Math.sign(prevSeg.x - seg.x || 1) * this.segmentLength * 0.9;
+                    const targetYBasedOnWave = this.serverBaseY + Math.sin(seg.x * this.frequency + waveTime) * this.amplitude;
+                    const finalTargetY = lerp(prevSeg.y, targetYBasedOnWave, 0.6);
+
+                    seg.x = lerp(seg.x, targetX, 0.45); // Slightly faster follow
+                    seg.y = lerp(seg.y, finalTargetY, 0.45);
+                }
+
+                // Add new visual segment near head if needed (simplified distance check)
+                if (this.segments.length > 0 && this.segments.length < this.maxSegments) {
+                    const head = this.segments[0];
+                    const neck = this.segments[1]; // Need at least 2 segments
+                    if (neck) {
+                        const headNeckDistSq = (head.x-neck.x)**2 + (head.y-neck.y)**2;
+                        if (headNeckDistSq > (this.segmentLength)**2) { // Add if neck is lagging
+                             // Insert new segment right behind the head
+                             this.segments.splice(1, 0, { x: head.x, y: head.y, time: currentTime });
+                        }
+                    } else {
+                         // If only head exists, add first neck segment
+                         this.segments.push({ x: head.x, y: head.y, time: currentTime });
                     }
                 }
+                 // Trim excess segments (redundant if maxSegments logic above works)
+                // while (this.segments.length > this.maxSegments) { this.segments.pop(); }
             }
         };
-        function initSnake() { // Resets snake state for a new appearance
-            snake.x = -50; snake.y = snake.baseY; snake.segments = [];
-            for (let i = 1; i <= 10; i++) { snake.segments.push({ x: snake.x - (i * snake.segmentLength), y: snake.baseY }); }
-            snake.active = true;
-        }
-        let snakeSpawnTimer = 5 + Math.random() * 10; // Initial timer
-        const SNAKE_SPAWN_INTERVAL_MIN = 15; // Min seconds between snake appearances
-        const SNAKE_SPAWN_INTERVAL_MAX = 35; // Max seconds between snake appearances
+        // Remove old snakeSpawnTimer and related constants if they exist globally
+
 
         // --- Logging Wrappers ---
         function log(...args) { console.log("[Client]", ...args); }
@@ -1135,26 +1173,42 @@
                 playerIdsToRemove.forEach(id => { delete activeSpeechBubbles[id]; });
             }
 
-            // Draws the decorative snake effect
             function drawSnake() {
-                if (!snake.active || !snake.segments || snake.segments.length === 0) return;
+                // Draw based on snake.isActiveFromServer flag, controlled by server state
+                if (!snake.isActiveFromServer || !snake.segments || snake.segments.length < 2) return;
+
                 const snakeLineColor = '#261a0d';
-                ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-                ctx.strokeStyle = snakeLineColor; ctx.lineWidth = snake.lineWidth;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = snakeLineColor;
+                ctx.lineWidth = snake.lineWidth;
                 ctx.beginPath();
-                const tailSegment = snake.segments[snake.segments.length - 1]; if (!tailSegment) return;
-                // Draw wavy line through segments
-                const tailAmplitudeFactor = 1.5;
-                const tailY = snake.baseY + Math.sin(tailSegment.x * snake.frequency) * (snake.amplitude * tailAmplitudeFactor);
-                ctx.moveTo(tailSegment.x, tailY);
-                for (let i = snake.segments.length - 2; i >= 0; i--) {
-                    const segment = snake.segments[i]; if (!segment) continue;
-                    const denominator = snake.segments.length - 1; const progress = (denominator > 0) ? (i / denominator) : 0;
-                    const segmentAmplitudeFactor = 1.0 + (progress * progress * 0.5);
-                    const segmentY = snake.baseY + Math.sin(segment.x * snake.frequency) * (snake.amplitude * segmentAmplitudeFactor);
-                    ctx.lineTo(segment.x, segmentY);
+
+                // Start from tail
+                ctx.moveTo(snake.segments[snake.segments.length - 1].x, snake.segments[snake.segments.length - 1].y);
+
+                // Draw smooth curves through segments
+                for (let i = snake.segments.length - 2; i >= 1; i--) {
+                    const seg = snake.segments[i];
+                    const nextSeg = snake.segments[i - 1];
+                    if (!seg || !nextSeg) continue;
+                    const xc = (seg.x + nextSeg.x) / 2;
+                    const yc = (seg.y + nextSeg.y) / 2;
+                    ctx.quadraticCurveTo(seg.x, seg.y, xc, yc);
                 }
-                ctx.lineTo(snake.x, snake.y); // Connect to current head
+                // Curve / Line to the head
+                if(snake.segments.length > 0) {
+                    const head = snake.segments[0];
+                    if (snake.segments.length > 1) {
+                         const neck = snake.segments[1];
+                         const xc = (neck.x + head.x) / 2;
+                         const yc = (neck.y + head.y) / 2;
+                          ctx.quadraticCurveTo(neck.x, neck.y, xc, yc); // Curve from neck towards midpoint
+                    }
+                    ctx.lineTo(head.x, head.y); // Final line to head
+                }
+
+
                 ctx.stroke();
             }
 
@@ -1267,6 +1321,10 @@
                  const isMoving = !isIdle;
                  const time = performance.now(); // For animations
                  const bobOffset = isIdle ? Math.sin(time / IDLE_BOB_SPEED) * IDLE_BOB_AMPLITUDE : 0; // Idle bobbing
+
+                 const nowSeconds = time / 1000.0;
+                 const snakeEffect = playerState?.effects?.snake_bite_slow;
+                 const isSnakeBitten = snakeEffect && nowSeconds < snakeEffect.expires_at;
 
                  // Dimensions (relative to w/h)
                  const helmetHeight = h*0.30; const helmetWidth = w*0.95; const slitHeight = helmetHeight*0.15;
@@ -1397,40 +1455,90 @@
 
             // Draws a single enemy rectangle/sprite
             function drawEnemyRect(x, y, w, h, type, enemyState) {
-                // Use cached colors
-                const torsoColor = type === ENEMY_TYPE_SHOOTER ? enemyTorsoShooterColor : enemyTorsoChaserColor;
-                const bobOffset = Math.sin(performance.now() / IDLE_BOB_SPEED) * IDLE_BOB_AMPLITUDE; // Idle animation
+                // Use dimensions passed from enemyState (w, h arguments)
+                const currentW = w;
+                const currentH = h;
 
-                // Geometry (relative to w/h)
-                const headRadius = h*0.18; const bodyHeight = h*0.5; const coatLengthBonus = h*0.15;
-                const bodyWidthTop = w*0.9; const bodyWidthBottom = w*0.7; const coatWidth = w*1.1;
-                const armWidth = w*0.2; const armLength = h*0.4; const capHeight = headRadius*0.8;
-                const capWidth = headRadius*2.2; const bootSize = 5; const bootSpacing = w*0.3;
+                // Determine torso color based on type
+                const torsoColor = type === ENEMY_TYPE_SHOOTER ? enemyTorsoShooterColor : (type === 'giant' ? enemyTorsoGiantColor : enemyTorsoChaserColor);
+                // Giants don't bob
+                const bobOffset = (type !== 'giant') ? Math.sin(performance.now() / IDLE_BOB_SPEED) * IDLE_BOB_AMPLITUDE : 0;
+                // Define tint color
+                const snakeBiteTintColor = 'rgba(0, 200, 50, 0.15)';
 
-                // Y Positions including bob offset
-                const headCenterY = y - (h/2) + headRadius + bobOffset;
-                const bodyTopY = headCenterY + headRadius*0.8; const bodyBottomY = bodyTopY + bodyHeight;
-                const coatTopY = bodyTopY + bodyHeight*0.1; const coatBottomY = bodyBottomY + coatLengthBonus;
-                const armTopY = bodyTopY + bodyHeight*0.05; const capTopY = headCenterY - headRadius;
+                // Check for active snake bite slow effect from server state
+                const nowSeconds = performance.now() / 1000.0;
+                const snakeEffect = enemyState?.effects?.snake_bite_slow;
+                const isSnakeBitten = snakeEffect && nowSeconds < snakeEffect.expires_at;
+
+                // Geometry scaled by currentW, currentH
+                const headRadius = currentH * 0.18;
+                const bodyHeight = currentH * 0.5;
+                const coatLengthBonus = currentH * 0.15;
+                const bodyWidthTop = currentW * 0.9;
+                const bodyWidthBottom = currentW * 0.7;
+                const coatWidth = currentW * 1.1;
+                const armWidth = currentW * 0.2;
+                const armLength = currentH * 0.4;
+                const capHeight = headRadius * 0.8; // Used only if not giant
+                const capWidth = headRadius * 2.2; // Used only if not giant
+                const bootSize = currentW * 0.15; // Scale boots with width
+                const bootSpacing = currentW * 0.3;
+
+                // Y Positions calculated using currentH and bobOffset
+                const headCenterY = y - (currentH / 2) + headRadius + bobOffset;
+                const bodyTopY = headCenterY + headRadius * 0.8;
+                const bodyBottomY = bodyTopY + bodyHeight;
+                const coatTopY = bodyTopY + bodyHeight * 0.1;
+                const coatBottomY = bodyBottomY + coatLengthBonus;
+                const armTopY = bodyTopY + bodyHeight * 0.05;
+                const capTopY = headCenterY - headRadius; // Used only if not giant
                 const bootOffsetY = coatBottomY + 2;
 
-                // Draw layers
                 ctx.save();
-                ctx.fillStyle = enemyCoatColor; ctx.fillRect(x - coatWidth/2, coatTopY, coatWidth, coatBottomY - coatTopY); // Coat base
-                ctx.fillStyle = torsoColor; // Torso color based on type
-                ctx.beginPath(); ctx.moveTo(x-bodyWidthTop/2, bodyTopY); ctx.lineTo(x+bodyWidthTop/2, bodyTopY);
-                ctx.lineTo(x+bodyWidthBottom/2, bodyBottomY); ctx.lineTo(x-bodyWidthBottom/2, bodyBottomY); ctx.closePath(); ctx.fill(); // Torso shape
-                ctx.fillStyle = enemyCoatColor; ctx.fillRect(x-bodyWidthTop/2-armWidth, armTopY, armWidth, armLength); ctx.fillRect(x+bodyWidthTop/2, armTopY, armWidth, armLength); // Arms
-                ctx.fillStyle = enemySkinColor; ctx.beginPath(); ctx.arc(x, headCenterY, headRadius, 0, Math.PI*2); ctx.fill(); // Head
-                ctx.fillStyle = enemyCapColor; ctx.fillRect(x - capWidth/2, capTopY, capWidth, capHeight); // Cap
-                ctx.fillStyle = enemyBootColor; ctx.fillRect(x-bootSpacing-bootSize/2, bootOffsetY, bootSize, bootSize); ctx.fillRect(x+bootSpacing-bootSize/2, bootOffsetY, bootSize, bootSize); // Boots
-                ctx.restore();
 
-                // Hit flash overlay
-                if (enemyState?.hit_flash_this_tick) {
-                    ctx.fillStyle = enemyHitFlashColor; const flashMargin = 2;
-                    ctx.fillRect(x-w/2-flashMargin, y-h/2-flashMargin, w+flashMargin*2, h+flashMargin*2);
+                // Draw base layers using calculated dimensions
+                ctx.fillStyle = enemyCoatColor;
+                ctx.fillRect(x - coatWidth / 2, coatTopY, coatWidth, coatBottomY - coatTopY);
+                ctx.fillStyle = torsoColor;
+                ctx.beginPath();
+                ctx.moveTo(x - bodyWidthTop / 2, bodyTopY);
+                ctx.lineTo(x + bodyWidthTop / 2, bodyTopY);
+                ctx.lineTo(x + bodyWidthBottom / 2, bodyBottomY);
+                ctx.lineTo(x - bodyWidthBottom / 2, bodyBottomY);
+                ctx.closePath();
+                ctx.fill();
+                ctx.fillStyle = enemyCoatColor;
+                ctx.fillRect(x - bodyWidthTop / 2 - armWidth, armTopY, armWidth, armLength);
+                ctx.fillRect(x + bodyWidthTop / 2, armTopY, armWidth, armLength);
+                ctx.fillStyle = enemySkinColor;
+                ctx.beginPath();
+                ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2);
+                ctx.fill();
+                // Only draw cap if not a giant
+                if (type !== 'giant') {
+                    ctx.fillStyle = enemyCapColor;
+                    ctx.fillRect(x - capWidth / 2, capTopY, capWidth, capHeight);
                 }
+                ctx.fillStyle = enemyBootColor;
+                ctx.fillRect(x - bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
+                ctx.fillRect(x + bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
+
+                // Apply Snake Bite Tint Overlay if active
+                if (isSnakeBitten) {
+                    ctx.fillStyle = snakeBiteTintColor;
+                    ctx.fillRect(x - currentW * 0.5, y - currentH * 0.5 + bobOffset, currentW, currentH);
+                }
+
+                // Apply Hit Flash overlay if active
+                if (enemyState?.hit_flash_this_tick) {
+                    ctx.fillStyle = enemyHitFlashColor;
+                    const flashMargin = 2;
+                    // Ensure flash covers the potentially larger enemy
+                    ctx.fillRect(x - currentW / 2 - flashMargin, y - currentH / 2 - flashMargin + bobOffset, currentW + flashMargin * 2, currentH + flashMargin * 2);
+                }
+
+                ctx.restore();
             }
 
             // Iterates through bullets and calls appropriate drawing function
@@ -1757,81 +1865,57 @@ return {
  // --- Game Loop Management ---
 
  // Main game loop function, called via requestAnimationFrame
-function gameLoop(currentTime) {
-    // Handle Hit Pause (visual effect)
+ function gameLoop(currentTime) {
     if (hitPauseFrames > 0) {
         hitPauseFrames--;
-        // Keep requesting frames during pause if game should still be running
         if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
             appState.animationFrameId = requestAnimationFrame(gameLoop);
         }
-        return; // Skip rest of loop logic/rendering this frame
-    }
-
-    // Exit loop conditions
-    if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
-        if (appState.serverState?.game_over) {
-            UI.updateStatus("Game Over!"); UI.showGameOver(appState.serverState); // Show final screen
-        } else if (appState.mode === 'menu') {
-            UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
-        }
-        cleanupLoop(); // Stop the loop and input listeners
         return;
     }
 
-    // Wait for initial state in MP
+    if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
+            if (appState.serverState?.game_over) { UI.updateStatus("Game Over!"); UI.showGameOver(appState.serverState); }
+            else if (appState.mode === 'menu') { UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected."); }
+            cleanupLoop();
+            return;
+    }
+
     if (!appState.serverState && appState.mode !== 'singleplayer') {
         appState.animationFrameId = requestAnimationFrame(gameLoop); return;
     }
 
-    // Calculate time delta for physics/updates
-    if (appState.lastLoopTime === null) { appState.lastLoopTime = currentTime; } // First frame init
-    const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000); // Delta in seconds, capped
+    if (appState.lastLoopTime === null) { appState.lastLoopTime = currentTime; }
+    const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000);
     appState.lastLoopTime = currentTime;
 
-    // Update Decorative Snake Effect (Client-side visual only)
-    if (appState.serverState?.status === 'active' && appState.serverState && !appState.serverState.is_night) { // Only during day
-        if (!snake.active) { // Handle spawning
-            snakeSpawnTimer -= deltaTime;
-            if (snakeSpawnTimer <= 0) {
-                const startLeft = Math.random() < 0.5; snake.direction = startLeft ? 1 : -1;
-                snake.x = startLeft ? -snake.segmentLength * snake.maxSegments : CANVAS_WIDTH + snake.segmentLength * snake.maxSegments;
-                snake.baseY = Math.random() * (CANVAS_HEIGHT - 40) + 20; snake.y = snake.baseY;
-                initSnake(); log("[Effect] Snake activated!");
-                snakeSpawnTimer = SNAKE_SPAWN_INTERVAL_MIN + Math.random() * (SNAKE_SPAWN_INTERVAL_MAX - SNAKE_SPAWN_INTERVAL_MIN); // Reset timer
-            }
-        }
+    // --- Update Visual Snake Segments ---
+    if (snake && typeof snake.update === 'function') {
+            snake.update(currentTime);
     }
-    if (snake.active) { // Handle movement and despawn
-        snake.update(currentTime); // Internal snake logic updates position/segments
-        const offscreenMargin = snake.segmentLength * snake.maxSegments * 1.5; // Check if fully offscreen
-        if ((snake.direction === 1 && snake.x > CANVAS_WIDTH + offscreenMargin) || (snake.direction === -1 && snake.x < -offscreenMargin)) {
-            snake.active = false; log("[Effect] Snake deactivated (off-screen).");
-        }
-    }
+    // --- End Snake Update ---
 
     // Process Input
     if (appState.serverState?.status === 'active' && Input.isShootHeld()) {
-        Input.handleShooting(); // Check cooldowns, send shoot message
+        Input.handleShooting();
     }
 
     // Update Local Prediction & Reconcile (MP only)
     if (appState.mode !== 'singleplayer' && appState.serverState?.status === 'active') {
-        updatePredictedPosition(deltaTime); // Apply local movement input prediction
-        reconcileWithServer();             // Adjust prediction/rendering based on server state
+        updatePredictedPosition(deltaTime);
+        reconcileWithServer();
     }
 
     // Render the Frame
-    Renderer.drawGame(); // Call the main drawing function
+    Renderer.drawGame(); // Calls function in Renderer IIFE
 
     // Request Next Frame
-    // Continue loop if still connected and game not over/in menu
     if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
         appState.animationFrameId = requestAnimationFrame(gameLoop);
     } else {
-        if(appState.animationFrameId) cleanupLoop(); // Ensure cleanup if loop condition suddenly fails
+        if(appState.animationFrameId) cleanupLoop();
     }
-} // End gameLoop
+}
 
 // Starts the game loop if conditions are met
 function startGameLoop() {
@@ -2077,6 +2161,30 @@ return {
                         appState.serverState = data.state; // Store the new state
                         const newState = appState.serverState; // Alias for clarity
                         const currentPlayerState = newState?.players?.[appState.localPlayerId];
+
+                        // --- Update Visual Snake State ---
+                        const serverSnakeState = newState.snake_state;
+                        if (serverSnakeState) {
+                            snake.isActiveFromServer = serverSnakeState.active;
+                            snake.serverHeadX = serverSnakeState.head_x;
+                            snake.serverHeadY = serverSnakeState.head_y;
+                            snake.serverBaseY = serverSnakeState.base_y;
+                            // If snake just became active visually, ensure segment array starts correctly
+                            if (snake.isActiveFromServer && snake.segments.length === 0) {
+                                snake.segments = [{ x: snake.serverHeadX, y: snake.serverHeadY, time: performance.now() }];
+                            } else if (!snake.isActiveFromServer) {
+                                snake.segments = []; // Clear if inactive
+                            }
+                        }
+                        // --- End Snake Update ---
+
+                        // --- Trigger Screen Shake on Snake Bite (Check Local Player) ---
+                        if (currentPlayerState?.trigger_snake_bite_shake_this_tick) {
+                            const shakeMag = 15.0; // Use constants defined in backend/frontend
+                            const shakeDur = 400.0;
+                            Renderer.triggerShake(shakeMag, shakeDur);
+                        }
+                        // --- End Shake Trigger ---
 
                         // Trigger screen shake if local player took damage
                         if (previousPlayerState && currentPlayerState &&
