@@ -223,8 +223,10 @@
 
         /* --- Canvas --- */
         #canvas-container {
-            flex-grow: 1; display: flex; justify-content: center;
-            align-items: flex-start; min-width: 0;
+            flex-grow: 1; /* Allows it to take up remaining space */
+            display: flex; justify-content: center;
+            align-items: flex-start;
+            min-width: 0; /* Allows shrinking if needed (good practice) */
         }
         #gameCanvas {
             border: 3px solid var(--primary-color); background-color: #a0522d; /* Default bg */
@@ -361,7 +363,7 @@
                 <div class="left-panel-top-group">
                     <div id="player-stats-grid">Loading Stats...</div>
                     <div id="day-night-indicator" style="display: none;">Day --:--</div>
-                    <div id="temperature-indicator" style="text-align: center; margin: 5px 0 10px 0; font-size: 1.0em; padding: 4px; background: rgba(0, 0, 0, 0.3); border-radius: 4px; width: 100%; box-sizing: border-box;">--°C</div>
+                    <div id="temperature-indicator" style="text-align: center; margin: 5px 0 10px 0; font-size: 1.0em; padding: 4px; background: rgba(0, 0, 0, 0.3); border-radius: 4px; width: auto; align-self: stretch; box-sizing: border-box;">--°C</div>
                 </div>
 
             <div class="left-panel-bottom-group">
