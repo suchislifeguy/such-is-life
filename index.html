@@ -57,7 +57,29 @@
             align-items: center; min-height: 100vh; background-color: var(--bg-color);
             font-family: var(--font-family); color: var(--text-color);
         }
+        #loading-screen {
+            position: fixed; /* Cover screen */
+            inset: 0; /* Replaces top/left/width/height:0/100% */
+            background-color: var(--dark-bg); /* Use theme background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--text-color); /* Theme text color */
+            font-family: var(--font-family); /* Theme font */
+            z-index: 9999; /* Highest layer */
+            opacity: 1;
+            /* --- Transition for fade out --- */
+            transition: opacity 0.5s ease-out;
+            /* Ensure clicks don't go through during fade */
+            pointer-events: auto;
+        }
+
         #game-container {
+            /* Initially hide game content */
+            opacity: 0;
+            visibility: hidden;
+            /* --- Transition for fade in --- */
+            transition: opacity 0.4s ease-in 0.2s;
             background-color: var(--secondary-color);
             border: 5px solid var(--container-border);
             border-radius: 15px; padding: 20px; padding-top: 15px;
@@ -238,7 +260,7 @@
         /* --- Game Over Screen --- */
         #game-over-screen {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background-color: rgba(10, 20, 25, 0.9); padding: 30px;
+            background-color: #000000; padding: 30px;
             border: 3px solid var(--player-color); border-radius: 10px;
             text-align: center; z-index: 20; width: 90%; max-width: 400px;
             box-sizing: border-box; display: flex; flex-direction: column; align-items: center;
@@ -263,7 +285,15 @@
     </style>
 </head>
 <body>
-    <div id="game-container">
+    <div id="loading-screen">
+        <div style="text-align: center;">
+            <div style="font-size: 2em; margin-bottom: 15px; color: var(--title-red); text-shadow: 1px 1px 3px black;">SUNDAY KILL</div>
+            <div style="font-size: 1.2em;">Loading... Such is Life.</div>
+            <!-- Optional: You could add a simple spinner CSS animation here too -->
+        </div>
+    </div>
+
+    <div id="game-container"> 
         <div id="top-bar">
             <h1>SUCH IS LIFE</h1>
         </div>
@@ -608,10 +638,35 @@
                 catch (err) { error("WebSocket creation failed:", err); UI.updateStatus('Connection failed. Please refresh.', true); return; }
 
                 socket.onopen = () => {
-                    log('WebSocket connection established.'); appState.isConnected = true; UI.updateStatus('Connected.');
-                    UI.showSection('main-menu-section'); // Show menu only AFTER connection opens
-                    if (onOpenCallback) onOpenCallback();
+                    log('WebSocket connection established.');
+                    appState.isConnected = true;
+                    // Don't update #game-status here, let the menu show first
+
+                    const loadingScreen = document.getElementById('loading-screen');
+                    const gameContainer = DOM.gameContainer; // Use cached DOM ref if available
+
+                    // Trigger fade-out for loading screen
+                    if (loadingScreen) {
+                        loadingScreen.style.opacity = '0';
+                        // Make it non-interactive after starting fade
+                        loadingScreen.style.pointerEvents = 'none';
+                        // Optional: Remove from layout after transition if needed, though opacity=0 usually suffices
+                        // setTimeout(() => { loadingScreen.style.display = 'none'; }, 500); // Match CSS transition time
+                    }
+
+                    // Trigger fade-in for game container
+                    if (gameContainer) {
+                        gameContainer.style.visibility = 'visible';
+                        gameContainer.style.opacity = '1';
+                    }
+
+                    // Now safe to update status and show the menu
+                    UI.updateStatus('Connected. Select Mode.');
+                    UI.showSection('main-menu-section');
+
+                    // if (onOpenCallback) onOpenCallback(); // Keep if used
                 };
+                
                 socket.onmessage = handleServerMessage; // Global handler
                 socket.onerror = (event) => { error('WebSocket Error Event:', event); }; // Limited info typically
                 socket.onclose = (event) => {
