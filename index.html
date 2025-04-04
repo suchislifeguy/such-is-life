@@ -477,7 +477,7 @@
                 // --- Snake Effect State (Visuals driven by Server Logic) ---
         let snake = {
             // Keep existing visual properties: segmentLength, segments, maxSegments, frequency, amplitude, lineWidth
-            segmentLength: 10.0,
+            segmentLength: 15.0,
             segments: [],
             maxSegments: 20,
             frequency: 0.03, // Frequency for wave calculation
@@ -535,7 +535,7 @@
                     // Use time and segment index 'i' for phase, relative to serverBaseY
                     const wavePhase = waveTime - (i * phaseOffsetPerSegment);
                     // Amplitude decreases towards tail
-                    const amplitudeFactor = 1.0 - Math.pow(i / this.segments.length, 1.5);
+                    const amplitudeFactor = Math.pow(i / this.segments.length, power)
                     const targetWaveY = this.serverBaseY + Math.sin(wavePhase) * this.amplitude * amplitudeFactor;
 
                     // 4. Blend the target Y: Use the following logic for X, but blend the wave Y
