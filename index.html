@@ -426,14 +426,6 @@
             <button id="gameOverBackBtn">Back to Menu</button>
         </div> <!-- End of game-over-screen -->
 
-    </div> <!-- END of game-container -->
-
-        <!-- Game Over Screen -->
-        <div id="game-over-screen">
-            <h2>Game Over, Mate!</h2>
-            <div id="final-stats"></div>
-            <button id="gameOverBackBtn">Back to Menu</button>
-        </div>
 
     </div>
 
@@ -2068,14 +2060,15 @@ return {
     }
 
     if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
-        // If the reason for stopping is being in the menu, update the status text.
-        // The game over status/UI is now handled *only* by the 'game_over_notification' message handler.
-        if (appState.mode === 'menu') {
-            UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
-        }
-        // Always stop the loop if any of these conditions (menu, disconnected, game over flag) are true.
-        cleanupLoop();
-        return; // Exit the loop function immediately.
+            if (appState.serverState?.game_over) {
+                UI.updateStatus("Game Over!");
+                UI.showGameOver(appState.serverState);
+            }
+            else if (appState.mode === 'menu') {
+                UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
+            }
+            cleanupLoop();
+            return;
     }
 
     if (!appState.serverState && appState.mode !== 'singleplayer') {
