@@ -645,7 +645,7 @@
                 allSections.forEach(s => { if(s) s.style.display = 'none'; });
                 const sectionToShow = DOM[sectionId] || document.getElementById(sectionId);
                 if (sectionToShow) {
-                    sectionToShow.style.display = (sectionId === 'game-area') ? 'flex' : 'block'; // Use flex for game area
+                    sectionToShow.style.display = (sectionId === 'game-area' || sectionId === 'game-over-screen') ? 'flex' : 'block';
                     log(`UI: Showing section: ${sectionId}`);
                     DOM.gameContainer.classList.toggle('in-game', gameSections.includes(sectionId));
                 } else {
