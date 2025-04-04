@@ -361,11 +361,10 @@
                     <div id="player-stats-grid">Loading Stats...</div>
                     <div id="day-night-indicator" style="display: none;">Day --:--</div>
                 </div>
-                <div class="left-panel-bottom-group">
-                    <button id="leaveGameBtn">Leave Game</button>
-                    <div id="chat-log"></div>
-                    <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="100">
-                    <button id="sendChatBtn">Send</button>
+                <div class="left-panel-top-group">
+                    <div id="player-stats-grid">Loading Stats...</div>
+                    <div id="day-night-indicator" style="display: none;">Day --:--</div>
+                    <div id="temperature-indicator" style="text-align: center; margin: 5px 0 10px 0; font-size: 1.0em; padding: 4px; background: rgba(0, 0, 0, 0.3); border-radius: 4px;">--°C</div>
                 </div>
             </div>
 
@@ -464,6 +463,9 @@
             previousServerState: null,  // State before the previous one (for interpolation edge cases)
             lastLoopTime: null,         // Timestamp of the last game loop iteration
             lastStateReceiveTime: performance.now(), // Timestamp when last state was received
+            currentTemp: null,
+            isRaining: false,
+            isDustStorm: false,        
         };
 
         // --- Local Effects State ---
@@ -711,8 +713,38 @@
                 showSection('game-over-screen'); // Use showSection to handle hiding others
             }
 
-            return { showSection, updateStatus, updateHUD, addChatMessage, updateCountdown, updateDayNight, showGameOver };
-        })();
+            function updateEnvironmentDisplay() {
+                const tempIndicator = document.getElementById('temperature-indicator');
+                if (!tempIndicator) { error("UI Error: #temperature-indicator not found!"); return; }
+
+                if (appState.currentTemp === null || appState.serverState?.status !== 'active') {
+                    tempIndicator.style.display = 'none'; // Hide if not active or no temp data
+                    return;
+                }
+
+                tempIndicator.style.display = 'block'; // Show if active
+                const temp = appState.currentTemp;
+                let icon = '';
+                // Determine Icon (Simple version)
+                if (appState.isRaining) icon = '💧';
+                else if (appState.isDustStorm) icon = '🌪️';
+                else if (temp > 35) icon = '🔥'; // Scorching
+                else if (temp > 25) icon = '☀️'; // Hot
+                else if (temp < 0) icon = '🥶'; // Freezing
+                else if (temp < 10) icon = '❄️'; // Cold
+                else icon = '😊'; // Temperate
+
+                tempIndicator.innerHTML = `${temp.toFixed(0)}°C ${icon}`;
+            }
+            // --- End NEW Function ---
+
+            // Make sure to expose the new function
+            return {
+                 showSection, updateStatus, updateHUD, addChatMessage,
+                 updateCountdown, updateDayNight, showGameOver,
+                 updateEnvironmentDisplay // <-- ADD THIS to return object
+            };
+        })(); // End UI module IIFE
 
         // --- Network Module ---
         const Network = (() => {
@@ -1128,6 +1160,8 @@
                 const flashSize = flashSizeBase + Math.random() * flashSizeVariation;
                 ctx.fillStyle = muzzleFlashColor; ctx.beginPath(); ctx.arc(flashX, flashY, flashSize / 2, 0, Math.PI * 2); ctx.fill();
             }
+
+
 
             // Draws a red vignette effect around the screen edges when player health is low
             function drawDamageVignette(intensity) {
@@ -1699,6 +1733,43 @@
                      ctx.drawImage(offscreenCanvas, 0, 0);
                 }
 
+
+
+                // --- NEW: Apply Background Tint based on Temperature ---
+                let tintColor = null;
+                let tintAlpha = 0.0;
+                const currentTemp = appState.currentTemp; // Use value stored in appState
+
+                if (currentTemp !== null) {
+                    const TEMP_FREEZING_CLIENT = 0.0; // Match server constants if possible
+                    const TEMP_COLD_CLIENT = 10.0;
+                    const TEMP_TEMPERATE_CLIENT = 25.0;
+                    const TEMP_HOT_CLIENT = 35.0;
+                    const MAX_TINT_ALPHA = 0.25; // Max opacity for tint
+
+                    if (currentTemp < TEMP_FREEZING_CLIENT) {
+                        tintColor = 'rgba(100, 150, 255, 1)'; // Cyan/Blue
+                        tintAlpha = Math.min(MAX_TINT_ALPHA, MAX_TINT_ALPHA * ((TEMP_FREEZING_CLIENT - currentTemp) / 10.0)); // Scale alpha below freezing
+                    } else if (currentTemp < TEMP_COLD_CLIENT) {
+                        tintColor = 'rgba(120, 160, 240, 1)'; // Lighter Blue
+                        tintAlpha = Math.min(MAX_TINT_ALPHA * 0.6, MAX_TINT_ALPHA * 0.6 * ((TEMP_COLD_CLIENT - currentTemp) / (TEMP_COLD_CLIENT - TEMP_FREEZING_CLIENT)));
+                    } else if (currentTemp > TEMP_HOT_CLIENT) { // Hot/Scorching use same tint logic here
+                        tintColor = 'rgba(255, 150, 50, 1)'; // Orange/Red
+                        tintAlpha = Math.min(MAX_TINT_ALPHA, MAX_TINT_ALPHA * ((currentTemp - TEMP_HOT_CLIENT) / 10.0)); // Scale alpha above hot
+                    } else if (currentTemp > TEMP_TEMPERATE_CLIENT) {
+                        tintColor = 'rgba(255, 180, 80, 1)'; // Yellow/Orange
+                        tintAlpha = Math.min(MAX_TINT_ALPHA * 0.6, MAX_TINT_ALPHA * 0.6 * ((currentTemp - TEMP_TEMPERATE_CLIENT) / (TEMP_HOT_CLIENT - TEMP_TEMPERATE_CLIENT)));
+                    }
+                }
+
+                if (tintColor && tintAlpha > 0.01) {
+                    ctx.globalAlpha = tintAlpha;
+                    ctx.fillStyle = tintColor;
+                    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                    ctx.globalAlpha = 1.0; // Reset alpha
+                }
+                // --- End Background Tint ---
+
                 // Draw decorative snake effect (runs client-side only)
                 drawSnake();
 
@@ -1746,6 +1817,35 @@
                 drawSpeechBubbles(stateToRender.players);
                 drawEnemySpeechBubbles(stateToRender.enemies);
                 drawDamageTexts(stateToRender.damage_texts);
+
+                ctx.globalAlpha = 0.4; // Adjust alpha for overlays
+                if (appState.isRaining) {
+                    ctx.fillStyle = 'rgba(50, 80, 150, 0.4)'; // Blueish tint for rain overlay
+                    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                    // Add simple rain particle logic here if desired (keep it minimal)
+                } else if (appState.isDustStorm) {
+                    ctx.fillStyle = 'rgba(180, 140, 90, 0.35)'; // Brownish tint for dust overlay
+                    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                    // Add simple dust particle logic here if desired (keep it minimal)
+                }
+                 // --- NEW Heat Haze / Frost (Simple Overlay Version) ---
+                 // More advanced would use shaders
+                 const currentTempForOverlay = appState.currentTemp; // Use current temp
+                 if(currentTempForOverlay !== null) {
+                     if (currentTempForOverlay > TEMP_HOT_CLIENT) { // Hot/Scorching Haze
+                        const hazeIntensity = Math.min(0.15, 0.05 + (currentTempForOverlay - TEMP_HOT_CLIENT) * 0.01);
+                        ctx.fillStyle = `rgba(255, 180, 100, ${hazeIntensity.toFixed(2)})`;
+                        // Simple shimmer effect by drawing slightly offset? Needs experimentation.
+                        // Or just the tint might be enough initially. ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                     } else if (currentTempForOverlay < TEMP_COLD_CLIENT) { // Cold/Freezing Frost
+                        const frostIntensity = Math.min(0.2, 0.05 + (TEMP_COLD_CLIENT - currentTempForOverlay) * 0.015);
+                        ctx.fillStyle = `rgba(180, 200, 255, ${frostIntensity.toFixed(2)})`;
+                        // Draw subtle frost border? ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                     }
+                 }
+                 // --- End Heat Haze / Frost ---
+
+                ctx.globalAlpha = 1.0; // Reset alpha after overlays
 
                 // 7. Restore Screen Shake Transform (Before drawing vignette)
                 if (shakeApplied) { ctx.restore(); }
@@ -2194,6 +2294,12 @@ return {
                         appState.serverState = data.state; // Store the new state
                         const newState = appState.serverState; // Alias for clarity
                         const currentPlayerState = newState?.players?.[appState.localPlayerId];
+
+                        if (typeof newState.current_temperature === 'number') {
+                            appState.currentTemp = newState.current_temperature;
+                        }
+                        appState.isRaining = newState.is_raining ?? false;
+                        appState.isDustStorm = newState.is_dust_storm ?? false
 
                         // --- Update Visual Snake State ---
                         const serverSnakeState = newState.snake_state;
