@@ -339,32 +339,34 @@
 </head>
 <body>
     <div id="loading-screen">
+        <!-- Content of loading screen goes here -->
         <div style="text-align: center;">
-            <!-- Themed Title -->
             <div style="font-size: 2.2em; margin-bottom: 5px; color: var(--accent-gold); text-shadow: 2px 2px 4px #333;">KELLY GANG</div>
             <div style="font-size: 0.9em; margin-bottom: 20px; color: var(--dusty-green);">VICTORIA, 1878</div>
-
-            <!-- Simple CSS Spinner -->
             <div class="loader-spinner" style="margin-bottom: 20px;"></div>
-
-            <!-- Loading Text -->
             <div style="font-size: 1.1em;">Loading... Such is Life.</div>
         </div>
     </div>
 
-    <div id="game-container"> 
+    <!-- Main Game Container (Holds all interactive UI elements) -->
+    <div id="game-container">
+
+        <!-- Top Bar (Always visible within game-container) -->
         <div id="top-bar">
-            <h1>SUCH IS LIFE</h1>
+             <h1>SUCH IS LIFE</h1>
         </div>
+        <!-- Game Status (Always visible within game-container) -->
         <div id="game-status">Initializing...</div>
 
-        <!-- Menu Sections -->
+        <!-- Menu Sections (Direct children of game-container, siblings to each other) -->
         <div id="main-menu-section" class="menu-section">
+            <!-- Main menu buttons go here -->
             <h2>Main Menu</h2>
             <button id="singlePlayerBtn">Single Player</button>
             <button id="multiplayerBtn">Multiplayer</button>
         </div>
         <div id="multiplayer-menu-section" class="menu-section">
+            <!-- Multiplayer menu buttons go here -->
             <h2>Multiplayer</h2>
             <p style="margin-bottom: 5px;">Choose number of players:</p>
             <button id="hostGameBtn2">Host 2 Player Game</button>
@@ -373,8 +375,9 @@
             <hr style="margin: 20px auto; width: 80%; border-color: var(--primary-color);">
             <button id="showJoinUIBtn">Join Game (Enter Code)</button>
             <button class="back-button" onclick="showSection('main-menu-section')">Back</button>
-       </div>
+        </div>
         <div id="host-wait-section" class="menu-section">
+             <!-- Host waiting elements go here -->
              <h2>Hosting Game</h2>
              <p>Share this code with your mate:</p>
              <div id="game-code-display">------</div>
@@ -382,6 +385,7 @@
              <button id="cancelHostBtn">Cancel Hosting</button>
         </div>
         <div id="join-code-section" class="menu-section">
+             <!-- Join code input elements go here -->
              <h2>Join Game</h2>
              <p>Enter the 6-character game code:</p>
              <input type="text" id="gameIdInput" placeholder="ABCDEF" maxlength="6">
@@ -389,35 +393,40 @@
              <button class="back-button" onclick="showSection('multiplayer-menu-section')">Back</button>
         </div>
 
-        <!-- Game Area -->
+        <!-- Game Area (Direct child of game-container, sibling to menus/game over) -->
         <div id="game-area">
-            <div id="game-area"> <!-- START Game Area -->
+            <!-- Left Panel -->
+            <div id="left-panel">
+                 <div class="left-panel-top-group">
+                    <div id="player-stats-grid">Loading Stats...</div>
+                    <div id="day-night-indicator" style="display: none;">Day --:--</div>
+                    <div id="temperature-indicator">--°C</div>
+                 </div>
+                 <div class="left-panel-bottom-group">
+                    <button id="leaveGameBtn">Leave Game</button>
+                    <div id="chat-log"></div>
+                    <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="100">
+                    <button id="sendChatBtn">Send</button>
+                 </div>
+            </div>
+            <!-- Canvas Container -->
+            <div id="canvas-container">
+                 <div style="position: relative;">
+                    <canvas id="gameCanvas" width="1600" height="900"></canvas>
+                    <div id="countdown"></div>
+                 </div>
+            </div>
+        </div> <!-- End of game-area -->
 
-                <!-- === Left Panel (First Child of game-area) === -->
-                <div id="left-panel">
-                    <div class="left-panel-top-group">
-                        <div id="player-stats-grid">Loading Stats...</div>
-                        <div id="day-night-indicator" style="display: none;">Day --:--</div>
-                        <!-- Temperature Indicator added inside top group -->
-                        <div id="temperature-indicator">--°C</div>
-                    </div> <!-- End of Top Group -->
-    
-                    <div class="left-panel-bottom-group">
-                        <button id="leaveGameBtn">Leave Game</button>
-                        <div id="chat-log"></div>
-                        <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="100">
-                        <button id="sendChatBtn">Send</button>
-                    </div> <!-- End of Bottom Group -->
-                </div> <!-- === END of Left Panel === -->
-    
-                <!-- === Canvas Container (Second Child of game-area, SIBLING to left-panel) === -->
-                <div id="canvas-container">
-                    <div style="position: relative;"> <!-- Wrapper for countdown -->
-                        <canvas id="gameCanvas" width="1600" height="900"></canvas>
-                        <div id="countdown"></div>
-                    </div>
-                </div> <!-- === END of Canvas Container === -->
-        </div>
+        <!-- Game Over Screen (Direct child of game-container, sibling to game-area/menus) -->
+        <!-- MUST NOT be inside game-area -->
+        <div id="game-over-screen">
+            <h2>Game Over, Mate!</h2>
+            <div id="final-stats"><!-- Final stats populated by JS --></div>
+            <button id="gameOverBackBtn">Back to Menu</button>
+        </div> <!-- End of game-over-screen -->
+
+    </div> <!-- END of game-container -->
 
         <!-- Game Over Screen -->
         <div id="game-over-screen">
