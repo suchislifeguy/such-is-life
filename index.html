@@ -149,8 +149,9 @@
             overflow-y: auto; overflow-x: hidden;
         }
         #left-panel .left-panel-top-group { /* Holds stats, day/night indicator */
-            flex-grow: 1; flex-shrink: 1; display: flex; flex-direction: column;
-        }
+            flex-grow: 0; /* Prevent this group from growing unnecessarily */
+            flex-shrink: 1; display: flex; flex-direction: column;
+}
         #left-panel .left-panel-bottom-group { /* Holds leave btn, chat */
             flex-shrink: 0; display: flex; flex-direction: column;
         }
@@ -360,8 +361,7 @@
                 <div class="left-panel-top-group">
                     <div id="player-stats-grid">Loading Stats...</div>
                     <div id="day-night-indicator" style="display: none;">Day --:--</div>
-                    <div id="temperature-indicator" style="text-align: center; margin: 5px 0 10px 0; font-size: 1.0em; padding: 4px; background: rgba(0, 0, 0, 0.3); border-radius: 4px;">--°C</div>
-                </div>
+                    <div id="temperature-indicator" style="text-align: center; margin: 5px 0 10px 0; font-size: 1.0em; padding: 4px; background: rgba(0, 0, 0, 0.3); border-radius: 4px; width: 100%; box-sizing: border-box;">--°C</div>                </div>
             </div>
 
             <div class="left-panel-bottom-group">
@@ -398,6 +398,14 @@
         const INPUT_SEND_INTERVAL = 33; // How often movement input is sent (ms)
         const RECONNECT_DELAY = 3000; // Delay before trying to reconnect (ms)
 
+        // --- NEW Temperature Threshold Constants ---
+        const TEMP_FREEZING_CLIENT = 0.0;
+        const TEMP_COLD_CLIENT = 10.0;
+        const TEMP_TEMPERATE_CLIENT = 25.0;
+        const TEMP_HOT_CLIENT = 35.0;
+        // Note: Scorching (> 35) is handled implicitly by checks
+        const MAX_TINT_ALPHA = 0.25; // Max opacity for tint
+
         // Default entity values (primarily for initial rendering/prediction before server state)
         const PLAYER_DEFAULTS = { width: 25, height: 48, max_health: 100, base_speed: 150 };
         const ENEMY_DEFAULTS = { width: 20, height: 40, max_health: 50 };
@@ -411,7 +419,6 @@
 
         const ENEMY_TYPE_CHASER = 'chaser';
         const ENEMY_TYPE_SHOOTER = 'shooter';
-
 
         // --- Utility Functions ---
         function getCssVar(varName) { return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || ''; }
