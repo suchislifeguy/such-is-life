@@ -1554,13 +1554,14 @@
         const Game = (() => {
 
 // --- Game Start/Join Actions ---
+
 function startSinglePlayer() {
     log("Requesting Single Player game...");
-    appState.mode = 'singleplayer';
-    resetClientState(false); // Reset state but don't show menu yet
+    resetClientState(false); // Reset core state but *don't* set mode to menu or show menu
+    appState.mode = 'singleplayer'; // Set the mode *after* resetting
     UI.updateStatus("Starting Single Player...");
     Network.sendMessage({ type: 'start_single_player' });
-    // Loop start is triggered by 'sp_game_started' server message
+    // Server response 'sp_game_started' will trigger UI change and loop start
 }
 
 function joinMultiplayer() {
@@ -1569,34 +1570,53 @@ function joinMultiplayer() {
         UI.updateStatus('Invalid Game ID format.', true); return;
      }
     log(`Attempting to join game: ${gameId}`);
-    appState.mode = 'multiplayer-client';
-    resetClientState(false);
+    resetClientState(false); // Reset core state
+    appState.mode = 'multiplayer-client'; // Set the mode *after* resetting
     UI.updateStatus(`Joining game ${gameId}...`);
     Network.sendMessage({ type: 'join_game', game_id: gameId });
-     // Loop start is triggered by 'game_joined' server message
+     // Server response 'game_joined' will trigger UI change and loop start
 }
 
+// Initiates hosting a multiplayer game
+function hostMultiplayer(maxPlayers) {
+    log(`Requesting to Host MP game for ${maxPlayers} players...`);
+    if (![2, 3, 4].includes(maxPlayers)) {
+        error("Invalid max player count requested:", maxPlayers); UI.updateStatus("Invalid player count.", true); return;
+    }
+    resetClientState(false); // Reset core state
+    appState.mode = 'multiplayer-host'; // Set the mode *after* resetting
+    UI.updateStatus(`Creating ${maxPlayers}-player game...`);
+    Network.sendMessage({ type: 'create_game', max_players: maxPlayers });
+    // Server response 'game_created' will trigger UI change (host waiting screen)
+}
+
+
 // --- In-Game Actions ---
+
 function leaveGame() {
     log("Leaving current game / Cancelling host...");
-    Network.closeConnection(1000, "User action (leave/cancel)"); // Normal closure code
-    resetClientState(true); // Reset state and return to main menu
+    Network.closeConnection(1000, "User action (leave/cancel)"); // Close connection normally
+    resetClientState(true); // Reset state fully and return to main menu UI
 }
 
 function sendChatMessage() {
     const message = DOM.chatInput.value.trim();
     if (message && appState.isConnected && appState.currentGameId && appState.localPlayerId) {
         Network.sendMessage({ type: 'player_chat', message: message });
-        DOM.chatInput.value = ''; // Clear input field
+        DOM.chatInput.value = ''; // Clear input field after sending
     } else {
         log("Cannot send chat: Not connected or not in a game.");
+        // Optionally provide UI feedback if desired
     }
 }
 
-// Resets client-side game state variables and UI elements
+/**
+ * Resets client-side game state variables, UI elements, and stops the game loop.
+ * @param {boolean} showMenu - If true, also resets appState.mode to 'menu' and shows the main menu UI.
+ */
 function resetClientState(showMenu = true) {
     log(`Resetting client state. Show Menu: ${showMenu}`);
-    cleanupLoop(); // Stop existing game loop first
+    cleanupLoop(); // Stop existing game loop and input listeners first
 
     // Reset core game state variables
     appState.localPlayerId = null;
@@ -1605,12 +1625,12 @@ function resetClientState(showMenu = true) {
     appState.lastServerState = null;
     appState.previousServerState = null;
     appState.maxPlayersInGame = null;
-    appState.mode = 'menu'; // <<< Explicitly set mode back to menu
+    // appState.mode is NOT reset here; it's handled by the calling function or if showMenu is true
     appState.predictedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
     appState.renderedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
     appState.lastLoopTime = null;
 
-    // Clear local effects state
+    // Clear local visual effects state
     localPlayerMuzzleFlash = { active: false, endTime: 0, aimDx: 0, aimDy: 0 };
     hitPauseFrames = 0;
     activeSpeechBubbles = {};
@@ -1624,16 +1644,27 @@ function resetClientState(showMenu = true) {
     DOM.countdownDiv.style.display = 'none';
     DOM.dayNightIndicator.style.display = 'none';
     DOM.gameOverScreen.style.display = 'none';
-    // Clear player stats grid
     const gridContainer = document.getElementById('player-stats-grid');
     if (gridContainer) gridContainer.innerHTML = 'Loading Stats...';
 
-    // Show main menu only if explicitly requested
+    // Reset mode and show main menu only if explicitly requested (e.g., leaving game, game over button)
     if (showMenu) {
+        appState.mode = 'menu'; // <<< Set mode back to menu ONLY when returning to menu
         UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
-        UI.showSection('main-menu-section'); // <<< Ensure this is called last
+        UI.showSection('main-menu-section'); // Show the main menu UI
     }
 }
+
+
+// Expose public functions of the Game module
+return {
+     resetClientState,
+     startGameLoop, // Needed by handleServerMessage
+     cleanupLoop, // Needed by handleServerMessage
+     sendChatMessage, // Needed by button listener
+     initListeners, // Called on window load
+     getInterpolatedState // Needed by Renderer.drawGame
+};
 
  // --- Game Loop Management ---
 
@@ -1869,18 +1900,6 @@ function cleanupLoop() {
             } else { log(`Warning: Back button target section invalid: ${targetId}`); }
         } else { log("Warning: Back button found without valid target in onclick:", btn); }
     });
-}
-
-// Initiates hosting a multiplayer game
-function hostMultiplayer(maxPlayers) {
-    log(`Requesting to Host MP game for ${maxPlayers} players...`);
-    if (![2, 3, 4].includes(maxPlayers)) { // Basic client-side validation
-        error("Invalid max player count requested:", maxPlayers); UI.updateStatus("Invalid player count.", true); return;
-    }
-    appState.mode = 'multiplayer-host'; resetClientState(false);
-    UI.updateStatus(`Creating ${maxPlayers}-player game...`);
-    Network.sendMessage({ type: 'create_game', max_players: maxPlayers });
-    // UI transition happens on 'game_created' server response
 }
 
 // Expose public functions of the Game module
