@@ -535,7 +535,7 @@
                     // Use time and segment index 'i' for phase, relative to serverBaseY
                     const wavePhase = waveTime - (i * phaseOffsetPerSegment);
                     // Amplitude decreases towards tail
-                    const amplitudeFactor = Math.pow(i / this.segments.length, power)
+                    const amplitudeFactor = Math.pow(i / this.segments.length, 1.5); 
                     const targetWaveY = this.serverBaseY + Math.sin(wavePhase) * this.amplitude * amplitudeFactor;
 
                     // 4. Blend the target Y: Use the following logic for X, but blend the wave Y
