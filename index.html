@@ -140,6 +140,26 @@
             align-items: stretch; width: 100%;
         }
 
+        /* --- Temperature Indicator Style --- */
+        #left-panel #temperature-indicator {
+            text-align: center;
+            margin: 5px 0 10px 0; /* Adjust spacing as needed */
+            font-size: 1.0em; /* Slightly smaller than day/night */
+            padding: 4px;
+            background: rgba(0, 0, 0, 0.3); /* Consistent background style */
+            border-radius: 4px;
+            width: auto; /* Let content size it, or use width: 100% if you want full width */
+            align-self: center; /* Center horizontally if width is auto */
+            /* OR use these if you want it to span the width like day/night: */
+            /* width: 100%; */
+            /* align-self: stretch; */
+            box-sizing: border-box; /* Important if using width: 100% and padding */
+            color: var(--text-color);
+            flex-shrink: 0; /* Prevent shrinking */
+            display: block; /* Or 'flex' if needed later, initially block is fine */
+            /* You might want to add 'display: none;' initially and control via JS */
+        }
+
         /* --- Left Panel --- */
         #left-panel {
             width: 360px; max-height: 910px; flex-shrink: 0;
@@ -148,20 +168,27 @@
             color: var(--text-color); font-size: 13px;
             overflow-y: auto; overflow-x: hidden;
         }
-        #left-panel .left-panel-top-group { /* Holds stats, day/night indicator */
-            flex-grow: 0; /* Prevent this group from growing unnecessarily */
-            flex-shrink: 1; display: flex; flex-direction: column;
-}
+        #left-panel .left-panel-top-group { /* Holds stats, day/night indicator, TEMP */
+            /* NOTE: Changed flex-grow from 1 to 0 to prevent it taking all space */
+            flex-grow: 0; 
+            flex-shrink: 1; /* Can shrink if needed */
+            display: flex; 
+            flex-direction: column;
+        }
         #left-panel .left-panel-bottom-group { /* Holds leave btn, chat */
-            flex-shrink: 0; display: flex; flex-direction: column;
+            flex-shrink: 0; 
+            display: flex; 
+            flex-direction: column;
+            margin-top: auto; /* Push bottom group to the actual bottom */
         }
 
-        /* Player Stats Grid */
+        /* --- Player Stats Grid (Keep existing style) --- */
         #player-stats-grid {
             display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
             width: 100%; box-sizing: border-box; margin-bottom: 15px; flex-shrink: 0;
         }
-        .player-stats-box {
+        /* ... (keep all existing .player-stats-box styles) ... */
+         .player-stats-box {
             display: block; color: var(--text-color); font-size: 14px;
             background: rgba(10, 20, 25, 0.6); padding: 8px 10px; border-radius: 4px;
             text-align: left; border: 1px solid var(--dusty-green); box-sizing: border-box;
@@ -181,18 +208,22 @@
             color: var(--dusty-green); vertical-align: top;
         }
 
+        /* --- Day/Night Indicator (Keep existing style) --- */
         #left-panel #day-night-indicator {
             display: none; text-align: center; margin: 0 0 15px 0;
             font-size: 1.1em; padding: 5px; background: rgba(0, 0, 0, 0.5);
             border-radius: 5px; box-sizing: border-box; width: 100%;
             color: var(--text-color); flex-shrink: 0;
         }
+        
+        /* --- Leave Button (Keep existing style) --- */
         #left-panel #leaveGameBtn {
-            display: block; width: 100%; margin-top: auto; margin-bottom: 15px;
+            /* Removed margin-top: auto; */ /* This is now handled by the parent .left-panel-bottom-group */
+            display: block; width: 100%; margin-bottom: 15px; 
             padding: 12px 10px; font-size: 1rem; box-sizing: border-box; flex-shrink: 0;
         }
 
-        /* Chat */
+        /* --- Chat Styles (Keep existing) --- */
         #left-panel #chat-log {
             height: 190px; overflow-y: scroll; border: 1px solid var(--primary-color);
             margin-bottom: 8px; padding: 5px; text-align: left;
@@ -200,6 +231,7 @@
             width: 100%; transition: background-color 0.5s ease, border-color 0.5s ease;
             color: var(--dark-text); box-sizing: border-box; flex-shrink: 0;
         }
+        /* ... (keep all other existing chat styles) ... */
         #left-panel #chat-log div { margin-bottom: 3px; word-wrap: break-word; }
         #left-panel #chat-log .my-message { color: var(--bullet-player-color); }
         #left-panel #chat-log .other-message { color: var(--text-color); }
@@ -363,7 +395,7 @@
                 <div class="left-panel-top-group">
                     <div id="player-stats-grid">Loading Stats...</div>
                     <div id="day-night-indicator" style="display: none;">Day --:--</div>
-                    <div id="temperature-indicator" style="text-align: center; margin: 5px 0 10px 0; font-size: 1.0em; padding: 4px; background: rgba(0, 0, 0, 0.3); border-radius: 4px; width: auto; align-self: stretch; box-sizing: border-box;">--°C</div>
+                    <div id="temperature-indicator">--°C</div>
                 </div>
 
             <div class="left-panel-bottom-group">
