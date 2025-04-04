@@ -353,6 +353,10 @@
         const PLAYER_STATUS_DOWN = 'down';
         const PLAYER_STATUS_DEAD = 'dead';
 
+        const ENEMY_TYPE_CHASER = 'chaser';
+        const ENEMY_TYPE_SHOOTER = 'shooter';
+
+
         // --- Utility Functions ---
         function getCssVar(varName) { return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || ''; }
         function lerp(start, end, amount) { return start + (end - start) * amount; }
