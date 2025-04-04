@@ -391,26 +391,32 @@
 
         <!-- Game Area -->
         <div id="game-area">
-            <div id="left-panel">
-                <div class="left-panel-top-group">
-                    <div id="player-stats-grid">Loading Stats...</div>
-                    <div id="day-night-indicator" style="display: none;">Day --:--</div>
-                    <div id="temperature-indicator">--°C</div>
-                </div>
+            <div id="game-area"> <!-- START Game Area -->
 
-            <div class="left-panel-bottom-group">
-                <button id="leaveGameBtn">Leave Game</button>
-                <div id="chat-log"></div>
-                <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="100">
-                <button id="sendChatBtn">Send</button>
-            </div>
-
-            <div id="canvas-container">
-                <div style="position: relative;"> <!-- Wrapper for countdown -->
-                    <canvas id="gameCanvas" width="1600" height="900"></canvas>
-                    <div id="countdown"></div>
-                </div>
-            </div>
+                <!-- === Left Panel (First Child of game-area) === -->
+                <div id="left-panel">
+                    <div class="left-panel-top-group">
+                        <div id="player-stats-grid">Loading Stats...</div>
+                        <div id="day-night-indicator" style="display: none;">Day --:--</div>
+                        <!-- Temperature Indicator added inside top group -->
+                        <div id="temperature-indicator">--°C</div>
+                    </div> <!-- End of Top Group -->
+    
+                    <div class="left-panel-bottom-group">
+                        <button id="leaveGameBtn">Leave Game</button>
+                        <div id="chat-log"></div>
+                        <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="100">
+                        <button id="sendChatBtn">Send</button>
+                    </div> <!-- End of Bottom Group -->
+                </div> <!-- === END of Left Panel === -->
+    
+                <!-- === Canvas Container (Second Child of game-area, SIBLING to left-panel) === -->
+                <div id="canvas-container">
+                    <div style="position: relative;"> <!-- Wrapper for countdown -->
+                        <canvas id="gameCanvas" width="1600" height="900"></canvas>
+                        <div id="countdown"></div>
+                    </div>
+                </div> <!-- === END of Canvas Container === -->
         </div>
 
         <!-- Game Over Screen -->
