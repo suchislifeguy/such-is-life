@@ -42,8 +42,8 @@
 
             /* Config & Text */
             --font-family: 'Courier New', monospace;
-            --reconciliation-threshold: 25; /* Increased to reduce snapping frequency */
-            --lerp-factor: 0.1;            /* Slightly increased for faster visual smoothing */
+            --reconciliation-threshold: 35; /* Increased to reduce snapping frequency */
+            --lerp-factor: 0.15;            /* Slightly increased for faster visual smoothing */
             --damage-text-color: #FFFFFF;
             --damage-text-crit-color: var(--accent-gold);
             --damage-text-font-size: 14px;
@@ -898,7 +898,7 @@
         // --- Rendering Module ---
         const Renderer = (() => {
             const ctx = DOM.ctx; // Main canvas context
-            const lerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.1; // Used in Game module, not directly here
+            const lerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.15; // Used in Game module, not directly here
 
             // --- Offscreen Canvas for Background Rendering ---
             const offscreenCanvas = document.createElement('canvas');
@@ -1956,8 +1956,8 @@ function reconcileWithServer() {
     const renderedPos = appState.renderedPlayerPos;
     const dist = distance(predictedPos.x, predictedPos.y, serverPos.x, serverPos.y);
 
-    const snapThreshold = (parseFloat(getCssVar('--reconciliation-threshold')) || 25); // Using default 25 now
-    const renderLerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.1; // Using default 0.1 now
+    const snapThreshold = (parseFloat(getCssVar('--reconciliation-threshold')) || 35); // Using default 25 now
+    const renderLerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.15; // Using default 0.1 now
 
     if (dist > snapThreshold) {
         // Snap Prediction: Error is too large, force prediction to match server
