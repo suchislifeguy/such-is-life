@@ -57,9 +57,30 @@
             align-items: center; min-height: 100vh; background-color: var(--bg-color);
             font-family: var(--font-family); color: var(--text-color);
         }
+        
+        /* --- Spinner Animation --- */
+        .loader-spinner {
+        border: 4px solid rgba(255, 255, 255, 0.2); /* Light border */
+        border-left-color: var(--primary-color); /* Spinner color - dusty green */
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        /* Center the spinner if needed (using margin auto in HTML might suffice) */
+        margin-left: auto;
+        margin-right: auto;
+        }
+
+        @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+        }
+
+        /* --- Ensure existing loading screen styles are present --- */
         #loading-screen {
             position: fixed; /* Cover screen */
-            inset: 0; /* Replaces top/left/width/height:0/100% */
+            inset: 0;
             background-color: var(--dark-bg); /* Use theme background */
             display: flex;
             justify-content: center;
@@ -68,9 +89,7 @@
             font-family: var(--font-family); /* Theme font */
             z-index: 9999; /* Highest layer */
             opacity: 1;
-            /* --- Transition for fade out --- */
             transition: opacity 0.5s ease-out;
-            /* Ensure clicks don't go through during fade */
             pointer-events: auto;
         }
 
@@ -78,7 +97,6 @@
             /* Initially hide game content */
             opacity: 0;
             visibility: hidden;
-            /* --- Transition for fade in --- */
             transition: opacity 0.4s ease-in 0.2s;
             background-color: var(--secondary-color);
             border: 5px solid var(--container-border);
@@ -287,9 +305,15 @@
 <body>
     <div id="loading-screen">
         <div style="text-align: center;">
-            <div style="font-size: 2em; margin-bottom: 15px; color: var(--title-red); text-shadow: 1px 1px 3px black;">SUNDAY KILL</div>
-            <div style="font-size: 1.2em;">Loading... Such is Life.</div>
-            <!-- Optional: You could add a simple spinner CSS animation here too -->
+            <!-- Themed Title -->
+            <div style="font-size: 2.2em; margin-bottom: 5px; color: var(--accent-gold); text-shadow: 2px 2px 4px #333;">KELLY GANG</div>
+            <div style="font-size: 0.9em; margin-bottom: 20px; color: var(--dusty-green);">VICTORIA, 1878</div>
+
+            <!-- Simple CSS Spinner -->
+            <div class="loader-spinner" style="margin-bottom: 20px;"></div>
+
+            <!-- Loading Text -->
+            <div style="font-size: 1.1em;">Loading... Such is Life.</div>
         </div>
     </div>
 
@@ -666,7 +690,7 @@
 
                     // if (onOpenCallback) onOpenCallback(); // Keep if used
                 };
-                
+
                 socket.onmessage = handleServerMessage; // Global handler
                 socket.onerror = (event) => { error('WebSocket Error Event:', event); }; // Limited info typically
                 socket.onclose = (event) => {
