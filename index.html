@@ -769,24 +769,16 @@
             const tempIndicator = document.getElementById('temperature-indicator');
                 if (!tempIndicator) { error("UI Error: #temperature-indicator not found!"); return; }
 
-                if (appState.currentTemp === null || appState.serverState?.status !== 'active') {
+                // Only hide if temp is null AND the game hasn't started yet
+                if ((appState.currentTemp === null && appState.serverState?.status !== 'active') || appState.serverState?.status === 'menu') {
                     tempIndicator.style.display = 'none'; // Hide if not active or no temp data
                     return;
                 }
 
                 tempIndicator.style.display = 'block'; // Show if active
                 const temp = appState.currentTemp;
-                let icon = '';
-                // Determine Icon (Simple version)
-                if (appState.isRaining) icon = '💧';
-                else if (appState.isDustStorm) icon = '🌪️';
-                else if (temp > 35) icon = '🔥'; // Scorching
-                else if (temp > 25) icon = '☀️'; // Hot
-                else if (temp < 0) icon = '🥶'; // Freezing
-                else if (temp < 10) icon = '❄️'; // Cold
-                else icon = '😊'; // Temperate
 
-                tempIndicator.innerHTML = `${temp.toFixed(0)}°C ${icon}`;
+                tempIndicator.innerHTML = `${temp.toFixed(0)}°C`;
             }
 
             // Make sure to expose the new function
@@ -2282,7 +2274,9 @@ return {
         // Processes all messages received via the WebSocket
         function handleServerMessage(event) {
             let data;
-            try { data = JSON.parse(event.data); }
+            try { data = JSON.parse(event.data); 
+                console.log("[DEBUG] Received data: ", data); // Log all received data
+            }
             catch (err) { error("Failed to parse server message:", err, event.data); UI.updateStatus("Received invalid data from server.", true); return; }
 
             try {
