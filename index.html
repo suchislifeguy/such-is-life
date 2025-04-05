@@ -516,7 +516,9 @@
             lastStateReceiveTime: performance.now(), // Timestamp when last state was received
             currentTemp: 18.0,
             isRaining: false,
-            isDustStorm: false,        
+            isDustStorm: false,
+            targetTint: null, 
+            targetTintAlpha: 0.0,     
         };
 
         // --- Local Effects State ---
@@ -1875,20 +1877,32 @@
                     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
                     // Add simple dust particle logic here if desired (keep it minimal)
                 }
+                // Adjust to control the transition speed (0.0 - 1.0)
+                const TINT_SMOOTHING_FACTOR = 0.05;
                  // --- NEW Heat Haze / Frost (Simple Overlay Version) ---
-                 // More advanced would use shaders
                  const currentTempForOverlay = appState.currentTemp; // Use current temp
                  if(currentTempForOverlay !== null) {
+                     let targetHazeIntensity = 0;
+
                      if (currentTempForOverlay > TEMP_HOT_CLIENT) { // Hot/Scorching Haze
-                        const hazeIntensity = Math.min(0.15, 0.05 + (currentTempForOverlay - TEMP_HOT_CLIENT) * 0.01);
-                        ctx.fillStyle = `rgba(255, 180, 100, ${hazeIntensity.toFixed(2)})`;
-                        // Simple shimmer effect by drawing slightly offset? Needs experimentation.
-                        // Or just the tint might be enough initially. ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                         targetHazeIntensity = Math.min(0.15, 0.05 + (currentTempForOverlay - TEMP_HOT_CLIENT) * 0.01);
+                         appState.targetTint = 'rgba(255, 180, 100, 1)';
                      } else if (currentTempForOverlay < TEMP_COLD_CLIENT) { // Cold/Freezing Frost
-                        const frostIntensity = Math.min(0.2, 0.05 + (TEMP_COLD_CLIENT - currentTempForOverlay) * 0.015);
-                        ctx.fillStyle = `rgba(180, 200, 255, ${frostIntensity.toFixed(2)})`;
-                        // Draw subtle frost border? ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                         targetHazeIntensity = Math.min(0.2, 0.05 + (TEMP_COLD_CLIENT - currentTempForOverlay) * 0.015);
+                         appState.targetTint = 'rgba(180, 200, 255, 1)';
+                     } else {
+                         appState.targetTint = null;
+                         targetHazeIntensity = 0;
                      }
+                     const tintAlphaDiff = targetHazeIntensity - appState.targetTintAlpha;
+                     appState.targetTintAlpha += tintAlphaDiff * TINT_SMOOTHING_FACTOR;
+
+                if (appState.targetTint && appState.targetTintAlpha > 0.01) {
+                    ctx.globalAlpha = appState.targetTintAlpha;
+                    ctx.fillStyle = appState.targetTint;
+                    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                    ctx.globalAlpha = 1.0; // Reset alpha
+                }
                  }
                  // --- End Heat Haze / Frost ---
 
