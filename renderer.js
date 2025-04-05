@@ -112,93 +112,84 @@ const Renderer = (() => {
     function drawRoundedRect(ctx, x, y, width, height, radius) { if (width < 2 * radius) radius = width / 2; if (height < 2 * radius) radius = height / 2; ctx.beginPath(); ctx.moveTo(x + radius, y); ctx.arcTo(x + width, y, x + width, y + height, radius); ctx.arcTo(x + width, y + height, x, y + height, radius); ctx.arcTo(x, y + height, x, y, radius); ctx.arcTo(x, y, x + width, y, radius); ctx.closePath(); }
 
 
-    // REVISED generateBackground function
+    // REVISED v4: generateBackground function
     function generateBackground(ctx, targetIsNight, width, height) {
-        console.log(`[Renderer] generateBackground v3 called. TargetNight: ${targetIsNight}`);
+        console.log(`[Renderer] generateBackground v4 called. TargetNight: ${targetIsNight}`);
         ctx.clearRect(0, 0, width, height); // Start fresh
-    
+
         if (!targetIsNight) {
-            // --- Day View (Looking Down - Earthy Ground) ---
-            const dayBaseColor = "#8F9779"; // Dusty Green-Brown Base
-            const dirtColor1 = "rgba(101, 67, 33, 0.15)"; // Earthy Brown 1 (more transparent)
-            const dirtColor2 = "rgba(139, 90, 43, 0.12)"; // Earthy Brown 2 (more transparent)
-            const textureColor1 = "rgba(106, 111, 84, 0.2)"; // Darker texture overlay
-            const textureColor2 = "rgba(160, 168, 138, 0.15)"; // Lighter texture overlay
-            const numDirtPatches = 50;
-            const numTextureElements = 3000; // LOTS of small elements for texture
-    
+            // --- Day View (Looking Down - Earthy Ground with Life) ---
+            const dayBaseColor = "#8A9A70"; // Slightly greener dusty base
+            const dirtColor1 = "rgba(101, 67, 33, 0.15)"; // Earthy Brown 1
+            const dirtColor2 = "rgba(139, 90, 43, 0.12)"; // Earthy Brown 2
+            // Texture Colors: Mix of dusty greens and a hint of emerald
+            const textureColor1 = "rgba(90, 105, 70, 0.2)";  // Darker Dusty Green
+            const textureColor2 = "rgba(145, 160, 120, 0.15)"; // Lighter Dusty Green
+            const textureColorEmerald = "rgba(50, 140, 90, 0.08)"; // Subtle Emerald touch (low alpha)
+
+            const numDirtPatches = 55; // Slightly more dirt
+            const numTextureElements = 3500; // Increase density for blending
+
             // 1. Base ground color
             ctx.fillStyle = dayBaseColor;
             ctx.fillRect(0, 0, width, height);
-    
+
             // 2. Large, soft dirt patches (under texture)
             for (let i = 0; i < numDirtPatches; i++) {
                 const x = Math.random() * width;
                 const y = Math.random() * height;
-                const radiusX = Math.random() * 120 + 60; // Even larger, softer patches
-                const radiusY = Math.random() * 100 + 50;
+                const radiusX = Math.random() * 110 + 55;
+                const radiusY = Math.random() * 90 + 45;
                 const color = Math.random() < 0.5 ? dirtColor1 : dirtColor2;
-    
                 ctx.fillStyle = color;
                 ctx.beginPath();
-                // Use ellipse for organic shapes
                 ctx.ellipse(x, y, radiusX, radiusY, Math.random() * Math.PI, 0, Math.PI * 2);
                 ctx.fill();
             }
-    
+
             // 3. Blended Texture Overlay (many small, overlapping elements)
-            // Technique: Draw many small, low-alpha rects/circles
             for (let i = 0; i < numTextureElements; i++) {
                 const x = Math.random() * width;
                 const y = Math.random() * height;
-                const size = Math.random() * 4 + 1; // Very small elements
-                const color = Math.random() < 0.5 ? textureColor1 : textureColor2;
-    
+                const size = Math.random() * 4 + 1; // Keep elements small
+
+                // Choose texture color, giving emerald a lower chance
+                let color;
+                const randColor = Math.random();
+                if (randColor < 0.15) { // ~15% chance for emerald touch
+                    color = textureColorEmerald;
+                } else if (randColor < 0.6) { // ~45% chance for lighter dusty
+                    color = textureColor2;
+                } else { // ~40% chance for darker dusty
+                    color = textureColor1;
+                }
+
                 ctx.fillStyle = color;
-                // Use fillRect for speed with tiny elements
                 ctx.fillRect(x - size / 2, y - size / 2, size, size);
-    
-                // // Alternative: Tiny circles (slightly slower)
-                // ctx.beginPath();
-                // ctx.arc(x, y, size / 2, 0, Math.PI * 2);
-                // ctx.fill();
             }
-    
-            // // Optional: Add extremely subtle, sparse grass strokes (if needed)
-            // const numGrassBlades = 50;
-            // ctx.strokeStyle = "rgba(90, 100, 70, 0.3)"; // Very subtle dark green
-            // ctx.lineWidth = 0.5;
-            // for (let i = 0; i < numGrassBlades; i++) {
-            //     const x = Math.random() * width;
-            //     const y = Math.random() * height;
-            //     const length = Math.random() * 6 + 2;
-            //     const angle = Math.random() * Math.PI * 2;
-            //     ctx.beginPath();
-            //     ctx.moveTo(x, y);
-            //     ctx.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
-            //     ctx.stroke();
-            // }
-    
-    
+
         } else {
-            // --- Night View (Looking Up - Galactic Sky with Clouds) ---
-            const baseNightColor = "#04060C";
+            // --- Night View (Looking Up - More Neutral Dark Sky) ---
+            const baseNightColor = "#0A0A10"; // Very Dark Grey/Desaturated Purple/Blue Base
             const nebulaeColors = [
-                [148, 0, 211, 0.07], [75, 0, 130, 0.09],
-                [0, 100, 180, 0.06], [200, 20, 100, 0.05]
+                // Adjusted alphas slightly, maybe desaturated the blue a bit
+                [148, 0, 211, 0.06], // Dark Violet
+                [75, 0, 130, 0.08],  // Indigo
+                [40, 90, 150, 0.05], // Desaturated Deep Sky Blue
+                [200, 20, 100, 0.04]  // Muted Pink
             ];
-            const darkCloudColor = "rgba(5, 5, 15, 0.1)"; // Very dark blue/black clouds
+            const darkCloudColor = "rgba(10, 10, 20, 0.12)"; // Slightly more visible dark clouds
             const numNebulae = 12;
-            const numDarkClouds = 15; // How many dark cloud patches
+            const numDarkClouds = 18; // More clouds
             const numDustStars = 1800;
             const numMidStars = 450;
             const numHeroStars = 60;
-    
-            // 1. Base Sky Color
+
+            // 1. Base Sky Color (More Neutral)
             ctx.fillStyle = baseNightColor;
             ctx.fillRect(0, 0, width, height);
-    
-            // 2. Nebulae / Gas Clouds (Soft Gradients)
+
+            // 2. Nebulae / Gas Clouds (Draw first)
             for (let i = 0; i < numNebulae; i++) {
                 const x = Math.random() * width;
                 const y = Math.random() * height;
@@ -214,7 +205,7 @@ const Renderer = (() => {
                     ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
                 } catch (e) { console.error("Failed to create nebula gradient:", e); }
             }
-    
+
             // --- Star Fields --- (Helper function remains the same)
             const drawStars = (count, minSize, maxSize, minAlpha, maxAlpha, colorVariance = 0) => {
                 for (let i = 0; i < count; i++) {
@@ -225,7 +216,13 @@ const Renderer = (() => {
                     let r = 255, g = 255, b = 255;
                     if (colorVariance > 0 && Math.random() < 0.35) {
                         const variance = Math.random() * colorVariance;
-                        if (Math.random() < 0.5) { b -= variance; } else { r -= variance * 0.7; g -= variance * 0.7; }
+                        // Keep star color variance subtle, maybe less blue overall
+                        if (Math.random() < 0.6) { // 60% yellow/white shift
+                            b -= variance;
+                        } else { // 40% blue/white shift
+                            r -= variance * 0.6;
+                            g -= variance * 0.6;
+                        }
                         r = Math.max(0, Math.min(255, r)); g = Math.max(0, Math.min(255, g)); b = Math.max(0, Math.min(255, b));
                     }
                     ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${alpha.toFixed(2)})`;
@@ -234,32 +231,32 @@ const Renderer = (() => {
             };
             // 3. Draw Star Layers
             drawStars(numDustStars, 0.4, 0.9, 0.08, 0.35);
-            drawStars(numMidStars, 0.7, 1.6, 0.25, 0.75, 35);
-            drawStars(numHeroStars, 1.4, 2.6, 0.55, 1.0, 65);
-    
+            drawStars(numMidStars, 0.7, 1.6, 0.25, 0.75, 30); // Slightly less variance
+            drawStars(numHeroStars, 1.4, 2.6, 0.55, 1.0, 50); // Slightly less variance
+
             // 4. Draw Dark Space Clouds (Over stars/nebulae)
-            // Using large, soft ellipses for a cloud-like feel
             for (let i = 0; i < numDarkClouds; i++) {
                 const x = Math.random() * width;
                 const y = Math.random() * height;
-                const radiusX = Math.random() * (width * 0.25) + (width * 0.1); // Size variation
-                const radiusY = Math.random() * (height * 0.2) + (height * 0.08);
-                const rotation = Math.random() * Math.PI; // Random orientation
-    
-                ctx.fillStyle = darkCloudColor; // Very low alpha dark color
+                const radiusX = Math.random() * (width * 0.3) + (width * 0.1); // Wider clouds
+                const radiusY = Math.random() * (height * 0.25) + (height * 0.1);
+                const rotation = Math.random() * Math.PI;
+                ctx.fillStyle = darkCloudColor; // Slightly more opaque
                 ctx.beginPath();
                 ctx.ellipse(x, y, radiusX, radiusY, rotation, 0, Math.PI * 2);
                 ctx.fill();
             }
-    
-    
+
         } // End Night View
-    
+
         // Store the state on the canvas element itself for the transition logic
         ctx.canvas.dataset.isNight = String(targetIsNight);
-        console.log(`[Renderer] generateBackground v3 finished. Stored isNight: ${ctx.canvas.dataset.isNight}`);
+        console.log(`[Renderer] generateBackground v4 finished. Stored isNight: ${ctx.canvas.dataset.isNight}`);
         return targetIsNight; // Return the state we just generated
     }
+
+    // --- (The rest of the Renderer module remains the same) ---
+    // --- Replace the previous generateBackground function with this v4 ---
 
 
 
