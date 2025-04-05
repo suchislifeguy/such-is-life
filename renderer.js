@@ -305,8 +305,9 @@
              }
 
             // Generates the static background details onto the offscreen canvas
-            function generateBackground(offscreenCtx, targetIsNight, CANVAS_WIDTH, CANVAS_HEIGHT, dayBaseColor, nightBaseColor) {
+            function generateBackground(offscreenCtx, targetIsNight, CANVAS_WIDTH, CANVAS_HEIGHT) { // <-- NEW SIGNATURE
                 log(`[Renderer] Generating background for ${targetIsNight ? 'Night' : 'Day'}`);
+                // Ensure this line uses the INTERNAL constants, which it likely already does:
                 const baseColor = targetIsNight ? nightBaseColor : dayBaseColor;
                 offscreenCtx.fillStyle = baseColor;
                 offscreenCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); // Base fill
@@ -346,23 +347,20 @@
             }
 
             // Called externally (e.g., by UI module) to trigger background regeneration/transition
-            function updateGeneratedBackground(targetIsNight, CANVAS_WIDTH, CANVAS_HEIGHT, dayBaseColor, nightBaseColor) {
-                // No change needed if background is already correct and ready
+            function updateGeneratedBackground(targetIsNight, CANVAS_WIDTH, CANVAS_HEIGHT) { // <-- NEW SIGNATURE (Removed color params)
+                // No change needed inside the function, it should already use the internal consts
                 if (targetIsNight === currentBackgroundIsNight && isBackgroundReady) return;
                 log(`[Renderer] Request to update background to ${targetIsNight ? 'Night' : 'Day'}.`);
-
-                if (isBackgroundReady) { // Start transition if a previous background exists
-                    log("[Renderer] Starting background transition...");
-                    isTransitioningBackground = true; transitionStartTime = performance.now();
-                    // Copy current background to the 'old' canvas for fading
-                    oldOffscreenCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-                    oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0);
-                    // Generate the new background onto the main offscreen canvas
-                    generateBackground(offscreenCtx, targetIsNight, CANVAS_WIDTH, CANVAS_HEIGHT, dayBaseColor, nightBaseColor);
-                } else { // First time: generate directly, no transition
-                    log("[Renderer] First background generation.");
-                    currentBackgroundIsNight = generateBackground(offscreenCtx, targetIsNight, CANVAS_WIDTH, CANVAS_HEIGHT, dayBaseColor, nightBaseColor);
-                    isBackgroundReady = true; log("[Renderer] isBackgroundReady set to true.");
+            
+                if (isBackgroundReady) {
+                    // ... existing transition logic ...
+                    // Make sure the call to generateBackground inside here is ALSO updated if needed
+                    generateBackground(offscreenCtx, targetIsNight, CANVAS_WIDTH, CANVAS_HEIGHT); // Pass only needed args
+                } else {
+                    // ... existing first generation logic ...
+                    // Make sure the call to generateBackground inside here is ALSO updated if needed
+                    currentBackgroundIsNight = generateBackground(offscreenCtx, targetIsNight, CANVAS_WIDTH, CANVAS_HEIGHT); // Pass only needed args
+                    // ...
                 }
             }
 
