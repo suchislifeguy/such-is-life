@@ -2274,11 +2274,8 @@ return {
         // Processes all messages received via the WebSocket
         function handleServerMessage(event) {
             let data;
-            try { data = JSON.parse(event.data); 
-                console.log("[DEBUG] Received data: ", data); // Log all received data
-            }
+            try { data = JSON.parse(event.data); }
             catch (err) { error("Failed to parse server message:", err, event.data); UI.updateStatus("Received invalid data from server.", true); return; }
-
             try {
                 switch (data.type) {
                     // --- Association Cases (Remain Largely Unchanged) ---
@@ -2342,17 +2339,15 @@ return {
                         appState.previousServerState = appState.lastServerState;
                         appState.lastServerState = appState.serverState;
                         appState.serverState = data.state; // Store the new state
-                        const newState = appState.serverState; // Alias for clarity
-                        const currentPlayerState = newState?.players?.[appState.localPlayerId];
-
-                        if (typeof newState.current_temperature === 'number') {
-                            appState.currentTemp = newState.current_temperature;
+                        // Directly access data.state for temperature to ensure correct value
+                        if (typeof data.state.current_temperature === 'number') {
+                            appState.currentTemp = data.state.current_temperature;
                         }
-                        appState.isRaining = newState.is_raining ?? false;
-                        appState.isDustStorm = newState.is_dust_storm ?? false
+                        appState.isRaining = data.state.is_raining ?? false;
+                        appState.isDustStorm = data.state.is_dust_storm ?? false;
 
                         // --- Update Visual Snake State ---
-                        const serverSnakeState = newState.snake_state;
+                        const serverSnakeState = data.state.snake_state;
                         if (serverSnakeState) {
                             snake.isActiveFromServer = serverSnakeState.active;
                             snake.serverHeadX = serverSnakeState.head_x;
