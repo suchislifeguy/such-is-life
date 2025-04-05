@@ -766,7 +766,7 @@
                       // Add this for display as needed
                      // console.log(`[DEBUG] (updateDayNight) Setting display to ${isNight ? 'Night' : 'Day'}`);
 
-                     Renderer.updateGeneratedBackground(isNight); // Tell Renderer to update/transition bg
+                     Renderer.updateGeneratedBackground(isNight, CANVAS_WIDTH, CANVAS_HEIGHT); // <-- NEW CALL
                      DOM.gameContainer.classList.toggle('night-mode', isNight); // Toggle CSS class
                  } else {
                      DOM.dayNightIndicator.style.display = 'none';
@@ -1462,8 +1462,7 @@ return {
                         if (joinedP) { appState.predictedPlayerPos = { x: joinedP.x, y: joinedP.y }; appState.renderedPlayerPos = { x: joinedP.x, y: joinedP.y }; }
                         UI.updateStatus(`Joined game ${appState.currentGameId}. Get ready!`); UI.showSection('game-area');
                         if (appState.serverState) { // Trigger initial UI updates for joined client
-                            Renderer.updateGeneratedBackground(appState.serverState.is_night, CANVAS_WIDTH, CANVAS_HEIGHT, dayBaseColor, nightBaseColor);
-
+                            Renderer.updateGeneratedBackground(appState.serverState.is_night, CANVAS_WIDTH, CANVAS_HEIGHT); // <-- NEW CALL
                             UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState);
                         }
                         Game.startGameLoop(); // Joining client starts loop immediately
@@ -1478,8 +1477,8 @@ return {
                         UI.updateStatus("Single Player Game Started!"); UI.showSection('game-area');
                         if (appState.serverState) { // Trigger initial UI updates
                             console.log(`--- handleServerMessage (${data.type}): Attempting to use Renderer. typeof Renderer:`, typeof Renderer);
-                            Renderer.updateGeneratedBackground(appState.serverState.is_night, CANVAS_WIDTH, CANVAS_HEIGHT, dayBaseColor, nightBaseColor);
-                             UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState);
+                            Renderer.updateGeneratedBackground(isNight, CANVAS_WIDTH, CANVAS_HEIGHT); // <-- NEW CALL
+                            UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState);
                         }
                         Game.startGameLoop(); // SP client starts loop immediately
                         break;
