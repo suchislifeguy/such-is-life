@@ -256,91 +256,157 @@ const Renderer = (() => {
     function drawHealthBar(ctx, x, y, width, currentHealth, maxHealth) { if(maxHealth<=0) return; const bh=5,yo=-(width/2+27),bw=Math.max(20,width*0.8),cw=Math.max(0,(currentHealth/maxHealth)*bw),hp=currentHealth/maxHealth,bx=x-bw/2,by=y+yo; ctx.fillStyle=healthBarBg; ctx.fillRect(bx,by,bw,bh); let bc=healthBarLow; if(hp>0.66) bc=healthBarHigh; else if(hp>0.33) bc=healthBarMedium; ctx.fillStyle=bc; ctx.fillRect(bx,by,cw,bh); }
     function drawArmorBar(ctx, x, y, width, currentArmor) { const ma=100; if(currentArmor<=0) return; const abh=4,hbh=5,bs=1,hbyo=-(width/2+27),hbty=y+hbyo,abty=hbty+hbh+bs,bw=Math.max(20,width*0.8),cw=Math.max(0,(currentArmor/ma)*bw),bx=x-bw/2,by=abty; ctx.fillStyle=healthBarBg; ctx.fillRect(bx,by,bw,abh); ctx.fillStyle=armorBarColor; ctx.fillRect(bx,by,cw,abh); }
 
+    // renderer.js
+
+    // --- Add near other color constants ---
+    const enemyUniformBlue = "#18315f"; // Or use getCssVar('--enemy-uniform-blue') if defined
+    const enemyGiantRed = "#a00000"; // Or use getCssVar('--enemy-giant-red')
+
+    // ... (Keep existing code and constants above this point) ...
+
+    // --- REVISED V2: drawEnemyRect (Better Colors, Giant, Hat Fix) ---
     function drawEnemyRect(ctx, x, y, w, h, type, enemyState) {
         const currentW = w;
         const currentH = h;
+        const t = performance.now(); // Time for animations (used for standard enemies)
+        const bo = Math.sin(t / IDLE_BOB_SPEED_DIVISOR) * IDLE_BOB_AMPLITUDE; // Bobbing offset
 
-        // --- Handle Giant Separately (Keeps existing simple giant logic if needed) ---
-        // If you have significantly different drawing for giants, you might return early
-        // or have a large conditional block here. For now, we focus on chaser/shooter.
+        ctx.save(); // Save context at the start
+
+        // --- Giant Specific Drawing ---
         if (type === 'giant') {
-            // TODO: Add specific giant drawing logic if it differs significantly from below
-            // For now, let's assume it draws *something* based on its larger w/h
-            // and we'll draw the basic effects afterwards if applicable.
-            // Example placeholder: draw a big brown rectangle
-            ctx.fillStyle = enemyTorsoGiantColor;
-            ctx.fillRect(x - currentW / 2, y - currentH / 2, currentW, currentH);
-            // Fall through to draw effects like bite aura / hit flash
-        }
+            // Giant proportions (relative to its larger w/h)
+            const bodyWidth = currentW * 0.85;
+            const bodyHeight = currentH * 0.7;
+            const bodyTopY = y - currentH * 0.4;
+            const bodyBottomY = bodyTopY + bodyHeight;
 
+            const legHeight = currentH * 0.25;
+            const legWidth = currentW * 0.2;
+            const legSpacing = currentW * 0.2;
+            const legTopY = bodyBottomY;
+
+            const bootHeight = currentH * 0.1;
+            const bootWidth = legWidth * 1.2;
+            const bootTopY = legTopY + legHeight;
+
+            const headRadius = currentW * 0.2; // Larger head relative to width
+            const headCenterY = bodyTopY - headRadius * 0.5;
+
+            // Shako Hat properties
+            const shakoHeight = headRadius * 1.5;
+            const shakoWidth = headRadius * 1.8;
+            const shakoBaseY = headCenterY - headRadius * 0.8;
+            const shakoPeakHeight = shakoHeight * 0.2;
+            const shakoPeakWidth = shakoWidth * 1.1;
+
+            // 1. Draw Legs & Boots (Static, Large)
+            ctx.fillStyle = enemyBootColor; // Dark trousers
+            ctx.fillRect(x - legSpacing - legWidth / 2, legTopY, legWidth, legHeight); // Left
+            ctx.fillRect(x + legSpacing - legWidth / 2, legTopY, legWidth, legHeight); // Right
+            ctx.fillStyle = enemyBootColor; // Dark boots
+            ctx.fillRect(x - legSpacing - bootWidth / 2, bootTopY, bootWidth, bootHeight); // Left
+            ctx.fillRect(x + legSpacing - bootWidth / 2, bootTopY, bootWidth, bootHeight); // Right
+
+            // 2. Draw Main Body (Red Coat)
+            ctx.fillStyle = enemyGiantRed;
+            ctx.fillRect(x - bodyWidth / 2, bodyTopY, bodyWidth, bodyHeight);
+            // Optional: Add simple belt/details
+            ctx.fillStyle = beltColor;
+            ctx.fillRect(x - bodyWidth / 2, bodyTopY + bodyHeight * 0.7, bodyWidth, bodyHeight * 0.08);
+
+            // 3. Draw Arms (Simple Rects)
+            ctx.fillStyle = enemyGiantRed; // Red sleeves
+            const armWidth = currentW * 0.18;
+            const armHeight = currentH * 0.5;
+            const armOffsetY = bodyTopY + bodyHeight * 0.1;
+            ctx.fillRect(x - bodyWidth / 2 - armWidth, armOffsetY, armWidth, armHeight); // Left
+            ctx.fillRect(x + bodyWidth / 2, armOffsetY, armWidth, armHeight);          // Right
+
+            // 4. Draw Head
+            ctx.fillStyle = enemySkinColor;
+            ctx.beginPath();
+            ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 5. Draw Shako Hat
+            ctx.fillStyle = enemyCapColor; // Black base
+            // Main cylinder
+            ctx.fillRect(x - shakoWidth / 2, shakoBaseY - shakoHeight, shakoWidth, shakoHeight);
+            // Peak/Brim at front
+            ctx.beginPath();
+            ctx.moveTo(x - shakoPeakWidth / 2, shakoBaseY);
+            ctx.lineTo(x + shakoPeakWidth / 2, shakoBaseY);
+            ctx.lineTo(x + shakoWidth / 2, shakoBaseY - shakoPeakHeight);
+            ctx.lineTo(x - shakoWidth / 2, shakoBaseY - shakoPeakHeight);
+            ctx.closePath();
+            ctx.fill();
+            // Optional: Add tiny gold/red decoration? (Keep simple)
+            // ctx.fillStyle = '#FFD700';
+            // ctx.fillRect(x - 3, shakoBaseY - shakoHeight*0.8, 6, 6);
+
+        }
         // --- Standard Enemy Drawing (Chaser/Shooter) ---
         else {
-            const t = performance.now(); // Time for animations
-            const bo = Math.sin(t / IDLE_BOB_SPEED_DIVISOR) * IDLE_BOB_AMPLITUDE; // Bobbing offset
-
-            // Define body part proportions (adjust as needed)
-            const headRadius = currentH * 0.15;
+            // Proportions (mostly same as before)
+            const headRadius = currentH * 0.16; // Slightly larger head?
             const coatShoulderWidth = currentW * 1.1;
             const coatHemWidth = currentW * 0.9;
             const coatTopY = y - currentH * 0.35 + bo;
             const coatBottomY = y + currentH * 0.25 + bo;
             const coatHeight = coatBottomY - coatTopY;
-            const headCenterY = coatTopY - headRadius * 0.8; // Head sits slightly above coat top
+            // Adjusted head Y position slightly
+            const headCenterY = coatTopY - headRadius * 0.6;
 
             const armWidth = currentW * 0.2;
             const armHeight = currentH * 0.45;
-            const armOffsetY = coatTopY + coatHeight * 0.1; // Arms start below shoulder line
+            const armOffsetY = coatTopY + coatHeight * 0.1;
 
             const trouserHeight = currentH * 0.20;
             const trouserWidth = currentW * 0.25;
             const trouserTopY = coatBottomY;
-            const legSpacing = currentW * 0.15; // Distance from center to each leg start
+            const legSpacing = currentW * 0.15;
 
             const bootHeight = currentH * 0.12;
             const bootWidth = currentW * 0.30;
             const bootTopY = trouserTopY + trouserHeight;
 
-            // Hat properties (Slouch Hat)
-            const hatBrimWidth = headRadius * 2.5;
-            const hatBrimHeight = headRadius * 0.4;
-            const hatCrownRadiusH = headRadius * 1.1;
-            const hatCrownRadiusV = headRadius * 0.9;
-            const hatCenterY = headCenterY - headRadius * 0.7; // Position hat relative to head
+            // Hat properties (Slouch Hat - Larger & Higher)
+            const hatBrimWidth = headRadius * 3.0; // Increased
+            const hatBrimHeight = headRadius * 0.5; // Increased
+            const hatCrownRadiusH = headRadius * 1.3; // Increased
+            const hatCrownRadiusV = headRadius * 1.0; // Increased
+            // Adjusted Y position relative to new head position
+            const hatCenterY = headCenterY - headRadius * 0.9; // Higher up
 
             // Animation state for boots
-            const isMoving = true; // Assume enemies are generally moving for simpler animation
-                                // Server *could* send an isIdle flag if needed later
-            const stepCycle = 400; // Milliseconds per step cycle
-            const stepPhase = Math.floor(t / stepCycle) % 2; // 0 or 1
-
-            ctx.save();
+            const isMoving = true; // Assume movement
+            const stepCycle = 400;
+            const stepPhase = Math.floor(t / stepCycle) % 2;
 
             // 1. Draw Legs & Animated Boots
-            ctx.fillStyle = enemyBootColor; // Trouser color (dark)
-            // Left Leg
+            ctx.fillStyle = enemyBootColor; // Dark trousers
             const leftLegX = x - legSpacing;
             ctx.fillRect(leftLegX - trouserWidth / 2, trouserTopY, trouserWidth, trouserHeight);
-            // Right Leg
             const rightLegX = x + legSpacing;
             ctx.fillRect(rightLegX - trouserWidth / 2, trouserTopY, trouserWidth, trouserHeight);
 
-            // Boots (Animated) - slightly wider than trousers
-            ctx.fillStyle = enemyBootColor; // Boot color
-            if (isMoving) {
-                if (stepPhase === 0) { // Left foot forward
-                    ctx.fillRect(leftLegX - bootWidth / 2, bootTopY - 2, bootWidth, bootHeight); // Step forward slightly higher
+            ctx.fillStyle = enemyBootColor; // Dark boots
+            if (isMoving) { // Feet animation
+                if (stepPhase === 0) {
+                    ctx.fillRect(leftLegX - bootWidth / 2, bootTopY - 2, bootWidth, bootHeight);
                     ctx.fillRect(rightLegX - bootWidth / 2, bootTopY, bootWidth, bootHeight);
-                } else { // Right foot forward
+                } else {
                     ctx.fillRect(leftLegX - bootWidth / 2, bootTopY, bootWidth, bootHeight);
-                    ctx.fillRect(rightLegX - bootWidth / 2, bootTopY - 2, bootWidth, bootHeight); // Step forward slightly higher
+                    ctx.fillRect(rightLegX - bootWidth / 2, bootTopY - 2, bootWidth, bootHeight);
                 }
-            } else { // Idle state - feet level
+            } else {
                 ctx.fillRect(leftLegX - bootWidth / 2, bootTopY, bootWidth, bootHeight);
                 ctx.fillRect(rightLegX - bootWidth / 2, bootTopY, bootWidth, bootHeight);
             }
 
-            // 2. Draw Coat/Torso (Slightly Tapered)
-            ctx.fillStyle = enemyCoatColor;
+            // 2. Draw Torso (Navy Blue Uniform)
+            ctx.fillStyle = enemyUniformBlue; // Use Navy Blue
             ctx.beginPath();
             ctx.moveTo(x - coatShoulderWidth / 2, coatTopY); // Top left
             ctx.lineTo(x + coatShoulderWidth / 2, coatTopY); // Top right
@@ -349,7 +415,8 @@ const Renderer = (() => {
             ctx.closePath();
             ctx.fill();
 
-            // 3. Draw Arms (Attached slightly lower)
+            // 3. Draw Arms (Brown Coat Color)
+            ctx.fillStyle = enemyCoatColor; // Brown arms over blue torso
             ctx.fillRect(x - coatShoulderWidth * 0.45 - armWidth / 2, armOffsetY, armWidth, armHeight); // Left Arm
             ctx.fillRect(x + coatShoulderWidth * 0.45 - armWidth / 2, armOffsetY, armWidth, armHeight); // Right Arm
 
@@ -360,101 +427,80 @@ const Renderer = (() => {
             ctx.fill();
 
             // 5. Draw Angry Eyebrows
-            ctx.strokeStyle = '#000000'; // Black eyebrows
+            ctx.strokeStyle = '#000000';
             ctx.lineWidth = 2;
             ctx.beginPath();
             const browLength = headRadius * 0.5;
             const browY = headCenterY - headRadius * 0.3;
             const browXOffset = headRadius * 0.3;
-            // Left brow (\)
-            ctx.moveTo(x - browXOffset - browLength / 2, browY - browLength / 3);
+            ctx.moveTo(x - browXOffset - browLength / 2, browY - browLength / 3); // Left \
             ctx.lineTo(x - browXOffset + browLength / 2, browY + browLength / 3);
-            // Right brow (/)
-            ctx.moveTo(x + browXOffset - browLength / 2, browY + browLength / 3);
+            ctx.moveTo(x + browXOffset - browLength / 2, browY + browLength / 3); // Right /
             ctx.lineTo(x + browXOffset + browLength / 2, browY - browLength / 3);
             ctx.stroke();
 
 
-            // 6. Draw Hat (Slouch Hat)
-            // Brim
-            ctx.fillStyle = enemyCapColor; // Use cap color for hat
+            // 6. Draw Hat (Slouch Hat - Adjusted)
+            ctx.fillStyle = enemyCapColor; // Dark hat color
+            // Brim (Larger)
             ctx.beginPath();
             ctx.ellipse(x, hatCenterY + hatCrownRadiusV * 0.7, hatBrimWidth / 2, hatBrimHeight / 2, 0, 0, Math.PI * 2);
             ctx.fill();
-            // Crown
+            // Crown (Larger, Higher)
             ctx.beginPath();
             ctx.ellipse(x, hatCenterY, hatCrownRadiusH / 2, hatCrownRadiusV, 0, 0, Math.PI * 2);
             ctx.fill();
 
 
-            // --- 7. Conditionally Draw Gun for Shooters ---
+            // 7. Conditionally Draw Gun for Shooters
             if (type === 'shooter') {
-                const gunBarrelLength = w * 1.2;
-                const gunBarrelThickness = 3;
-                const gunStockLength = w * 0.5;
-                const gunStockThickness = 5;
-                const gunColorBarrel = "#555555";
-                const gunColorStock = "#7a4a2a";
+                // Using same gun code as before for consistency, can be tweaked
+                const gunBarrelLength = w * 1.2; const gunBarrelThickness = 3;
+                const gunStockLength = w * 0.5; const gunStockThickness = 5;
+                const gunColorBarrel = "#555555"; const gunColorStock = "#7a4a2a";
 
                 ctx.save();
-                // Position the gun across the body, slightly angled down
-                const gunAngle = Math.PI / 10; // Small downward angle
-                const gunCenterY = y + bo; // Center vertically on the bobbing body
-                const gunCenterX = x;
-                ctx.translate(gunCenterX, gunCenterY);
-                ctx.rotate(gunAngle);
-
-                // Draw stock slightly behind center
+                const gunAngle = Math.PI / 10;
+                const gunCenterY = y + bo; const gunCenterX = x;
+                ctx.translate(gunCenterX, gunCenterY); ctx.rotate(gunAngle);
                 ctx.fillStyle = gunColorStock;
                 ctx.fillRect(-gunStockLength * 0.8, -gunStockThickness / 2, gunStockLength, gunStockThickness);
-                // Draw barrel extending forward
                 ctx.fillStyle = gunColorBarrel;
                 ctx.fillRect(-gunStockLength * 0.2, -gunBarrelThickness / 2, gunBarrelLength, gunBarrelThickness);
-
-                ctx.restore(); // Restore rotation/translation
+                ctx.restore();
             }
-            // --- End Gun Drawing ---
-
-            ctx.restore(); // Restore context state from start of standard enemy draw
         } // --- End Standard Enemy Drawing ---
 
 
-        // --- Draw Effects Over Everything (Applies to Giant too if it falls through) ---
-        const ns = performance.now(); // Use performance.now for consistency
+        // --- Draw Effects Over Everything (Applies to All Types) ---
+        const ns = performance.now();
         const se = enemyState?.effects?.snake_bite_slow;
         const isb = se && typeof se.expires_at === 'number' && ns < (se.expires_at * 1000);
 
         // Snake Bite Aura
         if (isb) {
             const auraRadius = Math.max(currentW * 0.6, 15);
-            // Adjust Y based on whether it's a giant (larger) or standard enemy
-            const auraBaseY = (type === 'giant') ? (y + currentH * 0.4) : (y + currentH * 0.5 - 5); // Lower for giant
-            const auraY = auraBaseY + ((type !== 'giant') ? bo : 0) ; // Add bob only for standard
+            const auraBaseY = (type === 'giant') ? (y + currentH * 0.4) : (y + currentH * 0.5 - 5 + bo); // Lower for giant, include bob for standard
             const auraLineWidth = 3;
             const auraColor = "rgba(0, 255, 50, 0.7)";
-            const pulseSpeed = 0.004;
-            const pulseMagnitude = 2;
+            const pulseSpeed = 0.004; const pulseMagnitude = 2;
             const pulseOffset = Math.sin(ns * pulseSpeed) * pulseMagnitude;
 
-            const originalLineWidth = ctx.lineWidth;
-            const originalStrokeStyle = ctx.strokeStyle;
-            ctx.lineWidth = auraLineWidth;
-            ctx.strokeStyle = auraColor;
-            ctx.beginPath();
-            ctx.arc(x, auraY, auraRadius + pulseOffset, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.lineWidth = originalLineWidth;
-            ctx.strokeStyle = originalStrokeStyle;
+            const originalLineWidth = ctx.lineWidth; const originalStrokeStyle = ctx.strokeStyle;
+            ctx.lineWidth = auraLineWidth; ctx.strokeStyle = auraColor;
+            ctx.beginPath(); ctx.arc(x, auraBaseY, auraRadius + pulseOffset, 0, Math.PI * 2); ctx.stroke();
+            ctx.lineWidth = originalLineWidth; ctx.strokeStyle = originalStrokeStyle;
         }
 
         // Hit Flash
         if (enemyState?.hit_flash_this_tick) {
-            ctx.fillStyle = enemyHitFlashColor;
-            const fm = 2;
-            // Apply flash centered correctly, considering bob for standard enemies
+            ctx.fillStyle = enemyHitFlashColor; const fm = 2;
+            // Adjust Y center based on type (Giant doesn't bob)
             const flashYCenter = y + ((type !== 'giant') ? bo : 0);
             ctx.fillRect(x - currentW / 2 - fm, flashYCenter - currentH / 2 - fm, currentW + fm * 2, currentH + fm * 2);
         }
+
+        ctx.restore(); // Restore context from the very start
     }
 
     function drawPlayerCharacter( ctx, x, y, w, h, isSelf, playerState, aimDx, aimDy ) {
