@@ -337,20 +337,84 @@
                 if (showMenu) { appState.mode = 'menu'; UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected."); UI.showSection('main-menu-section'); }
             }
             function gameLoop(currentTime) {
-                if (hitPauseFrames > 0) { hitPauseFrames--; if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) { appState.animationFrameId = requestAnimationFrame(gameLoop); } return; }
-                if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) { if (appState.serverState?.game_over) { UI.updateStatus("Game Over!"); UI.showGameOver(appState.serverState); } else if (appState.mode === 'menu') { UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected."); } cleanupLoop(); return; }
-                if (!appState.serverState && appState.mode !== 'singleplayer') { appState.animationFrameId = requestAnimationFrame(gameLoop); return; }
-                if (appState.lastLoopTime === null) { appState.lastLoopTime = currentTime; } const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000); appState.lastLoopTime = currentTime;
+                // Hit pause logic (remains the same)
+                if (hitPauseFrames > 0) {
+                    hitPauseFrames--;
+                    if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
+                        appState.animationFrameId = requestAnimationFrame(gameLoop);
+                    }
+                    return;
+                }
+
+                // Exit conditions (remains the same)
+                if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
+                    if (appState.serverState?.game_over) { UI.updateStatus("Game Over!"); UI.showGameOver(appState.serverState); }
+                    else if (appState.mode === 'menu') { UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected."); }
+                    cleanupLoop();
+                    return;
+                }
+                if (!appState.serverState && appState.mode !== 'singleplayer') {
+                    appState.animationFrameId = requestAnimationFrame(gameLoop); return;
+                }
+
+                // Delta time calculation (remains the same)
+                if (appState.lastLoopTime === null) { appState.lastLoopTime = currentTime; }
+                const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000);
+                appState.lastLoopTime = currentTime;
+
+                // Update visual snake (remains the same)
                 if (snake && typeof snake.update === 'function') { snake.update(currentTime); }
+
+                // Process input (remains the same)
                 if (appState.serverState?.status === 'active' && Input.isShootHeld()) { Input.handleShooting(); }
-                if (appState.mode !== 'singleplayer' && appState.serverState?.status === 'active') { updatePredictedPosition(deltaTime); reconcileWithServer(); }
 
+                // --- START: Player Position Update Logic ---
+                if (appState.serverState?.status === 'active') {
+                    if (appState.mode === 'singleplayer') {
+                        // --- FIX: Update rendered position directly from server state in SP ---
+                        const playerState = appState.serverState?.players?.[appState.localPlayerId];
+                        if (playerState && typeof playerState.x === 'number' && typeof playerState.y === 'number') {
+                            // No prediction/lerp needed for SP visual position, just use server state
+                            appState.renderedPlayerPos.x = playerState.x;
+                            appState.renderedPlayerPos.y = playerState.y;
+                        }
+                    } else {
+                        // --- MP Logic: Update prediction and reconcile ---
+                        updatePredictedPosition(deltaTime);
+                        reconcileWithServer();
+                    }
+                }
+                // --- END: Player Position Update Logic ---
+
+                // --- Render the Frame ---
+                // Get state (interpolated for MP, direct for SP handled by getInterpolatedState logic)
                 const stateToRender = Game.getInterpolatedState(currentTime);
-                 // Call simplified drawGame - assumes Renderer handles shake internally
-                 Renderer.drawGame( DOM.ctx, appState, stateToRender, localPlayerMuzzleFlash, CANVAS_WIDTH, CANVAS_HEIGHT );
 
-                if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) { appState.animationFrameId = requestAnimationFrame(gameLoop); } else { if(appState.animationFrameId) cleanupLoop(); }
-            }
+                // Call simplified drawGame - assumes Renderer handles shake internally
+                // Ensure stateToRender is valid before drawing
+                if (stateToRender) {
+                    Renderer.drawGame(
+                        DOM.ctx,
+                        appState, // Pass needed global state (temp, localId)
+                        stateToRender, // Pass calculated state
+                        localPlayerMuzzleFlash, // Pass muzzle flash state
+                        CANVAS_WIDTH,
+                        CANVAS_HEIGHT
+                    );
+                } else {
+                    // Optionally draw a placeholder or skip frame if state is missing
+                     // log("Skipping render, stateToRender is null/undefined");
+                }
+                 // --- End Render Frame ---
+
+
+                // Request next frame (remains the same)
+                if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
+                    appState.animationFrameId = requestAnimationFrame(gameLoop);
+                } else {
+                    if(appState.animationFrameId) cleanupLoop();
+                }
+            } // --- End REVISED gameLoop function ---
             function startGameLoop() { if (appState.mode === 'menu') return; if (appState.animationFrameId) return; if (!appState.serverState && appState.mode !== 'singleplayer') return; Input.setup(); log("Starting game loop..."); appState.lastLoopTime = null; appState.animationFrameId = requestAnimationFrame(gameLoop); }
             function getInterpolatedState(renderTime) {
                 const INTERPOLATION_BUFFER_MS = 100; const serverTime = appState.serverState?.timestamp * 1000; const lastServerTime = appState.lastServerState?.timestamp * 1000;
@@ -388,8 +452,11 @@
                 DOM.sendChatBtn.onclick = sendChatMessage; DOM.leaveGameBtn.onclick = leaveGame; DOM.gameOverBackBtn.onclick = () => resetClientState(true);
                 DOM.gameContainer.querySelectorAll('.back-button').forEach(btn => { const targetMatch = btn.getAttribute('onclick')?.match(/'([^']+)'/); if (targetMatch && targetMatch[1]) { const targetId = targetMatch[1]; if (DOM[targetId] || document.getElementById(targetId)) { btn.onclick = (e) => { e.preventDefault(); UI.showSection(targetId); }; } else { log(`Warning: Back button target section invalid: ${targetId}`); } } else { log("Warning: Back button found without valid target in onclick:", btn); } });
             }
-            return { resetClientState, startGameLoop, cleanupLoop, sendChatMessage, initListeners, getInterpolatedState };
-        })();
+            return {
+                 resetClientState, startGameLoop, cleanupLoop, sendChatMessage,
+                 initListeners, getInterpolatedState
+            };
+        })(); // End Game module IIFE
 
         // --- Global Server Message Handler ---
         function handleServerMessage(event) {
