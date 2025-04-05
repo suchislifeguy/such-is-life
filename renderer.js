@@ -114,7 +114,104 @@ const Renderer = (() => {
     function generateBackground(ctx, targetIsNight, width, height) { console.log(`[Renderer] generateBackground called. TargetNight: ${targetIsNight}`); const baseColor = targetIsNight ? nightBaseColor : dayBaseColor; ctx.fillStyle = baseColor; ctx.fillRect(0, 0, width, height); if (!targetIsNight) { const np=100,nt=150; for(let i=0;i<np;i++){ const x=Math.random()*width,y=Math.random()*height,r=Math.random()*40+15,c=`rgba(${(101+Math.random()*20-10).toFixed(0)},${(67+Math.random()*20-10).toFixed(0)},${(33+Math.random()*20-10).toFixed(0)},${(Math.random()*0.25+0.20).toFixed(2)})`; ctx.fillStyle=c; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); } ctx.lineWidth=3; ctx.strokeStyle='rgba(34,139,34,0.6)'; for(let i=0;i<nt;i++){ const x=Math.random()*width,y=Math.random()*height; ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+(Math.random()*6-3),y-(Math.random()*6+5)); ctx.stroke(); } } else { const np=60,ns=150; for(let i=0;i<np;i++){ const x=Math.random()*width,y=Math.random()*height,r=Math.random()*50+20,a=Math.random()*0.15+0.1; ctx.fillStyle=`rgba(5,2,2,${a.toFixed(2)})`; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); } ctx.fillStyle='rgba(255,255,240,0.8)'; for(let i=0;i<ns;i++){ const sx=Math.random()*width,sy=Math.random()*height,sr=Math.random()*1.5+0.5; ctx.fillRect(sx,sy,sr,sr); } } ctx.canvas.dataset.isNight = targetIsNight; console.log(`[Renderer] generateBackground finished. Stored isNight: ${ctx.canvas.dataset.isNight}`); return targetIsNight; }
     function updateGeneratedBackground(targetIsNight, targetCanvasWidth, targetCanvasHeight) { canvasWidth = targetCanvasWidth; canvasHeight = targetCanvasHeight; if ( offscreenCanvas.width !== canvasWidth || offscreenCanvas.height !== canvasHeight ) { offscreenCanvas.width = canvasWidth; offscreenCanvas.height = canvasHeight; oldOffscreenCanvas.width = canvasWidth; oldOffscreenCanvas.height = canvasHeight; hazeCanvas.width = canvasWidth; hazeCanvas.height = canvasHeight; isBackgroundReady = false; currentBackgroundIsNight = null; isTransitioningBackground = false; } if (targetIsNight === currentBackgroundIsNight && isBackgroundReady) { return; } if (isTransitioningBackground && targetIsNight === (offscreenCanvas.dataset.isNight === 'true')) { return; } if (isBackgroundReady) { oldOffscreenCtx.clearRect(0, 0, canvasWidth, canvasHeight); oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0); isTransitioningBackground = true; transitionStartTime = performance.now(); generateBackground(offscreenCtx, targetIsNight, canvasWidth, canvasHeight); currentBackgroundIsNight = targetIsNight; } else { generateBackground(offscreenCtx, targetIsNight, canvasWidth, canvasHeight); currentBackgroundIsNight = targetIsNight; isBackgroundReady = true; isTransitioningBackground = false; } }
     function drawDamageTexts(ctx, damageTexts) { if(!damageTexts) return; const now=performance.now(),pd=250,pmsi=4; ctx.textAlign='center'; ctx.textBaseline='bottom'; Object.values(damageTexts).forEach(dt=>{ if(!dt) return; const x=dt.x??0,y=dt.y??0,t=dt.text??'?',ic=dt.is_crit??false,st=dt.spawn_time?dt.spawn_time*1000:now,ts=now-st; let cfs=ic?damageTextCritFontSize:damageTextFontSize,cfc=ic?damageTextCritColor:damageTextColor; if(ic&&ts<pd){ const pp=Math.sin((ts/pd)*Math.PI); cfs+=pp*pmsi; } ctx.font=`bold ${Math.round(cfs)}px ${fontFamily}`; ctx.fillStyle=cfc; ctx.fillText(t,x,y); }); }
-    function drawCampfire(ctx, campfireData, width, height) { if(!campfireData||!campfireData.active) return; const x=campfireData.x??width/2,y=campfireData.y??height/2,r=campfireData.radius??0; if(r<=0) return; const sw=20,sh=4,fw=15,fh=25; ctx.save(); ctx.fillStyle=campfireAuraColor; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); const soy=5; ctx.fillStyle=campfireStickColor; ctx.translate(x,y+soy); ctx.rotate(Math.PI/5); ctx.fillRect(-sw/2,-sh/2,sw,sh); ctx.rotate(-Math.PI/5); ctx.rotate(-Math.PI/6); ctx.fillRect(-sw/2,-sh/2,sw,sh); ctx.rotate(Math.PI/6); ctx.translate(-x,-(y+soy)); const foy=-10,fcx=x,fcy=y+foy; ctx.fillStyle=campfireFlameOuterColor; ctx.beginPath(); ctx.ellipse(fcx,fcy,fw/2,fh/2,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle=campfireFlameInnerColor; ctx.beginPath(); ctx.ellipse(fcx,fcy-3,fw/3,fh/3,0,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+    function drawCampfire(ctx, campfireData, width, height) {
+        if (!campfireData || !campfireData.active) return; // Only draw if active (server controls this via is_night)
+
+        const now = performance.now();
+        const x = campfireData.x ?? width / 2;
+        const y = campfireData.y ?? height / 2;
+        const baseRadius = campfireData.radius ?? 0;
+        if (baseRadius <= 0) return;
+
+        // Base stick/log parameters
+        const stickWidth = 20;
+        const stickHeight = 4;
+        const stickColor = "#6B4513"; // Darker brown for logs
+        const stickYOffset = 5; // How much sticks sit below the logical 'y'
+
+        // Base flame parameters
+        const baseFlameWidthOuter = 18;
+        const baseFlameHeightOuter = 30;
+        const baseFlameWidthMid = 12;
+        const baseFlameHeightMid = 22;
+        const baseFlameWidthCore = 7;
+        const baseFlameHeightCore = 15;
+
+        const flameColorOuter = "rgba(255, 100, 0, A)"; // Orange-Red
+        const flameColorMid = "rgba(255, 165, 0, A)";   // Orange-Yellow
+        const flameColorCore = "rgba(255, 255, 150, A)"; // Pale Yellow
+
+        // Flicker parameters
+        const flickerSpeed1 = 0.003;
+        const flickerSpeed2 = 0.005;
+        const flickerMagnitudeWidth = 0.15; // % change
+        const flickerMagnitudeHeight = 0.25; // % change
+        const flickerMagnitudeY = 2; // pixels
+        const flickerMagnitudeAlpha = 0.2; // alpha change
+
+        ctx.save();
+
+        // 1. Draw Campfire Aura (subtle glow around the fire)
+        const auraColor = "rgba(255, 165, 0, 0.15)"; // Existing aura color
+        ctx.fillStyle = auraColor;
+        ctx.beginPath();
+        // Make aura pulse slightly too
+        const auraPulseFactor = 1.0 + Math.sin(now * flickerSpeed1 * 0.5) * 0.05;
+        ctx.arc(x, y, baseRadius * auraPulseFactor, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 2. Draw Logs/Sticks
+        ctx.fillStyle = stickColor;
+        ctx.translate(x, y + stickYOffset);
+        // Draw two crossed logs
+        ctx.rotate(Math.PI / 5);
+        ctx.fillRect(-stickWidth / 2, -stickHeight / 2, stickWidth, stickHeight);
+        ctx.rotate(-Math.PI / 5); // Rotate back
+        ctx.rotate(-Math.PI / 6);
+        ctx.fillRect(-stickWidth / 2, -stickHeight / 2, stickWidth, stickHeight);
+        ctx.rotate(Math.PI / 6); // Rotate back
+        // Reset transform to original position before drawing flames
+        ctx.translate(-x, -(y + stickYOffset));
+
+        // 3. Draw Flickering Flames (Multiple Layers)
+        const flameBaseY = y - 5; // Flames start slightly above the logical center
+
+        // Calculate flicker factors using sine waves + a touch of randomness offset by layer
+        const flicker1 = Math.sin(now * flickerSpeed1);
+        const flicker2 = Math.sin(now * flickerSpeed2);
+
+        // Layer 1: Outer Flames (Orange-Red)
+        let outerW = baseFlameWidthOuter * (1 + flicker1 * flickerMagnitudeWidth);
+        let outerH = baseFlameHeightOuter * (1 + flicker2 * flickerMagnitudeHeight);
+        let outerY = flameBaseY - flicker1 * flickerMagnitudeY;
+        let outerAlpha = 0.6 + flicker2 * flickerMagnitudeAlpha;
+        ctx.fillStyle = flameColorOuter.replace('A', Math.max(0.1, Math.min(0.8, outerAlpha)).toFixed(2));
+        ctx.beginPath();
+        ctx.ellipse(x, outerY, outerW / 2, outerH / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Layer 2: Mid Flames (Orange-Yellow)
+        let midW = baseFlameWidthMid * (1 - flicker2 * flickerMagnitudeWidth); // Use different flicker
+        let midH = baseFlameHeightMid * (1 - flicker1 * flickerMagnitudeHeight);
+        let midY = flameBaseY - 2 - flicker2 * flickerMagnitudeY; // Slightly higher
+        let midAlpha = 0.7 + flicker1 * flickerMagnitudeAlpha;
+        ctx.fillStyle = flameColorMid.replace('A', Math.max(0.2, Math.min(0.9, midAlpha)).toFixed(2));
+        ctx.beginPath();
+        ctx.ellipse(x, midY, midW / 2, midH / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Layer 3: Core Flames (Pale Yellow)
+        let coreW = baseFlameWidthCore * (1 + flicker1 * flickerMagnitudeWidth * 0.8); // Less width flicker
+        let coreH = baseFlameHeightCore * (1 + flicker2 * flickerMagnitudeHeight * 1.2); // More height flicker
+        let coreY = flameBaseY - 4 - flicker1 * flickerMagnitudeY * 1.1; // Even higher
+        let coreAlpha = 0.8 + flicker2 * flickerMagnitudeAlpha * 0.5; // Less alpha flicker
+        ctx.fillStyle = flameColorCore.replace('A', Math.max(0.3, Math.min(1.0, coreAlpha)).toFixed(2));
+        ctx.beginPath();
+        ctx.ellipse(x, coreY, coreW / 2, coreH / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    }
 
     function drawDamageVignette(ctx, intensity, width, height) { if(intensity<=0) return; ctx.save(); const or=Math.sqrt(width**2+height**2)/2,g=ctx.createRadialGradient(width/2,height/2,0,width/2,height/2,or),ra=0.4*intensity; g.addColorStop(0,'rgba(255,0,0,0)'); g.addColorStop(0.75,'rgba(255,0,0,0)'); g.addColorStop(1,`rgba(255,0,0,${ra.toFixed(2)})`); ctx.fillStyle=g; ctx.fillRect(0,0,width,height); ctx.restore(); }
     function drawTemperatureTint(ctx, temperature, width, height) { let tcs=null, a=0.0; const tfc=TEMP_FREEZING_CLIENT, tcc=TEMP_COLD_CLIENT, thc=TEMP_HOT_CLIENT, tsc=TEMP_SCORCHING_CLIENT, mta=MAX_TINT_ALPHA; if(temperature===null || typeof temperature === 'undefined'){ return; } if(temperature<=tfc){ tcs='rgba(100,150,255,A)'; a=mta*Math.min(1.0,(tfc-temperature+5)/5.0); } else if(temperature<=tcc){ tcs='rgba(150,180,255,A)'; a=mta*((tcc-temperature)/(tcc-tfc)); } else if(temperature>=tsc){ tcs='rgba(255,100,0,A)'; a=mta*Math.min(1.0,(temperature-tsc+5)/5.0); } else if(temperature>=thc){ tcs='rgba(255,150,50,A)'; a=mta*((temperature-thc)/(tsc-thc)); } a=Math.max(0,Math.min(mta,a)); if(tcs&&a>0.01){ ctx.globalAlpha=1.0; ctx.fillStyle=tcs.replace('A',a.toFixed(2)); ctx.fillRect(0,0,width,height); ctx.globalAlpha=1.0; } }
