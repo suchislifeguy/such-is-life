@@ -464,62 +464,109 @@ const Renderer = (() => {
         CANVAS_HEIGHT = canvasHeight;
         let shakeApplied = false; let shakeOffsetX = 0; let shakeOffsetY = 0;
 
-        // Check internal shake state
+        // Check and apply internal shake state
         if (currentShakeMagnitude > 0 && now < shakeEndTime) {
             shakeApplied = true;
-            // Fade shake magnitude over time
             const timeRemaining = shakeEndTime - now;
-            const duration = shakeEndTime - (shakeEndTime - currentShakeMagnitude > 0 ? (shakeEndTime - (currentShakeMagnitude * 1000)) : 0); // Estimate duration
+            const initialDuration = shakeEndTime - (shakeEndTime - currentShakeMagnitude > 0 ? (shakeEndTime - (currentShakeMagnitude * 1000)) : 0); // Rough estimate of original duration
             let currentMag = currentShakeMagnitude;
-            if (duration > 0) { // Avoid division by zero
-                 currentMag = currentShakeMagnitude * (timeRemaining / duration); // Linear fade
+            // Simple linear decay example - adjust if needed
+            if (initialDuration > 0) { currentMag = currentShakeMagnitude * (timeRemaining / initialDuration); }
+            if (currentMag > 0.5) { // Only apply if magnitude is noticeable
+                const shakeAngle = Math.random() * Math.PI * 2;
+                shakeOffsetX = Math.cos(shakeAngle) * currentMag;
+                shakeOffsetY = Math.sin(shakeAngle) * currentMag;
+            } else {
+                currentShakeMagnitude = 0; // Stop shake if magnitude gets too small
             }
-            const shakeAngle = Math.random() * Math.PI * 2;
-            shakeOffsetX = Math.cos(shakeAngle) * currentMag;
-            shakeOffsetY = Math.sin(shakeAngle) * currentMag;
         } else if (currentShakeMagnitude > 0 && now >= shakeEndTime) {
              currentShakeMagnitude = 0; // Reset magnitude if time expired
              shakeEndTime = 0;
         }
 
+        // --- FIX: Ensure Background is Drawn Correctly ---
+        // 1. Draw Background (from offscreen canvas, handles transitions)
+        ctx.globalAlpha = 1.0; // Reset alpha before drawing background
+        if (!isBackgroundReady) {
+            // Fallback: Draw base color if offscreen isn't ready yet
+            ctx.fillStyle = dayBaseColor; // Use internal constant
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+             // Attempt to generate initial background if somehow missed
+             if (appState.serverState && currentBackgroundIsNight === null) {
+                console.warn("Background wasn't ready, attempting initial generation in drawGame.");
+                updateGeneratedBackground(appState.serverState.is_night, CANVAS_WIDTH, CANVAS_HEIGHT);
+             }
+        } else if (isTransitioningBackground) {
+            // Handle fade effect
+            const elapsed = now - transitionStartTime;
+            const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS);
+            ctx.globalAlpha = 1.0;
+            ctx.drawImage(oldOffscreenCanvas, 0, 0); // Draw old bg fully opaque
+            ctx.globalAlpha = progress;
+            ctx.drawImage(offscreenCanvas, 0, 0); // Draw new bg fading in
+            ctx.globalAlpha = 1.0; // Reset alpha
+            if (progress >= 1.0) {
+                isTransitioningBackground = false;
+                // Update internal state tracker AFTER transition completes
+                 currentBackgroundIsNight = offscreenCanvas.dataset.isNight === 'true'; // Assuming this was set during generation
+                 log("[Renderer] Background transition complete.");
+            }
+        } else {
+            // Normal: Draw current generated background
+            ctx.globalAlpha = 1.0;
+            ctx.drawImage(offscreenCanvas, 0, 0);
+        }
+        // --- End Background Fix ---
 
-        // 1. Draw Background (uses internal state/constants)
-        if (!isBackgroundReady) { ctx.fillStyle = dayBaseColor; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); }
-        else if (isTransitioningBackground) { const elapsed = now - transitionStartTime; const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS); ctx.globalAlpha = 1.0; ctx.drawImage(oldOffscreenCanvas, 0, 0); ctx.globalAlpha = progress; ctx.drawImage(offscreenCanvas, 0, 0); ctx.globalAlpha = 1.0; if (progress >= 1.0) { isTransitioningBackground = false; currentBackgroundIsNight = offscreenCanvas.dataset.isNight === 'true'; } } // Update state after transition
-        else { ctx.drawImage(offscreenCanvas, 0, 0); }
 
         // 2. Apply Shake Transform
         if (shakeApplied) { ctx.save(); ctx.translate(shakeOffsetX, shakeOffsetY); }
 
         // --- Draw Game World Elements (Under Shake) ---
-        // Need access to globals: snake, activeSpeechBubbles, activeEnemyBubbles
-        // Need access to appState for local player ID and positions
-        if (!stateToRender) { // Guard if state is missing
-             if (shakeApplied) ctx.restore(); return;
-        }
+        if (!stateToRender) { if (shakeApplied) ctx.restore(); return; } // Guard clause
+
+        // Need access to globals from index.html: snake, activeSpeechBubbles, activeEnemyBubbles
+        // Pass them or ensure Renderer has access if they become part of appState later.
+        // Assuming access to global 'snake' object here:
         drawCampfire(ctx, stateToRender.campfire, CANVAS_WIDTH, CANVAS_HEIGHT);
-        drawSnake(ctx, snake); // Pass the global snake state object
+        if (typeof snake !== 'undefined') drawSnake(ctx, snake); // Check if snake exists globally
+
         drawPowerups(ctx, stateToRender.powerups);
         drawBullets(ctx, stateToRender.bullets);
-        drawEnemies(ctx, stateToRender.enemies, activeEnemyBubbles); // Pass global enemy bubbles
-        drawPlayers(ctx, stateToRender.players, appState, localPlayerMuzzleFlashRef); // Pass appState and muzzle flash ref
-        drawSpeechBubbles(ctx, stateToRender.players, activeSpeechBubbles, appState); // Pass global player bubbles and appState
-        drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles); // Pass global enemy bubbles
+
+        // Pass necessary global state refs to drawing functions
+        if (typeof activeEnemyBubbles !== 'undefined') drawEnemies(ctx, stateToRender.enemies, activeEnemyBubbles);
+        if (typeof activeSpeechBubbles !== 'undefined') drawPlayers(ctx, stateToRender.players, appState, localPlayerMuzzleFlashRef); // Includes health/armor
+        if (typeof activeSpeechBubbles !== 'undefined') drawSpeechBubbles(ctx, stateToRender.players, activeSpeechBubbles, appState);
+        if (typeof activeEnemyBubbles !== 'undefined') drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles);
+
         drawDamageTexts(ctx, stateToRender.damage_texts);
 
-        // Muzzle flash (drawn relative to player, so affected by shake)
+        // Muzzle flash
         let shouldDrawMuzzleFlash = localPlayerMuzzleFlashRef.active && (now < localPlayerMuzzleFlashRef.endTime);
         if (shouldDrawMuzzleFlash) { drawMuzzleFlash(ctx, appState.renderedPlayerPos.x, appState.renderedPlayerPos.y, localPlayerMuzzleFlashRef.aimDx, localPlayerMuzzleFlashRef.aimDy); }
-        else if (localPlayerMuzzleFlashRef.active) { localPlayerMuzzleFlashRef.active = false; } // Deactivate if time expired
+        else if (localPlayerMuzzleFlashRef.active) { localPlayerMuzzleFlashRef.active = false; }
 
         // 3. Restore Shake Transform
         if (shakeApplied) { ctx.restore(); }
 
         // --- Draw Overlays (Not Affected by Shake) ---
         const localPlayerState = stateToRender.players?.[appState.localPlayerId];
+        // Vignette
         if (localPlayerState && localPlayerState.health < DAMAGE_VIGNETTE_HEALTH_THRESHOLD) { const vignetteIntensity = 1.0 - (localPlayerState.health / DAMAGE_VIGNETTE_HEALTH_THRESHOLD); drawDamageVignette(ctx, vignetteIntensity, CANVAS_WIDTH, CANVAS_HEIGHT); }
+        // Temperature Tint
         drawTemperatureTint(ctx, appState.currentTemp, CANVAS_WIDTH, CANVAS_HEIGHT);
-    }
+        // Rain/Dust Overlays (Optional visual additions)
+         if (appState.isRaining) {
+             ctx.fillStyle = 'rgba(50, 80, 150, 0.15)'; // Slightly reduced alpha
+             ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+         } else if (appState.isDustStorm) {
+             ctx.fillStyle = 'rgba(180, 140, 90, 0.2)'; // Slightly reduced alpha
+             ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+         }
+
+        ctx.globalAlpha = 1.0; // Final safety alpha reset
+    } // --- End drawGame function ---
 
     // Expose public functions
     return {
