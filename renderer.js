@@ -110,256 +110,161 @@ const Renderer = (() => {
     function drawRoundedRect(ctx, x, y, width, height, radius) { if (width < 2 * radius) radius = width / 2; if (height < 2 * radius) radius = height / 2; ctx.beginPath(); ctx.moveTo(x + radius, y); ctx.arcTo(x + width, y, x + width, y + height, radius); ctx.arcTo(x + width, y + height, x, y + height, radius); ctx.arcTo(x, y + height, x, y, radius); ctx.arcTo(x, y, x + width, y, radius); ctx.closePath(); }
 
 
-// renderer.js // (Continuing inside the Renderer IIFE)
-
-// --- (Keep other constants and variables) ---
-
-// REVISED v6: generateBackground function
-function generateBackground(ctx, targetIsNight, width, height) {
-    console.log(`[Renderer] generateBackground v6 called. TargetNight: ${targetIsNight}`);
-    ctx.clearRect(0, 0, width, height); // Start fresh
-
-    if (!targetIsNight) {
-        // --- Day View (Looking Down - Grassy Field) ---
-        const dayBaseColor = "#6A994E"; // A solid mid-green base
-        const grassDarkerStroke = "rgba(74, 110, 50, 0.4)"; // Darker green for texture
-        const grassLighterStroke = "rgba(130, 170, 90, 0.3)"; // Lighter green for texture
-        const grassHighlightStroke = "rgba(180, 200, 100, 0.2)"; // Subtle yellow-green highlight
-        // "Green Puddles" = Fertile Patches
-        const fertilePatchColor = "rgba(50, 105, 50, 0.25)"; // Richer, darker green, semi-transparent
-
-        const numFertilePatches = 35; // Fewer patches
-        const numGrassStrokes = 4500; // Need many strokes for grassy texture
-
-        // 1. Base ground color
-        ctx.fillStyle = dayBaseColor;
-        ctx.fillRect(0, 0, width, height);
-
-        // 2. Fertile Green Patches (Smaller, irregular polygons)
-        for (let i = 0; i < numFertilePatches; i++) {
-            const x = Math.random() * width;
-            const y = Math.random() * height;
-            // Smaller radius range than previous dirt patches
-            const avgRadius = Math.random() * 50 + 25; // Average size 25-75
-            const points = 5 + Math.floor(Math.random() * 4); // 5-8 points
-            const color = fertilePatchColor;
-
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.moveTo(x + avgRadius * Math.cos(0), y + avgRadius * Math.sin(0));
-            for (let j = 1; j <= points; j++) {
-                const angle = (j / points) * Math.PI * 2;
-                const radius = avgRadius * (0.6 + Math.random() * 0.8); // More irregular shape
-                ctx.lineTo(x + radius * Math.cos(angle), y + radius * Math.sin(angle));
-            }
-            ctx.closePath();
-            ctx.fill();
-        }
-
-        // 3. Grassy Texture using Short, Curved Strokes
-        ctx.lineWidth = 1.2; // Fine lines
-        // ctx.lineCap = 'round'; // Optional: Round caps can look softer
-
-        for (let i = 0; i < numGrassStrokes; i++) {
-            const x = Math.random() * width;
-            const y = Math.random() * height;
-            const length = Math.random() * 4 + 2; // Short strokes (2-6px)
-            // Give strokes a slight curve
-            const angle = Math.random() * Math.PI * 2;
-            const curveAngle = angle + (Math.random() - 0.5) * 0.8; // Slight bend
-            const endX = x + Math.cos(angle) * length;
-            const endY = y + Math.sin(angle) * length;
-            const cpX = x + Math.cos(curveAngle) * length * 0.5; // Control point for curve
-            const cpY = y + Math.sin(curveAngle) * length * 0.5;
-
-            // Choose stroke color
-            let strokeColor;
-            const randColor = Math.random();
-            if (randColor < 0.1) { // 10% Highlights
-                strokeColor = grassHighlightStroke;
-            } else if (randColor < 0.55) { // 45% Lighter
-                strokeColor = grassLighterStroke;
-            } else { // 45% Darker
-                strokeColor = grassDarkerStroke;
-            }
-
-            ctx.strokeStyle = strokeColor;
-            ctx.beginPath();
-            ctx.moveTo(x, y);
-            // Use quadratic curve for simple bend
-            ctx.quadraticCurveTo(cpX, cpY, endX, endY);
-            // // Alternative: Straight lines (simpler, less organic)
-            // ctx.lineTo(endX, endY);
-            ctx.stroke();
-        }
-       // ctx.lineCap = 'butt'; // Reset if changed
-
-
-    } else {
-        // --- Night View (Looking Up - More Structure & Activity) ---
-        const baseNightColor = "#080808"; // Keep neutral dark base
-        const nebulaeColors = [
-            [180, 180, 190, 0.05], [200, 80, 80, 0.04],
-            [160, 160, 160, 0.06], [210, 100, 100, 0.035]
-        ];
-        const darkCloudColor = "rgba(8, 8, 8, 0.2)"; // Slightly more opaque clouds
-        const milkyWayColor = "rgba(180, 180, 200, 0.04)"; // Faint grey/white for dust lane
-        const constellationLineColor = "rgba(150, 150, 180, 0.1)"; // Very faint lines
-
-        const numNebulae = 8; // Fewer distinct nebulae, focus on milky way
-        const numDarkClouds = 22;
-        const numDustStars = 2500; // More dust overall
-        const numMilkyWayDust = 1500; // Extra dust for the band
-        const numMidStars = 500;
-        const numHeroStars = 70;
-        const numConstellations = 3; // Add a few simple constellations
-
-        // 1. Base Sky Color
-        ctx.fillStyle = baseNightColor;
-        ctx.fillRect(0, 0, width, height);
-
-        // 2. Draw Milky Way Dust Band (Wide, soft ellipse/gradient)
-        const mwCenterX = width * (0.3 + Math.random() * 0.4); // Randomize center slightly
-        const mwCenterY = height / 2;
-        const mwWidth = width * 1.5; // Wider than screen
-        const mwHeight = height * (0.2 + Math.random() * 0.2); // Varying thickness
-        const mwAngle = (Math.random() - 0.5) * 0.5; // Slight random angle
-
-        // Create a soft gradient for the band background
-        ctx.save();
-        ctx.translate(mwCenterX, mwCenterY);
-        ctx.rotate(mwAngle);
-        try {
-            const mwGradient = ctx.createLinearGradient(-mwWidth / 2, 0, mwWidth / 2, 0);
-            mwGradient.addColorStop(0, "rgba(0,0,0,0)");
-            mwGradient.addColorStop(0.3, milkyWayColor);
-            mwGradient.addColorStop(0.7, milkyWayColor);
-            mwGradient.addColorStop(1, "rgba(0,0,0,0)");
-            ctx.fillStyle = mwGradient;
-            ctx.fillRect(-mwWidth / 2, -mwHeight / 2, mwWidth, mwHeight);
-        } catch(e) { console.error("Failed to create Milky Way gradient:", e); }
-        ctx.restore();
-
-        // 3. Nebulae / Gas Clouds (Draw overlapping the MW band)
-        for (let i = 0; i < numNebulae; i++) {
-            const x = Math.random() * width;
-            const y = Math.random() * height;
-            const radius = Math.random() * (width * 0.3) + (width * 0.1); // Smaller nebulae now
-            const colorData = nebulaeColors[Math.floor(Math.random() * nebulaeColors.length)];
-            const [r, g, b, baseAlpha] = colorData;
-            try {
-                const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-                gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${Math.min(0.1, baseAlpha * 1.5).toFixed(2)})`);
-                gradient.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${baseAlpha.toFixed(2)})`);
-                gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
-                ctx.fillStyle = gradient;
-                ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
-            } catch (e) { console.error("Failed to create nebula gradient:", e); }
-        }
-
-        // --- Star Fields --- (Helper function remains the same)
-        const drawStars = (count, minSize, maxSize, minAlpha, maxAlpha, colorVariance = 0) => {
-             // ... (previous drawStars implementation) ...
-             for (let i = 0; i < count; i++) {
-                const sx = Math.random() * width;
-                const sy = Math.random() * height;
-                const size = Math.random() * (maxSize - minSize) + minSize;
-                const alpha = Math.random() * (maxAlpha - minAlpha) + minAlpha;
-                let r = 255, g = 255, b = 255;
-                if (colorVariance > 0 && Math.random() < 0.3) {
-                    const variance = Math.random() * colorVariance;
-                     if (Math.random() < 0.7) { b -= variance; }
-                    r = Math.max(0, Math.min(255, r)); g = Math.max(0, Math.min(255, g)); b = Math.max(0, Math.min(255, b));
+    function generateBackground(ctx, targetIsNight, width, height) {
+        console.log(`[Renderer] generateBackground v5 called. TargetNight: ${targetIsNight}`);
+        ctx.clearRect(0, 0, width, height); // Start fresh
+    
+        if (!targetIsNight) {
+            // --- Day View (Looking Down - Structured Earthy Ground) ---
+            const dayBaseColor = "#949A80"; // More Greyish-Green Base
+            const dirtColor1 = "rgba(53, 80, 27, 0.2)"; // Slightly more opaque Earthy Brown 1
+            const dirtColor2 = "rgba(143, 97, 55, 0.2)";  // Slightly more opaque Earthy Brown 2
+            // Texture Stroke Colors:
+            const textureStrokeDark = "rgba(80, 95, 60, 0.3)";    // Darker Dusty Green Stroke
+            const textureStrokeLight = "rgba(135, 150, 110, 0.25)"; // Lighter Dusty Green Stroke
+            const textureStrokeEmerald = "rgba(50, 140, 90, 0.15)";// Subtle Emerald Stroke (lower alpha)
+    
+            const numDirtPatches = 40; // Fewer, more defined patches
+            const numTextureStrokes = 2500; // Fewer elements needed for strokes vs fills
+    
+            // 1. Base ground color
+            ctx.fillStyle = dayBaseColor;
+            ctx.fillRect(0, 0, width, height);
+    
+            // 2. Irregular Dirt Patches (Polygons - under texture)
+            for (let i = 0; i < numDirtPatches; i++) {
+                const x = Math.random() * width;
+                const y = Math.random() * height;
+                const avgRadius = Math.random() * 100 + 50; // Average size
+                const points = 5 + Math.floor(Math.random() * 4); // 5-8 points for irregularity
+                const color = Math.random() < 0.5 ? dirtColor1 : dirtColor2;
+    
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.moveTo(x + avgRadius * Math.cos(0), y + avgRadius * Math.sin(0));
+                for (let j = 1; j <= points; j++) {
+                    const angle = (j / points) * Math.PI * 2;
+                    // Add randomness to radius for each point
+                    const radius = avgRadius * (0.7 + Math.random() * 0.6);
+                    ctx.lineTo(x + radius * Math.cos(angle), y + radius * Math.sin(angle));
                 }
-                ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${alpha.toFixed(2)})`;
-                ctx.fillRect(sx - size / 2, sy - size / 2, size, size);
+                ctx.closePath();
+                ctx.fill();
             }
-        };
-
-        // 4. Draw Base Star Layers
-        drawStars(numDustStars, 0.4, 0.9, 0.06, 0.30);
-        drawStars(numMidStars, 0.7, 1.6, 0.20, 0.70, 25);
-        drawStars(numHeroStars, 1.4, 2.6, 0.50, 1.0, 40);
-
-        // 5. Add extra dust stars within the Milky Way band area
-        ctx.save();
-        ctx.translate(mwCenterX, mwCenterY);
-        ctx.rotate(mwAngle);
-        // Draw stars within the rotated rectangle bounds of the band
-        for (let i = 0; i < numMilkyWayDust; i++) {
-             const sx = (Math.random() - 0.5) * mwWidth * 0.9; // Confine mostly to band width
-             const sy = (Math.random() - 0.5) * mwHeight * 0.9; // Confine mostly to band height
-             const size = Math.random() * 0.8 + 0.3; // Very small dust
-             const alpha = Math.random() * 0.2 + 0.05; // Faint
-             ctx.fillStyle = `rgba(220, 220, 230, ${alpha.toFixed(2)})`; // Faint grey/white
-             ctx.fillRect(sx - size/2, sy - size/2, size, size);
-        }
-        ctx.restore();
-
-
-        // 6. Draw Constellations (Simple Example)
-        ctx.strokeStyle = constellationLineColor;
-        ctx.lineWidth = 0.5;
-        const constellationStars = []; // Store coords of stars used in constellations
-
-        for (let c = 0; c < numConstellations; c++) {
-            const numPoints = 4 + Math.floor(Math.random() * 4); // 4-7 stars per constellation
-            const startX = Math.random() * (width * 0.6) + width * 0.2; // Avoid edges
-            const startY = Math.random() * (height * 0.6) + height * 0.2;
-            const scale = 50 + Math.random() * 100; // Size of constellation
-
-            const points = [];
-            for (let p = 0; p < numPoints; p++) {
-                // Generate points relative to start, keep track of them
-                const px = startX + (Math.random() - 0.5) * scale;
-                const py = startY + (Math.random() - 0.5) * scale;
-                points.push({ x: px, y: py });
-                constellationStars.push({ x: px, y: py }); // Add to list for drawing bright stars later
+    
+            // 3. Ground Texture using Strokes (Organic feel)
+            ctx.lineWidth = 1.5; // Slightly thicker strokes
+            ctx.lineCap = 'round'; // Softer ends
+    
+            for (let i = 0; i < numTextureStrokes; i++) {
+                const x = Math.random() * width;
+                const y = Math.random() * height;
+                const length = Math.random() * 5 + 2; // Short strokes
+                const angle = Math.random() * Math.PI * 2; // Random direction
+    
+                // Choose texture color, giving emerald a lower chance
+                let strokeColor;
+                const randColor = Math.random();
+                if (randColor < 0.10) { // ~10% chance for emerald touch
+                    strokeColor = textureStrokeEmerald;
+                } else if (randColor < 0.55) { // ~45% chance for lighter dusty
+                    strokeColor = textureStrokeLight;
+                } else { // ~45% chance for darker dusty
+                    strokeColor = textureStrokeDark;
+                }
+    
+                ctx.strokeStyle = strokeColor;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
+                ctx.stroke();
             }
-
-            // Connect points simply (e.g., connect sequentially)
-            ctx.beginPath();
-            ctx.moveTo(points[0].x, points[0].y);
-            for (let p = 1; p < numPoints; p++) {
-                ctx.lineTo(points[p].x, points[p].y);
-                // Optional: Connect back to start or add more complex connections
+            ctx.lineCap = 'butt'; // Reset lineCap
+    
+        } else {
+            // --- Night View (Looking Up - Aggressively Neutral Dark Sky) ---
+            const baseNightColor = "#080808"; // Near Black / Very Dark Grey Base
+            const nebulaeColors = [
+                // Removed blue/purple, using faint greys & reds
+                [180, 180, 190, 0.05], // Faint Grey/White Cloud
+                [200, 80, 80, 0.04],  // Faint Hydrogen-Alpha Red Cloud
+                [160, 160, 160, 0.06], // Slightly Brighter Grey Cloud
+                [210, 100, 100, 0.035] // Fainter Red Cloud
+            ];
+            const darkCloudColor = "rgba(8, 8, 8, 0.18)"; // Dark grey clouds, slightly more opaque
+            const numNebulae = 10; // Fewer nebulae now they aren't the main color source
+            const numDarkClouds = 20; // More dark clouds
+            const numDustStars = 2000; // More dust
+            const numMidStars = 500;
+            const numHeroStars = 70;
+    
+            // 1. Base Sky Color (Very Neutral)
+            ctx.fillStyle = baseNightColor;
+            ctx.fillRect(0, 0, width, height);
+    
+            // 2. Nebulae / Gas Clouds (Faint Greys/Reds)
+            for (let i = 0; i < numNebulae; i++) {
+                const x = Math.random() * width;
+                const y = Math.random() * height;
+                const radius = Math.random() * (width * 0.4) + (width * 0.15); // Can be large
+                const colorData = nebulaeColors[Math.floor(Math.random() * nebulaeColors.length)];
+                const [r, g, b, baseAlpha] = colorData;
+                try {
+                    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+                    gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${Math.min(0.1, baseAlpha * 1.5).toFixed(2)})`); // Faint core
+                    gradient.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${baseAlpha.toFixed(2)})`); // Main color
+                    gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`); // Fade out
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
+                } catch (e) { console.error("Failed to create nebula gradient:", e); }
             }
-             // ctx.closePath(); // Usually don't close path for constellations
-            ctx.stroke();
-        }
-
-        // 7. Draw brighter stars specifically for the constellations
-        ctx.fillStyle = "rgba(255, 255, 220, 0.9)"; // Brighter, slightly yellow stars
-        const constStarSize = 2.5;
-        constellationStars.forEach(star => {
-            ctx.fillRect(star.x - constStarSize / 2, star.y - constStarSize / 2, constStarSize, constStarSize);
-        });
-
-
-        // 8. Draw Dark Space Clouds (Over everything except maybe hero stars/constellations)
-        for (let i = 0; i < numDarkClouds; i++) {
-            const x = Math.random() * width;
-            const y = Math.random() * height;
-            const radiusX = Math.random() * (width * 0.3) + (width * 0.12);
-            const radiusY = Math.random() * (height * 0.25) + (height * 0.1);
-            const rotation = Math.random() * Math.PI;
-            ctx.fillStyle = darkCloudColor;
-            ctx.beginPath();
-            ctx.ellipse(x, y, radiusX, radiusY, rotation, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-
-    } // End Night View
-
-    // Store the state on the canvas element itself for the transition logic
-    ctx.canvas.dataset.isNight = String(targetIsNight);
-    console.log(`[Renderer] generateBackground v6 finished. Stored isNight: ${ctx.canvas.dataset.isNight}`);
-    return targetIsNight; // Return the state we just generated
-
-
-// --- (The rest of the Renderer module remains the same) ---
-// --- Replace the previous generateBackground function with this v6 ---
+    
+            // --- Star Fields --- (Helper function remains the same)
+            const drawStars = (count, minSize, maxSize, minAlpha, maxAlpha, colorVariance = 0) => {
+                for (let i = 0; i < count; i++) {
+                    const sx = Math.random() * width;
+                    const sy = Math.random() * height;
+                    const size = Math.random() * (maxSize - minSize) + minSize;
+                    const alpha = Math.random() * (maxAlpha - minAlpha) + minAlpha;
+                    let r = 255, g = 255, b = 255;
+                    if (colorVariance > 0 && Math.random() < 0.3) { // Reduced chance for color variance
+                        const variance = Math.random() * colorVariance;
+                        // Focus variance more on yellow/white, less pure blue
+                         if (Math.random() < 0.7) { // 70% yellow/white shift
+                            b -= variance;
+                            r = Math.max(0, Math.min(255, r));
+                            g = Math.max(0, Math.min(255, g));
+                            b = Math.max(0, Math.min(255, b));
+                        }
+                        // Keep pure blue shift minimal or non-existent
+                        // else { // Optional: very faint blue shift
+                        //     r -= variance * 0.3;
+                        //     g -= variance * 0.3;
+                        // }
+                    }
+                    ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${alpha.toFixed(2)})`;
+                    ctx.fillRect(sx - size / 2, sy - size / 2, size, size);
+                }
+            };
+            // 3. Draw Star Layers (Increased dust count)
+            drawStars(numDustStars, 0.4, 0.9, 0.06, 0.30); // Even fainter dust base alpha
+            drawStars(numMidStars, 0.7, 1.6, 0.20, 0.70, 25); // Less color variance
+            drawStars(numHeroStars, 1.4, 2.6, 0.50, 1.0, 40); // Less color variance
+    
+            // 4. Draw Dark Space Clouds (Neutral Dark Grey)
+            for (let i = 0; i < numDarkClouds; i++) {
+                const x = Math.random() * width;
+                const y = Math.random() * height;
+                const radiusX = Math.random() * (width * 0.3) + (width * 0.12);
+                const radiusY = Math.random() * (height * 0.25) + (height * 0.1);
+                const rotation = Math.random() * Math.PI;
+                ctx.fillStyle = darkCloudColor; // Neutral dark grey/black cloud color
+                ctx.beginPath();
+                ctx.ellipse(x, y, radiusX, radiusY, rotation, 0, Math.PI * 2);
+                ctx.fill();
+            }
+    
+        } // End Night View
     
         // Store the state on the canvas element itself for the transition logic
         ctx.canvas.dataset.isNight = String(targetIsNight);
@@ -382,15 +287,15 @@ function generateBackground(ctx, targetIsNight, width, height) {
         if (baseRadius <= 0) return;
 
         // Stick properties
-        const stickWidth = 25;
-        const stickHeight = 5;
+        const stickWidth = 35;
+        const stickHeight = 8;
         const stickColor = "#5a3a1e"; // Slightly darker, less red
         const stickYOffset = 6; // How far sticks sit below the logical 'y'
         const logBaseY = y + stickYOffset;
 
         // Flame base properties
         const flameBaseWidth = stickWidth * 0.8; // Flames originate from log area
-        const numFlames = 3; // Draw multiple distinct flame shapes
+        const numFlames = 4; // Draw multiple distinct flame shapes
 
         // Flicker parameters
         const timeSlow = now * 0.0015; // Slower base time for flicker
