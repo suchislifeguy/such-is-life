@@ -338,6 +338,7 @@
     </style>
 </head>
 <body>
+    <script src="renderer.js"></script>
     <div id="loading-screen">
         <!-- Content of loading screen goes here -->
         <div style="text-align: center;">
@@ -1456,6 +1457,7 @@ return {
                         UI.updateStatus(`Joined game ${appState.currentGameId}. Get ready!`); UI.showSection('game-area');
                         if (appState.serverState) { // Trigger initial UI updates for joined client
                             Renderer.updateGeneratedBackground(appState.serverState.is_night, CANVAS_WIDTH, CANVAS_HEIGHT, dayBaseColor, nightBaseColor);
+
                             UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState);
                         }
                         Game.startGameLoop(); // Joining client starts loop immediately
@@ -1675,6 +1677,5 @@ return {
         };
 
     </script>
-    <script src="renderer.js"></script>
 </body>
 </html>
