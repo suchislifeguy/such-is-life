@@ -2339,16 +2339,13 @@ return {
                         appState.previousServerState = appState.lastServerState;
                         appState.lastServerState = appState.serverState;
                         appState.serverState = data.state; // Store the new state
-                        const newState = appState.serverState; // Alias for clarity
-                        const currentPlayerState = newState?.players?.[appState.localPlayerId];
 
-                        if (typeof newState.current_temperature === 'number') {
-                            appState.currentTemp = newState.current_temperature;
-                        }
-                        appState.isRaining = newState.is_raining ?? false;
-                        appState.isDustStorm = newState.is_dust_storm ?? false
+                        // Directly assign instead of using a conditional
+                        appState.currentTemp = data.state.current_temperature ?? 18.0; // Use a default if missing
+                        appState.isRaining = data.state.is_raining ?? false;
+                        appState.isDustStorm = data.state.is_dust_storm ?? false
 
-                        updateEnvironmentDisplay(); // FORCE IT TO BE UPDATED
+                        UI.updateEnvironmentDisplay(); // FORCE IT TO BE UPDATED FROM UI!
 
                         // --- Update Visual Snake State ---
                         const serverSnakeState = newState.snake_state;
