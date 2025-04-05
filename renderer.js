@@ -1,1670 +1,912 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>SUCH IS LIFE - Kelly Gang Survival</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        /* --- Base Styles & Variables --- */
-        :root {
-            /* Color Scheme */
-            --dark-bg: #1e2a28;
-            --container-bg: #2a3d45;
-            --container-border: #111a18;
-            --top-bar-bg: rgba(0, 0, 0, 0.2);
-            --dusty-green: #7a8c79;
-            --dark-text: #d0d8d7;
-            --accent-gold: #FFD700;
-            --title-red: #a00000;
 
-            /* Mappings */
-            --bg-color: var(--dark-bg);
-            --primary-color: var(--dusty-green);
-            --secondary-color: var(--container-bg);
-            --accent-color: var(--accent-gold);
-            --text-color: var(--dark-text);
+                // renderer.js
 
-            /* Game Element Colors */
-            --player-color: #DC143C;
-            --other-player-color: #4682B4;
-            --enemy-color: #18315f;
-            --bullet-player-color: #ffed4a;
-            --bullet-enemy-color: #ff0000;
-            --health-bar-bg: #444;
-            --health-bar-high: #66bb6a;
-            --health-bar-medium: var(--accent-gold);
-            --health-bar-low: var(--player-color); /* Uses player color for low health */
-            --powerup-health: #81c784;
-            --powerup-gun: #442848;
-            --powerup-speed: #3edef3;
-            --powerup-armor: #9e9e9e;
-            --night-overlay: rgba(0, 0, 10, 0.3);
+        // --- Rendering Module ---
+        const Renderer = (() => {
+            console.log("--- Renderer.js: Starting execution ---");
 
-            /* Config & Text */
-            --font-family: 'Courier New', monospace;
-            --reconciliation-threshold: 35; /* Increased to reduce snapping frequency */
-            --lerp-factor: 0.15;            /* Slightly increased for faster visual smoothing */
-            --damage-text-color: #FFFFFF;
-            --damage-text-crit-color: var(--accent-gold);
-            --damage-text-font-size: 14px;
-            --damage-text-crit-font-size: 18px;
-            --campfire-aura-color: rgba(255, 165, 0, 0.15);
-        }
+            // --- Offscreen Canvas for Background Rendering ---
+            const offscreenCanvas = document.createElement('canvas');
+            offscreenCanvas.width = 1600;
+            offscreenCanvas.height = 900;
+            const offscreenCtx = offscreenCanvas.getContext('2d', { alpha: false }); // Optimize for no transparency
+            let isBackgroundReady = false;           // Has the initial background been drawn?
+            let currentBackgroundIsNight = null;     // Tracks state of offscreenCanvas (null, true=night, false=day)
 
-        /* --- General Layout --- */
-        body {
-            margin: 0; display: flex; flex-direction: column; justify-content: center;
-            align-items: center; min-height: 100vh; background-color: var(--bg-color);
-            font-family: var(--font-family); color: var(--text-color);
-        }
+            // --- Background Transition State ---
+            let isTransitioningBackground = false;   // Is fade animation active?
+            let transitionStartTime = 0;             // Timestamp when transition started
+            const BACKGROUND_FADE_DURATION_MS = 1000;// Duration of the fade effect
+            const oldOffscreenCanvas = document.createElement('canvas'); // Stores previous background for fading
+            oldOffscreenCanvas.width = 1600;
+            oldOffscreenCanvas.height = 900;
+            const oldOffscreenCtx = oldOffscreenCanvas.getContext('2d', { alpha: false });
 
-        /* --- Spinner Animation --- */
-        .loader-spinner {
-        border: 4px solid rgba(255, 255, 255, 0.2); /* Light border */
-        border-left-color: var(--primary-color); /* Spinner color - dusty green */
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        animation: spin 1s linear infinite;
-        /* Center the spinner if needed (using margin auto in HTML might suffice) */
-        margin-left: auto;
-        margin-right: auto;
-        }
+            // --- Base Background Colors ---
+            const dayBaseColor = '#8FBC8F';    // Base color for daytime background generation
+            const nightBaseColor = '#3E2723';  // Base color for nighttime background generation
 
-        @keyframes spin {
-        to {
-            transform: rotate(360deg);
-        }
-        }
-
-        /* --- Ensure existing loading screen styles are present --- */
-        #loading-screen {
-            position: fixed; /* Cover screen */
-            inset: 0;
-            background-color: var(--dark-bg); /* Use theme background */
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: var(--text-color); /* Theme text color */
-            font-family: var(--font-family); /* Theme font */
-            z-index: 9999; /* Highest layer */
-            opacity: 1;
-            transition: opacity 0.5s ease-out;
-            pointer-events: auto;
-        }
-
-        #game-container {
-            /* Initially hide game content */
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.4s ease-in 0.2s;
-            background-color: var(--secondary-color);
-            border: 5px solid var(--container-border);
-            border-radius: 15px; padding: 20px; padding-top: 15px;
-            text-align: center; max-width: 1980px;
-            width: calc(100% - 40px); position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.7);
-        }
-
-        /* --- Top Bar --- */
-        #top-bar {
-            display: flex; flex-direction: row; align-items: center; justify-content: center;
-            padding: 5px 10px; margin-bottom: 5px;
-            border-bottom: 2px solid var(--primary-color);
-            background-color: var(--top-bar-bg);
-            border-radius: 10px 10px 0 0;
-            box-sizing: border-box; width: 100%;
-        }
-        #top-bar h1 {
-            color: var(--text-color); margin: 5px 0 10px 0; padding: 0;
-            line-height: 1.1; text-shadow: 2px 2px 5px black;
-            font-size: 2.5em; font-weight: bold;
-        }
-        #game-status {
-            min-height: 25px; color: var(--accent-color); font-weight: bold;
-            margin-bottom: 15px; text-align: center;
-        }
-
-        /* --- Section Visibility --- */
-        #main-menu-section,
-        #multiplayer-menu-section,
-        #host-wait-section,
-        #join-code-section,
-        #game-area,
-        #game-over-screen {
-            display: none; /* Controlled by JS */
-        }
-
-        /* --- Game Area Layout --- */
-        #game-area {
-            display: flex; flex-direction: row;
-            align-items: stretch; width: 100%;
-        }
-
-        /* --- Temperature Indicator Style --- */
-        #left-panel #temperature-indicator {
-            text-align: center;
-            margin: 5px 0 10px 0; /* Adjust spacing as needed */
-            font-size: 1.0em; /* Slightly smaller than day/night */
-            padding: 4px;
-            background: rgba(0, 0, 0, 0.3); /* Consistent background style */
-            border-radius: 4px;
-            width: auto; /* Let content size it, or use width: 100% if you want full width */
-            align-self: center; /* Center horizontally if width is auto */
-            /* OR use these if you want it to span the width like day/night: */
-            /* width: 100%; */
-            /* align-self: stretch; */
-            box-sizing: border-box; /* Important if using width: 100% and padding */
-            color: var(--text-color);
-            flex-shrink: 0; /* Prevent shrinking */
-            display: block; /* Or 'flex' if needed later, initially block is fine */
-            /* You might want to add 'display: none;' initially and control via JS */
-        }
-
-        /* --- Left Panel --- */
-        #left-panel {
-            width: 360px; max-height: 910px; flex-shrink: 0;
-            background-color: var(--container-bg); padding: 15px;
-            box-sizing: border-box; display: flex; flex-direction: column;
-            color: var(--text-color); font-size: 13px;
-            overflow-y: auto; overflow-x: hidden;
-        }
-        #left-panel .left-panel-top-group { /* Holds stats, day/night indicator, TEMP */
-            /* NOTE: Changed flex-grow from 1 to 0 to prevent it taking all space */
-            flex-grow: 0; 
-            flex-shrink: 1; /* Can shrink if needed */
-            display: flex; 
-            flex-direction: column;
-        }
-        #left-panel .left-panel-bottom-group { /* Holds leave btn, chat */
-            flex-shrink: 0; 
-            display: flex; 
-            flex-direction: column;
-            margin-top: auto; /* Push bottom group to the actual bottom */
-        }
-
-        /* --- Player Stats Grid (Keep existing style) --- */
-        #player-stats-grid {
-            display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
-            width: 100%; box-sizing: border-box; margin-bottom: 15px; flex-shrink: 0;
-        }
-        /* ... (keep all existing .player-stats-box styles) ... */
-         .player-stats-box {
-            display: block; color: var(--text-color); font-size: 14px;
-            background: rgba(10, 20, 25, 0.6); padding: 8px 10px; border-radius: 4px;
-            text-align: left; border: 1px solid var(--dusty-green); box-sizing: border-box;
-            box-shadow: inset 0 0 4px rgba(0,0,0,0.4); overflow: hidden;
-        }
-        .player-stats-box .stats-header {
-            font-size: 15px; font-weight: bold; color: var(--accent-color); text-align: center;
-            padding-bottom: 4px; margin-bottom: 5px; border-bottom: 1px dashed var(--primary-color);
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; /* Prevent long headers breaking layout */
-            box-sizing: border-box;
-        }
-        .player-stats-box .stats-content {
-            line-height: 1.5; overflow-wrap: break-word; word-wrap: break-word; /* Wrap long stat values */
-        }
-        .player-stats-box .stats-content span { /* Label styling */
-            display: inline-block; min-width: 40px; font-weight: bold;
-            color: var(--dusty-green); vertical-align: top;
-        }
-
-        /* --- Day/Night Indicator (Keep existing style) --- */
-        #left-panel #day-night-indicator {
-            display: none; text-align: center; margin: 0 0 15px 0;
-            font-size: 1.1em; padding: 5px; background: rgba(0, 0, 0, 0.5);
-            border-radius: 5px; box-sizing: border-box; width: 100%;
-            color: var(--text-color); flex-shrink: 0;
-        }
-        
-        /* --- Leave Button (Keep existing style) --- */
-        #left-panel #leaveGameBtn {
-            /* Removed margin-top: auto; */ /* This is now handled by the parent .left-panel-bottom-group */
-            display: block; width: 100%; margin-bottom: 15px; 
-            padding: 12px 10px; font-size: 1rem; box-sizing: border-box; flex-shrink: 0;
-        }
-
-        /* --- Chat Styles (Keep existing) --- */
-        #left-panel #chat-log {
-            height: 190px; overflow-y: scroll; border: 1px solid var(--primary-color);
-            margin-bottom: 8px; padding: 5px; text-align: left;
-            background: rgba(10, 20, 25, 0.5); font-size: 13px; border-radius: 5px;
-            width: 100%; transition: background-color 0.5s ease, border-color 0.5s ease;
-            color: var(--dark-text); box-sizing: border-box; flex-shrink: 0;
-        }
-        /* ... (keep all other existing chat styles) ... */
-        #left-panel #chat-log div { margin-bottom: 3px; word-wrap: break-word; }
-        #left-panel #chat-log .my-message { color: var(--bullet-player-color); }
-        #left-panel #chat-log .other-message { color: var(--text-color); }
-        #left-panel #chat-log .system-message { color: var(--accent-color); font-style: italic; }
-
-        #game-container.night-mode #left-panel #chat-log { /* Night Mode Chat */
-            background-color: rgba(10, 20, 25, 0.7); border-color: var(--accent-color);
-        }
-        #game-container.night-mode #left-panel #chat-log .my-message { color: #FFFF99; }
-        #game-container.night-mode #left-panel #chat-log .other-message { color: #C0C0FF; }
-        #game-container.night-mode #left-panel #chat-log .system-message { color: var(--accent-color); }
-
-        #left-panel #chatInput {
-            display: block; width: 100%; padding: 12px 8px; font-size: 0.9rem;
-            box-sizing: border-box; margin-bottom: 8px;
-        }
-        #left-panel #sendChatBtn {
-            display: block; width: 100%; padding: 12px 10px; font-size: 1rem;
-            box-sizing: border-box; flex-shrink: 0;
-        }
-
-        /* --- Canvas --- */
-        #canvas-container {
-            flex-grow: 1; /* Allows it to take up remaining space */
-            display: flex; justify-content: center;
-            align-items: flex-start;
-            min-width: 0; /* Allows shrinking if needed (good practice) */
-        }
-        #gameCanvas {
-            border: 3px solid var(--primary-color); background-color: #a0522d; /* Default bg */
-            display: block; width: 1600px; height: 900px;
-            max-width: 100%; margin: 0; box-sizing: border-box;
-        }
-        #countdown {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            font-size: 72px; color: var(--player-color); text-shadow: 3px 3px 6px black;
-            z-index: 10; pointer-events: none; display: none;
-        }
-
-        /* --- Common Elements --- */
-        button {
-            background-color: var(--primary-color); color: var(--dark-bg);
-            border: 2px solid var(--container-border); padding: 10px 20px; margin: 10px 5px;
-            cursor: pointer; font-family: var(--font-family); font-size: 1rem;
-            transition: background-color 0.2s ease, color 0.2s ease;
-            border-radius: 5px; font-weight: bold; box-sizing: border-box;
-        }
-        button:hover:not(:disabled) { background-color: #9cb49a; color: #000; }
-        button:disabled { background-color: #555; color: #aaa; cursor: not-allowed; border-color: #444; }
-        input[type="text"] {
-            padding: 10px; margin: 10px 5px; font-family: var(--font-family); font-size: 1rem;
-            border: 2px solid var(--primary-color); border-radius: 5px;
-            background-color: var(--dark-text); color: var(--dark-bg);
-            text-transform: uppercase; box-sizing: border-box;
-        }
-
-        /* --- Menu Sections --- */
-        .menu-section {
-            padding: 30px; text-align: center; box-sizing: border-box;
-            width: 100%; color: var(--text-color);
-        }
-        .menu-section h2 { color: var(--accent-color); margin-bottom: 20px; }
-        .menu-section button {
-            display: block; width: 80%; max-width: 300px;
-            margin: 15px auto; padding: 15px 20px; font-size: 1.2rem;
-        }
-        .menu-section input[type="text"] { display: inline-block; width: auto; min-width: 180px; }
-
-        /* --- Host/Join Specific --- */
-        #host-wait-section p, #join-code-section p { font-size: 1.1rem; margin-bottom: 10px; }
-        #game-code-display {
-            font-size: 1.8rem; font-weight: bold; color: var(--accent-color);
-            background-color: var(--dark-bg); padding: 5px 15px; border-radius: 5px;
-            display: inline-block; margin: 10px 0; user-select: all;
-            border: 1px solid var(--primary-color);
-        }
-        #waiting-message { margin-top: 15px; font-style: italic;}
-
-        /* --- Game Over Screen --- */
-        #game-over-screen {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background-color: #000000; padding: 30px;
-            border: 3px solid var(--player-color); border-radius: 10px;
-            text-align: center; z-index: 20; width: 90%; max-width: 400px;
-            box-sizing: border-box; display: flex; flex-direction: column; align-items: center;
-        }
-        #game-over-screen h2 {
-            color: var(--player-color); margin-top: 0; margin-bottom: 25px;
-            font-size: 1.8em; width: 100%; flex-shrink: 0;
-        }
-        #final-stats {
-            color: var(--text-color); font-size: 1.3em; line-height: 1.6;
-            margin-bottom: 30px; width: 100%; flex-shrink: 0; text-align: center;
-        }
-        .final-stat-item { margin-bottom: 5px; }
-        .final-stat-item strong { /* Label alignment */
-            color: var(--accent-color); margin-right: 8px; display: inline-block;
-            min-width: 70px; text-align: right;
-        }
-        #game-over-screen button {
-            padding: 12px 25px; font-size: 1.1rem; margin-top: 10px; flex-shrink: 0;
-        }
-
-    </style>
-</head>
-<body>
-    <div id="loading-screen">
-        <!-- Content of loading screen goes here -->
-        <div style="text-align: center;">
-            <div style="font-size: 2.2em; margin-bottom: 5px; color: var(--accent-gold); text-shadow: 2px 2px 4px #333;">KELLY GANG</div>
-            <div style="font-size: 0.9em; margin-bottom: 20px; color: var(--dusty-green);">VICTORIA, 1878</div>
-            <div class="loader-spinner" style="margin-bottom: 20px;"></div>
-            <div style="font-size: 1.1em;">Loading... Such is Life.</div>
-        </div>
-    </div>
-
-    <!-- Main Game Container (Holds all interactive UI elements) -->
-    <div id="game-container">
-
-        <!-- Top Bar (Always visible within game-container) -->
-        <div id="top-bar">
-             <h1>SUCH IS LIFE</h1>
-        </div>
-        <!-- Game Status (Always visible within game-container) -->
-        <div id="game-status">Initializing...</div>
-
-        <!-- Menu Sections (Direct children of game-container, siblings to each other) -->
-        <div id="main-menu-section" class="menu-section">
-            <!-- Main menu buttons go here -->
-            <h2>Main Menu</h2>
-            <button id="singlePlayerBtn">Single Player</button>
-            <button id="multiplayerBtn">Multiplayer</button>
-        </div>
-        <div id="multiplayer-menu-section" class="menu-section">
-            <!-- Multiplayer menu buttons go here -->
-            <h2>Multiplayer</h2>
-            <p style="margin-bottom: 5px;">Choose number of players:</p>
-            <button id="hostGameBtn2">Host 2 Player Game</button>
-            <button id="hostGameBtn3">Host 3 Player Game</button>
-            <button id="hostGameBtn4">Host 4 Player Game</button>
-            <hr style="margin: 20px auto; width: 80%; border-color: var(--primary-color);">
-            <button id="showJoinUIBtn">Join Game (Enter Code)</button>
-            <button class="back-button" onclick="showSection('main-menu-section')">Back</button>
-        </div>
-        <div id="host-wait-section" class="menu-section">
-             <!-- Host waiting elements go here -->
-             <h2>Hosting Game</h2>
-             <p>Share this code with your mate:</p>
-             <div id="game-code-display">------</div>
-             <p id="waiting-message">Waiting for opponent to connect...</p>
-             <button id="cancelHostBtn">Cancel Hosting</button>
-        </div>
-        <div id="join-code-section" class="menu-section">
-             <!-- Join code input elements go here -->
-             <h2>Join Game</h2>
-             <p>Enter the 6-character game code:</p>
-             <input type="text" id="gameIdInput" placeholder="ABCDEF" maxlength="6">
-             <button id="joinGameSubmitBtn">Join Game</button>
-             <button class="back-button" onclick="showSection('multiplayer-menu-section')">Back</button>
-        </div>
-
-        <!-- Game Area (Direct child of game-container, sibling to menus/game over) -->
-        <div id="game-area">
-            <!-- Left Panel -->
-            <div id="left-panel">
-                 <div class="left-panel-top-group">
-                    <div id="player-stats-grid">Loading Stats...</div>
-                    <div id="day-night-indicator" style="display: none;">Day --:--</div>
-                    <div id="temperature-indicator">--°C</div>
-                 </div>
-                 <div class="left-panel-bottom-group">
-                    <button id="leaveGameBtn">Leave Game</button>
-                    <div id="chat-log"></div>
-                    <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="100">
-                    <button id="sendChatBtn">Send</button>
-                 </div>
-            </div>
-            <!-- Canvas Container -->
-            <div id="canvas-container">
-                 <div style="position: relative;">
-                    <canvas id="gameCanvas" width="1600" height="900"></canvas>
-                    <div id="countdown"></div>
-                 </div>
-            </div>
-        </div> <!-- End of game-area -->
-
-        <!-- Game Over Screen (Direct child of game-container, sibling to game-area/menus) -->
-        <!-- MUST NOT be inside game-area -->
-        <div id="game-over-screen">
-            <h2>Game Over, Mate!</h2>
-            <div id="final-stats"><!-- Final stats populated by JS --></div>
-            <button id="gameOverBackBtn">Back to Menu</button>
-        </div> <!-- End of game-over-screen -->
-
-
-    </div>
-
-    <script>
-        // --- Client Configuration & Core Constants ---
-        const WEBSOCKET_URL = 'wss://such-is-life.glitch.me/ws'; // TARGET SERVER
-        const CANVAS_WIDTH = 1600;
-        const CANVAS_HEIGHT = 900;
-        const SHOOT_COOLDOWN = 750; // Base cooldown (ms), client-side timing for now
-        const RAPID_FIRE_COOLDOWN_MULTIPLIER = 0.4; // Multiplier for rapid fire
-        const INPUT_SEND_INTERVAL = 33; // How often movement input is sent (ms)
-        const RECONNECT_DELAY = 3000; // Delay before trying to reconnect (ms)
-
-        // --- NEW Temperature Threshold Constants ---
-        const TEMP_FREEZING_CLIENT = 0.0;
-        const TEMP_COLD_CLIENT = 10.0;
-        const TEMP_TEMPERATE_CLIENT = 25.0;
-        const TEMP_HOT_CLIENT = 35.0;
-        // Note: Scorching (> 35) is handled implicitly by checks
-        const MAX_TINT_ALPHA = 0.25; // Max opacity for tint
-
-        // Default entity values (primarily for initial rendering/prediction before server state)
-        const PLAYER_DEFAULTS = { width: 25, height: 48, max_health: 100, base_speed: 150 };
-        const ENEMY_DEFAULTS = { width: 20, height: 40, max_health: 50 };
-        const BULLET_DEFAULTS = { radius: 4 };
-        const POWERUP_DEFAULTS = { size: 20 };
-
-        // Player status constants (used by UI based on server state)
-        const PLAYER_STATUS_ALIVE = 'alive';
-        const PLAYER_STATUS_DOWN = 'down';
-        const PLAYER_STATUS_DEAD = 'dead';
-
-        const ENEMY_TYPE_CHASER = 'chaser';
-        const ENEMY_TYPE_SHOOTER = 'shooter';
-   const powerupArmorColor = '#9e9e9e';
-            // Speech Bubble Colors
-           const playerSpeechBubbleBg = 'rgba(0, 0, 0, 0.7)';
-            const playerSpeechBubbleOutline = 'rgba(200, 200, 200, 0.5)';
-            const playerSpeechBubbleColor = '#d0d8d7';
-               const bulletPlayerColor = '#ffed4a';
+            // --- Cached CSS Variables for Drawing Performance ---
+            const fontFamily = "'Courier New', monospace";            // Damage Text Styles
+            const damageTextColor = '#FFFFFF';
+            const damageTextCritColor = '#FFD700';
+            const damageTextFontSize = 14;
+            const damageTextCritFontSize = 18;
+            // Player Colors (Health bars use these too)
+            const playerColor = '#DC143C';
+            const otherPlayerColor = '#4682B4';
+            // Player Character Drawing Colors (could be CSS vars if more dynamic theming needed)
+            const playerHeadColor = '#D2B48C';      const playerHelmetColor = '#CCCCCC';
+            const playerSlitColor = '#222222';      const playerCoatColor = '#8B4513';
+            const playerBootColor = '#222222';      const playerGunColor = '#444444';
+            const playerTorsoSelfColor = '#A00000'; const playerTorsoOtherColor = '#004488';
+            const dustyPlayerSelfColor = '#8B4513';   // Specific brown/dusty look for local player
+            const dustyPlayerOtherColor = '#556B2F';  // Specific green/dusty look for other players
+            // Enemy Character Drawing Colors
+            const enemySkinColor = '#D2B48C';       const enemyCoatColor = '#8B4513';
+            const enemyTorsoChaserColor = '#2F4F4F';const enemyTorsoShooterColor = '#4682B4';
+            const enemyTorsoGiantColor = '#6B4226';
+            const enemyBootColor = '#222222';       const enemyCapColor = '#111111';
+            const enemyHitFlashColor = 'rgba(255, 255, 255, 0.7)'; // Visual effect on hit
+            // Bullet Colors
+            const bulletPlayerColor = '#ffed4a';
             const bulletEnemyColor = '#ff0000'; // Note: CSS uses #ff0000, using grey here?
             // Health & Armor Bar Colors
             const healthBarBg = '#444';
             const healthBarHigh = '#66bb6a';
             const healthBarMedium = '#FFD700';
-            const healthBarLow = '#DC143C';
+            const healthBarLow = '#DC143C'; // Use cached playerColor
+            const armorBarColor = '#9e9e9e';
+            // Powerup Colors (Mapped by type in drawPowerupSquare)
+            const powerupHealthColor = '#81c784';
+            const powerupGunColor = '#442848';
+            const powerupSpeedColor = '#3edef3';
+            const powerupArmorColor = '#9e9e9e'; // Reuse armor bar color
+            const powerupShotgunColor = '#FFA500'; const powerupSlugColor = '#A0522D';
+            const powerupRapidColor = '#FFFF00'; const powerupScoreColor = '#FFD700';
+            const powerupDefaultColor = '#888'; // Fallback for unknown types
+            // Speech Bubble Colors
+            const playerSpeechBubbleColor = '#d0d8d7';
+            const playerSpeechBubbleBg = 'rgba(0, 0, 0, 0.7)';
+            const playerSpeechBubbleOutline = 'rgba(200, 200, 200, 0.5)';
+            const enemySpeechBubbleColor = '#FFAAAA';
+            const enemySpeechBubbleBg = 'rgba(70, 0, 0, 0.7)';
+            const enemySpeechBubbleOutline = 'rgba(200, 150, 150, 0.5)';
+            // Campfire Colors
+            const campfireAuraColor = 'rgba(255, 165, 0, 0.15)';
+            const campfireStickColor = '#8B4513';
+            const campfireFlameOuterColor = 'rgba(255, 165, 0, 0.6)';
+            const campfireFlameInnerColor = 'rgba(255, 255, 0, 0.7)';
+            // Muzzle Flash Color
+            const muzzleFlashColor = 'rgba(255, 220, 50, 0.9)';
+            // Idle Animation Parameters
+            const IDLE_BOB_SPEED = 600; // Divisor for time (higher = slower bob)
+            const IDLE_BOB_AMPLITUDE = 3; // Max pixel offset for bobbing
 
-        // --- Utility Functions ---
-        function getCssVar(varName) { return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || ''; }
-        function lerp(start, end, amount) { return start + (end - start) * amount; }
-        function distance(x1, y1, x2, y2) { const dx = x1 - x2; const dy = y1 - y2; return Math.sqrt(dx * dx + dy * dy); }
+            // --- Screen Shake State ---
+            let currentShakeMagnitude = 0;    // Current intensity of the shake
+            let shakeEndTime = 0;             // Timestamp when shake effect should end
 
-        // --- DOM Element References ---
-        const DOM = {
-            gameContainer: document.getElementById('game-container'),
-            gameStatus: document.getElementById('game-status'),
-            mainMenuSection: document.getElementById('main-menu-section'),
-            multiplayerMenuSection: document.getElementById('multiplayer-menu-section'),
-            hostWaitSection: document.getElementById('host-wait-section'),
-            joinCodeSection: document.getElementById('join-code-section'),
-            gameArea: document.getElementById('game-area'),
-            gameOverScreen: document.getElementById('game-over-screen'),
-            gameCodeDisplay: document.getElementById('game-code-display'),
-            waitingMessage: document.getElementById('waiting-message'),
-            gameIdInput: document.getElementById('gameIdInput'),
-            canvas: document.getElementById('gameCanvas'),
-            ctx: document.getElementById('gameCanvas').getContext('2d'),
-            dayNightIndicator: document.getElementById('day-night-indicator'),
-            countdownDiv: document.getElementById('countdown'),
-            finalStatsDiv: document.getElementById('final-stats'),
-            chatInput: document.getElementById('chatInput'),
-            chatLog: document.getElementById('chat-log'),
-            singlePlayerBtn: document.getElementById('singlePlayerBtn'),
-            multiplayerBtn: document.getElementById('multiplayerBtn'),
-            hostGameBtn2: document.getElementById('hostGameBtn2'),
-            hostGameBtn3: document.getElementById('hostGameBtn3'),
-            hostGameBtn4: document.getElementById('hostGameBtn4'),
-            showJoinUIBtn: document.getElementById('showJoinUIBtn'),
-            cancelHostBtn: document.getElementById('cancelHostBtn'),
-            joinGameSubmitBtn: document.getElementById('joinGameSubmitBtn'),
-            sendChatBtn: document.getElementById('sendChatBtn'),
-            leaveGameBtn: document.getElementById('leaveGameBtn'),
-            gameOverBackBtn: document.getElementById('gameOverBackBtn'),
-        };
+            // Helper to draw rounded rectangles (used for speech bubbles)
+            function drawRoundedRect(ctx, x, y, width, height, radius) {
+                if (width < 2 * radius) radius = width / 2; if (height < 2 * radius) radius = height / 2;
+                ctx.beginPath(); ctx.moveTo(x + radius, y);
+                ctx.arcTo(x + width, y, x + width, y + height, radius); ctx.arcTo(x + width, y + height, x, y + height, radius);
+                ctx.arcTo(x, y + height, x, y, radius); ctx.arcTo(x, y, x + width, y, radius);
+                ctx.closePath();
+            }
 
-        // --- Global Client State ---
-        let appState = {
-            mode: 'menu',               // Current state: 'menu', 'singleplayer', 'multiplayer-host', 'multiplayer-client'
-            localPlayerId: null,        // This client's player ID from the server
-            maxPlayersInGame: null,     // Max players for the current game (set by server)
-            currentGameId: null,        // ID of the current game session
-            serverState: null,          // Latest authoritative state received from server
-            animationFrameId: null,     // ID for cancelling the game loop
-            isConnected: false,         // WebSocket connection status
-            renderedPlayerPos: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 }, // Visual position after smoothing/lerp
-            predictedPlayerPos: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 }, // Position based on local input prediction
-            lastServerState: null,      // Previous server state (for interpolation)
-            previousServerState: null,  // State before the previous one (for interpolation edge cases)
-            lastLoopTime: null,         // Timestamp of the last game loop iteration
-            lastStateReceiveTime: performance.now(), // Timestamp when last state was received
-            currentTemp: 18.0,
-            isRaining: false,
-            isDustStorm: false,
-            targetTint: null, 
-            targetTintAlpha: 0.0,     
-        };
+            // --- Drawing Functions ---
 
-        // --- Local Effects State ---
-        let localPlayerMuzzleFlash = { active: false, endTime: 0, aimDx: 0, aimDy: 0 }; // Visual effect only
-        let hitPauseFrames = 0;           // Frames to pause rendering on local player hit
-        let activeSpeechBubbles = {};     // { playerId: { text: "Hi!", endTime: timestamp } }
-        let activeEnemyBubbles = {};      // { enemyId: { text: "Grrr!", endTime: timestamp } }
-        let socket = null;                // Global WebSocket instance
+            // Draws floating damage numbers, handling crits and pulsing
+            function drawDamageTexts(ctx, damageTexts, fontFamily, damageTextColor, damageTextCritColor, damageTextFontSize, damageTextCritFontSize) {
+                if (!damageTexts) return;
+                const now = performance.now();
+                const pulseDuration = 250; const pulseMaxSizeIncrease = 4; // Crit pulse effect params
+                ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
 
-        // --- Decorative Snake Effect State ---
-                // --- Snake Effect State (Visuals driven by Server Logic) ---
-        let snake = {
-            // Keep existing visual properties: segmentLength, segments, maxSegments, frequency, amplitude, lineWidth
-            segmentLength: 6.0,
-            segments: [],
-            maxSegments: 12,
-            frequency: 0.03, // Frequency for wave calculation
-            amplitude: 15.0,
-            lineWidth: 3,
+                Object.values(damageTexts).forEach(dmgText => {
+                    if (!dmgText) return;
+                    const x = dmgText.x ?? 0; const y = dmgText.y ?? 0;
+                    const text = dmgText.text ?? '?'; const isCrit = dmgText.is_crit ?? false;
+                    const spawnTime = dmgText.spawn_time ? dmgText.spawn_time * 1000 : now; // Server sends seconds
+                    const timeSinceSpawn = now - spawnTime;
+                    let currentFontSize = isCrit ? damageTextCritFontSize : damageTextFontSize;
+                    let currentFillColor = isCrit ? damageTextCritColor : damageTextColor;
 
-            // Keep server state properties
-            serverHeadX: 0,
-            serverHeadY: 0,
-            serverBaseY: 0,
-            isActiveFromServer: false,
-
-            // Replace the existing update function with this one:
-            // Replace the existing update function with this one:
-            update: function(currentTime) {
-                if (!this.isActiveFromServer) {
-                    this.segments = []; return;
-                }
-                const lerp = (s, e, a) => s + (e - s) * a;
-
-                // Ensure head segment exists and matches server
-                if (this.segments.length === 0) {
-                    this.segments.push({ x: this.serverHeadX, y: this.serverHeadY, time: currentTime });
-                } else {
-                    this.segments[0].x = this.serverHeadX;
-                    this.segments[0].y = this.serverHeadY;
-                    this.segments[0].time = currentTime; // Keep head time updated
-                }
-
-                // --- Update tail segments ---
-                const waveTime = currentTime * 0.005; // Base time factor for wave
-                // How much the wave phase shifts per segment (controls wavelength relative to body)
-                const phaseOffsetPerSegment = 1.2;
-                // How quickly segments visually follow the segment in front
-                const followLerp = 0.4;
-
-                for (let i = 1; i < this.segments.length; i++) {
-                    const seg = this.segments[i];
-                    const prevSeg = this.segments[i - 1];
-                    if (!seg || !prevSeg) continue;
-
-                    // 1. Calculate vector and distance towards the segment in front
-                    const dx = prevSeg.x - seg.x;
-                    const dy = prevSeg.y - seg.y;
-                    const dist = Math.sqrt(dx*dx + dy*dy);
-                    const dirX = dist > 0.01 ? dx / dist : 0;
-                    const dirY = dist > 0.01 ? dy / dist : 0;
-
-                    // 2. Calculate the target position purely based on following
-                    // Aim to be 'segmentLength' behind the previous segment along the direction vector
-                    const targetFollowX = prevSeg.x - dirX * this.segmentLength;
-                    const targetFollowY = prevSeg.y - dirY * this.segmentLength;
-
-                    // 3. Calculate the desired Y position based on the SIN wave
-                    // Use time and segment index 'i' for phase, relative to serverBaseY
-                    const wavePhase = waveTime - (i * phaseOffsetPerSegment);
-                    const midPoint = (this.segments.length - 1) / 2.0; // Center index (can be float)
-                    const distanceFromMid = Math.abs(i - midPoint);
-                    // Normalize distance relative to half the length (ensures value goes from 0 at center to 1 at ends)
-                    const normDist = midPoint > 0 ? distanceFromMid / midPoint : 0;
-                    // Use cosine curve: Peaks at 1 (cos(0)) in middle, falls to 0 (cos(PI/2)) at ends
-                    const amplitudeFactor = Math.cos(normDist * (Math.PI / 2)); 
-                    const targetWaveY = this.serverBaseY + Math.sin(wavePhase) * this.amplitude * amplitudeFactor;
-
-                    // 4. Blend the target Y: Use the following logic for X, but blend the wave Y
-                    // This attempts to keep the horizontal spacing correct while applying the wave vertically
-                    const finalTargetX = targetFollowX; // Use the X calculated from following
-                    const finalTargetY = targetWaveY; // Use the Y calculated purely from the wave relative to base Y
-
-
-                    // 5. Lerp segment towards its final target position
-                    seg.x = lerp(seg.x, finalTargetX, followLerp);
-                    seg.y = lerp(seg.y, finalTargetY, followLerp * 1.2); // Maybe lerp Y slightly faster?
-                }
-
-                // --- Add new segment near head if distance to neck is too large ---
-                if (this.segments.length > 0 && this.segments.length < this.maxSegments) {
-                    const head = this.segments[0];
-                    const neck = this.segments[1];
-                    if (neck) {
-                        const headNeckDistSq = (head.x - neck.x)**2 + (head.y - neck.y)**2;
-                        if (headNeckDistSq > (this.segmentLength * 1.1)**2) {
-                            // Add segment midway between head and neck for smoother addition
-                            this.segments.splice(1, 0, { x: lerp(neck.x, head.x, 0.5), y: lerp(neck.y, head.y, 0.5), time: currentTime });
-                        }
-                    } else { // Only head exists, add first neck segment
-                        // Place initial neck slightly behind head based on approx direction (needs server direction ideally)
-                        // For now, just place it offset slightly based on previous attempts
-                        this.segments.push({ x: head.x - (this.segmentLength*0.5), y: head.y, time: currentTime });
+                    // Apply crit pulse effect
+                    if (isCrit && timeSinceSpawn < pulseDuration) {
+                        const pulseProgress = Math.sin((timeSinceSpawn / pulseDuration) * Math.PI); // 0 -> 1 -> 0 wave
+                        currentFontSize += pulseProgress * pulseMaxSizeIncrease;
                     }
-                }
-                // Trim excess segments
-                while (this.segments.length > this.maxSegments) {
-                    this.segments.pop();
-                }
-            } // --- End of REVISED update function ---
-        }; // --- End of snake object definition ---
-
-        // --- Logging Wrappers ---
-        function log(...args) { console.log("[Client]", ...args); }
-        function error(...args) { console.error("[Client]", ...args); }
-
-        // --- UI Management Module ---
-        const UI = (() => {
-            const allSections = [
-                DOM.mainMenuSection, DOM.multiplayerMenuSection, DOM.hostWaitSection,
-                DOM.joinCodeSection, DOM.gameArea, DOM.gameOverScreen
-            ];
-            const gameSections = ['game-area']; // Sections considered "in-game" for styling/logic
-
-            // Shows the specified section, hides others
-            function showSection(sectionId) {
-                allSections.forEach(s => { if(s) s.style.display = 'none'; });
-                const sectionToShow = DOM[sectionId] || document.getElementById(sectionId);
-                if (sectionToShow) {
-                    sectionToShow.style.display = (sectionId === 'game-area' || sectionId === 'game-over-screen') ? 'flex' : 'block';
-                    log(`UI: Showing section: ${sectionId}`);
-                    DOM.gameContainer.classList.toggle('in-game', gameSections.includes(sectionId));
-                } else {
-                     error(`UI: Section not found: ${sectionId}`);
-                }
-            }
-
-            // Updates the #game-status text and color
-            function updateStatus(message, isError = false) {
-                 if (!DOM.gameStatus) { error("DOM.gameStatus not found"); return; }
-                 DOM.gameStatus.textContent = message;
-                 DOM.gameStatus.style.color = isError ? (getCssVar('--player-color') || 'red') : (getCssVar('--accent-color') || 'yellow');
-                 (isError ? error : log)("Status Update:", message);
-            }
-
-            // Updates the player stats grid (#player-stats-grid)
-            function updateHUD(serverState) {
-                const gridContainer = document.getElementById('player-stats-grid');
-                if (!gridContainer) { error("UI Error: #player-stats-grid not found!"); return; }
-
-                const players = serverState?.players;
-                const localPlayerId = appState.localPlayerId;
-                gridContainer.innerHTML = ''; // Clear previous stats
-
-                if (!players || Object.keys(players).length === 0) {
-                     gridContainer.innerHTML = '<span>Waiting for players...</span>'; return;
-                }
-
-                // Sort to show local player first
-                const sortedPlayerIds = Object.keys(players).sort((a, b) => {
-                     if (a === localPlayerId) return -1; if (b === localPlayerId) return 1;
-                     return a.localeCompare(b);
-                 });
-
-                sortedPlayerIds.forEach(playerId => {
-                    const pData = players[playerId]; if (!pData) return;
-                    const isSelf = (playerId === localPlayerId);
-                    const header = isSelf ? "YOU" : `P:${playerId.substring(0, 4)}`;
-                    const status = pData.player_status || PLAYER_STATUS_ALIVE;
-                    const health = pData.health ?? 0;
-                    const maxH = pData.max_health ?? PLAYER_DEFAULTS.max_health;
-                    const armor = pData.armor ?? 0;
-                    let healthDisplay;
-                    if (status === PLAYER_STATUS_DOWN) healthDisplay = `<span style='color: var(--health-bar-medium);'>DOWN</span>`;
-                    else if (status === PLAYER_STATUS_DEAD || health <= 0) healthDisplay = `<span style='color: var(--health-bar-low);'>DEAD</span>`;
-                    else healthDisplay = `${health.toFixed(1)}`; // Show one decimal place for health
-
-                    gridContainer.innerHTML += `
-                        <div class="player-stats-box">
-                            <div class="stats-header">${header}</div>
-                            <div class="stats-content">
-                                <span>HP:</span> ${healthDisplay}<br>
-                                <span>Armor:</span> ${Math.round(armor)}<br>
-                                <span>Gun:</span> ${pData.gun ?? 1}<br>
-                                <span>Speed:</span> ${pData.speed ?? PLAYER_DEFAULTS.base_speed}<br>
-                                <span>Kills:</span> ${pData.kills ?? 0}<br>
-                                <span>Score:</span> ${pData.score ?? 0}
-                            </div>
-                        </div>`;
+                    ctx.font = `bold ${Math.round(currentFontSize)}px ${fontFamily}`;
+                    ctx.fillStyle = currentFillColor;
+                    ctx.fillText(text, x, y);
                 });
             }
 
-            // Adds a message to the chat log
-            function addChatMessage(sender, message, isSelf, isSystem = false) {
-                if (!DOM.chatLog) { error("DOM.chatLog not found"); return; }
-                const div = document.createElement('div');
-                if (isSystem) {
-                    div.className = 'system-message'; div.textContent = message;
-                } else {
-                    div.className = isSelf ? 'my-message' : 'other-message';
-                    div.textContent = `${sender ? `P:${sender.substring(0,4)}` : '???'}: ${message}`;
-                }
-                DOM.chatLog.appendChild(div);
-                DOM.chatLog.scrollTop = DOM.chatLog.scrollHeight; // Auto-scroll
+            // Draws the campfire visual effect (aura, sticks, flame)
+            function drawCampfire(ctx, campfireData, CANVAS_WIDTH, CANVAS_HEIGHT, campfireAuraColor, campfireStickColor, campfireFlameOuterColor, campfireFlameInnerColor) {
+                if (!campfireData || !campfireData.active) return; // Only draw if active (night)
+                const x = campfireData.x ?? CANVAS_WIDTH / 2; const y = campfireData.y ?? CANVAS_HEIGHT / 2;
+                const radius = campfireData.radius ?? 0; if (radius <= 0) return;
+                const stickWidth = 20; const stickHeight = 4; const flameWidth = 15; const flameHeight = 25;
+
+                ctx.save();
+                // Aura
+                ctx.fillStyle = campfireAuraColor; ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
+                // Sticks (rotated slightly)
+                const stickOffsetY = 5; ctx.fillStyle = campfireStickColor;
+                ctx.translate(x, y + stickOffsetY);
+                ctx.rotate(Math.PI / 5); ctx.fillRect(-stickWidth / 2, -stickHeight / 2, stickWidth, stickHeight); ctx.rotate(-Math.PI / 5);
+                ctx.rotate(-Math.PI / 6); ctx.fillRect(-stickWidth / 2, -stickHeight / 2, stickWidth, stickHeight); ctx.rotate(Math.PI / 6);
+                ctx.translate(-x, -(y + stickOffsetY));
+                // Flame (layered ellipses)
+                const flameOffsetY = -10; const flameCenterX = x; const flameCenterY = y + flameOffsetY;
+                ctx.fillStyle = campfireFlameOuterColor; ctx.beginPath(); ctx.ellipse(flameCenterX, flameCenterY, flameWidth / 2, flameHeight / 2, 0, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = campfireFlameInnerColor; ctx.beginPath(); ctx.ellipse(flameCenterX, flameCenterY - 3, flameWidth / 3, flameHeight / 3, 0, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
             }
 
-            // Updates the countdown display and hides/shows day/night indicator
-            function updateCountdown(serverState) {
-                 if (!DOM.countdownDiv || !DOM.dayNightIndicator) { error("DOM countdown/dayNight not found."); return; }
-                 const isCountdown = serverState?.status === 'countdown' && serverState?.countdown >= 0;
-                 DOM.countdownDiv.textContent = isCountdown ? Math.ceil(serverState.countdown) : '';
-                 DOM.countdownDiv.style.display = isCountdown ? 'block' : 'none';
-                 DOM.dayNightIndicator.style.display = (serverState?.status === 'active') ? 'block' : 'none';
-             }
-
-             // Updates day/night indicator text and triggers background rendering update
-             function updateDayNight(serverState) {
-                 if (!DOM.dayNightIndicator || !DOM.canvas || !DOM.gameContainer) {
-                     error("DOM dayNight/canvas/container not found for day/night update."); return;
-                 }
-                 if (serverState?.status === 'active') {
-                     const isNight = serverState.is_night;
-                     DOM.dayNightIndicator.textContent = isNight ? 'Night' : 'Day';
-                     DOM.dayNightIndicator.style.display = 'block';
-
-                      // Add this for display as needed
-                     // console.log(`[DEBUG] (updateDayNight) Setting display to ${isNight ? 'Night' : 'Day'}`);
-
-                     Renderer.updateGeneratedBackground(isNight); // Tell Renderer to update/transition bg
-                     DOM.gameContainer.classList.toggle('night-mode', isNight); // Toggle CSS class
-                 } else {
-                     DOM.dayNightIndicator.style.display = 'none';
-                     DOM.gameContainer.classList.remove('night-mode');
-                 }
-             }
-
-            // Shows the game over screen with final stats
-            function showGameOver(finalState) {
-                if (!DOM.finalStatsDiv || !DOM.gameOverScreen) { error("DOM finalStats/gameOverScreen not found."); return; }
-                const player = finalState?.players?.[appState.localPlayerId];
-                let statsHtml = "Stats Unavailable";
-                if (player) {
-                     statsHtml = `
-                        <div class="final-stat-item"><strong>Score:</strong> ${player.score ?? 0}</div>
-                        <div class="final-stat-item"><strong>Kills:</strong> ${player.kills ?? 0}</div>`;
-                }
-                DOM.finalStatsDiv.innerHTML = statsHtml;
-                log("UI: Showing game over screen.");
-                showSection('game-over-screen'); // Use showSection to handle hiding others
+            // Draws the muzzle flash effect at the end of the player's gun
+            function drawMuzzleFlash(ctx, playerX, playerY, aimDx, aimDy, muzzleFlashColor) {
+                const flashSizeBase = 10; const flashSizeVariation = 5; const offsetDistance = 12;
+                const flashX = playerX + aimDx * offsetDistance; const flashY = playerY + aimDy * offsetDistance;
+                const flashSize = flashSizeBase + Math.random() * flashSizeVariation;
+                ctx.fillStyle = muzzleFlashColor; ctx.beginPath(); ctx.arc(flashX, flashY, flashSize / 2, 0, Math.PI * 2); ctx.fill();
             }
 
-            function updateEnvironmentDisplay() {
-            console.log("[Debug] updateEnvironmentDisplay called. appState.currentTemp:", appState.currentTemp, "appState.serverState.status:", appState.serverState?.status); // DEBUG Line
-            const tempIndicator = document.getElementById('temperature-indicator');
-                if (!tempIndicator) { error("UI Error: #temperature-indicator not found!"); return; }
-
-                // Only hide if temp is null AND the game hasn't started yet
-                if ((appState.currentTemp === null && appState.serverState?.status !== 'active') || appState.serverState?.status === 'menu') {
-                    tempIndicator.style.display = 'none'; // Hide if not active or no temp data
-                    return;
-                }
-
-                tempIndicator.style.display = 'block'; // Show if active
-                const temp = appState.currentTemp;
-
-                tempIndicator.innerHTML = `${temp.toFixed(0)}°C`;
+            // Draws a red vignette effect around the screen edges when player health is low
+            function drawDamageVignette(ctx, intensity, CANVAS_WIDTH, CANVAS_HEIGHT) {
+                if (intensity <= 0) return;
+                ctx.save();
+                const outerRadius = Math.sqrt(CANVAS_WIDTH**2 + CANVAS_HEIGHT**2) / 2; // Diagonal radius
+                const gradient = ctx.createRadialGradient(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 0, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, outerRadius);
+                const redAlpha = 0.4 * intensity; // Max 40% opacity red
+                gradient.addColorStop(0, 'rgba(255, 0, 0, 0)'); // Transparent center
+                gradient.addColorStop(0.75, 'rgba(255, 0, 0, 0)'); // Transparent out to 75%
+                gradient.addColorStop(1, `rgba(255, 0, 0, ${redAlpha.toFixed(2)})`); // Fade to red at edge
+                ctx.fillStyle = gradient; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                ctx.restore();
             }
 
-            // Make sure to expose the new function
-            return {
-                 showSection, updateStatus, updateHUD, addChatMessage,
-                 updateCountdown, updateDayNight, showGameOver,
-                 updateEnvironmentDisplay // <-- ADD THIS to return object
-            };
-        })(); // End UI module IIFE
+            // Draws active speech bubbles for enemies based on server state
+            function drawEnemySpeechBubbles(ctx, enemiesToRender, activeEnemyBubbles, fontFamily, enemySpeechBubbleBg, enemySpeechBubbleOutline, enemySpeechBubbleColor, ENEMY_DEFAULTS) {
+                const now = performance.now();
+                const bubbleFont = 'italic 11px ' + fontFamily;
+                const cornerRadius = 4; const textPadding = 3; const bubbleOffset = 20; // Positioning constants
+                ctx.font = bubbleFont; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+                const enemyIdsToRemove = []; // Track bubbles that expired or whose owner disappeared
 
-        // --- Network Module ---
-        const Network = (() => {
-            let reconnectTimer = null;
+                for (const enemyId in activeEnemyBubbles) {
+                    const bubble = activeEnemyBubbles[enemyId];
+                    if (now >= bubble.endTime) { enemyIdsToRemove.push(enemyId); continue; } // Expired
+                    const enemy = enemiesToRender?.[enemyId]; // Find corresponding enemy in current state
+                    if (enemy && enemy.health > 0) { // Only draw if enemy exists and is alive
+                        const enemyDrawX = enemy.x; const enemyDrawY = enemy.y;
+                        const enemyHeight = enemy.height ?? ENEMY_DEFAULTS.height;
+                        const bubbleY = enemyDrawY - (enemyHeight / 2) - bubbleOffset; // Position above enemy
+                        const textMetrics = ctx.measureText(bubble.text);
+                        const textWidth = textMetrics.width; const boxWidth = textWidth + textPadding * 2;
+                        const approxFontHeight = 11; const boxHeight = approxFontHeight + textPadding * 2;
+                        const boxX = enemyDrawX - boxWidth / 2; const boxY = bubbleY - boxHeight;
 
-            // Establishes WebSocket connection
-            function connect(onOpenCallback) {
-                if (socket && socket.readyState !== WebSocket.CLOSED) { // Prevent multiple connections
-                    if (socket.readyState === WebSocket.OPEN && onOpenCallback) onOpenCallback();
-                    return;
+                        ctx.fillStyle = enemySpeechBubbleBg; drawRoundedRect(ctx, boxX, boxY, boxWidth, boxHeight, cornerRadius); ctx.fill();
+                        ctx.strokeStyle = enemySpeechBubbleOutline; ctx.lineWidth = 1; ctx.stroke();
+                        ctx.fillStyle = enemySpeechBubbleColor; ctx.fillText(bubble.text, enemyDrawX, bubbleY - textPadding);
+                    } else { enemyIdsToRemove.push(enemyId); } // Remove if enemy no longer valid
                 }
-                clearTimeout(reconnectTimer);
-                UI.updateStatus('Connecting...'); log("Attempting WebSocket connection to:", WEBSOCKET_URL);
-                try { socket = new WebSocket(WEBSOCKET_URL); }
-                catch (err) { error("WebSocket creation failed:", err); UI.updateStatus('Connection failed. Please refresh.', true); return; }
+                enemyIdsToRemove.forEach(id => { delete activeEnemyBubbles[id]; }); // Clean up expired/invalid bubbles
+            }
 
-                socket.onopen = () => {
-                    log('WebSocket connection established.');
-                    appState.isConnected = true;
-                    // Don't update #game-status here, let the menu show first
+            // Draws active speech bubbles for players (e.g., from chat)
+            function drawSpeechBubbles(ctx, playersToRender, activeSpeechBubbles, fontFamily, playerSpeechBubbleBg, playerSpeechBubbleOutline, playerSpeechBubbleColor, PLAYER_DEFAULTS, appState) {
+                const now = performance.now();
+                const bubbleFont = 'bold 12px ' + fontFamily;
+                const cornerRadius = 5; const textPadding = 4; const bubbleOffset = 30;
+                ctx.font = bubbleFont; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+                const playerIdsToRemove = [];
 
-                    const loadingScreen = document.getElementById('loading-screen');
-                    const gameContainer = DOM.gameContainer; // Use cached DOM ref if available
+                for (const playerId in activeSpeechBubbles) {
+                    const bubble = activeSpeechBubbles[playerId];
+                    if (now >= bubble.endTime) { playerIdsToRemove.push(playerId); continue; }
+                    const player = playersToRender?.[playerId];
+                    // Only draw if player exists and is not dead
+                    if (player && player.player_status !== 'dead' && player.health > 0) {
+                        // Use interpolated/predicted position for smoothness
+                        const playerDrawX = (playerId === appState.localPlayerId) ? appState.renderedPlayerPos.x : player.x;
+                        const playerDrawY = (playerId === appState.localPlayerId) ? appState.renderedPlayerPos.y : player.y;
+                        const playerHeight = player.height ?? PLAYER_DEFAULTS.height;
+                        const bubbleY = playerDrawY - (playerHeight / 2) - bubbleOffset;
+                        const textMetrics = ctx.measureText(bubble.text);
+                        const textWidth = textMetrics.width; const boxWidth = textWidth + textPadding * 2;
+                        const approxFontHeight = 12; const boxHeight = approxFontHeight + textPadding * 2;
+                        const boxX = playerDrawX - boxWidth / 2; const boxY = bubbleY - boxHeight;
 
-                    // Trigger fade-out for loading screen
-                    if (loadingScreen) {
-                        loadingScreen.style.opacity = '0';
-                        // Make it non-interactive after starting fade
-                        loadingScreen.style.pointerEvents = 'none';
-                        // Optional: Remove from layout after transition if needed, though opacity=0 usually suffices
-                        // setTimeout(() => { loadingScreen.style.display = 'none'; }, 500); // Match CSS transition time
+                        ctx.fillStyle = playerSpeechBubbleBg; drawRoundedRect(ctx, boxX, boxY, boxWidth, boxHeight, cornerRadius); ctx.fill();
+                        ctx.strokeStyle = playerSpeechBubbleOutline; ctx.lineWidth = 1; ctx.stroke();
+                        ctx.fillStyle = playerSpeechBubbleColor; ctx.fillText(bubble.text, playerDrawX, bubbleY - textPadding);
+                    } else { playerIdsToRemove.push(playerId); } // Remove if player invalid
+                }
+                playerIdsToRemove.forEach(id => { delete activeSpeechBubbles[id]; });
+            }
+
+            function drawSnake(ctx, snake) {
+                // Draw based on snake.isActiveFromServer flag, controlled by server state
+                if (!snake.isActiveFromServer || !snake.segments || snake.segments.length < 2) return; // Need at least 2 points to draw a line
+
+                const snakeLineColor = '#261a0d';
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = snakeLineColor;
+                ctx.lineWidth = snake.lineWidth; // Use snake.lineWidth defined in the snake object
+                ctx.beginPath();
+
+                // Start drawing from the tail segment
+                ctx.moveTo(snake.segments[snake.segments.length - 1].x, snake.segments[snake.segments.length - 1].y);
+
+                // Draw lines smoothly through the segments (e.g., using quadratic curves)
+                for (let i = snake.segments.length - 2; i >= 1; i--) {
+                    const seg = snake.segments[i];
+                    const nextSeg = snake.segments[i - 1];
+                    if (!seg || !nextSeg) continue;
+                    // Calculate midpoint for curve control point
+                    const xc = (seg.x + nextSeg.x) / 2;
+                    const yc = (seg.y + nextSeg.y) / 2;
+                    ctx.quadraticCurveTo(seg.x, seg.y, xc, yc);
+                }
+                // Curve/Line to the head segment
+                if (snake.segments.length > 0) {
+                    const head = snake.segments[0];
+                    if (snake.segments.length > 1) {
+                        const neck = snake.segments[1];
+                        // Curve from neck towards midpoint between neck and head for smoother connection
+                        const xc = (neck.x + head.x) / 2;
+                        const yc = (neck.y + head.y) / 2;
+                        ctx.quadraticCurveTo(neck.x, neck.y, xc, yc);
                     }
+                    // Ensure final line goes exactly to the head
+                    ctx.lineTo(head.x, head.y);
+                }
 
-                    // Trigger fade-in for game container
-                    if (gameContainer) {
-                        gameContainer.style.visibility = 'visible';
-                        gameContainer.style.opacity = '1';
-                    }
+                ctx.stroke();
+            }
 
-                    // Now safe to update status and show the menu
-                    UI.updateStatus('Connected. Select Mode.');
-                    UI.showSection('main-menu-section');
+            // Iterates through players and calls drawPlayerCharacter for each alive/downed player
+            function drawPlayers(ctx, players, appState, PLAYER_DEFAULTS, playerColor, otherPlayerColor, localPlayerMuzzleFlash) {
+                 if (!players) return;
+                 Object.values(players).forEach(player => {
+                     if (!player || player.player_status === 'dead') return; // Skip dead players
+                     const isSelf = player.id === appState.localPlayerId;
+                     const playerStatus = player.player_status || 'alive';
+                     // Use smoothed render position for local player, direct server pos for others (handled by interpolation later)
+                     const drawX = isSelf ? appState.renderedPlayerPos.x : player.x;
+                     const drawY = isSelf ? appState.renderedPlayerPos.y : player.y;
+                     const width = player.width ?? PLAYER_DEFAULTS.width;
+                     const height = player.height ?? PLAYER_DEFAULTS.height;
+                     const maxHealth = player.max_health ?? PLAYER_DEFAULTS.max_health;
+                     const currentArmor = player.armor ?? 0;
+                     let isDown = (playerStatus === 'down');
+                     let alpha = isDown ? 0.4 : 1.0; // Fade downed players
 
-                    // if (onOpenCallback) onOpenCallback(); // Keep if used
-                };
+                     ctx.save(); ctx.globalAlpha = alpha;
+                     // Aim direction needed for drawing the gun correctly for local player
+                     const aimDx = isSelf ? localPlayerMuzzleFlash.aimDx : 0;
+                     const aimDy = isSelf ? localPlayerMuzzleFlash.aimDy : 0;
+                     drawPlayerCharacter(ctx, drawX, drawY, width, height, isSelf, player, aimDx, aimDy);
+                     ctx.restore();
 
-                socket.onmessage = handleServerMessage; // Global handler
-                socket.onerror = (event) => { error('WebSocket Error Event:', event); }; // Limited info typically
-                socket.onclose = (event) => {
-                    error(`WebSocket Closed: Code=${event.code}, Reason='${event.reason || 'N/A'}'`);
-                    const wasConnected = appState.isConnected; appState.isConnected = false; socket = null;
-                    Game.resetClientState(false); // Reset game state, keep UI showing error/reconnecting
-
-                    if (event.code === 1000) { // Normal closure
-                        UI.updateStatus('Disconnected.'); UI.showSection('main-menu-section');
-                    } else if (wasConnected) { // Abnormal closure
-                         UI.updateStatus('Connection lost. Reconnecting...', true); scheduleReconnect();
-                    } else { // Failed initial connection
-                         UI.updateStatus('Connection failed. Please refresh.', true);
-                    }
-                    if (appState.animationFrameId) { // Stop game loop if running
-                         cancelAnimationFrame(appState.animationFrameId); appState.animationFrameId = null;
-                         Input.cleanup(); log("Game loop stopped due to connection close.");
+                     // Draw health/armor bars only if player is alive
+                     if (playerStatus === 'alive') {
+                         drawHealthBar(ctx, drawX, drawY, width, player.health, maxHealth, healthBarBg, healthBarHigh, healthBarMedium, healthBarLow);
+                         if (currentArmor > 0) drawArmorBar(ctx, drawX, drawY, width, currentArmor, healthBarBg, armorBarColor);
                      }
-                };
+                 });
+             }
+
+            // Generates the static background details onto the offscreen canvas
+            function generateBackground(offscreenCtx, targetIsNight, CANVAS_WIDTH, CANVAS_HEIGHT, dayBaseColor, nightBaseColor) {
+                log(`[Renderer] Generating background for ${targetIsNight ? 'Night' : 'Day'}`);
+                const baseColor = targetIsNight ? nightBaseColor : dayBaseColor;
+                offscreenCtx.fillStyle = baseColor;
+                offscreenCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); // Base fill
+
+                if (!targetIsNight) { // Day Details
+                    const numPatches = 100; const numTufts = 150;
+                    for (let i = 0; i < numPatches; i++) { // Dirt patches
+                        const x = Math.random()*CANVAS_WIDTH; const y = Math.random()*CANVAS_HEIGHT;
+                        const radius = Math.random()*40+15; const r = 101+Math.random()*20-10;
+                        const g = 67+Math.random()*20-10; const b = 33+Math.random()*20-10;
+                        const alpha = Math.random()*0.25+0.20;
+                        offscreenCtx.fillStyle = `rgba(${r.toFixed(0)}, ${g.toFixed(0)}, ${b.toFixed(0)}, ${alpha.toFixed(2)})`;
+                        offscreenCtx.beginPath(); offscreenCtx.arc(x, y, radius, 0, Math.PI*2); offscreenCtx.fill();
+                    }
+                    offscreenCtx.lineWidth = 3; offscreenCtx.strokeStyle = 'rgba(34, 139, 34, 0.6)';
+                    for (let i = 0; i < numTufts; i++) { // Grass tufts
+                        const x = Math.random()*CANVAS_WIDTH; const y = Math.random()*CANVAS_HEIGHT;
+                        offscreenCtx.beginPath(); offscreenCtx.moveTo(x, y);
+                        offscreenCtx.lineTo(x+(Math.random()*6-3), y-(Math.random()*6+5)); offscreenCtx.stroke();
+                    }
+                } else { // Night Details
+                    const numPatches = 60; const numStars = 150;
+                    for (let i = 0; i < numPatches; i++) { // Dark patches
+                        const x = Math.random()*CANVAS_WIDTH; const y = Math.random()*CANVAS_HEIGHT;
+                        const radius = Math.random()*50+20; const alpha = Math.random()*0.15+0.1;
+                        offscreenCtx.fillStyle = `rgba(5, 2, 2, ${alpha.toFixed(2)})`;
+                        offscreenCtx.beginPath(); offscreenCtx.arc(x, y, radius, 0, Math.PI*2); offscreenCtx.fill();
+                    }
+                    offscreenCtx.fillStyle = 'rgba(255, 255, 240, 0.8)';
+                    for (let i = 0; i < numStars; i++) { // Stars
+                        const starX = Math.random()*CANVAS_WIDTH; const starY = Math.random()*CANVAS_HEIGHT;
+                        const starR = Math.random()*1.5+0.5; offscreenCtx.fillRect(starX, starY, starR, starR);
+                    }
+                }
+                log("[Renderer] Background generation complete.");
+                return targetIsNight; // Update state tracker
             }
 
-            // Schedules a reconnect attempt
-            function scheduleReconnect() {
-                 clearTimeout(reconnectTimer); log(`Scheduling reconnect in ${RECONNECT_DELAY}ms`);
-                 reconnectTimer = setTimeout(() => {
-                     log("Attempting reconnect...");
-                     connect(() => { UI.updateStatus('Reconnected.'); UI.showSection('main-menu-section'); }); // Go back to menu on reconnect
-                 }, RECONNECT_DELAY);
-            }
+            // Called externally (e.g., by UI module) to trigger background regeneration/transition
+            function updateGeneratedBackground(targetIsNight, CANVAS_WIDTH, CANVAS_HEIGHT, dayBaseColor, nightBaseColor) {
+                // No change needed if background is already correct and ready
+                if (targetIsNight === currentBackgroundIsNight && isBackgroundReady) return;
+                log(`[Renderer] Request to update background to ${targetIsNight ? 'Night' : 'Day'}.`);
 
-            // Sends a JSON payload to the server
-            function sendMessage(payload) {
-                if (socket && socket.readyState === WebSocket.OPEN) {
-                    try { socket.send(JSON.stringify(payload)); }
-                    catch (err) { error("Error sending message:", err, payload); }
-                } else {
-                    error('Cannot send message, WebSocket not open or null.', payload);
+                if (isBackgroundReady) { // Start transition if a previous background exists
+                    log("[Renderer] Starting background transition...");
+                    isTransitioningBackground = true; transitionStartTime = performance.now();
+                    // Copy current background to the 'old' canvas for fading
+                    oldOffscreenCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                    oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0);
+                    // Generate the new background onto the main offscreen canvas
+                    generateBackground(offscreenCtx, targetIsNight, CANVAS_WIDTH, CANVAS_HEIGHT, dayBaseColor, nightBaseColor);
+                } else { // First time: generate directly, no transition
+                    log("[Renderer] First background generation.");
+                    currentBackgroundIsNight = generateBackground(offscreenCtx, targetIsNight, CANVAS_WIDTH, CANVAS_HEIGHT, dayBaseColor, nightBaseColor);
+                    isBackgroundReady = true; log("[Renderer] isBackgroundReady set to true.");
                 }
             }
 
-            // Explicitly closes the WebSocket connection
-             function closeConnection(code = 1000, reason = "User action") {
-                 clearTimeout(reconnectTimer);
-                 if (socket && socket.readyState === WebSocket.OPEN) {
-                     log(`Closing WebSocket explicitly: ${reason} (Code: ${code})`);
-                     socket.close(code, reason);
-                 }
-                 socket = null; appState.isConnected = false; // Clear refs immediately
-             }
+             // Draws the detailed player character sprite
+             function drawPlayerCharacter(ctx, x, y, w, h, isSelf, playerState, aimDx, aimDy) {
+                 // Color Definitions (Specific to player sprite)
+                 const ironHelmetColor = '#3d3d3d'; const ironHelmetHighlight = '#666666'; const ironHelmetShadow = '#1a1a1a';
+                 const beltColor = '#412a19'; const bootColor = '#241c1c'; const backgroundShadowColor = 'rgba(0,0,0,0.3)';
+                 const simpleChestPlateColor = '#777777'; const chestPlateHighlight = '#999999';
+                 const slitColor = '#000000'; const gunColor = '#444444';
+                 const sparkColors = ['rgba(255, 100, 0, 0.8)', 'rgba(255, 165, 0, 0.9)', 'rgba(255, 220, 50, 0.7)']; // Hit sparks
 
-            return { connect, sendMessage, closeConnection };
-        })();
+                 // State / Animation variables
+                 const justHit = playerState?.hit_flash_this_tick ?? false;
+                 const isIdle = (playerState?.input_vector?.dx ?? 0) === 0 && (playerState?.input_vector?.dy ?? 0) === 0;
+                 const isMoving = !isIdle;
+                 const time = performance.now(); // For animations
+                 const bobOffset = isIdle ? Math.sin(time / IDLE_BOB_SPEED) * IDLE_BOB_AMPLITUDE : 0; // Idle bobbing
 
-        // --- Input Handling Module ---
-        const Input = (() => {
-             let keys = {}; // Tracks currently pressed keys relevant to game actions
-             let lastShotTime = 0; // Timestamp of the last shot fired (for cooldown)
-             let movementInterval = null; // Interval timer for sending movement input
-             let mouseCanvasPos = { x: 0, y: 0 }; // Mouse position relative to internal canvas coords
-             let isMouseDown = false; // Tracks left mouse button state
+                 const nowSeconds = time / 1000.0;
+                 const snakeEffect = playerState?.effects?.snake_bite_slow;
+                 const isSnakeBitten = snakeEffect && nowSeconds < snakeEffect.expires_at;
 
-             // Sets up global event listeners
-             function setup() {
-                cleanup(); // Remove old listeners first
-                document.addEventListener('keydown', handleKeyDown);
-                document.addEventListener('keyup', handleKeyUp);
-                DOM.chatInput.addEventListener('keydown', handleChatEnter); // Specific listener for chat
-                if (DOM.canvas) {
-                     DOM.canvas.addEventListener('mousemove', handleMouseMove);
-                     DOM.canvas.addEventListener('mousedown', handleMouseDown);
-                } else { error("Input setup failed: Canvas element not found."); }
-                document.addEventListener('mouseup', handleMouseUp); // Global mouse up listener
-                movementInterval = setInterval(sendMovementInput, INPUT_SEND_INTERVAL);
-                log("Input listeners setup.");
-             }
+                 // Dimensions (relative to w/h)
+                 const helmetHeight = h*0.30; const helmetWidth = w*0.95; const slitHeight = helmetHeight*0.15;
+                 const slitWidth = helmetWidth*0.8; const neckGuardHeight = h*0.06; const shoulderPlateWidth = w*1.25;
+                 const shoulderPlateHeight = h*0.10; const chestPlateHeight = h*0.30; const chestPlateWidth = w*0.9;
+                 const armWidth = w*0.2; const armLength = h*0.4; const beltHeight = h*0.05; const pantsHeight = h*0.35;
+                 const bootHeight = h*0.10; const bootWidth = w*0.32; const bootSpacing = w*0.4;
 
-             // Removes event listeners and clears state
-             function cleanup() {
-                 document.removeEventListener('keydown', handleKeyDown);
-                 document.removeEventListener('keyup', handleKeyUp);
-                 DOM.chatInput.removeEventListener('keydown', handleChatEnter);
-                 if (DOM.canvas) {
-                      DOM.canvas.removeEventListener('mousemove', handleMouseMove);
-                      DOM.canvas.removeEventListener('mousedown', handleMouseDown);
-                 }
-                 document.removeEventListener('mouseup', handleMouseUp);
-                 clearInterval(movementInterval); movementInterval = null;
-                 keys = {}; isMouseDown = false; mouseCanvasPos = { x: 0, y: 0 };
-                 log("Input listeners cleaned up.");
-             }
+                 // Y Position Calculation (Top-down from center y)
+                 const topOffset = h*0.5; const helmetTopY = y-topOffset+bobOffset; const helmetBottomY = helmetTopY+helmetHeight;
+                 const slitY = helmetTopY+helmetHeight*0.4; const neckGuardTopY = helmetBottomY-3;
+                 const neckGuardBottomY = neckGuardTopY+neckGuardHeight; const shoulderTopY = neckGuardBottomY-2;
+                 const shoulderBottomY = shoulderTopY+shoulderPlateHeight; const chestPlateTopY = shoulderTopY+shoulderPlateHeight*0.15;
+                 const armTopY = shoulderTopY+shoulderPlateHeight*0.2; const beltY = chestPlateTopY+chestPlateHeight+beltHeight*0.1; // Adjusted belt pos
+                 const pantsTopY = beltY+beltHeight*0.4; const pantsBottomY = pantsTopY+pantsHeight;
+                 const bootTopY = pantsBottomY-5; const bootBottomY = bootTopY+bootHeight;
 
-            // Updates mouse position relative to the internal canvas resolution
-             function handleMouseMove(event) {
-                 if (!DOM.canvas) return;
-                 const rect = DOM.canvas.getBoundingClientRect();
-                 const rawMouseX = event.clientX - rect.left; const rawMouseY = event.clientY - rect.top;
-                 const visualWidth = rect.width; const visualHeight = rect.height;
-                 const internalWidth = DOM.canvas.width; const internalHeight = DOM.canvas.height;
-                 const scaleX = (visualWidth > 0) ? internalWidth / visualWidth : 1;
-                 const scaleY = (visualHeight > 0) ? internalHeight / visualHeight : 1;
-                 mouseCanvasPos.x = rawMouseX * scaleX; mouseCanvasPos.y = rawMouseY * scaleY;
-             }
+                 // Use distinct colors for self vs others
+                 const distinguishingColor = isSelf ? '#8B4513' : '#556B2F';
 
-            // Tracks left mouse button down state
-            function handleMouseDown(event) {
-                if (document.activeElement === DOM.chatInput) return; // Ignore clicks if typing chat
-                if (event.button === 0) { isMouseDown = true; event.preventDefault(); }
-            }
-            // Tracks left mouse button up state (globally)
-            function handleMouseUp(event) {
-                if (event.button === 0) { isMouseDown = false; }
-            }
+                 ctx.save(); // Start drawing layers
 
-            // Handles game-related key presses (movement, space, 'e')
-            // Ignores input if chat input is focused.
-             function handleKeyDown(e) {
-                 if (document.activeElement === DOM.chatInput) return; // Ignore if typing chat
+                 // 1. Shadow (underneath everything)
+                 ctx.beginPath(); const shadowY = bootBottomY+1;
+                 ctx.ellipse(x, shadowY, w*0.45, h*0.05, 0, 0, Math.PI*2); ctx.fillStyle = backgroundShadowColor; ctx.fill();
 
-                 const key = e.key.toLowerCase();
+                 // 2. Pants (using the distinguishing color)
+                 ctx.fillStyle = distinguishingColor; const legWidth = w*0.4;
+                 ctx.fillRect(x-w*0.45, pantsTopY, legWidth, pantsHeight); ctx.fillRect(x+w*0.05, pantsTopY, legWidth, pantsHeight);
 
-                 // Track movement/shoot keys state
-                 if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' '].includes(key)) {
-                    if (!keys[key]) { keys[key] = true; }
-                    e.preventDefault(); return;
+                 // 3. Boots (with stepping animation if moving)
+                 ctx.fillStyle = bootColor;
+                 if (isMoving) {
+                     const stepDuration = 250; const stepPhase = Math.floor(time / stepDuration) % 2;
+                     if (stepPhase === 0) { // Left steps
+                         ctx.fillRect(x-bootSpacing-bootWidth/2, bootTopY-2, bootWidth, bootHeight); ctx.fillRect(x+bootSpacing-bootWidth/2, bootTopY, bootWidth, bootHeight);
+                     } else { // Right steps
+                         ctx.fillRect(x-bootSpacing-bootWidth/2, bootTopY, bootWidth, bootHeight); ctx.fillRect(x+bootSpacing-bootWidth/2, bootTopY-2, bootWidth, bootHeight);
+                     }
+                 } else { // Idle stance
+                     ctx.fillRect(x-bootSpacing-bootWidth/2, bootTopY, bootWidth, bootHeight); ctx.fillRect(x+bootSpacing-bootWidth/2, bootTopY, bootWidth, bootHeight);
                  }
 
-                 // Handle 'E' key for pushback ability
-                 if (key === 'e') {
-                     if (appState.serverState?.status === 'active' && appState.isConnected) {
-                         log("Sending player_pushback message."); Network.sendMessage({ type: 'player_pushback' });
-                         e.preventDefault();
-                     } else { log("Pushback ('e') ignored: Game not active or not connected."); }
-                     return;
-                 }
-             }
+                 // 4. Belt
+                 ctx.fillStyle = beltColor; ctx.fillRect(x-w*0.65, beltY-beltHeight/2, w*1.3, beltHeight);
 
-             // Clears key state flags on key up
-             function handleKeyUp(e) {
-                 const key = e.key.toLowerCase();
-                 if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' '].includes(key)) {
-                     if (keys[key]) { keys[key] = false; }
-                 }
-             }
+                 // 5. Chest Plate
+                 ctx.fillStyle = simpleChestPlateColor; ctx.fillRect(x-chestPlateWidth/2, chestPlateTopY, chestPlateWidth, chestPlateHeight);
+                 ctx.fillStyle = chestPlateHighlight; ctx.fillRect(x-chestPlateWidth/2+5, chestPlateTopY+5, chestPlateWidth-10, 3); // Highlight
 
-             // Handles sending chat message on Enter key press in chat input
-             function handleChatEnter(e) {
-                 if (e.key === 'Enter') {
-                     e.preventDefault(); log("Enter key detected in chat input.");
-                     Game.sendChatMessage();
-                 }
-             }
+                 // 6. Shoulder Plates
+                 ctx.fillStyle = ironHelmetColor; ctx.fillRect(x-shoulderPlateWidth/2, shoulderTopY, shoulderPlateWidth, shoulderPlateHeight);
+                 ctx.fillStyle = ironHelmetHighlight; ctx.fillRect(x-shoulderPlateWidth/2+3, shoulderTopY+2, shoulderPlateWidth-6, 2); // Highlight
 
-             // Calculates normalized movement vector based on currently pressed keys
-             function getMovementInputVector() {
-                 let dx = 0, dy = 0;
-                 if (keys['w'] || keys['arrowup']) dy -= 1; if (keys['s'] || keys['arrowdown']) dy += 1;
-                 if (keys['a'] || keys['arrowleft']) dx -= 1; if (keys['d'] || keys['arrowright']) dx -= 1;
-                 if (dx !== 0 && dy !== 0) { // Normalize diagonal
-                     const factor = 1 / Math.sqrt(2); dx *= factor; dy *= factor;
-                 }
-                 return { dx, dy };
-             }
+                 // 7. Arms (using distinguishing color)
+                 ctx.fillStyle = distinguishingColor;
+                 ctx.fillRect(x-shoulderPlateWidth*0.45, armTopY, armWidth, armLength); ctx.fillRect(x+shoulderPlateWidth*0.45-armWidth, armTopY, armWidth, armLength);
 
-             // Sends movement input to server periodically
-             function sendMovementInput() {
-                 if (appState.mode !== 'menu' && appState.serverState?.status === 'active' && appState.isConnected) {
-                    Network.sendMessage({ type: 'player_move', direction: getMovementInputVector() });
-                 }
-             }
+                 // 8. Neck Guard
+                 ctx.fillStyle = ironHelmetColor; ctx.fillRect(x-helmetWidth*0.4, neckGuardTopY, helmetWidth*0.8, neckGuardHeight);
 
-            // Handles client-side shooting logic (cooldown, effects, sending message)
-            function handleShooting() {
-                if (appState.serverState?.status !== 'active') return;
+                 // 9. Helmet
+                 ctx.fillStyle = ironHelmetColor; ctx.fillRect(x-helmetWidth/2, helmetTopY, helmetWidth, helmetHeight);
+                 ctx.fillStyle = ironHelmetHighlight; ctx.fillRect(x-helmetWidth/2, helmetTopY, helmetWidth, 3); // Top Highlight
+                 ctx.fillStyle = ironHelmetShadow; ctx.fillRect(x-helmetWidth/2+1, helmetTopY+3, helmetWidth-2, 2); // Shadow below highlight
 
-                // Calculate cooldown based on current ammo type from server state
-                const playerState = appState.serverState?.players?.[appState.localPlayerId];
-                const currentAmmo = playerState?.active_ammo_type || 'standard';
-                let actualCooldown = SHOOT_COOLDOWN * (currentAmmo === 'ammo_rapid_fire' ? RAPID_FIRE_COOLDOWN_MULTIPLIER : 1);
+                 // 10. Slit
+                 ctx.fillStyle = slitColor; ctx.fillRect(x-slitWidth/2, slitY, slitWidth, slitHeight);
 
-                // Check cooldown
-                const now = Date.now();
-                if (now - lastShotTime < actualCooldown) return; // Still on cooldown
-                lastShotTime = now;
+                 // 11. Gun (only for local player, pointing towards aim direction)
+                 if (isSelf && (aimDx !== 0 || aimDy !== 0)) { // Check aim direction is non-zero
+                    const gunLevel = playerState?.gun ?? 1; const gunLengthBase = 12;
+                    const gunLengthBonus = (gunLevel-1)*3; const gunLength = gunLengthBase+gunLengthBonus;
+                    const gunThickness = 5+(gunLevel-1)*0.5; const gunOriginY = armTopY+armLength*0.4;
+                    const gunOriginXOffset = w*0.1; // Offset from center
+                    ctx.save(); ctx.translate(x, gunOriginY);
+                    const angle = Math.atan2(aimDy, aimDx); ctx.rotate(angle);
+                    ctx.fillStyle = gunColor; ctx.fillRect(gunOriginXOffset, -gunThickness/2, gunLength, gunThickness);
+                    ctx.restore();
+                }
 
-                // Trigger local muzzle flash effect
-                const playerRenderX = appState.renderedPlayerPos.x; const playerRenderY = appState.renderedPlayerPos.y;
-                let flashDx = mouseCanvasPos.x - playerRenderX; let flashDy = mouseCanvasPos.y - playerRenderY;
-                const flashMag = Math.sqrt(flashDx*flashDx + flashDy*flashDy);
-                if (flashMag > 0.01) { flashDx /= flashMag; flashDy /= flashMag; } else { flashDx = 0; flashDy = -1; }
-                localPlayerMuzzleFlash.active = true; localPlayerMuzzleFlash.endTime = performance.now() + 75;
-                localPlayerMuzzleFlash.aimDx = flashDx; localPlayerMuzzleFlash.aimDy = flashDy;
-
-                // Send shoot message with target coordinates (server calculates direction)
-                log("Sending shoot message with Target Coords:", mouseCanvasPos);
-                Network.sendMessage({ type: 'player_shoot', target: { x: mouseCanvasPos.x, y: mouseCanvasPos.y } });
+                // 12. Hit Feedback (Sparks only, flash removed)
+                if (justHit) {
+                    ctx.save(); // Draw sparks relative to player center
+                    const numSparks = 15 + Math.random() * 10;
+                    for (let i = 0; i < numSparks; i++) {
+                        const angle = Math.random() * Math.PI * 2; const radius = Math.random()*w*0.8 + w*0.2;
+                        const particleX = x + Math.cos(angle)*radius; const particleY = y + Math.sin(angle)*radius*0.7 - h*0.1; // Slight upward bias
+                        const particleSize = Math.random()*3.5 + 1.5;
+                        ctx.fillStyle = sparkColors[Math.floor(Math.random() * sparkColors.length)]; // Random spark color
+                        ctx.beginPath(); ctx.arc(particleX, particleY, particleSize/2, 0, Math.PI*2); ctx.fill();
+                    }
+                    ctx.restore();
+                }
+                ctx.restore(); // Restore initial context save
             }
 
-            // Helper to check if shoot action is currently held (Space or Mouse)
-            function isShootHeld() { return keys[' '] || isMouseDown; }
-
-            return { setup, cleanup, getMovementInputVector, handleShooting, isShootHeld };
-        })();
-
-        // --- Game Logic & Flow Module ---
-        const Game = (() => {
-
-// --- Game Start/Join Actions ---
-
-function startSinglePlayer() {
-    log("Requesting Single Player game...");
-    resetClientState(false); // Reset core state but *don't* set mode to menu or show menu
-    appState.mode = 'singleplayer'; // Set the mode *after* resetting
-    UI.updateStatus("Starting Single Player...");
-    Network.sendMessage({ type: 'start_single_player' });
-    // Server response 'sp_game_started' will trigger UI change and loop start
-}
-
-function joinMultiplayer() {
-    const gameId = DOM.gameIdInput.value.trim().toUpperCase();
-    if (!gameId || gameId.length !== 6) {
-        UI.updateStatus('Invalid Game ID format.', true); return;
-     }
-    log(`Attempting to join game: ${gameId}`);
-    resetClientState(false); // Reset core state
-    appState.mode = 'multiplayer-client'; // Set the mode *after* resetting
-    UI.updateStatus(`Joining game ${gameId}...`);
-    Network.sendMessage({ type: 'join_game', game_id: gameId });
-     // Server response 'game_joined' will trigger UI change and loop start
-}
-
-// Initiates hosting a multiplayer game
-function hostMultiplayer(maxPlayers) {
-    log(`Requesting to Host MP game for ${maxPlayers} players...`);
-    if (![2, 3, 4].includes(maxPlayers)) {
-        error("Invalid max player count requested:", maxPlayers); UI.updateStatus("Invalid player count.", true); return;
-    }
-    resetClientState(false); // Reset core state
-    appState.mode = 'multiplayer-host'; // Set the mode *after* resetting
-    UI.updateStatus(`Creating ${maxPlayers}-player game...`);
-    Network.sendMessage({ type: 'create_game', max_players: maxPlayers });
-    // Server response 'game_created' will trigger UI change (host waiting screen)
-}
-
-
-// --- In-Game Actions ---
-
-function leaveGame() {
-    log("Leaving current game...");
-    // Notify the server the player is leaving the current game instance
-    if (appState.isConnected && appState.currentGameId && appState.localPlayerId) {
-        Network.sendMessage({ type: 'leave_game' });
-    } else {
-        log("Cannot send leave_game message: Not connected or not in a game.");
-    }
-
-    // --- DO NOT close the WebSocket connection ---
-
-    // Reset client state fully and return to main menu UI
-    resetClientState(true);
-}
-
-function sendChatMessage() {
-    const message = DOM.chatInput.value.trim();
-    if (message && appState.isConnected && appState.currentGameId && appState.localPlayerId) {
-        Network.sendMessage({ type: 'player_chat', message: message });
-        DOM.chatInput.value = ''; // Clear input field after sending
-    } else {
-        log("Cannot send chat: Not connected or not in a game.");
-        // Optionally provide UI feedback if desired
-    }
-}
-
-/**
- * Resets client-side game state variables, UI elements, and stops the game loop.
- * @param {boolean} showMenu - If true, also resets appState.mode to 'menu' and shows the main menu UI.
- */
-function resetClientState(showMenu = true) {
-    log(`Resetting client state. Show Menu: ${showMenu}`);
-    cleanupLoop(); // Stop existing game loop and input listeners first
-
-    // Reset core game state variables
-    appState.localPlayerId = null;
-    appState.currentGameId = null;
-    appState.serverState = null;
-    appState.lastServerState = null;
-    appState.previousServerState = null;
-    appState.maxPlayersInGame = null;
-    // appState.mode is NOT reset here; it's handled by the calling function or if showMenu is true
-    appState.predictedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
-    appState.renderedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
-    appState.lastLoopTime = null;
-
-    // Clear local visual effects state
-    localPlayerMuzzleFlash = { active: false, endTime: 0, aimDx: 0, aimDy: 0 };
-    hitPauseFrames = 0;
-    activeSpeechBubbles = {};
-    activeEnemyBubbles = {};
-    snake.active = false; // Reset snake effect
-
-    // Clear game-specific UI elements
-    DOM.chatLog.innerHTML = '';
-    DOM.gameCodeDisplay.textContent = '------';
-    DOM.gameIdInput.value = '';
-    DOM.countdownDiv.style.display = 'none';
-    DOM.dayNightIndicator.style.display = 'none';
-    DOM.gameOverScreen.style.display = 'none';
-    const gridContainer = document.getElementById('player-stats-grid');
-    if (gridContainer) gridContainer.innerHTML = 'Loading Stats...';
-
-    // Reset mode and show main menu only if explicitly requested (e.g., leaving game, game over button)
-    if (showMenu) {
-        appState.mode = 'menu'; // --- Set mode back to menu ONLY when returning to menu
-        UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
-        UI.showSection('main-menu-section'); // Show the main menu UI
-    }
-}
-
-
-// Expose public functions of the Game module
-return {
-     resetClientState,
-     startGameLoop, // Needed by handleServerMessage
-     cleanupLoop, // Needed by handleServerMessage
-     sendChatMessage, // Needed by button listener
-     initListeners, // Called on window load
-     getInterpolatedState // Needed by Renderer.drawGame
-};
-
- // --- Game Loop Management ---
-
- // Main game loop function, called via requestAnimationFrame
- function gameLoop(currentTime) {
-    if (hitPauseFrames > 0) {
-        hitPauseFrames--;
-        if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
-            appState.animationFrameId = requestAnimationFrame(gameLoop);
-        }
-        return;
-    }
-
-    if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
-            if (appState.serverState?.game_over) {
-                UI.updateStatus("Game Over!");
-                UI.showGameOver(appState.serverState);
-            }
-            else if (appState.mode === 'menu') {
-                UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
-            }
-            cleanupLoop();
-            return;
-    }
-
-    if (!appState.serverState && appState.mode !== 'singleplayer') {
-        appState.animationFrameId = requestAnimationFrame(gameLoop); return;
-    }
-
-    if (appState.lastLoopTime === null) { appState.lastLoopTime = currentTime; }
-    const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000);
-    appState.lastLoopTime = currentTime;
-
-    // --- Update Visual Snake Segments ---
-    if (snake && typeof snake.update === 'function') {
-            snake.update(currentTime);
-    }
-    // --- End Snake Update ---
-
-    // Process Input
-    if (appState.serverState?.status === 'active' && Input.isShootHeld()) {
-        Input.handleShooting();
-    }
-
-    // Update Local Prediction & Reconcile (MP only)
-    if (appState.mode !== 'singleplayer' && appState.serverState?.status === 'active') {
-        updatePredictedPosition(deltaTime);
-        reconcileWithServer();
-    }
-
-    // Render the Frame
-       Renderer.drawGame(DOM.ctx, appState, Game, false, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT, 0, localPlayerMuzzleFlash, '#8FBC8F', '#3E2723', 600, 3, Game.getInterpolatedState(currentTime)); // Calls function in Renderer IIFE
-
-    // Request Next Frame
-    if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
-        appState.animationFrameId = requestAnimationFrame(gameLoop);
-    } else {
-        if(appState.animationFrameId) cleanupLoop();
-    }
-}
-
-// Starts the game loop if conditions are met
-function startGameLoop() {
-    if (appState.mode === 'menu') { log("StartGameLoop skipped: In menu mode."); return; }
-    if (appState.animationFrameId) { log("StartGameLoop skipped: Loop already running."); return; }
-    if (!appState.serverState && appState.mode !== 'singleplayer') { // Wait for state in MP
-         log("StartGameLoop: Waiting for initial server state (MP)..."); return;
-    }
-
-    Input.setup(); // Activate input listeners
-    log("Starting game loop...");
-    appState.lastLoopTime = null; // Reset timer for accurate first delta
-    appState.animationFrameId = requestAnimationFrame(gameLoop); // Initial call
-}
-
-// Calculates the visual state for rendering based on interpolation between server updates
-function getInterpolatedState(renderTime) {
-    const INTERPOLATION_BUFFER_MS = 100; // Render slightly behind server time for smoothness
-    const serverTime = appState.serverState?.timestamp * 1000; // Latest server state time
-    const lastServerTime = appState.lastServerState?.timestamp * 1000; // Previous server state time
-
-    // Cannot interpolate without two valid states
-    if (!appState.serverState || !appState.lastServerState || !serverTime || !lastServerTime || serverTime <= lastServerTime) {
-        return appState.serverState; // Fallback to latest state
-    }
-
-    const renderTargetTime = renderTime - INTERPOLATION_BUFFER_MS; // Target time point for rendering
-    const timeBetweenStates = serverTime - lastServerTime;
-    const timeSinceLastState = renderTargetTime - lastServerTime;
-    let t = Math.max(0, Math.min(1, timeSinceLastState / timeBetweenStates)); // Interpolation factor (clamped 0-1)
-
-    // Create a new state object, copy non-positional data from latest state
-    let interpolatedState = { ...appState.serverState };
-    interpolatedState.players = {}; interpolatedState.enemies = {}; interpolatedState.bullets = {}; // Clear entities to repopulate
-
-    // Interpolate Players
-    if (appState.serverState.players) {
-        for (const pId in appState.serverState.players) {
-            const currentP = appState.serverState.players[pId]; const lastP = appState.lastServerState.players?.[pId];
-            if (pId === appState.localPlayerId) { // Use smoothed local render position for self
-                interpolatedState.players[pId] = { ...currentP, x: appState.renderedPlayerPos.x, y: appState.renderedPlayerPos.y };
-            } else if (lastP && typeof currentP.x === 'number' && typeof lastP.x === 'number') { // Interpolate others
-                interpolatedState.players[pId] = { ...currentP, x: lerp(lastP.x, currentP.x, t), y: lerp(lastP.y, currentP.y, t) };
-            } else { interpolatedState.players[pId] = { ...currentP }; } // Fallback to current
-        }
-    }
-    // Interpolate Enemies
-    if (appState.serverState.enemies) {
-        for (const eId in appState.serverState.enemies) {
-            const currentE = appState.serverState.enemies[eId]; const lastE = appState.lastServerState.enemies?.[eId];
-            // Interpolate if possible and alive
-            if (lastE && typeof currentE.x === 'number' && typeof lastE.x === 'number' && currentE.health > 0) {
-                interpolatedState.enemies[eId] = { ...currentE, x: lerp(lastE.x, currentE.x, t), y: lerp(lastE.y, currentE.y, t) };
-            } else { interpolatedState.enemies[eId] = { ...currentE }; } // Use latest for dead/new
-        }
-    }
-    // Interpolate Bullets
-    if (appState.serverState.bullets) {
-        for (const bId in appState.serverState.bullets) {
-            const currentB = appState.serverState.bullets[bId]; const lastB = appState.lastServerState.bullets?.[bId];
-            if (lastB && typeof currentB.x === 'number' && typeof lastB.x === 'number') {
-                interpolatedState.bullets[bId] = { ...currentB, x: lerp(lastB.x, currentB.x, t), y: lerp(lastB.y, currentB.y, t) };
-            } else { interpolatedState.bullets[bId] = { ...currentB }; }
-        }
-    }
-    // Copy non-interpolated data (powerups, damage texts, score, status etc.) directly from latest state
-    interpolatedState.powerups = appState.serverState.powerups;
-    interpolatedState.damage_texts = appState.serverState.damage_texts;
-    // Other fields like score, status, is_night, game_over, countdown, day_night_timer_remaining,
-    // campfire, enemy_speaker_id, enemy_speech_text are already copied via the initial spread {...appState.serverState}
-
-    return interpolatedState;
-}
-
-// Stops the game loop and cleans up input listeners
-function cleanupLoop() {
-     if (appState.animationFrameId) {
-         cancelAnimationFrame(appState.animationFrameId);
-         appState.animationFrameId = null;
-         log("Game loop stopped and cleaned up.");
-     }
-     Input.cleanup(); // Deactivate input listeners
-     appState.lastLoopTime = null;
- }
-
- // --- Client-Side Prediction & Reconciliation ---
-
- function updatePredictedPosition(deltaTime) {
-    if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) {
-        return;
-    }
-    const moveVector = Input.getMovementInputVector();
-    const playerState = appState.serverState.players[appState.localPlayerId];
-    const playerSpeed = playerState?.speed ?? PLAYER_DEFAULTS.base_speed;
-
-    if (moveVector.dx === 0 && moveVector.dy === 0) {
-            // Don't apply prediction if there's no new input, let reconciliation handle drifts.
-            // Or optionally: return; // if you want prediction *only* when actively moving. Test both.
-    } else {
-            // Apply movement prediction based on input
-            appState.predictedPlayerPos.x += moveVector.dx * playerSpeed * deltaTime;
-            appState.predictedPlayerPos.y += moveVector.dy * playerSpeed * deltaTime;
-    }
-
-    // Always clamp the predicted position to canvas bounds
-    const w_half = (playerState?.width ?? PLAYER_DEFAULTS.width) / 2;
-    const h_half = (playerState?.height ?? PLAYER_DEFAULTS.height) / 2;
-    appState.predictedPlayerPos.x = Math.max(w_half, Math.min(CANVAS_WIDTH - w_half, appState.predictedPlayerPos.x));
-    appState.predictedPlayerPos.y = Math.max(h_half, Math.min(CANVAS_HEIGHT - h_half, appState.predictedPlayerPos.y));
-}
-
-function reconcileWithServer() {
-    if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) {
-        return;
-    }
-    const serverPos = appState.serverState.players[appState.localPlayerId];
-    if (typeof serverPos.x !== 'number' || typeof serverPos.y !== 'number') {
-        return;
-    }
-
-    const predictedPos = appState.predictedPlayerPos;
-    const renderedPos = appState.renderedPlayerPos;
-    const dist = distance(predictedPos.x, predictedPos.y, serverPos.x, serverPos.y);
-
-    const snapThreshold = (parseFloat(getCssVar('--reconciliation-threshold')) || 35); // Using default 25 now
-    const renderLerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.15; // Using default 0.1 now
-
-    if (dist > snapThreshold) {
-        // Snap Prediction: Error is too large, force prediction to match server
-        predictedPos.x = serverPos.x;
-        predictedPos.y = serverPos.y;
-        // Snap Rendering: Also force visuals to match immediately
-        renderedPos.x = serverPos.x;
-        renderedPos.y = serverPos.y;
-    } else {
-        // Smooth Rendering Only: Error is within tolerance, smoothly move visuals
-        // towards the current predicted position. Prediction itself is not modified here.
-        renderedPos.x = lerp(renderedPos.x, predictedPos.x, renderLerpFactor);
-        renderedPos.y = lerp(renderedPos.y, predictedPos.y, renderLerpFactor);
-    }
-}
-
- // Sets up initial button listeners
- function initListeners() {
-    log("Initializing button listeners...");
-    DOM.singlePlayerBtn.onclick = startSinglePlayer;
-    DOM.multiplayerBtn.onclick = () => UI.showSection('multiplayer-menu-section');
-    DOM.hostGameBtn2.onclick = () => hostMultiplayer(2); DOM.hostGameBtn3.onclick = () => hostMultiplayer(3); DOM.hostGameBtn4.onclick = () => hostMultiplayer(4);
-    DOM.showJoinUIBtn.onclick = () => UI.showSection('join-code-section');
-    DOM.cancelHostBtn.onclick = leaveGame; DOM.joinGameSubmitBtn.onclick = joinMultiplayer;
-    DOM.sendChatBtn.onclick = sendChatMessage; DOM.leaveGameBtn.onclick = leaveGame;
-    // Ensure Game Over button correctly calls resetClientState with true
-    DOM.gameOverBackBtn.onclick = () => resetClientState(true); // --- Confirmed line
-
-    // Make back buttons work generically based on their onclick attribute target
-    DOM.gameContainer.querySelectorAll('.back-button').forEach(btn => {
-        const targetMatch = btn.getAttribute('onclick')?.match(/'([^']+)'/);
-        if (targetMatch && targetMatch[1]) {
-            const targetId = targetMatch[1];
-            if (DOM[targetId] || document.getElementById(targetId)) { // Check target exists
-                btn.onclick = (e) => { e.preventDefault(); UI.showSection(targetId); }; // Override inline onclick
-            } else { log(`Warning: Back button target section invalid: ${targetId}`); }
-        } else { log("Warning: Back button found without valid target in onclick:", btn); }
-    });
-}
-
-// Expose public functions of the Game module
-return {
-     resetClientState, startGameLoop, cleanupLoop, sendChatMessage,
-     initListeners, getInterpolatedState // Note: getLocalGameState removed as SP uses serverState directly
-};
-})(); // End Game module IIFE
-
-        // --- Global Server Message Handler ---
-        // Processes all messages received via the WebSocket
-        function handleServerMessage(event) {
-            let data;
-            try { data = JSON.parse(event.data); }
-            catch (err) { error("Failed to parse server message:", err, event.data); UI.updateStatus("Received invalid data from server.", true); return; }
-            try {
-                switch (data.type) {
-                    // --- Association Cases (Remain Largely Unchanged) ---
-                    case 'game_created':
-                        log("Received 'game_created'");
-                        appState.localPlayerId = data.player_id; appState.currentGameId = data.game_id;
-                        appState.serverState = data.initial_state; appState.maxPlayersInGame = data.max_players;
-                        const hostP = appState.serverState?.players[appState.localPlayerId];
-                        if (hostP) { appState.predictedPlayerPos = { x: hostP.x, y: hostP.y }; appState.renderedPlayerPos = { x: hostP.x, y: hostP.y }; }
-                        if (!appState.maxPlayersInGame) { error("'game_created' missing 'max_players'!"); appState.maxPlayersInGame = '?'; }
-                        DOM.gameCodeDisplay.textContent = appState.currentGameId || 'ERROR';
-                        const currentP = Object.keys(appState.serverState?.players || {}).length;
-                        DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentP}/${appState.maxPlayersInGame})`;
-                        UI.updateStatus(`Game hosted. Code: ${appState.currentGameId}`); UI.showSection('host-wait-section');
-                        // Host loop starts when game status changes from 'waiting' via game_state update
-                        break;
-
-                    case 'game_joined':
-                        log("Received 'game_joined'");
-                        appState.localPlayerId = data.player_id; appState.currentGameId = data.game_id;
-                        appState.serverState = data.initial_state;
-                        appState.maxPlayersInGame = appState.serverState?.max_players;
-                        if (!appState.maxPlayersInGame) { error("'game_joined' initial_state missing 'max_players'!"); appState.maxPlayersInGame = '?'; }
-                        const joinedP = appState.serverState?.players[appState.localPlayerId];
-                        if (joinedP) { appState.predictedPlayerPos = { x: joinedP.x, y: joinedP.y }; appState.renderedPlayerPos = { x: joinedP.x, y: joinedP.y }; }
-                        UI.updateStatus(`Joined game ${appState.currentGameId}. Get ready!`); UI.showSection('game-area');
-                        if (appState.serverState) { // Trigger initial UI updates for joined client
-                            Renderer.updateGeneratedBackground(appState.serverState.is_night);
-                            UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState);
-                        }
-                        Game.startGameLoop(); // Joining client starts loop immediately
-                        break;
-
-                    case 'sp_game_started':
-                        log("Received 'sp_game_started'");
-                        appState.localPlayerId = data.player_id; appState.currentGameId = data.game_id;
-                        appState.serverState = data.initial_state; appState.maxPlayersInGame = 1;
-                        const spP = appState.serverState?.players[appState.localPlayerId];
-                        if (spP) { appState.predictedPlayerPos = { x: spP.x, y: spP.y }; appState.renderedPlayerPos = { x: spP.x, y: spP.y }; }
-                        UI.updateStatus("Single Player Game Started!"); UI.showSection('game-area');
-                        if (appState.serverState) { // Trigger initial UI updates
-                             Renderer.updateGeneratedBackground(appState.serverState.is_night);
-                             UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState);
-                        }
-                        Game.startGameLoop(); // SP client starts loop immediately
-                        break;
-
-                        // --- Game State Update ---
-                    case 'game_state':
-                        // If client is in menu mode, ignore state updates entirely.
-                        if (appState.mode === 'menu') {
-                            // log("Ignoring game_state message while in menu mode.");
-                            return; // Stop processing this message
-                        }
-
-                        // --- Proceed with processing state if not in menu ---
-                        const previousStatus = appState.serverState?.status;
-                        const previousPlayerState = appState.serverState?.players?.[appState.localPlayerId];
-
-                        // Update state history for interpolation
-                        appState.previousServerState = appState.lastServerState;
-                        appState.lastServerState = appState.serverState;
-                        appState.serverState = data.state; // Store the new state
-                        const newState = appState.serverState; // Alias for clarity
-                        const currentPlayerState = newState?.players?.[appState.localPlayerId];
-
-                        // Update variables with their respective server values
-                        appState.currentTemp = newState.current_temperature ?? 18.0; // Use a default if missing
-                        appState.isRaining = newState.is_raining ?? false;
-                        appState.isDustStorm = newState.is_dust_storm ?? false;
-                        UI.updateEnvironmentDisplay();
-
-                        // --- Update Visual Snake State ---
-                        const serverSnakeState = newState.snake_state;
-                        if (serverSnakeState) {
-                            snake.isActiveFromServer = serverSnakeState.active;
-                            snake.serverHeadX = serverSnakeState.head_x;
-                            snake.serverHeadY = serverSnakeState.head_y;
-                            snake.serverBaseY = serverSnakeState.base_y;
-                            // If snake just became active visually, ensure segment array starts correctly
-                            if (snake.isActiveFromServer && snake.segments.length === 0) {
-                                snake.segments = [{ x: snake.serverHeadX, y: snake.serverHeadY, time: performance.now() }];
-                            } else if (!snake.isActiveFromServer) {
-                                snake.segments = []; // Clear if inactive
-                            }
-                        }
-                        // --- End Snake Update ---
-
-                        // --- Trigger Screen Shake on Snake Bite (Check Local Player) ---
-                        if (currentPlayerState?.trigger_snake_bite_shake_this_tick) {
-                            const shakeMag = 15.0; // Use constants defined in backend/frontend
-                            const shakeDur = 400.0;
-                            Renderer.triggerShake(shakeMag, shakeDur);
-                        }
-                        // --- End Shake Trigger ---
-
-                        // Trigger screen shake if local player took damage
-                        if (previousPlayerState && currentPlayerState &&
-                            typeof currentPlayerState.health === 'number' &&
-                            typeof previousPlayerState.health === 'number' &&
-                            currentPlayerState.health < previousPlayerState.health)
-                        {
-                            const damageTaken = previousPlayerState.health - currentPlayerState.health;
-                            const baseMag = 5; const dmgScale = 0.18; const maxMag = 18; // Shake params
-                            const shakeMagnitude = Math.min(maxMag, baseMag + damageTaken * dmgScale);
-                            Renderer.triggerShake(shakeMagnitude, 250); // Trigger shake effect
-                        }
-
-                         // Trigger hit pause if local player was hit this tick
-                         if (currentPlayerState?.hit_flash_this_tick && hitPauseFrames <= 0) {
-                             hitPauseFrames = 3; // Pause rendering for 3 frames
-                         }
-
-                        // Store max_players if received in state update (e.g., if missed initial message)
-                        if (!appState.maxPlayersInGame && newState.max_players) {
-                             appState.maxPlayersInGame = newState.max_players;
-                        }
-
-                        // --- Handle transitions between game statuses ---
-                        if (newState.status !== previousStatus) {
-                            log(`[Client State Change] From ${previousStatus || 'null'} to ${newState.status}`);
-
-                            // Logic for STARTING the game (Countdown or Active)
-                            if ((newState.status === 'countdown' || newState.status === 'active') && previousStatus !== 'active' && previousStatus !== 'countdown') {
-                                UI.updateStatus(newState.status === 'countdown' ? "Countdown starting..." : "Game active!");
-                                UI.showSection('game-area'); // Ensure game area is visible
-                                if (!appState.animationFrameId) { // Start loop if not already running
-                                    log(`--> Starting game loop NOW (triggered by ${newState.status} state update).`);
-                                    if (newState) { Renderer.updateGeneratedBackground(newState.is_night); }
-                                    Game.startGameLoop();
-                                }
-                            }
-                            // Logic for HOST potentially returning to WAITING state
-                            // (e.g., if server forces it - less likely now but kept for robustness)
-                            else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host' && previousStatus !== 'waiting') {
-                                UI.updateStatus("Game reverted to waiting lobby.", true); // Inform host
-                                UI.showSection('host-wait-section');
-                                const currentPWaiting = Object.keys(newState.players || {}).length;
-                                DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentPWaiting}/${appState.maxPlayersInGame || '?'})`;
-                                Game.cleanupLoop(); // Stop loop if returning to wait
-                            }
-                            // NOTE: We no longer have specific logic here to handle clients (non-hosts)
-                            // receiving a 'waiting' status while they thought the game was active,
-                            // because the server-side change prevents that status transition on player leave.
-                            // If the server *did* send 'waiting' unexpectedly, the client would now
-                            // likely just stop receiving updates, and the user would manually leave.
-
-                        } // End status change handling
-
-                        // --- Update UI elements based on current state ---
-                        // Only update HUD/Timers if game is actually running client-side
-                        if (appState.animationFrameId && (newState.status === 'countdown' || newState.status === 'active')) {
-                            UI.updateHUD(newState);
-                            UI.updateCountdown(newState);
-                            UI.updateDayNight(newState);
-                        }
-                        // Update waiting message specifically for hosts in waiting state
-                        else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') {
-                            const pCount = Object.keys(newState.players || {}).length;
-                            DOM.waitingMessage.textContent = `Waiting for Team Mate... (${pCount}/${appState.maxPlayersInGame || '?'})`;
-                        }
-
-                        // Update enemy speech bubbles based on state
-                        const speakerId = newState.enemy_speaker_id; const speechText = newState.enemy_speech_text;
-                        if (speakerId && speechText) {
-                            activeEnemyBubbles[speakerId] = { text: speechText.substring(0, 50), endTime: performance.now() + 3000 };
-                        }
-                        break; // End game_state
-
-                    // --- Explicit Game Over Notification (Primary Trigger) ---
-                    case 'game_over_notification':
-                        log("Received 'game_over_notification'");
-                        if (data.final_state) {
-                            appState.serverState = data.final_state; // Store final state
-                            UI.updateStatus("Game Over!");
-                            Game.cleanupLoop(); // --- Stop the game loop FIRST
-                            UI.showGameOver(data.final_state); // --- THEN show the game over screen
-                            log("-> Game Over sequence initiated by notification.");
-                        } else {
-                            error("Received 'game_over_notification' without final_state data.");
-                            Game.resetClientState(true); // Fallback to menu
-                        }
-                        break;
-
-                     // --- Chat Message ---
-                     case 'chat_message':
-                         const senderId = data.sender_id; const msgText = data.message;
-                         const isSelf = senderId === appState.localPlayerId;
-                         UI.addChatMessage(senderId, msgText, isSelf); // Add to chat log
-                         if (senderId && msgText) { // Display as speech bubble
-                             activeSpeechBubbles[senderId] = { text: msgText.substring(0, 50), endTime: performance.now() + 4000 };
-                         }
-                         break;
-
-                     // --- Error Message ---
-                     case 'error':
-                         error("[Client] Server Error Message:", data.message);
-                         UI.updateStatus(`Server Error: ${data.message}`, true);
-                         // Handle specific errors causing UI state changes
-                         if (appState.mode === 'multiplayer-client' && (data.message.includes('not found') || data.message.includes('not waiting') || data.message.includes('full') || data.message.includes('finished'))) {
-                             UI.showSection('join-code-section'); appState.mode = 'menu'; // Back to join input
-                         } else if (appState.mode === 'multiplayer-host' && data.message.includes('Creation Error')) {
-                             Game.resetClientState(true); // Back to main menu
-                         } else if (data.message === 'Please create or join a game first.') {
-                              Game.resetClientState(true); // Back to main menu if disconnected/out of sync
-                         }
-                         break;
-
-                    // Unknown message type
-                    default:
-                        log(`Unknown message type received: ${data.type}`);
-                } // End switch
-            } catch (handlerError) {
-                error("Error inside handleServerMessage logic:", handlerError);
-                UI.updateStatus("Client error processing message.", true);
-            }
-        } // End handleServerMessage
-
-        // --- Global Initialization ---
-
-        // Wrapper function to allow calling UI.showSection from inline HTML onclick attributes
-        function showSection(sectionId) { UI.showSection(sectionId); }
-
-        // Runs when the page finishes loading
-        window.onload = () => {
-            log("Window loaded.");
-            UI.updateStatus("Initializing...");
-
-            // Initialize global state (appState already defined globally)
-            // socket is also defined globally
-
-            // Initialize button listeners and connect to WebSocket server
-            try {
-                 Game.initListeners(); // Set up UI button click handlers
-                 Network.connect(() => { // Attempt connection, callback runs on success
-                     // This runs *after* WebSocket opens successfully
-                     UI.updateStatus("Connected. Select Mode.");
-                     UI.showSection('main-menu-section'); // Show menu only after successful connection
-                 });
-                 UI.updateStatus("Connecting..."); // Show initial connecting status
-            } catch (initError) {
-                 error("Initialization failed:", initError);
-                 UI.updateStatus("Error initializing game. Please refresh.", true);
-            }
-        };
-
-    </script>
-    <script src="renderer.js"></script>
-</body>
-</html>
+           // Iterates through enemies and calls drawEnemyRect for each non-faded one
+           function drawEnemies(ctx, enemies, ENEMY_DEFAULTS, ENEMY_TYPE_SHOOTER, enemyTorsoShooterColor, enemyTorsoGiantColor, enemyTorsoChaserColor, enemySkinColor, enemyCoatColor, enemyCapColor, enemyBootColor, enemyHitFlashColor, activeEnemyBubbles) {
+               if (!enemies) return;
+               const now = performance.now() / 1000; // Use seconds for comparison with server timestamps
+               const FADE_DURATION = 0.3; // Seconds enemy corpse is visible
+
+               Object.values(enemies).forEach(enemy => {
+                   if (!enemy) return;
+                   const width = enemy.width ?? ENEMY_DEFAULTS.width; const height = enemy.height ?? ENEMY_DEFAULTS.height;
+                   const maxHealth = enemy.max_health ?? ENEMY_DEFAULTS.max_health;
+                   let alpha = 1.0; let shouldDraw = true; let isDying = false;
+
+                   // Handle death fading
+                   if (enemy.health <= 0 && enemy.death_timestamp) {
+                       isDying = true; const elapsed = now - enemy.death_timestamp;
+                       if (elapsed < FADE_DURATION) alpha = 0.4; // Partially faded
+                       else shouldDraw = false; // Fully faded, don't draw
+                   }
+
+                   if (shouldDraw) {
+                       ctx.save(); ctx.globalAlpha = alpha; // Apply fade alpha
+                       drawEnemyRect(ctx, enemy.x, enemy.y, width, height, enemy.type, enemy);
+                       ctx.restore();
+                   }
+                   // Draw health bar only if alive and should be drawn
+                   if (!isDying && enemy.health > 0 && shouldDraw) {
+                        drawHealthBar(ctx, enemy.x, enemy.y, width, enemy.health, maxHealth, healthBarBg, healthBarHigh, healthBarMedium, healthBarLow);
+                   }
+               });
+           }
+
+           // Draws a single enemy rectangle/sprite
+           function drawEnemyRect(ctx, x, y, w, h, type, enemyState) {
+               // Use dimensions passed from enemyState (w, h arguments)
+               const currentW = w;
+               const currentH = h;
+
+               // Determine torso color based on type
+               const torsoColor = type === 'shooter' ? '#4682B4' : (type === 'giant' ? '#6B4226' : '#2F4F4F');
+               // Giants don't bob
+               const bobOffset = (type !== 'giant') ? Math.sin(performance.now() / 600) * 3 : 0;
+               // Define tint color
+               const snakeBiteTintColor = 'rgba(0, 200, 50, 0.15)';
+
+               // Check for active snake bite slow effect from server state
+               const nowSeconds = performance.now() / 1000.0;
+               const snakeEffect = enemyState?.effects?.snake_bite_slow;
+               const isSnakeBitten = snakeEffect && nowSeconds < snakeEffect.expires_at;
+
+               // Geometry scaled by currentW, currentH
+               const headRadius = currentH * 0.18;
+               const bodyHeight = currentH * 0.5;
+               const coatLengthBonus = currentH * 0.15;
+               const bodyWidthTop = currentW * 0.9;
+               const bodyWidthBottom = currentW * 0.7;
+               const coatWidth = currentW * 1.1;
+               const armWidth = currentW * 0.2;
+               const armLength = currentH * 0.4;
+               const capHeight = headRadius * 0.8; // Used only if not giant
+               const capWidth = headRadius * 2.2; // Used only if not giant
+               const bootSize = currentW * 0.15; // Scale boots with width
+               const bootSpacing = currentW * 0.3;
+
+               // Y Positions calculated using currentH and bobOffset
+               const headCenterY = y - (currentH / 2) + headRadius + bobOffset;
+               const bodyTopY = headCenterY + headRadius * 0.8;
+               const bodyBottomY = bodyTopY + bodyHeight;
+               const coatTopY = bodyTopY + bodyHeight * 0.1;
+               const coatBottomY = bodyBottomY + coatLengthBonus;
+               const armTopY = bodyTopY + bodyHeight * 0.05;
+               const capTopY = headCenterY - headRadius; // Used only if not giant
+               const bootOffsetY = coatBottomY + 2;
+
+               ctx.save();
+
+               // Draw base layers using calculated dimensions
+               ctx.fillStyle = '#8B4513';
+               ctx.fillRect(x - coatWidth / 2, coatTopY, coatWidth, coatBottomY - coatTopY);
+               ctx.fillStyle = torsoColor;
+               ctx.beginPath();
+               ctx.moveTo(x - bodyWidthTop / 2, bodyTopY);
+               ctx.lineTo(x + bodyWidthTop / 2, bodyTopY);
+               ctx.lineTo(x + bodyWidthBottom / 2, bodyBottomY);
+               ctx.lineTo(x - bodyWidthBottom / 2, bodyBottomY);
+               ctx.closePath();
+               ctx.fill();
+               ctx.fillStyle = '#8B4513';
+               ctx.fillRect(x - bodyWidthTop / 2 - armWidth, armTopY, armWidth, armLength);
+               ctx.fillRect(x + bodyWidthTop / 2, armTopY, armWidth, armLength);
+               ctx.fillStyle = '#D2B48C';
+               ctx.beginPath();
+               ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2);
+               ctx.fill();
+               // Only draw cap if not a giant
+               if (type !== 'giant') {
+                   ctx.fillStyle = '#111111';
+                   ctx.fillRect(x - capWidth / 2, capTopY, capWidth, capHeight);
+               }
+               ctx.fillStyle = '#222222';
+               ctx.fillRect(x - bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
+               ctx.fillRect(x + bootSpacing - bootSize / 2, bootOffsetY, bootSize, bootSize);
+
+               // Apply Snake Bite Tint Overlay if active
+               if (isSnakeBitten) {
+                   ctx.fillStyle = snakeBiteTintColor;
+                   ctx.fillRect(x - currentW * 0.5, y - currentH * 0.5 + bobOffset, currentW, currentH);
+               }
+
+               // Apply Hit Flash overlay if active
+               if (enemyState?.hit_flash_this_tick) {
+                   ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                   const flashMargin = 2;
+                   // Ensure flash covers the potentially larger enemy
+                   ctx.fillRect(x - currentW / 2 - flashMargin, y - currentH / 2 - flashMargin + bobOffset, currentW + flashMargin * 2, currentH + flashMargin * 2);
+               }
+
+               ctx.restore();
+           }
+
+           // Iterates through bullets and calls appropriate drawing function
+           function drawBullets(ctx, bullets, BULLET_DEFAULTS, bulletPlayerColor, bulletEnemyColor) {
+               if (!bullets) return;
+               Object.values(bullets).forEach(bullet => {
+                   if (!bullet) return;
+                   const x = bullet.x ?? 0; const y = bullet.y ?? 0; const vx = bullet.vx ?? 0; const vy = bullet.vy ?? 0;
+                   const radius = bullet.radius ?? BULLET_DEFAULTS.radius;
+                   const bulletType = bullet.bullet_type || 'standard'; const ownerType = bullet.owner_type;
+                   const hasVelocity = Math.abs(vx) > 0.01 || Math.abs(vy) > 0.01;
+
+                   // Choose drawing style based on type and velocity
+                   if (bulletType === 'ammo_heavy_slug' || bulletType === 'standard' || bulletType === 'ammo_rapid_fire' || bulletType === 'standard_enemy') {
+                       hasVelocity ? drawShapedBullet(ctx, bullet, bulletPlayerColor, bulletEnemyColor) : drawBulletCircle(ctx, x, y, radius, ownerType === 'player', bulletPlayerColor, bulletEnemyColor);
+                   } else if (bulletType === 'ammo_shotgun') {
+                       drawBulletCircle(ctx, x, y, radius, ownerType === 'player', bulletPlayerColor, bulletEnemyColor); // Shotgun pellets are circles
+                   } else {
+                       drawBulletCircle(ctx, x, y, radius, ownerType === 'player', bulletPlayerColor, bulletEnemyColor); // Default to circle
+                   }
+               });
+           }
+
+           // Draws a simple circle for a bullet
+           function drawBulletCircle(ctx, x, y, r, isPlayerBullet, bulletPlayerColor, bulletEnemyColor) {
+               ctx.fillStyle = isPlayerBullet ? bulletPlayerColor : bulletEnemyColor;
+               ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+           }
+
+           // Draws a directional, shaped bullet (rectangle with nose cone)
+           function drawShapedBullet(ctx, bullet, bulletPlayerColor, bulletEnemyColor) {
+               const x = bullet.x; const y = bullet.y; const vx = bullet.vx; const vy = bullet.vy;
+               const ownerType = bullet.owner_type; const radius = bullet.radius || 4;
+               const baseLength = 8; const baseWidth = 4; const scaleFactor = radius / 4; // Scale based on radius
+               const length = baseLength*scaleFactor; const width = baseWidth*scaleFactor;
+               const color = (ownerType === 'player') ? bulletPlayerColor : bulletEnemyColor;
+               const angle = Math.atan2(vy, vx); // Calculate angle from velocity
+
+               ctx.save(); ctx.translate(x, y); ctx.rotate(angle);
+               ctx.fillStyle = color;
+               ctx.fillRect(-length/2, -width/2, length, width); // Main body
+               const noseLength = length*0.4; // Nose cone part
+               ctx.beginPath(); ctx.moveTo(length/2, 0); ctx.lineTo(length/2-noseLength, -width/2);
+               ctx.lineTo(length/2-noseLength, width/2); ctx.closePath(); ctx.fill();
+               ctx.restore();
+           }
+
+           // Iterates through powerups and calls drawPowerupSquare
+           function drawPowerups(ctx, powerups, POWERUP_DEFAULTS) {
+               if (!powerups) return;
+               Object.values(powerups).forEach(powerup => {
+                   if (!powerup) return;
+                   const size = powerup.size ?? POWERUP_DEFAULTS.size;
+                   drawPowerupSquare(ctx, powerup.x, powerup.y, size, powerup.type);
+               });
+           }
+
+           // Draws a single powerup square with a symbol indicating its type
+           function drawPowerupSquare(ctx, x, y, size, type) {
+                let fillColor = '#888'; let symbol = '?'; // Defaults
+                // Map type to symbol and color
+                if (type === 'health') { symbol = '+'; fillColor = '#81c784'; }
+                else if (type === 'gun_upgrade') { symbol = 'G'; fillColor = '#442848'; }
+                else if (type === 'speed_boost') { symbol = 'S'; fillColor = '#3edef3'; }
+                else if (type === 'armor') { symbol = '#'; fillColor = '#9e9e9e'; }
+                else if (type === 'ammo_shotgun') { symbol = '::'; fillColor = '#FFA500'; }
+                else if (type === 'ammo_heavy_slug') { symbol = '■'; fillColor = '#A0522D'; }
+                else if (type === 'ammo_rapid_fire') { symbol = '>'; fillColor = '#FFFF00'; }
+                else if (type === 'bonus_score') { symbol = '$'; fillColor = '#FFD700'; }
+
+                ctx.fillStyle = fillColor; ctx.fillRect(x - size/2, y - size/2, size, size); // Draw square
+                ctx.fillStyle = '#000'; // Symbol color
+                let fontSize = Math.round(size*0.7); ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(symbol, x, y+(size*0.05)); // Draw symbol (slight Y offset for centering)
+           }
+
+           // Draws a health bar above an entity
+           function drawHealthBar(ctx, x, y, width, currentHealth, maxHealth, healthBarBg, healthBarHigh, healthBarMedium, healthBarLow) {
+               if (maxHealth <= 0) return;
+               const barHeight = 5; const yOffset = -((width/2) + 27); // Position above entity
+               const barWidth = Math.max(20, width*0.8); // Scale with entity width
+               const currentWidth = Math.max(0, (currentHealth/maxHealth)*barWidth);
+               const healthPercentage = currentHealth / maxHealth;
+               const barX = x - barWidth/2; const barY = y + yOffset;
+
+               ctx.fillStyle = healthBarBg; ctx.fillRect(barX, barY, barWidth, barHeight); // Background
+               // Determine color based on health percentage
+               let barColor = healthBarLow;
+               if (healthPercentage > 0.66) barColor = healthBarHigh;
+               else if (healthPercentage > 0.33) barColor = healthBarMedium;
+               ctx.fillStyle = barColor; ctx.fillRect(barX, barY, currentWidth, barHeight); // Foreground (current health)
+           }
+
+           // Draws an armor bar below the health bar
+           function drawArmorBar(ctx, x, y, width, currentArmor, healthBarBg, armorBarColor) {
+               const maxArmor = 100; if (currentArmor <= 0) return;
+               const armorBarHeight = 4; const healthBarHeight = 5; const barSpacing = 1;
+               const healthBarYOffset = -((width/2) + 30); // Position based on entity width
+               const healthBarTopY = y + healthBarYOffset;
+               const armorBarTopY = healthBarTopY + healthBarHeight + barSpacing; // Position below health bar
+               const barWidth = Math.max(20, width*0.8);
+               const currentWidth = Math.max(0, (currentArmor / maxArmor)*barWidth);
+               const barX = x - barWidth/2; const barY = armorBarTopY;
+
+               ctx.fillStyle = healthBarBg; ctx.fillRect(barX, barY, barWidth, armorBarHeight); // Background
+               ctx.fillStyle = armorBarColor; ctx.fillRect(barX, barY, currentWidth, armorBarHeight); // Foreground
+           }
+
+           // Main rendering function called each frame by the game loop
+           function drawGame(ctx, appState, Game, shakeApplied, shakeOffsetX, shakeOffsetY, CANVAS_WIDTH, CANVAS_HEIGHT, currentShakeMagnitude, localPlayerMuzzleFlash, dayBaseColor, nightBaseColor, IDLE_BOB_SPEED, IDLE_BOB_AMPLITUDE, stateToRender) {
+
+               const now = performance.now();
+
+               // 1. Draw Background (from offscreen canvas, handles transitions)
+               if (!isBackgroundReady) { // Fallback if first background not generated yet
+                    ctx.fillStyle = dayBaseColor; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+               } else if (isTransitioningBackground) { // Handle fade effect
+                    const elapsed = now - transitionStartTime;
+                    const progress = Math.min(1.0, elapsed / 1000);
+                    ctx.globalAlpha = 1.0; ctx.drawImage(oldOffscreenCanvas, 0, 0); // Draw old bg
+                    ctx.globalAlpha = progress; ctx.drawImage(offscreenCanvas, 0, 0); // Draw new bg fading in
+                    ctx.globalAlpha = 1.0; // Reset alpha for other drawing
+                    if (progress >= 1.0) { isTransitioningBackground = false; } // End transition
+               } else { // Normal: Draw current background
+                    ctx.drawImage(offscreenCanvas, 0, 0);
+               }
+
+           let snakeCopy = {...snake};
+          drawSnake(ctx, snakeCopy);
+               // 3. Get Interpolated State to Render
+               // Ensure stateToRender is properly calculated based on the game mode
+               if (appState.mode === 'singleplayer') { // SP uses direct state
+                   //stateToRender = appState.serverState;
+                   const spPlayer = stateToRender?.players[appState.localPlayerId];
+                   if (spPlayer) { appState.renderedPlayerPos.x = spPlayer.x; appState.renderedPlayerPos.y = spPlayer.y; }
+               } else { // MP uses interpolated state for smoothness
+                   //stateToRender = Game.getInterpolatedState(now); // Requires Game module reference
+               }
+
+               // 4. Guard Clause: Don't draw if essential state is missing
+               if (!stateToRender || !appState.localPlayerId || !stateToRender.players) {
+                   if (shakeApplied) { ctx.restore(); } // Restore shake transform if applied before returning
+                   return;
+               }
+
+               // 5. Check for Local Muzzle Flash
+               let shouldDrawMuzzleFlash = localPlayerMuzzleFlash.active && (now < localPlayerMuzzleFlash.endTime);
+               if (!shouldDrawMuzzleFlash && localPlayerMuzzleFlash.active) { localPlayerMuzzleFlash.active = false; }
+
+               // 6. Draw Game Entities (Order Matters for Layering)
+               // Drawn with shake transform applied if active
+               drawCampfire(ctx, stateToRender.campfire, CANVAS_WIDTH, CANVAS_HEIGHT, campfireAuraColor, campfireStickColor, campfireFlameOuterColor, campfireFlameInnerColor);
+               if (shouldDrawMuzzleFlash) { drawMuzzleFlash(ctx, appState.renderedPlayerPos.x, appState.renderedPlayerPos.y, localPlayerMuzzleFlash.aimDx, localPlayerMuzzleFlash.aimDy, muzzleFlashColor); }
+               drawPowerups(ctx, stateToRender.powerups, POWERUP_DEFAULTS);
+               drawBullets(ctx, stateToRender.bullets, BULLET_DEFAULTS, bulletPlayerColor, bulletEnemyColor);
+               drawEnemies(ctx, stateToRender.enemies, ENEMY_DEFAULTS, ENEMY_TYPE_SHOOTER, enemyTorsoShooterColor, enemyTorsoGiantColor, enemyTorsoChaserColor, enemySkinColor, enemyCoatColor, enemyCapColor, enemyBootColor, enemyHitFlashColor, activeEnemyBubbles);
+               drawPlayers(ctx, stateToRender.players, appState, PLAYER_DEFAULTS, playerColor, otherPlayerColor, localPlayerMuzzleFlash);
+               drawSpeechBubbles(ctx, stateToRender.players, activeSpeechBubbles, fontFamily, playerSpeechBubbleBg, playerSpeechBubbleOutline, playerSpeechBubbleColor, PLAYER_DEFAULTS, appState);
+               drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles, fontFamily, enemySpeechBubbleBg, enemySpeechBubbleOutline, enemySpeechBubbleColor, ENEMY_DEFAULTS);
+               drawDamageTexts(ctx, stateToRender.damage_texts, fontFamily, damageTextColor, damageTextCritColor, damageTextFontSize, damageTextCritFontSize);
+
+           }
+                function triggerShake(magnitude, durationMs) {
+               const now = performance.now();
+               const newEndTime = now + durationMs;
+               // Apply if new shake is stronger or lasts longer than current one
+               if (magnitude >= currentShakeMagnitude || newEndTime >= shakeEndTime) {
+                    currentShakeMagnitude = Math.max(magnitude, currentShakeMagnitude);
+                    shakeEndTime = Math.max(newEndTime, shakeEndTime);
+               }
+           }
+           
+
+                function drawDamageVignette(intensity) {
+                    if (intensity <= 0) return;
+                    ctx.save();
+                    const outerRadius = Math.sqrt(1600**2 + 900**2) / 2; // Diagonal radius
+                    const gradient = ctx.createRadialGradient(1600 / 2, 900 / 2, 0, 1600 / 2, 900 / 2, outerRadius);
+                    const redAlpha = 0.4 * intensity; // Max 40% opacity red
+                    gradient.addColorStop(0, 'rgba(255, 0, 0, 0)'); // Transparent center
+                    gradient.addColorStop(0.75, 'rgba(255, 0, 0, 0)'); // Transparent out to 75%
+                    gradient.addColorStop(1, `rgba(255, 0, 0, ${redAlpha.toFixed(2)})`); // Fade to red at edge
+                    ctx.fillStyle = gradient; ctx.fillRect(0, 0, 1600, 900);
+                    ctx.restore();
+                }
+
+           function generateBackground(targetIsNight) {
+               log(`[Renderer] Generating background for ${targetIsNight ? 'Night' : 'Day'}`);
+               const baseColor = targetIsNight ? '#3E2723' : '#8FBC8F';
+               offscreenCtx.fillStyle = baseColor;
+               offscreenCtx.fillRect(0, 0, 1600, 900); // Base fill
+
+               if (!targetIsNight) { // Day Details
+                   const numPatches = 100; const numTufts = 150;
+                   for (let i = 0; i < numPatches; i++) { // Dirt patches
+                       const x = Math.random()*1600; const y = Math.random()*900;
+                       const radius = Math.random()*40+15; const r = 101+Math.random()*20-10;
+                       const g = 67+Math.random()*20-10; const b = 33+Math.random()*20-10;
+                       const alpha = Math.random()*0.25+0.20;
+                       offscreenCtx.fillStyle = `rgba(${r.toFixed(0)}, ${g.toFixed(0)}, ${b.toFixed(0)}, ${alpha.toFixed(2)})`;
+                       offscreenCtx.beginPath(); offscreenCtx.arc(x, y, radius, 0, Math.PI*2); offscreenCtx.fill();
+                   }
+                   offscreenCtx.lineWidth = 3; offscreenCtx.strokeStyle = 'rgba(34, 139, 34, 0.6)';
+                   for (let i = 0; i < numTufts; i++) { // Grass tufts
+                       const x = Math.random()*1600; const y = Math.random()*900;
+                       offscreenCtx.beginPath(); offscreenCtx.moveTo(x, y);
+                       offscreenCtx.lineTo(x+(Math.random()*6-3), y-(Math.random()*6+5)); offscreenCtx.stroke();
+                   }
+               } else { // Night Details
+                   const numPatches = 60; const numStars = 150;
+                   for (let i = 0; i < numPatches; i++) { // Dark patches
+                       const x = Math.random()*1600; const y = Math.random()*900;
+                       const radius = Math.random()*50+20; const alpha = Math.random()*0.15+0.1;
+                       offscreenCtx.fillStyle = `rgba(5, 2, 2, ${alpha.toFixed(2)})`;
+                       offscreenCtx.beginPath(); offscreenCtx.arc(x, y, radius, 0, Math.PI*2); offscreenCtx.fill();
+                   }
+                   offscreenCtx.fillStyle = 'rgba(255, 255, 240, 0.8)';
+                   for (let i = 0; i < numStars; i++) { // Stars
+                       const starX = Math.random()*1600; const starY = Math.random()*900;
+                       const starR = Math.random()*1.5+0.5; offscreenCtx.fillRect(starX, starY, starR, starR);
+                   }
+               }
+               log("[Renderer] Background generation complete.");
+               return targetIsNight; // Update state tracker
+           }
+                    
+           function updateGeneratedBackground(targetIsNight) {
+               // No change needed if background is already correct and ready
+               if (targetIsNight === currentBackgroundIsNight && isBackgroundReady) return;
+               log(`[Renderer] Request to update background to ${targetIsNight ? 'Night' : 'Day'}.`);
+
+               if (isBackgroundReady) { // Start transition if a previous background exists
+                   log("[Renderer] Starting background transition...");
+                   isTransitioningBackground = true; transitionStartTime = performance.now();
+                   // Copy current background to the 'old' canvas for fading
+                   oldOffscreenCtx.clearRect(0, 0, 1600, 900);
+                   oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0);
+                   // Generate the new background onto the main offscreen canvas
+                   generateBackground(targetIsNight);
+               } else { // First time: generate directly, no transition
+                   log("[Renderer] First background generation.");
+                   currentBackgroundIsNight = generateBackground(targetIsNight);
+                   isBackgroundReady = true; log("[Renderer] isBackgroundReady set to true.");
+               }
+           }
+             function drawEnemySpeechBubbles(enemiesToRender) {
+               const now = performance.now();
+               const bubbleFont = 'italic 11px ' + "'Courier New', monospace";
+               const cornerRadius = 4; const textPadding = 3; const bubbleOffset = 20; // Positioning constants
+               ctx.font = bubbleFont; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+               const enemyIdsToRemove = []; // Track bubbles that expired or whose owner disappeared
+
+               for (const enemyId in activeEnemyBubbles) {
+                   const bubble = activeEnemyBubbles[enemyId];
+                   if (now >= bubble.endTime) { enemyIdsToRemove.push(enemyId); continue; } // Expired
+                   const enemy = enemiesToRender?.[enemyId]; // Find corresponding enemy in current state
+                   if (enemy && enemy.health > 0) { // Only draw if enemy exists and is alive
+                       const enemyDrawX = enemy.x; const enemyDrawY = enemy.y;
+                       const enemyHeight = enemy.height ?? 40;
+                       const bubbleY = enemyDrawY - (enemyHeight / 2) - bubbleOffset; // Position above enemy
+                       const textMetrics = ctx.measureText(bubble.text);
+                       const textWidth = textMetrics.width; const boxWidth = textWidth + textPadding * 2;
+                       const approxFontHeight = 11; const boxHeight = approxFontHeight + textPadding * 2;
+                       const boxX = enemyDrawX - boxWidth / 2; const boxY = bubbleY - boxHeight;
+
+                       ctx.fillStyle = 'rgba(70, 0, 0, 0.7)'; drawRoundedRect(boxX, boxY, boxWidth, boxHeight, cornerRadius); ctx.fill();
+                       ctx.strokeStyle = 'rgba(200, 150, 150, 0.5)'; ctx.lineWidth = 1; ctx.stroke();
+                       ctx.fillStyle = '#FFAAAA'; ctx.fillText(bubble.text, enemyDrawX, bubbleY - textPadding);
+                   } else { enemyIdsToRemove.push(enemyId); } // Remove if enemy no longer valid
+               }
+               enemyIdsToRemove.forEach(id => { delete activeEnemyBubbles[id]; }); // Clean up expired/invalid bubbles
+           }
+             function drawDamageTexts(damageTexts) {
+               if (!damageTexts) return;
+               const now = performance.now();
+               const pulseDuration = 250; const pulseMaxSizeIncrease = 4; // Crit pulse effect params
+               ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+
+               Object.values(damageTexts).forEach(dmgText => {
+                   if (!dmgText) return;
+                   const x = dmgText.x ?? 0; const y = dmgText.y ?? 0;
+                   const text = dmgText.text ?? '?'; const isCrit = dmgText.is_crit ?? false;
+                   const spawnTime = dmgText.spawn_time ? dmgText.spawn_time * 1000 : now; // Server sends seconds
+                   const timeSinceSpawn = now - spawnTime;
+                   let currentFontSize = isCrit ? 18 : 14;
+                   let currentFillColor = isCrit ? '#FFD700' : '#FFFFFF';
+
+                   // Apply crit pulse effect
+                   if (isCrit && timeSinceSpawn < pulseDuration) {
+                       const pulseProgress = Math.sin((timeSinceSpawn / pulseDuration) * Math.PI); // 0 -> 1 -> 0 wave
+                       currentFontSize += pulseProgress * pulseMaxSizeIncrease;
+                   }
+                   ctx.font = `bold ${Math.round(currentFontSize)}px 'Courier New', monospace`;
+                   ctx.fillStyle = currentFillColor;
+                   ctx.fillText(text, x, y);
+               });
+           }
+
+            // Expose public functions of the Renderer module
+            return {
+                drawGame,                  // Main render loop function
+                triggerShake,              // Function to initiate screen shake
+                updateGeneratedBackground,  // Function to trigger background changes/transitions
+                drawPlayers, // Add drawPlayers to what we are returning from the rendering to access
+                 drawEnemySpeechBubbles,
+                  drawDamageTexts
+
+            };
+       })(); // End Renderer module IIFE
+       console.log("--- Renderer.js: Renderer object defined?", typeof Renderer);
