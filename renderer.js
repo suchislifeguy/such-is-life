@@ -110,8 +110,249 @@ const Renderer = (() => {
     // --- (Keep ALL helper functions: drawRoundedRect, generateBackground, updateGeneratedBackground, etc...) ---
     // --- ... No changes needed inside the helper functions themselves for this fix ... ---
     function drawRoundedRect(ctx, x, y, width, height, radius) { if (width < 2 * radius) radius = width / 2; if (height < 2 * radius) radius = height / 2; ctx.beginPath(); ctx.moveTo(x + radius, y); ctx.arcTo(x + width, y, x + width, y + height, radius); ctx.arcTo(x + width, y + height, x, y + height, radius); ctx.arcTo(x, y + height, x, y, radius); ctx.arcTo(x, y, x + width, y, radius); ctx.closePath(); }
-    function generateBackground(ctx, targetIsNight, width, height) { console.log(`[Renderer] generateBackground called. TargetNight: ${targetIsNight}`); const baseColor = targetIsNight ? nightBaseColor : dayBaseColor; ctx.fillStyle = baseColor; ctx.fillRect(0, 0, width, height); if (!targetIsNight) { const np=100,nt=150; for(let i=0;i<np;i++){ const x=Math.random()*width,y=Math.random()*height,r=Math.random()*40+15,c=`rgba(${(101+Math.random()*20-10).toFixed(0)},${(67+Math.random()*20-10).toFixed(0)},${(33+Math.random()*20-10).toFixed(0)},${(Math.random()*0.25+0.20).toFixed(2)})`; ctx.fillStyle=c; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); } ctx.lineWidth=3; ctx.strokeStyle='rgba(34,139,34,0.6)'; for(let i=0;i<nt;i++){ const x=Math.random()*width,y=Math.random()*height; ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+(Math.random()*6-3),y-(Math.random()*6+5)); ctx.stroke(); } } else { const np=60,ns=150; for(let i=0;i<np;i++){ const x=Math.random()*width,y=Math.random()*height,r=Math.random()*50+20,a=Math.random()*0.15+0.1; ctx.fillStyle=`rgba(5,2,2,${a.toFixed(2)})`; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); } ctx.fillStyle='rgba(255,255,240,0.8)'; for(let i=0;i<ns;i++){ const sx=Math.random()*width,sy=Math.random()*height,sr=Math.random()*1.5+0.5; ctx.fillRect(sx,sy,sr,sr); } } ctx.canvas.dataset.isNight = targetIsNight; console.log(`[Renderer] generateBackground finished. Stored isNight: ${ctx.canvas.dataset.isNight}`); return targetIsNight; }
-    function updateGeneratedBackground(targetIsNight, targetCanvasWidth, targetCanvasHeight) { canvasWidth = targetCanvasWidth; canvasHeight = targetCanvasHeight; if ( offscreenCanvas.width !== canvasWidth || offscreenCanvas.height !== canvasHeight ) { offscreenCanvas.width = canvasWidth; offscreenCanvas.height = canvasHeight; oldOffscreenCanvas.width = canvasWidth; oldOffscreenCanvas.height = canvasHeight; hazeCanvas.width = canvasWidth; hazeCanvas.height = canvasHeight; isBackgroundReady = false; currentBackgroundIsNight = null; isTransitioningBackground = false; } if (targetIsNight === currentBackgroundIsNight && isBackgroundReady) { return; } if (isTransitioningBackground && targetIsNight === (offscreenCanvas.dataset.isNight === 'true')) { return; } if (isBackgroundReady) { oldOffscreenCtx.clearRect(0, 0, canvasWidth, canvasHeight); oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0); isTransitioningBackground = true; transitionStartTime = performance.now(); generateBackground(offscreenCtx, targetIsNight, canvasWidth, canvasHeight); currentBackgroundIsNight = targetIsNight; } else { generateBackground(offscreenCtx, targetIsNight, canvasWidth, canvasHeight); currentBackgroundIsNight = targetIsNight; isBackgroundReady = true; isTransitioningBackground = false; } }
+
+    function generateBackground(ctx, targetIsNight, width, height) {
+        console.log(`[Renderer] generateBackground called. TargetNight: ${targetIsNight}`);
+        const baseColor = targetIsNight ? "#0b102a" : "#87CEEB"; // Deep Blue Night, Lighter Blue Day
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(0, 0, width, height);
+
+        // --- DAY TIME BACKGROUND ---
+        if (!targetIsNight) {
+            // 1. Simple Gradient Sky
+            const skyGradient = ctx.createLinearGradient(0, 0, 0, height * 0.6);
+            skyGradient.addColorStop(0, "#87CEEB"); // Lighter blue top
+            skyGradient.addColorStop(1, "#add8e6"); // Slightly darker bottom
+            ctx.fillStyle = skyGradient;
+            ctx.fillRect(0, 0, width, height); // Cover whole canvas initially
+
+            // 2. Ground Area
+            const groundLevel = height * 0.85;
+            const groundColorBase = "#b8860b"; // Dark Goldenrod
+            const groundColorHighlight = "#daa520"; // Goldenrod
+
+            // Ground Base Color
+            ctx.fillStyle = groundColorBase;
+            ctx.fillRect(0, groundLevel, width, height - groundLevel);
+
+            // Subtle Ground Texture/Variation
+            const numGroundPatches = 150;
+            for (let i = 0; i < numGroundPatches; i++) {
+                const patchX = Math.random() * width;
+                const patchY = groundLevel + Math.random() * (height - groundLevel);
+                const patchW = Math.random() * 80 + 40;
+                const patchH = Math.random() * 5 + 2;
+                const patchAlpha = Math.random() * 0.1 + 0.05;
+                const patchColor = Math.random() < 0.5 ? groundColorBase : groundColorHighlight;
+                ctx.fillStyle = `${patchColor}${Math.round(patchAlpha*255).toString(16).padStart(2,'0')}`; // Append alpha hex
+                ctx.fillRect(patchX - patchW / 2, patchY - patchH / 2, patchW, patchH);
+            }
+
+            // 3. Distant Hills/Mesa Silhouette
+            const hillColor = "#8b4513"; // Saddle Brown
+            ctx.fillStyle = hillColor;
+            ctx.beginPath();
+            ctx.moveTo(0, groundLevel);
+            let hillY = groundLevel;
+            const hillSegmentWidth = 100;
+            for (let x = 0; x <= width; x += hillSegmentWidth) {
+                hillY = groundLevel - Math.random() * 40 - 10; // Varying height
+                ctx.lineTo(x + Math.random() * hillSegmentWidth - hillSegmentWidth/2, hillY);
+            }
+            ctx.lineTo(width, groundLevel); // End at ground level
+            ctx.closePath();
+            ctx.fill();
+
+            // 4. Sparse Vegetation (Simple Lines/Bushes)
+            const numTrees = 40;
+            const treeColor = "#556b2f"; // Dark Olive Green
+            ctx.strokeStyle = treeColor;
+            ctx.lineWidth = 2;
+            for (let i = 0; i < numTrees; i++) {
+                const treeX = Math.random() * width;
+                // Ensure trees start above the highest possible hill point
+                const treeBaseY = groundLevel - 60 + Math.random() * 20;
+                const treeHeight = Math.random() * 25 + 15;
+                // Simple trunk line
+                ctx.beginPath();
+                ctx.moveTo(treeX, treeBaseY);
+                ctx.lineTo(treeX + (Math.random()*4-2), treeBaseY - treeHeight);
+                ctx.stroke();
+                // Simple bush circle at base
+                ctx.fillStyle = treeColor + '99'; // Semi-transparent
+                ctx.beginPath();
+                ctx.arc(treeX, treeBaseY, Math.random()*5 + 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 5. Simple Clouds
+            const numClouds = 8;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            for (let i = 0; i < numClouds; i++) {
+                const cloudX = Math.random() * width;
+                const cloudY = Math.random() * height * 0.4; // Upper part of sky
+                const cloudBaseSize = Math.random() * 50 + 40;
+                // Draw cloud as a few overlapping circles
+                for (let j = 0; j < 5; j++) {
+                    ctx.beginPath();
+                    ctx.arc(
+                        cloudX + (Math.random() - 0.5) * cloudBaseSize * 0.8,
+                        cloudY + (Math.random() - 0.5) * cloudBaseSize * 0.3,
+                        cloudBaseSize * (Math.random() * 0.3 + 0.4), // Varying radius
+                        0, Math.PI * 2
+                    );
+                    ctx.fill();
+                }
+            }
+
+        }
+        // --- NIGHT TIME BACKGROUND ---
+        else {
+            // 1. Ground Area (Very Dark)
+            const groundLevel = height * 0.9; // Higher ground level at night?
+            const groundColor = "#1a1412"; // Very dark desaturated brown
+            ctx.fillStyle = groundColor;
+            ctx.fillRect(0, groundLevel, width, height - groundLevel);
+
+            // Subtle Ground Texture
+            const numGroundPatches = 200;
+            for (let i = 0; i < numGroundPatches; i++) {
+                const patchX = Math.random() * width;
+                const patchY = groundLevel + Math.random() * (height - groundLevel);
+                const patchR = Math.random() * 20 + 10;
+                const patchAlpha = Math.random() * 0.08 + 0.02; // Very subtle
+                ctx.fillStyle = `rgba(5, 3, 2, ${patchAlpha.toFixed(2)})`;
+                ctx.beginPath();
+                ctx.arc(patchX, patchY, patchR, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Optional: Slight noise horizon line? (Can be complex)
+            // For simplicity, keeping horizon straight for now.
+
+            // 2. The Moon
+            const moonRadius = 30;
+            const moonX = width * 0.8; // Position moon
+            const moonY = height * 0.15;
+            const moonGlowRadius = moonRadius * 2.5;
+            // Moon Glow Gradient
+            try {
+                const moonGradient = ctx.createRadialGradient(moonX, moonY, moonRadius * 0.8, moonX, moonY, moonGlowRadius);
+                moonGradient.addColorStop(0, "rgba(240, 240, 255, 0.3)"); // Inner glow
+                moonGradient.addColorStop(0.5, "rgba(200, 200, 240, 0.1)");
+                moonGradient.addColorStop(1, "rgba(150, 150, 200, 0)");   // Fade out
+                ctx.fillStyle = moonGradient;
+                ctx.fillRect(moonX - moonGlowRadius, moonY - moonGlowRadius, moonGlowRadius * 2, moonGlowRadius * 2); // Draw glow
+            } catch (e) {}
+            // Moon Body
+            ctx.fillStyle = "#f0f0f0";
+            ctx.beginPath();
+            ctx.arc(moonX, moonY, moonRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+
+            // 3. Milky Way / Dust Lane (Diagonal Band)
+            const mwAngle = Math.PI / 5; // Angle of the band
+            const mwWidth = height * 0.6; // Width of the band effect
+            const mwCenterX = width / 2;
+            const mwCenterY = height / 2;
+            const mwIterations = 8; // Layers of dust/glow
+            ctx.save();
+            ctx.translate(mwCenterX, mwCenterY);
+            ctx.rotate(mwAngle);
+            for (let i = 0; i < mwIterations; i++) {
+                const layerWidth = mwWidth * (1.0 - i * 0.05) * (1 + Math.random()*0.2); // Vary width per layer
+                const layerAlpha = 0.01 + Math.random() * 0.025; // Very low alpha
+                // Vary color slightly per layer
+                const r = 180 + Math.random()*40;
+                const g = 180 + Math.random()*40;
+                const b = 200 + Math.random()*55;
+                ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${layerAlpha.toFixed(3)})`;
+                // Draw wide rectangle for the dust lane layer
+                ctx.fillRect(-width * 0.7, -layerWidth / 2, width * 1.4, layerWidth);
+            }
+            ctx.restore(); // Restore rotation/translation
+
+
+            // 4. Deep Space Nebulae/Dark Clouds (Large, Faint Patches)
+            const numNebulae = 40;
+            for (let i = 0; i < numNebulae; i++) {
+                const nebX = Math.random() * width;
+                const nebY = Math.random() * groundLevel; // Keep above ground
+                const nebR = Math.random() * 150 + 80; // Large radius
+                const nebAlpha = Math.random() * 0.08 + 0.03; // Very faint
+                // Dark blue/purple tones
+                const r = 10 + Math.random() * 20;
+                const g = 10 + Math.random() * 25;
+                const b = 30 + Math.random() * 40;
+                ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${nebAlpha.toFixed(3)})`;
+                ctx.beginPath();
+                ctx.arc(nebX, nebY, nebR, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+
+            // 5. Star Field (Dense, Varied)
+            const numStars = 4000; // Increased star count
+            let lastStarX = Math.random()*width, lastStarY = Math.random()*groundLevel;
+            for (let i = 0; i < numStars; i++) {
+                // Simple clustering: slightly bias towards last star sometimes
+                let sx, sy;
+                if (Math.random() < 0.1) { // 10% chance to cluster
+                    sx = lastStarX + (Math.random() - 0.5) * 50;
+                    sy = lastStarY + (Math.random() - 0.5) * 50;
+                } else {
+                    sx = Math.random() * width;
+                    sy = Math.random() * groundLevel; // Stars only in the sky
+                }
+                // Clamp coordinates
+                sx = Math.max(0, Math.min(width, sx));
+                sy = Math.max(0, Math.min(groundLevel - 1, sy)); // Ensure below horizon
+                lastStarX = sx; lastStarY = sy;
+
+
+                // Size variation (most are tiny)
+                let sr;
+                const sizeRoll = Math.random();
+                if (sizeRoll < 0.7) sr = Math.random() * 0.5 + 0.2; // 70% tiny
+                else if (sizeRoll < 0.95) sr = Math.random() * 1.0 + 0.7; // 25% small
+                else sr = Math.random() * 1.5 + 1.5; // 5% larger
+
+                // Alpha variation (most are faint)
+                let starAlpha;
+                const alphaRoll = Math.random();
+                if (alphaRoll < 0.6) starAlpha = Math.random() * 0.3 + 0.1; // 60% faint
+                else if (alphaRoll < 0.9) starAlpha = Math.random() * 0.4 + 0.4; // 30% medium
+                else starAlpha = Math.random() * 0.2 + 0.8; // 10% bright
+
+                // Subtle Color variation (mostly white/pale yellow)
+                let r=255, g=255, b=240;
+                const colorRoll = Math.random();
+                if (sr > 1.0 && colorRoll < 0.1) { // 10% of larger stars are bluish
+                    r=230; g=240; b=255;
+                } else if (sr > 1.0 && colorRoll < 0.2) { // 10% of larger stars are reddish
+                    r=255; g=230; b=220;
+                }
+
+                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${starAlpha.toFixed(2)})`;
+                // Use fillRect for small stars (often faster than arc)
+                if (sr < 1.0) {
+                    ctx.fillRect(sx - sr/2, sy - sr/2, sr, sr);
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, sr / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        } // End Night Time
+
+        // Store generated state
+        ctx.canvas.dataset.isNight = targetIsNight;
+        console.log(`[Renderer] generateBackground finished. Stored isNight: ${ctx.canvas.dataset.isNight}`);
+        return targetIsNight;
+    }
+
+
     function drawDamageTexts(ctx, damageTexts) { if(!damageTexts) return; const now=performance.now(),pd=250,pmsi=4; ctx.textAlign='center'; ctx.textBaseline='bottom'; Object.values(damageTexts).forEach(dt=>{ if(!dt) return; const x=dt.x??0,y=dt.y??0,t=dt.text??'?',ic=dt.is_crit??false,st=dt.spawn_time?dt.spawn_time*1000:now,ts=now-st; let cfs=ic?damageTextCritFontSize:damageTextFontSize,cfc=ic?damageTextCritColor:damageTextColor; if(ic&&ts<pd){ const pp=Math.sin((ts/pd)*Math.PI); cfs+=pp*pmsi; } ctx.font=`bold ${Math.round(cfs)}px ${fontFamily}`; ctx.fillStyle=cfc; ctx.fillText(t,x,y); }); }
 
     function drawCampfire(ctx, campfireData, width, height) {
