@@ -433,8 +433,10 @@
     <script src="renderer.js"></script>
     <!-- ****  START BIG INLINE SCRIPT BLOCK **** -->
 
-    
+
     <script>
+        console.log("--- Inline Script: Starting execution ---");
+
         // --- Client Configuration & Core Constants ---
         const WEBSOCKET_URL = 'wss://such-is-life.glitch.me/ws'; // TARGET SERVER
         const CANVAS_WIDTH = 1600;
@@ -1475,6 +1477,7 @@ return {
                         if (spP) { appState.predictedPlayerPos = { x: spP.x, y: spP.y }; appState.renderedPlayerPos = { x: spP.x, y: spP.y }; }
                         UI.updateStatus("Single Player Game Started!"); UI.showSection('game-area');
                         if (appState.serverState) { // Trigger initial UI updates
+                            console.log(`--- handleServerMessage (${data.type}): Attempting to use Renderer. typeof Renderer:`, typeof Renderer);
                             Renderer.updateGeneratedBackground(appState.serverState.is_night, CANVAS_WIDTH, CANVAS_HEIGHT, dayBaseColor, nightBaseColor);
                              UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState);
                         }
