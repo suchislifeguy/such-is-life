@@ -115,7 +115,7 @@ const Renderer = (() => {
     function updateGeneratedBackground(targetIsNight, targetCanvasWidth, targetCanvasHeight) { canvasWidth = targetCanvasWidth; canvasHeight = targetCanvasHeight; if ( offscreenCanvas.width !== canvasWidth || offscreenCanvas.height !== canvasHeight ) { offscreenCanvas.width = canvasWidth; offscreenCanvas.height = canvasHeight; oldOffscreenCanvas.width = canvasWidth; oldOffscreenCanvas.height = canvasHeight; hazeCanvas.width = canvasWidth; hazeCanvas.height = canvasHeight; isBackgroundReady = false; currentBackgroundIsNight = null; isTransitioningBackground = false; } if (targetIsNight === currentBackgroundIsNight && isBackgroundReady) { return; } if (isTransitioningBackground && targetIsNight === (offscreenCanvas.dataset.isNight === 'true')) { return; } if (isBackgroundReady) { oldOffscreenCtx.clearRect(0, 0, canvasWidth, canvasHeight); oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0); isTransitioningBackground = true; transitionStartTime = performance.now(); generateBackground(offscreenCtx, targetIsNight, canvasWidth, canvasHeight); currentBackgroundIsNight = targetIsNight; } else { generateBackground(offscreenCtx, targetIsNight, canvasWidth, canvasHeight); currentBackgroundIsNight = targetIsNight; isBackgroundReady = true; isTransitioningBackground = false; } }
     function drawDamageTexts(ctx, damageTexts) { if(!damageTexts) return; const now=performance.now(),pd=250,pmsi=4; ctx.textAlign='center'; ctx.textBaseline='bottom'; Object.values(damageTexts).forEach(dt=>{ if(!dt) return; const x=dt.x??0,y=dt.y??0,t=dt.text??'?',ic=dt.is_crit??false,st=dt.spawn_time?dt.spawn_time*1000:now,ts=now-st; let cfs=ic?damageTextCritFontSize:damageTextFontSize,cfc=ic?damageTextCritColor:damageTextColor; if(ic&&ts<pd){ const pp=Math.sin((ts/pd)*Math.PI); cfs+=pp*pmsi; } ctx.font=`bold ${Math.round(cfs)}px ${fontFamily}`; ctx.fillStyle=cfc; ctx.fillText(t,x,y); }); }
     function drawCampfire(ctx, campfireData, width, height) { if(!campfireData||!campfireData.active) return; const x=campfireData.x??width/2,y=campfireData.y??height/2,r=campfireData.radius??0; if(r<=0) return; const sw=20,sh=4,fw=15,fh=25; ctx.save(); ctx.fillStyle=campfireAuraColor; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); const soy=5; ctx.fillStyle=campfireStickColor; ctx.translate(x,y+soy); ctx.rotate(Math.PI/5); ctx.fillRect(-sw/2,-sh/2,sw,sh); ctx.rotate(-Math.PI/5); ctx.rotate(-Math.PI/6); ctx.fillRect(-sw/2,-sh/2,sw,sh); ctx.rotate(Math.PI/6); ctx.translate(-x,-(y+soy)); const foy=-10,fcx=x,fcy=y+foy; ctx.fillStyle=campfireFlameOuterColor; ctx.beginPath(); ctx.ellipse(fcx,fcy,fw/2,fh/2,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle=campfireFlameInnerColor; ctx.beginPath(); ctx.ellipse(fcx,fcy-3,fw/3,fh/3,0,0,Math.PI*2); ctx.fill(); ctx.restore(); }
-    function drawMuzzleFlash(ctx, playerX, playerY, aimDx, aimDy) { const fsb=10,fsv=5,od=12,fx=playerX+aimDx*od,fy=playerY+aimDy*od,fs=fsb+Math.random()*fsv; ctx.fillStyle=muzzleFlashColor; ctx.beginPath(); ctx.arc(fx,fy,fs/2,0,Math.PI*2); ctx.fill(); }
+
     function drawDamageVignette(ctx, intensity, width, height) { if(intensity<=0) return; ctx.save(); const or=Math.sqrt(width**2+height**2)/2,g=ctx.createRadialGradient(width/2,height/2,0,width/2,height/2,or),ra=0.4*intensity; g.addColorStop(0,'rgba(255,0,0,0)'); g.addColorStop(0.75,'rgba(255,0,0,0)'); g.addColorStop(1,`rgba(255,0,0,${ra.toFixed(2)})`); ctx.fillStyle=g; ctx.fillRect(0,0,width,height); ctx.restore(); }
     function drawTemperatureTint(ctx, temperature, width, height) { let tcs=null, a=0.0; const tfc=TEMP_FREEZING_CLIENT, tcc=TEMP_COLD_CLIENT, thc=TEMP_HOT_CLIENT, tsc=TEMP_SCORCHING_CLIENT, mta=MAX_TINT_ALPHA; if(temperature===null || typeof temperature === 'undefined'){ return; } if(temperature<=tfc){ tcs='rgba(100,150,255,A)'; a=mta*Math.min(1.0,(tfc-temperature+5)/5.0); } else if(temperature<=tcc){ tcs='rgba(150,180,255,A)'; a=mta*((tcc-temperature)/(tcc-tfc)); } else if(temperature>=tsc){ tcs='rgba(255,100,0,A)'; a=mta*Math.min(1.0,(temperature-tsc+5)/5.0); } else if(temperature>=thc){ tcs='rgba(255,150,50,A)'; a=mta*((temperature-thc)/(tsc-thc)); } a=Math.max(0,Math.min(mta,a)); if(tcs&&a>0.01){ ctx.globalAlpha=1.0; ctx.fillStyle=tcs.replace('A',a.toFixed(2)); ctx.fillRect(0,0,width,height); ctx.globalAlpha=1.0; } }
     function drawEnemySpeechBubbles(ctx, enemiesToRender, activeEnemyBubblesRef) { if(!activeEnemyBubblesRef) return; const now=performance.now(),bf='italic 11px '+fontFamily,cr=4,tp=3,bo=20; ctx.font=bf; ctx.textAlign='center'; ctx.textBaseline='bottom'; const etr=[]; for(const eid in activeEnemyBubblesRef){ const b=activeEnemyBubblesRef[eid]; if(now>=b.endTime){etr.push(eid);continue;} const e=enemiesToRender?.[eid]; if(e&&e.health>0){ const edx=e.x,edy=e.y,eh=e.height??40,by=edy-eh/2-bo,tm=ctx.measureText(b.text),tw=tm.width,bw=tw+tp*2,afh=11,bh=afh+tp*2,bx=edx-bw/2,bby=by-bh; ctx.fillStyle=enemySpeechBubbleBg; drawRoundedRect(ctx,bx,bby,bw,bh,cr); ctx.fill(); ctx.strokeStyle=enemySpeechBubbleOutline; ctx.lineWidth=1; ctx.stroke(); ctx.fillStyle=enemySpeechBubbleColor; ctx.fillText(b.text,edx,by-tp); } else {etr.push(eid);} } etr.forEach(id=>{ if (activeEnemyBubblesRef) delete activeEnemyBubblesRef[id]; }); }
@@ -239,9 +239,222 @@ const Renderer = (() => {
     }
     function drawPlayers(ctx, players, appStateRef, localPlayerMuzzleFlashRef) { if(!players || !appStateRef) return; Object.values(players).forEach(p=>{ if(!p||p.player_status==='dead') return; const is=p.id===appStateRef.localPlayerId,ps=p.player_status||'alive',dx=is?appStateRef.renderedPlayerPos.x:p.x,dy=is?appStateRef.renderedPlayerPos.y:p.y,w=p.width??48,h=p.height??48,mh=p.max_health??100,ca=p.armor??0,id=(ps==='down'),a=id?0.4:1.0; ctx.save(); ctx.globalAlpha=a; const adx=is?localPlayerMuzzleFlashRef?.aimDx:0,ady=is?localPlayerMuzzleFlashRef?.aimDy:0; drawPlayerCharacter(ctx,dx,dy,w,h,is,p,adx,ady); ctx.restore(); if(ps==='alive'){ drawHealthBar(ctx,dx,dy,w,p.health,mh); if(ca>0) drawArmorBar(ctx,dx,dy,w,ca); } }); }
     function drawEnemies(ctx, enemies, activeEnemyBubblesRef) { if(!enemies) return; const now=performance.now()/1000,fd=0.3; Object.values(enemies).forEach(e=>{ if(!e) return; const w=e.width??20,h=e.height??40,mh=e.max_health??50; let a=1.0,sd=true,id=false; if(e.health<=0&&e.death_timestamp){ id=true; const el=now-e.death_timestamp; if(el<fd) a=0.4; else sd=false; } if(sd){ ctx.save(); ctx.globalAlpha=a; drawEnemyRect(ctx,e.x,e.y,w,h,e.type,e); ctx.restore(); } if(!id&&e.health>0&&sd){ drawHealthBar(ctx,e.x,e.y,w,e.health,mh); } }); }
-    function drawBulletCircle(ctx, x, y, r, isPlayerBullet) { ctx.fillStyle=isPlayerBullet?bulletPlayerColor:bulletEnemyColor; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); }
-    function drawShapedBullet(ctx, bullet) { const x=bullet.x,y=bullet.y,vx=bullet.vx,vy=bullet.vy,ot=bullet.owner_type,r=bullet.radius||4,bl=8,bw=4,sf=r/4,l=bl*sf,w=bw*sf,c=(ot==='player')?bulletPlayerColor:bulletEnemyColor,a=Math.atan2(vy,vx); ctx.save(); ctx.translate(x,y); ctx.rotate(a); ctx.fillStyle=c; ctx.fillRect(-l/2,-w/2,l,w); const nl=l*0.4; ctx.beginPath(); ctx.moveTo(l/2,0); ctx.lineTo(l/2-nl,-w/2); ctx.lineTo(l/2-nl,w/2); ctx.closePath(); ctx.fill(); ctx.restore(); }
-    function drawBullets(ctx, bullets) { if(!bullets) return; Object.values(bullets).forEach(b=>{ if(!b) return; const x=b.x??0,y=b.y??0,vx=b.vx??0,vy=b.vy??0,r=b.radius??4,bt=b.bullet_type||'standard',ot=b.owner_type,hv=Math.abs(vx)>0.01||Math.abs(vy)>0.01; if(bt==='ammo_heavy_slug'||bt==='standard'||bt==='ammo_rapid_fire'||bt==='standard_enemy'){ hv?drawShapedBullet(ctx,b):drawBulletCircle(ctx,x,y,r,ot==='player'); } else if(bt==='ammo_shotgun'){ drawBulletCircle(ctx,x,y,r,ot==='player'); } else { drawBulletCircle(ctx,x,y,r,ot==='player'); } }); }
+    function drawMuzzleFlash(ctx, playerX, playerY, aimDx, aimDy) {
+        const numPoints = 5; // Number of points in the star
+        const outerRadiusBase = 18;
+        const outerRadiusVariance = 6;
+        const innerRadiusBase = 7;
+        const innerRadiusVariance = 3;
+        const glowRadius = 35;
+        const glowColor = "rgba(255, 200, 50, 0.3)";
+        const flashColor = "rgba(255, 230, 100, 0.95)";
+        const offsetDistance = 12; // How far from player center the flash originates
+    
+        const flashX = playerX + aimDx * offsetDistance;
+        const flashY = playerY + aimDy * offsetDistance;
+        const angle = Math.atan2(aimDy, aimDx); // Base angle
+    
+        ctx.save();
+        ctx.translate(flashX, flashY);
+        ctx.rotate(angle); // Rotate the whole flash to match aim direction
+    
+        // 1. Draw the Glow behind
+        const glowGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, glowRadius);
+        glowGradient.addColorStop(0, glowColor);
+        glowGradient.addColorStop(1, "rgba(255, 200, 50, 0)");
+        ctx.fillStyle = glowGradient;
+        ctx.beginPath();
+        ctx.arc(0, 0, glowRadius, 0, Math.PI * 2);
+        ctx.fill();
+    
+        // 2. Draw the Starburst
+        ctx.fillStyle = flashColor;
+        ctx.beginPath();
+        for (let i = 0; i < numPoints * 2; i++) {
+            const radius = (i % 2 === 0)
+                ? outerRadiusBase + Math.random() * outerRadiusVariance
+                : innerRadiusBase + Math.random() * innerRadiusVariance;
+            const pointAngle = (i / (numPoints * 2)) * (Math.PI * 2) - Math.PI / 2; // Offset to point 'up' initially
+            const px = Math.cos(pointAngle) * radius;
+            const py = Math.sin(pointAngle) * radius;
+            if (i === 0) {
+                ctx.moveTo(px, py);
+            } else {
+                ctx.lineTo(px, py);
+            }
+        }
+        ctx.closePath();
+        ctx.fill();
+    
+        ctx.restore();
+    }
+    
+    // --- MODIFIED: drawBulletCircle (Adds trail logic) ---
+    function drawBulletCircle(ctx, bullet, trailLengthFactor = 0.8, trailBaseAlpha = 0.6) {
+        const { x, y, vx = 0, vy = 0, radius: r = 4, owner_type } = bullet;
+        const isPlayerBullet = owner_type === 'player';
+        const color = isPlayerBullet ? bulletPlayerColor : bulletEnemyColor;
+        const speed = Math.sqrt(vx * vx + vy * vy);
+    
+        // Trail calculations
+        const trailLength = r * 2 * trailLengthFactor * Math.min(1, speed / 100); // Scale trail with speed, capped
+        let startX = x, startY = y;
+        if (speed > 1) {
+            startX = x - (vx / speed) * trailLength;
+            startY = y - (vy / speed) * trailLength;
+        }
+    
+        // Draw Trail (gradient line)
+        if (trailLength > 1 && speed > 1) {
+            try {
+                const gradient = ctx.createLinearGradient(startX, startY, x, y);
+                // Parse base color to set alpha for trail start
+                let trailStartColor = color; // Default if parse fails
+                if (color.startsWith('#')) { // Basic hex handling
+                     let alphaHex = Math.round(trailBaseAlpha * 255).toString(16).padStart(2, '0');
+                     trailStartColor = color + alphaHex; // Append alpha hex
+                } else if (color.startsWith('rgb')) { // Basic rgb/rgba handling
+                     trailStartColor = color.replace(/rgb/i, 'rgba').replace(')', `, ${trailBaseAlpha})`);
+                }
+                gradient.addColorStop(0, trailStartColor); // Faded start
+                gradient.addColorStop(1, color);           // Solid end (at bullet position)
+    
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = r * 0.8; // Trail slightly thinner than bullet
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            } catch (e) {
+                // Fallback if gradient fails (e.g., invalid color format)
+                ctx.strokeStyle = color;
+                ctx.lineWidth = r * 0.8;
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            }
+        }
+    
+        // Draw Bullet Head
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+    
+        // Reset lineCap if changed
+        ctx.lineCap = 'butt';
+    }
+    
+    // --- MODIFIED: drawShapedBullet (Adds trail logic) ---
+    function drawShapedBullet(ctx, bullet, trailLengthFactor = 1.0, trailBaseAlpha = 0.7) {
+        const { x, y, vx = 0, vy = 0, radius: r = 4, owner_type } = bullet;
+        const isPlayerBullet = owner_type === 'player';
+        const color = isPlayerBullet ? bulletPlayerColor : bulletEnemyColor;
+        const speed = Math.sqrt(vx * vx + vy * vy);
+    
+        // Bullet shape parameters (relative to radius)
+        const baseLength = 8, baseWidth = 4;
+        const scaleFactor = r / 4; // Use radius to scale base shape
+        const shapeLength = baseLength * scaleFactor;
+        const shapeWidth = baseWidth * scaleFactor;
+    
+        // Trail calculations
+        const trailLength = shapeLength * trailLengthFactor * Math.min(1, speed / 150); // Scale trail with speed, capped
+        let startX = x, startY = y;
+        if (speed > 1) {
+            startX = x - (vx / speed) * trailLength;
+            startY = y - (vy / speed) * trailLength;
+        }
+    
+        // Draw Trail (gradient line)
+        if (trailLength > 1 && speed > 1) {
+             try {
+                const gradient = ctx.createLinearGradient(startX, startY, x, y);
+                let trailStartColor = color; // Default if parse fails
+                if (color.startsWith('#')) {
+                     let alphaHex = Math.round(trailBaseAlpha * 255).toString(16).padStart(2, '0');
+                     trailStartColor = color + alphaHex;
+                } else if (color.startsWith('rgb')) {
+                     trailStartColor = color.replace(/rgb/i, 'rgba').replace(')', `, ${trailBaseAlpha})`);
+                }
+                gradient.addColorStop(0, trailStartColor); // Faded start
+                gradient.addColorStop(1, color);           // Solid end
+    
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = shapeWidth * 0.6; // Trail slightly thinner than bullet body
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            } catch(e) {
+                 // Fallback
+                ctx.strokeStyle = color;
+                ctx.lineWidth = shapeWidth * 0.6;
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            }
+        }
+    
+        // Draw Bullet Head (rotated rect with triangle nose)
+        const angle = Math.atan2(vy, vx);
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+        ctx.fillStyle = color;
+        // Main body
+        ctx.fillRect(-shapeLength / 2, -shapeWidth / 2, shapeLength, shapeWidth);
+        // Nose cone
+        const noseLength = shapeLength * 0.4;
+        ctx.beginPath();
+        ctx.moveTo(shapeLength / 2, 0);
+        ctx.lineTo(shapeLength / 2 - noseLength, -shapeWidth / 2);
+        ctx.lineTo(shapeLength / 2 - noseLength, shapeWidth / 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    
+        // Reset lineCap if changed
+        ctx.lineCap = 'butt';
+    }
+    
+    // --- MODIFIED: drawBullets ---
+    function drawBullets(ctx, bullets) {
+        if (!bullets) return;
+    
+        Object.values(bullets).forEach(b => {
+            if (!b) return;
+            const bt = b.bullet_type || 'standard';
+            const ot = b.owner_type;
+            const hv = Math.abs(b.vx ?? 0) > 0.01 || Math.abs(b.vy ?? 0) > 0.01; // Has velocity
+    
+            // Choose drawing function and trail parameters based on type
+            if (bt === 'ammo_heavy_slug') {
+                if (hv) {
+                    drawShapedBullet(ctx, b, 0.6, 0.8); // Shorter, thicker trail? (adjust alpha)
+                } else {
+                    drawBulletCircle(ctx, b, 0.4, 0.8); // Shorter trail if somehow static
+                }
+            } else if (bt === 'ammo_shotgun') {
+                 // Shotgun pellets are circles with shorter trails
+                drawBulletCircle(ctx, b, 0.5, 0.5); // Shorter, fainter trails
+            } else if (bt === 'ammo_rapid_fire' || bt === 'standard' || bt === 'standard_enemy') {
+                if (hv) {
+                    drawShapedBullet(ctx, b, 1.0, 0.7); // Standard trail
+                } else {
+                    // Draw static bullet as circle without trail maybe?
+                    drawBulletCircle(ctx, b, 0, 0); // No trail if no velocity
+                }
+            } else {
+                // Default fallback: circle with standard trail
+                drawBulletCircle(ctx, b, 0.8, 0.6);
+            }
+        });
+    }
     function drawPowerupSquare(ctx, x, y, size, type) { let fc=powerupDefaultColor,s='?'; if(type==='health'){s='+';fc=powerupHealthColor;} else if(type==='gun_upgrade'){s='G';fc=powerupGunColor;} else if(type==='speed_boost'){s='S';fc=powerupSpeedColor;} else if(type==='armor'){s='#';fc=powerupArmorColor;} else if(type==='ammo_shotgun'){s='::';fc=powerupShotgunColor;} else if(type==='ammo_heavy_slug'){s='■';fc=powerupSlugColor;} else if(type==='ammo_rapid_fire'){s='>';fc=powerupRapidColor;} else if(type==='bonus_score'){s='$';fc=powerupScoreColor;} ctx.fillStyle=fc; ctx.fillRect(x-size/2,y-size/2,size,size); ctx.fillStyle='#000'; let fs=Math.round(size*0.7); ctx.font=`bold ${fs}px ${fontFamily}`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(s,x,y+(size*0.05)); }
     function drawPowerups(ctx, powerups) { if(!powerups) return; Object.values(powerups).forEach(p=>{ if(!p) return; const s=p.size??20; drawPowerupSquare(ctx,p.x,p.y,s,p.type); }); }
   
