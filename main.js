@@ -171,8 +171,24 @@ const Network = (() => {
 // --- Input Handling Module ---
 const Input = (() => {
      let keys = {}; let lastShotTime = 0; let movementInterval = null; let mouseCanvasPos = { x: 0, y: 0 }; let isMouseDown = false;
-     function setup() { cleanup(); document.addEventListener('keydown', handleKeyDown); document.addEventListener('keyup', handleKeyUp); DOM.chatInput.addEventListener('keydown', handleChatEnter); if (DOM.canvas) { DOM.canvas.addEventListener('mousemove', handleMouseMove); DOM.canvas.addEventListener('mousedown', handleMouseDown); } else { error("Input setup failed: Canvas element not found."); } document.addEventListener('mouseup', handleMouseUp); movementInterval = setInterval(sendMovementInput, INPUT_SEND_INTERVAL); log("Input listeners setup."); }
-     function cleanup() {
+     function setup() {
+        cleanup(); // Calls cleanup first
+        document.addEventListener('keydown', handleKeyDown);
+        document.addEventListener('keyup', handleKeyUp);
+        DOM.chatInput.addEventListener('keydown', handleChatEnter);
+        if (DOM.canvas) {
+            DOM.canvas.addEventListener('mousemove', handleMouseMove);
+            DOM.canvas.addEventListener('mousedown', handleMouseDown);
+            // --- ADD THIS LINE ---
+            DOM.canvas.addEventListener('contextmenu', preventContextMenu); // <-- Add this!
+            // ---------------------
+        } else {
+            error("Input setup failed: Canvas element not found.");
+        }
+        document.addEventListener('mouseup', handleMouseUp);
+        movementInterval = setInterval(sendMovementInput, INPUT_SEND_INTERVAL);
+        log("Input listeners setup.");
+    }     function cleanup() {
         document.removeEventListener('keydown', handleKeyDown);
         document.removeEventListener('keyup', handleKeyUp);
         DOM.chatInput.removeEventListener('keydown', handleChatEnter);
