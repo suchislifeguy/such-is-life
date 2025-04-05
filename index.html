@@ -2350,6 +2350,7 @@ return {
                         appState.currentTemp = newState.current_temperature ?? 18.0; // Use a default if missing
                         appState.isRaining = newState.is_raining ?? false;
                         appState.isDustStorm = newState.is_dust_storm ?? false;
+                        UI.updateEnvironmentDisplay();
 
                         // --- Update Visual Snake State ---
                         const serverSnakeState = newState.snake_state;
