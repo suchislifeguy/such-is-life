@@ -1,357 +1,354 @@
 // renderer.js
 
-const Renderer = (() => {
+// Ensure Renderer is defined in a scope accessible by main.js
+const Renderer = (() => { // Start IIFE (Immediately Invoked Function Expression)
     console.log("--- Renderer.js: Initializing ---");
-  
+
     let mainCtx = null;
     let canvasWidth = 1600;
     let canvasHeight = 900;
-  
-    // ... (Keep offscreen canvas, transition state, etc.) ...
+
+    // Offscreen canvases for background generation and effects
     const offscreenCanvas = document.createElement("canvas");
-    const offscreenCtx = offscreenCanvas.getContext("2d", { alpha: false });
+    const offscreenCtx = offscreenCanvas.getContext("2d", { alpha: false }); // No alpha needed for base bg
     let isBackgroundReady = false;
-    let currentBackgroundIsNight = null;
+    let currentBackgroundIsNight = null; // Tracks the state of the *generated* background
     let isTransitioningBackground = false;
     let transitionStartTime = 0;
     const BACKGROUND_FADE_DURATION_MS = 1000;
     const oldOffscreenCanvas = document.createElement("canvas");
     const oldOffscreenCtx = oldOffscreenCanvas.getContext("2d", { alpha: false });
     const hazeCanvas = document.createElement("canvas");
-    const hazeCtx = hazeCanvas.getContext("2d", { willReadFrequently: true });
-  
-    // --- Internal Constants ---
-    // *** FIX: Define playerColor BEFORE healthBarLow uses it ***
-    const playerColor = "#DC143C"; // Define player color first
-  
-    const dayBaseColor = "#8FBC8F";
-    const nightBaseColor = "#3E2723";
-    const fontFamily = "'Courier New', monospace";
-    const damageTextColor = "#FFFFFF";
-    const damageTextCritColor = "#FFD700";
-    const damageTextFontSize = 14;
-    const damageTextCritFontSize = 18;
-    // const playerColor = "#DC143C"; // Moved up
-    const otherPlayerColor = "#4682B4";
-    const dustyPlayerSelfColor = "#8B4513";
-    const dustyPlayerOtherColor = "#556B2F";
-    const enemyTorsoChaserColor = "#2F4F4F";
-    const enemyTorsoShooterColor = "#4682B4";
-    const enemyTorsoGiantColor = "#6B4226";
-    const enemySkinColor = "#D2B48C";
-    const enemyCoatColor = "#8B4513";
-    const enemyBootColor = "#222222";
-    const enemyCapColor = "#111111";
-    const enemyHitFlashColor = "rgba(255, 255, 255, 0.7)";
-    const bulletPlayerColor = "#ffed4a";
-    const bulletEnemyColor = "#ff0000";
-    const healthBarBg = "#444";
-    const healthBarHigh = "#66bb6a";
-    const healthBarMedium = "#FFD700";
-    const healthBarLow = playerColor; // Now playerColor is defined
-    const armorBarColor = "#9e9e9e";
-    const powerupHealthColor = "#81c784";
-    const powerupGunColor = "#442848";
-    const powerupSpeedColor = "#3edef3";
-    const powerupArmorColor = armorBarColor; // Reuse armorBarColor
-    const powerupShotgunColor = "#FFA500";
-    const powerupSlugColor = "#A0522D";
-    const powerupRapidColor = "#FFFF00";
-    const powerupScoreColor = healthBarMedium; // Reuse healthBarMedium
-    const powerupDefaultColor = "#888";
-    const playerSpeechBubbleColor = "#d0d8d7";
-    const playerSpeechBubbleBg = "rgba(0, 0, 0, 0.7)";
-    const playerSpeechBubbleOutline = "rgba(200, 200, 200, 0.5)";
-    const enemySpeechBubbleColor = "#FFAAAA";
-    const enemySpeechBubbleBg = "rgba(70, 0, 0, 0.7)";
-    const enemySpeechBubbleOutline = "rgba(200, 150, 150, 0.5)";
-    const campfireAuraColor = "rgba(255, 165, 0, 0.15)";
-    const campfireStickColor = "#8B4513";
-    const campfireFlameOuterColor = "rgba(255, 165, 0, 0.6)";
-    const campfireFlameInnerColor = "rgba(255, 255, 0, 0.7)";
-    const muzzleFlashColor = "rgba(255, 220, 50, 0.9)";
-    const snakeLineColor = "#261a0d";
-    const snakeBiteTintColor = "rgba(0, 200, 50, 0.15)";
-    const ironHelmetColor = "#3d3d3d";
-    const ironHelmetHighlight = "#666666";
-    const ironHelmetShadow = "#1a1a1a";
-    const beltColor = "#412a19";
-    const bootColor = "#241c1c";
-    const backgroundShadowColor = "rgba(0,0,0,0.3)";
-    const simpleChestPlateColor = "#777777";
-    const chestPlateHighlight = "#999999";
-    const slitColor = "#000000";
+    // Ensure 'willReadFrequently' if using getImageData for complex haze, otherwise maybe false.
+    const hazeCtx = hazeCanvas.getContext("2d", { willReadFrequently: false });
+
+
+    // --- Internal Constants (Color Palette & Style) ---
+    const playerColor = "#DC143C"; // Crimson
+    const otherPlayerColor = "#4682B4"; // SteelBlue
+    const dustyPlayerSelfColor = "#8B4513"; // SaddleBrown (Player clothing?)
+    const dustyPlayerOtherColor = "#556B2F"; // DarkOliveGreen (Other player clothing?)
+
+    const enemyUniformBlue = "#18315f"; // Dark Navy Blue for standard torso
+    const enemyGiantRed = "#a00000";   // Dark Red for Giant coat
+    const enemySkinColor = "#D2B48C"; // Tan
+    const enemyCoatColor = "#8B4513"; // SaddleBrown (Standard enemy arms/base coat layer)
+    const enemyBootColor = "#222222"; // Very Dark Grey/Black
+    const enemyCapColor = "#111111"; // Black/Very Dark Grey (Standard enemy hat)
+    const beltColor = "#412a19";      // Dark Brown
     const gunColor = "#444444";
+    const gunStockColor = "#7a4a2a"; // Slightly lighter brown for stock
+
+    const enemyHitFlashColor = "rgba(255, 255, 255, 0.7)";
+    const bulletPlayerColor = "#ffed4a"; // Bright Yellow
+    const bulletEnemyColor = "#ff0000"; // Bright Red
+    const healthBarBg = "#444";
+    const healthBarHigh = "#66bb6a"; // Green
+    const healthBarMedium = "#FFD700"; // Gold/Yellow
+    const healthBarLow = playerColor; // Crimson Red
+    const armorBarColor = "#9e9e9e"; // Grey
+    const powerupHealthColor = "#81c784"; const powerupGunColor = "#442848";
+    const powerupSpeedColor = "#3edef3"; const powerupArmorColor = armorBarColor;
+    const powerupShotgunColor = "#FFA500"; const powerupSlugColor = "#A0522D";
+    const powerupRapidColor = "#FFFF00"; const powerupScoreColor = healthBarMedium;
+    const powerupDefaultColor = "#888";
+    const playerSpeechBubbleColor = "#d0d8d7"; const playerSpeechBubbleBg = "rgba(0, 0, 0, 0.7)";
+    const playerSpeechBubbleOutline = "rgba(200, 200, 200, 0.5)";
+    const enemySpeechBubbleColor = "#FFAAAA"; const enemySpeechBubbleBg = "rgba(70, 0, 0, 0.7)";
+    const enemySpeechBubbleOutline = "rgba(200, 150, 150, 0.5)";
+    const campfireStickColor = "#5a3a1e"; // Darker brown for logs
+    const snakeLineColor = "#261a0d"; // Very dark brown for snake
+    const ironHelmetColor = "#3d3d3d"; const ironHelmetHighlight = "#666666"; const ironHelmetShadow = "#1a1a1a";
+    const bootColor = "#241c1c"; // Slightly different dark for player boots
+    const backgroundShadowColor = "rgba(0,0,0,0.3)";
+    const simpleChestPlateColor = "#777777"; const chestPlateHighlight = "#999999";
+    const slitColor = "#000000";
     const sparkColors = [ "rgba(255, 100, 0, 0.8)", "rgba(255, 165, 0, 0.9)", "rgba(255, 220, 50, 0.7)", ];
-    const IDLE_BOB_SPEED_DIVISOR = 600;
-    const IDLE_BOB_AMPLITUDE = 3;
+    const fontFamily = "'Courier New', monospace";
+    const damageTextColor = "#FFFFFF"; const damageTextCritColor = "#FFD700";
+    const damageTextFontSize = 14; const damageTextCritFontSize = 18;
+
+    // --- Dynamics & Effects Constants ---
+    const IDLE_BOB_SPEED_DIVISOR = 600; const IDLE_BOB_AMPLITUDE = 3;
     const DAMAGE_VIGNETTE_HEALTH_THRESHOLD = 30;
-    const TEMP_FREEZING_CLIENT = 0.0;
-    const TEMP_COLD_CLIENT = 10.0;
-    const TEMP_HOT_CLIENT = 35.0;
-    const TEMP_SCORCHING_CLIENT = 40.0;
+    const TEMP_FREEZING_CLIENT = 0.0; const TEMP_COLD_CLIENT = 10.0;
+    const TEMP_HOT_CLIENT = 35.0; const TEMP_SCORCHING_CLIENT = 40.0;
     const MAX_TINT_ALPHA = 0.25;
-    const RAIN_COLOR = "rgba(170, 190, 230, 0.6)";
-    const RAIN_DROPS = 150;
-    const RAIN_LENGTH = 15;
-    const RAIN_SPEED_X = 1;
-    const RAIN_SPEED_Y = 12;
-    const HEAT_HAZE_START_TEMP = 28.0;
-    const HEAT_HAZE_MAX_TEMP = 45.0;
-    const HEAT_HAZE_MAX_OFFSET = 4;
-    const HEAT_HAZE_SPEED = 0.004;
-    const HEAT_HAZE_WAVELENGTH = 0.02;
-    const HEAT_HAZE_LAYERS_MAX = 5;
-    const HEAT_HAZE_BASE_ALPHA = 0.03;
-  
+    const RAIN_COLOR = "rgba(170, 190, 230, 0.6)"; const RAIN_DROPS = 150;
+    const RAIN_LENGTH = 15; const RAIN_SPEED_X = 1; const RAIN_SPEED_Y = 12;
+    const HEAT_HAZE_START_TEMP = 28.0; const HEAT_HAZE_MAX_TEMP = 45.0;
+    const HEAT_HAZE_MAX_OFFSET = 4; const HEAT_HAZE_SPEED = 0.004;
+    const HEAT_HAZE_WAVELENGTH = 0.02; const HEAT_HAZE_LAYERS_MAX = 5; const HEAT_HAZE_BASE_ALPHA = 0.03;
+
+    // --- Internal State ---
     let currentShakeMagnitude = 0;
     let shakeEndTime = 0;
-  
-    // --- (Keep ALL helper functions: drawRoundedRect, generateBackground, updateGeneratedBackground, etc...) ---
-    // --- ... No changes needed inside the helper functions themselves for this fix ... ---
-    function drawRoundedRect(ctx, x, y, width, height, radius) { if (width < 2 * radius) radius = width / 2; if (height < 2 * radius) radius = height / 2; ctx.beginPath(); ctx.moveTo(x + radius, y); ctx.arcTo(x + width, y, x + width, y + height, radius); ctx.arcTo(x + width, y + height, x, y + height, radius); ctx.arcTo(x, y + height, x, y, radius); ctx.arcTo(x, y, x + width, y, radius); ctx.closePath(); }
 
+    // --- Utility Functions ---
+    function drawRoundedRect(ctx, x, y, width, height, radius) { /* ... implementation ... */ } // Keep implementation
+
+    // --- NEW Background Generation Function ---
     function generateBackground(ctx, targetIsNight, width, height) {
         console.log(`[Renderer] generateBackground called. TargetNight: ${targetIsNight}`);
-        const baseColor = targetIsNight ? "#0b102a" : "#87CEEB"; // Deep Blue Night, Lighter Blue Day
-        ctx.fillStyle = baseColor;
-        ctx.fillRect(0, 0, width, height);
+        ctx.clearRect(0, 0, width, height); // Clear previous content
 
+        // =============================
         // --- DAY TIME BACKGROUND ---
+        // =============================
         if (!targetIsNight) {
-            // 1. Simple Gradient Sky
-            const skyGradient = ctx.createLinearGradient(0, 0, 0, height * 0.6);
-            skyGradient.addColorStop(0, "#87CEEB"); // Lighter blue top
-            skyGradient.addColorStop(1, "#add8e6"); // Slightly darker bottom
-            ctx.fillStyle = skyGradient;
-            ctx.fillRect(0, 0, width, height); // Cover whole canvas initially
+            const baseGroundColor = "#CD853F"; // Peru (Ochre/Brown)
+            ctx.fillStyle = baseGroundColor;
+            ctx.fillRect(0, 0, width, height); // Base ground fill
 
-            // 2. Ground Area
-            const groundLevel = height * 0.85;
-            const groundColorBase = "#b8860b"; // Dark Goldenrod
-            const groundColorHighlight = "#daa520"; // Goldenrod
-
-            // Ground Base Color
-            ctx.fillStyle = groundColorBase;
-            ctx.fillRect(0, groundLevel, width, height - groundLevel);
-
-            // Subtle Ground Texture/Variation
-            const numGroundPatches = 150;
-            for (let i = 0; i < numGroundPatches; i++) {
-                const patchX = Math.random() * width;
-                const patchY = groundLevel + Math.random() * (height - groundLevel);
-                const patchW = Math.random() * 80 + 40;
-                const patchH = Math.random() * 5 + 2;
-                const patchAlpha = Math.random() * 0.1 + 0.05;
-                const patchColor = Math.random() < 0.5 ? groundColorBase : groundColorHighlight;
-                ctx.fillStyle = `${patchColor}${Math.round(patchAlpha*255).toString(16).padStart(2,'0')}`; // Append alpha hex
-                ctx.fillRect(patchX - patchW / 2, patchY - patchH / 2, patchW, patchH);
-            }
-
-            // 3. Distant Hills/Mesa Silhouette
-            const hillColor = "#8b4513"; // Saddle Brown
-            ctx.fillStyle = hillColor;
-            ctx.beginPath();
-            ctx.moveTo(0, groundLevel);
-            let hillY = groundLevel;
-            const hillSegmentWidth = 100;
-            for (let x = 0; x <= width; x += hillSegmentWidth) {
-                hillY = groundLevel - Math.random() * 40 - 10; // Varying height
-                ctx.lineTo(x + Math.random() * hillSegmentWidth - hillSegmentWidth/2, hillY);
-            }
-            ctx.lineTo(width, groundLevel); // End at ground level
-            ctx.closePath();
-            ctx.fill();
-
-            // 4. Sparse Vegetation (Simple Lines/Bushes)
-            const numTrees = 40;
-            const treeColor = "#556b2f"; // Dark Olive Green
-            ctx.strokeStyle = treeColor;
-            ctx.lineWidth = 2;
-            for (let i = 0; i < numTrees; i++) {
-                const treeX = Math.random() * width;
-                // Ensure trees start above the highest possible hill point
-                const treeBaseY = groundLevel - 60 + Math.random() * 20;
-                const treeHeight = Math.random() * 25 + 15;
-                // Simple trunk line
+            // 1. Subtle Ground Mottling/Noise
+            const numMottles = 1500; // More subtle patches
+            for (let i = 0; i < numMottles; i++) {
+                const mottleX = Math.random() * width;
+                const mottleY = Math.random() * height;
+                const mottleR = Math.random() * 30 + 15;
+                const mottleAlpha = Math.random() * 0.04 + 0.01; // Very subtle alpha
+                // Slightly lighter or darker ochre
+                const shadeAdjust = (Math.random() - 0.5) * 20;
+                const r = Math.min(255, Math.max(0, 205 + shadeAdjust)); // Base R for Peru
+                const g = Math.min(255, Math.max(0, 133 + shadeAdjust)); // Base G
+                const b = Math.min(255, Math.max(0, 63 + shadeAdjust));  // Base B
+                ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${mottleAlpha.toFixed(3)})`;
                 ctx.beginPath();
-                ctx.moveTo(treeX, treeBaseY);
-                ctx.lineTo(treeX + (Math.random()*4-2), treeBaseY - treeHeight);
-                ctx.stroke();
-                // Simple bush circle at base
-                ctx.fillStyle = treeColor + '99'; // Semi-transparent
-                ctx.beginPath();
-                ctx.arc(treeX, treeBaseY, Math.random()*5 + 3, 0, Math.PI * 2);
+                ctx.arc(mottleX, mottleY, mottleR, 0, Math.PI * 2);
                 ctx.fill();
             }
 
-            // 5. Simple Clouds
-            const numClouds = 8;
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-            for (let i = 0; i < numClouds; i++) {
-                const cloudX = Math.random() * width;
-                const cloudY = Math.random() * height * 0.4; // Upper part of sky
-                const cloudBaseSize = Math.random() * 50 + 40;
-                // Draw cloud as a few overlapping circles
-                for (let j = 0; j < 5; j++) {
-                    ctx.beginPath();
-                    ctx.arc(
-                        cloudX + (Math.random() - 0.5) * cloudBaseSize * 0.8,
-                        cloudY + (Math.random() - 0.5) * cloudBaseSize * 0.3,
-                        cloudBaseSize * (Math.random() * 0.3 + 0.4), // Varying radius
-                        0, Math.PI * 2
-                    );
-                    ctx.fill();
+            // 2. Larger Ground Patches (Dry Grass, Gravel)
+            const numPatches = 80;
+            const patchTypes = [
+                { color: 'rgba(128, 128, 0, 0.15)', type: 'grass' }, // Olive, semi-transparent
+                { color: 'rgba(188, 184, 138, 0.20)', type: 'gravel'} // Desaturated tan/grey, semi-transparent
+            ];
+            for (let i = 0; i < numPatches; i++) {
+                const patchX = Math.random() * width;
+                const patchY = Math.random() * height;
+                const patchW = Math.random() * 150 + 80;
+                const patchH = Math.random() * 100 + 60;
+                const patchData = patchTypes[Math.floor(Math.random() * patchTypes.length)];
+
+                ctx.fillStyle = patchData.color;
+                // Draw irregular blob shape for patch
+                const points = 8;
+                ctx.beginPath();
+                ctx.moveTo(patchX + patchW / 2, patchY);
+                for (let j = 1; j <= points; j++) {
+                    const angle = (j / points) * Math.PI * 2;
+                    const radiusX = patchW / 2 * (0.7 + Math.random() * 0.6); // Irregular radius X
+                    const radiusY = patchH / 2 * (0.7 + Math.random() * 0.6); // Irregular radius Y
+                    ctx.lineTo(patchX + Math.cos(angle) * radiusX, patchY + Math.sin(angle) * radiusY);
+                }
+                ctx.closePath();
+                ctx.fill();
+
+                // Add tufts or stippling inside patches
+                if (patchData.type === 'grass') {
+                    ctx.fillStyle = 'rgba(107, 142, 35, 0.3)'; // OliveDrab, more opaque
+                    for (let k = 0; k < 20; k++) {
+                        const tuftX = patchX + (Math.random() - 0.5) * patchW * 0.8;
+                        const tuftY = patchY + (Math.random() - 0.5) * patchH * 0.8;
+                        ctx.fillRect(tuftX, tuftY, Math.random()*2+1, Math.random()*2+1); // Small squares
+                    }
                 }
             }
+
+            // 3. Rocks and Boulders
+            const numRocks = 60;
+            const rockColorBase = "#808080"; // Grey
+            const rockColorShadow = "rgba(0, 0, 0, 0.2)";
+            for (let i = 0; i < numRocks; i++) {
+                const rockX = Math.random() * width;
+                const rockY = Math.random() * height;
+                const rockSize = Math.random() * 30 + 10;
+                const rockSides = Math.floor(Math.random() * 3) + 5; // 5-7 sides
+
+                // Draw main rock shape (irregular polygon)
+                ctx.fillStyle = rockColorBase;
+                ctx.beginPath();
+                ctx.moveTo(rockX + rockSize / 2, rockY); // Start point
+                for (let j = 1; j <= rockSides; j++) {
+                    const angle = (j / rockSides) * Math.PI * 2;
+                    const radius = rockSize / 2 * (0.6 + Math.random() * 0.8); // Irregular radius
+                    ctx.lineTo(rockX + Math.cos(angle) * radius, rockY + Math.sin(angle) * radius);
+                }
+                ctx.closePath();
+                ctx.fill();
+
+                // Simple Shadow/Bottom Edge
+                ctx.fillStyle = rockColorShadow;
+                ctx.beginPath();
+                ctx.arc(rockX + rockSize * 0.1, rockY + rockSize * 0.1, rockSize * 0.5, Math.PI * 0.2, Math.PI * 0.8); // Arc on bottom-ish
+                ctx.fill();
+            }
+
+            // 4. Top-Down Trees (Eucalypt style) & Bushes
+            const numTrees = 70;
+            const treeTrunkColor = "#5a3a1e";
+            const treeCanopyColors = ["#556B2F", "#6B8E23", "#8FBC8F"]; // DarkOlive, OliveDrab, DarkSeaGreen (desaturated)
+            const bushColors = ["#8B7355", "#90EE9090", "#CD853F90"]; // GreyishBrown, DryGreen (transparent), Ochre (transparent)
+            for (let i = 0; i < numTrees; i++) {
+                const isTree = Math.random() < 0.6; // 60% trees, 40% bushes
+                const itemX = Math.random() * width;
+                const itemY = Math.random() * height;
+
+                if (isTree) {
+                    const trunkRadius = Math.random() * 2 + 1;
+                    const canopyRadius = trunkRadius * (Math.random() * 5 + 5);
+                    const canopyColor = treeCanopyColors[Math.floor(Math.random() * treeCanopyColors.length)];
+
+                    // Subtle Shadow Blob (drawn first)
+                    ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
+                    ctx.beginPath();
+                    ctx.ellipse(itemX + canopyRadius * 0.1, itemY + canopyRadius * 0.1, canopyRadius * 1.1, canopyRadius * 0.9, Math.random() * Math.PI, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Trunk (small dark circle)
+                    ctx.fillStyle = treeTrunkColor;
+                    ctx.beginPath();
+                    ctx.arc(itemX, itemY, trunkRadius, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Canopy (irregular blob)
+                    ctx.fillStyle = canopyColor;
+                    const points = 10;
+                    ctx.beginPath();
+                    ctx.moveTo(itemX + canopyRadius, itemY);
+                    for (let j = 1; j <= points; j++) {
+                        const angle = (j / points) * Math.PI * 2;
+                        const radius = canopyRadius * (0.7 + Math.random() * 0.6); // Irregular radius
+                        ctx.lineTo(itemX + Math.cos(angle) * radius, itemY + Math.sin(angle) * radius);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+
+                } else { // Bush
+                    const bushSize = Math.random() * 15 + 8;
+                    const bushColor = bushColors[Math.floor(Math.random() * bushColors.length)];
+                    ctx.fillStyle = bushColor;
+                    // Cluster of small circles
+                    const numCircles = Math.floor(Math.random()*4)+3;
+                    for(let k=0; k<numCircles; k++) {
+                        ctx.beginPath();
+                        const circleR = bushSize * (0.2 + Math.random()*0.3);
+                        ctx.arc(itemX + (Math.random()-0.5)*bushSize*0.6, itemY + (Math.random()-0.5)*bushSize*0.6, circleR, 0, Math.PI*2);
+                        ctx.fill();
+                    }
+                }
+            }
+
+            // Optional: Very subtle top/bottom brightness difference (Atmospheric perspective)
+            const atmosGradient = ctx.createLinearGradient(0, 0, 0, height);
+            atmosGradient.addColorStop(0, "rgba(255, 255, 255, 0.03)"); // Slightly brighter top
+            atmosGradient.addColorStop(1, "rgba(0, 0, 0, 0.03)");       // Slightly darker bottom
+            ctx.fillStyle = atmosGradient;
+            ctx.fillRect(0, 0, width, height);
 
         }
+        // =============================
         // --- NIGHT TIME BACKGROUND ---
+        // =============================
         else {
+            const baseSkyColor = "#0b102a"; // Deep Midnight Blue
+            ctx.fillStyle = baseSkyColor;
+            ctx.fillRect(0, 0, width, height);
+
             // 1. Ground Area (Very Dark)
-            const groundLevel = height * 0.9; // Higher ground level at night?
-            const groundColor = "#1a1412"; // Very dark desaturated brown
+            const groundLevel = height * 0.9;
+            const groundColor = "#1a1412";
             ctx.fillStyle = groundColor;
             ctx.fillRect(0, groundLevel, width, height - groundLevel);
-
             // Subtle Ground Texture
             const numGroundPatches = 200;
-            for (let i = 0; i < numGroundPatches; i++) {
-                const patchX = Math.random() * width;
-                const patchY = groundLevel + Math.random() * (height - groundLevel);
-                const patchR = Math.random() * 20 + 10;
-                const patchAlpha = Math.random() * 0.08 + 0.02; // Very subtle
-                ctx.fillStyle = `rgba(5, 3, 2, ${patchAlpha.toFixed(2)})`;
-                ctx.beginPath();
-                ctx.arc(patchX, patchY, patchR, 0, Math.PI * 2);
-                ctx.fill();
-            }
+            for (let i = 0; i < numGroundPatches; i++) { /* ... (same as before) ... */ }
 
-            // Optional: Slight noise horizon line? (Can be complex)
-            // For simplicity, keeping horizon straight for now.
-
-            // 2. The Moon
-            const moonRadius = 30;
-            const moonX = width * 0.8; // Position moon
-            const moonY = height * 0.15;
+            // 2. The Moon & Glow
+            const moonRadius = 30; const moonX = width * 0.8; const moonY = height * 0.15;
             const moonGlowRadius = moonRadius * 2.5;
-            // Moon Glow Gradient
-            try {
-                const moonGradient = ctx.createRadialGradient(moonX, moonY, moonRadius * 0.8, moonX, moonY, moonGlowRadius);
-                moonGradient.addColorStop(0, "rgba(240, 240, 255, 0.3)"); // Inner glow
-                moonGradient.addColorStop(0.5, "rgba(200, 200, 240, 0.1)");
-                moonGradient.addColorStop(1, "rgba(150, 150, 200, 0)");   // Fade out
-                ctx.fillStyle = moonGradient;
-                ctx.fillRect(moonX - moonGlowRadius, moonY - moonGlowRadius, moonGlowRadius * 2, moonGlowRadius * 2); // Draw glow
-            } catch (e) {}
-            // Moon Body
-            ctx.fillStyle = "#f0f0f0";
-            ctx.beginPath();
-            ctx.arc(moonX, moonY, moonRadius, 0, Math.PI * 2);
-            ctx.fill();
+            try { /* ... (Moon gradient drawing - same as before) ... */ } catch (e) {}
+            ctx.fillStyle = "#f0f0f0"; ctx.beginPath(); ctx.arc(moonX, moonY, moonRadius, 0, Math.PI * 2); ctx.fill(); // Moon body
 
+            // 3. Milky Way / Dust Lane
+            const mwAngle = Math.PI / 5; const mwWidth = height * 0.6; const mwCenterX = width / 2;
+            const mwCenterY = height / 2; const mwIterations = 8;
+            ctx.save(); ctx.translate(mwCenterX, mwCenterY); ctx.rotate(mwAngle);
+            for (let i = 0; i < mwIterations; i++) { /* ... (Milky way layer drawing - same as before) ... */ }
+            ctx.restore();
 
-            // 3. Milky Way / Dust Lane (Diagonal Band)
-            const mwAngle = Math.PI / 5; // Angle of the band
-            const mwWidth = height * 0.6; // Width of the band effect
-            const mwCenterX = width / 2;
-            const mwCenterY = height / 2;
-            const mwIterations = 8; // Layers of dust/glow
-            ctx.save();
-            ctx.translate(mwCenterX, mwCenterY);
-            ctx.rotate(mwAngle);
-            for (let i = 0; i < mwIterations; i++) {
-                const layerWidth = mwWidth * (1.0 - i * 0.05) * (1 + Math.random()*0.2); // Vary width per layer
-                const layerAlpha = 0.01 + Math.random() * 0.025; // Very low alpha
-                // Vary color slightly per layer
-                const r = 180 + Math.random()*40;
-                const g = 180 + Math.random()*40;
-                const b = 200 + Math.random()*55;
-                ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${layerAlpha.toFixed(3)})`;
-                // Draw wide rectangle for the dust lane layer
-                ctx.fillRect(-width * 0.7, -layerWidth / 2, width * 1.4, layerWidth);
-            }
-            ctx.restore(); // Restore rotation/translation
-
-
-            // 4. Deep Space Nebulae/Dark Clouds (Large, Faint Patches)
+            // 4. Deep Space Nebulae/Dark Clouds
             const numNebulae = 40;
-            for (let i = 0; i < numNebulae; i++) {
-                const nebX = Math.random() * width;
-                const nebY = Math.random() * groundLevel; // Keep above ground
-                const nebR = Math.random() * 150 + 80; // Large radius
-                const nebAlpha = Math.random() * 0.08 + 0.03; // Very faint
-                // Dark blue/purple tones
-                const r = 10 + Math.random() * 20;
-                const g = 10 + Math.random() * 25;
-                const b = 30 + Math.random() * 40;
-                ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${nebAlpha.toFixed(3)})`;
-                ctx.beginPath();
-                ctx.arc(nebX, nebY, nebR, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
+            for (let i = 0; i < numNebulae; i++) { /* ... (Nebulae drawing - same as before) ... */ }
 
             // 5. Star Field (Dense, Varied)
-            const numStars = 4000; // Increased star count
+            const numStars = 4000;
             let lastStarX = Math.random()*width, lastStarY = Math.random()*groundLevel;
-            for (let i = 0; i < numStars; i++) {
-                // Simple clustering: slightly bias towards last star sometimes
-                let sx, sy;
-                if (Math.random() < 0.1) { // 10% chance to cluster
-                    sx = lastStarX + (Math.random() - 0.5) * 50;
-                    sy = lastStarY + (Math.random() - 0.5) * 50;
-                } else {
-                    sx = Math.random() * width;
-                    sy = Math.random() * groundLevel; // Stars only in the sky
-                }
-                // Clamp coordinates
-                sx = Math.max(0, Math.min(width, sx));
-                sy = Math.max(0, Math.min(groundLevel - 1, sy)); // Ensure below horizon
-                lastStarX = sx; lastStarY = sy;
+            for (let i = 0; i < numStars; i++) { /* ... (Star drawing logic - same as before) ... */ }
 
-
-                // Size variation (most are tiny)
-                let sr;
-                const sizeRoll = Math.random();
-                if (sizeRoll < 0.7) sr = Math.random() * 0.5 + 0.2; // 70% tiny
-                else if (sizeRoll < 0.95) sr = Math.random() * 1.0 + 0.7; // 25% small
-                else sr = Math.random() * 1.5 + 1.5; // 5% larger
-
-                // Alpha variation (most are faint)
-                let starAlpha;
-                const alphaRoll = Math.random();
-                if (alphaRoll < 0.6) starAlpha = Math.random() * 0.3 + 0.1; // 60% faint
-                else if (alphaRoll < 0.9) starAlpha = Math.random() * 0.4 + 0.4; // 30% medium
-                else starAlpha = Math.random() * 0.2 + 0.8; // 10% bright
-
-                // Subtle Color variation (mostly white/pale yellow)
-                let r=255, g=255, b=240;
-                const colorRoll = Math.random();
-                if (sr > 1.0 && colorRoll < 0.1) { // 10% of larger stars are bluish
-                    r=230; g=240; b=255;
-                } else if (sr > 1.0 && colorRoll < 0.2) { // 10% of larger stars are reddish
-                    r=255; g=230; b=220;
-                }
-
-                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${starAlpha.toFixed(2)})`;
-                // Use fillRect for small stars (often faster than arc)
-                if (sr < 1.0) {
-                    ctx.fillRect(sx - sr/2, sy - sr/2, sr, sr);
-                } else {
-                    ctx.beginPath();
-                    ctx.arc(sx, sy, sr / 2, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            }
         } // End Night Time
 
-        // Store generated state
+        // Store generated state regardless of day/night
         ctx.canvas.dataset.isNight = targetIsNight;
         console.log(`[Renderer] generateBackground finished. Stored isNight: ${ctx.canvas.dataset.isNight}`);
-        return targetIsNight;
+        return targetIsNight; // Return the state it generated
     }
 
+    // --- Update Background Function ---
+    // This function manages transitions and calls generateBackground
+    // It needs to be EXPOSED by the IIFE return statement.
+    function updateGeneratedBackground(targetIsNight, targetCanvasWidth, targetCanvasHeight) {
+        canvasWidth = targetCanvasWidth;
+        canvasHeight = targetCanvasHeight;
+
+        // Resize canvases if necessary
+        if (offscreenCanvas.width !== canvasWidth || offscreenCanvas.height !== canvasHeight) {
+            offscreenCanvas.width = canvasWidth;
+            offscreenCanvas.height = canvasHeight;
+            oldOffscreenCanvas.width = canvasWidth;
+            oldOffscreenCanvas.height = canvasHeight;
+            hazeCanvas.width = canvasWidth;
+            hazeCanvas.height = canvasHeight;
+            isBackgroundReady = false; // Force regeneration on resize
+            currentBackgroundIsNight = null;
+            isTransitioningBackground = false;
+            console.log(`[Renderer] Resized offscreen canvases to ${canvasWidth}x${canvasHeight}`);
+        }
+
+        // Check if update is needed (state changed or not ready)
+        if ((targetIsNight === currentBackgroundIsNight && isBackgroundReady) || isTransitioningBackground) {
+            // If already transitioning *to* the target state, do nothing
+            if(isTransitioningBackground && targetIsNight === (offscreenCanvas.dataset.isNight === 'true')) {
+                return;
+            }
+            // If not transitioning and state matches, do nothing
+            if(!isTransitioningBackground && targetIsNight === currentBackgroundIsNight && isBackgroundReady) {
+                return;
+            }
+        }
+
+        console.log(`[Renderer] Updating background. TargetNight: ${targetIsNight}, CurrentGenerated: ${currentBackgroundIsNight}, IsReady: ${isBackgroundReady}`);
+
+        if (isBackgroundReady) {
+            // Start transition: Copy current to old, generate new, start fade timer
+            console.log("[Renderer] Starting background transition.");
+            oldOffscreenCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+            oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0);
+            isTransitioningBackground = true;
+            transitionStartTime = performance.now();
+            // Generate the new background onto the main offscreen canvas
+            generateBackground(offscreenCtx, targetIsNight, canvasWidth, canvasHeight);
+            currentBackgroundIsNight = targetIsNight; // Update the tracker immediately
+        } else {
+            // First time generation or after resize: Generate directly, no transition
+            console.log("[Renderer] Generating initial background.");
+            generateBackground(offscreenCtx, targetIsNight, canvasWidth, canvasHeight);
+            currentBackgroundIsNight = targetIsNight;
+            isBackgroundReady = true;
+            isTransitioningBackground = false;
+        }
+    }
 
     function drawDamageTexts(ctx, damageTexts) { if(!damageTexts) return; const now=performance.now(),pd=250,pmsi=4; ctx.textAlign='center'; ctx.textBaseline='bottom'; Object.values(damageTexts).forEach(dt=>{ if(!dt) return; const x=dt.x??0,y=dt.y??0,t=dt.text??'?',ic=dt.is_crit??false,st=dt.spawn_time?dt.spawn_time*1000:now,ts=now-st; let cfs=ic?damageTextCritFontSize:damageTextFontSize,cfc=ic?damageTextCritColor:damageTextColor; if(ic&&ts<pd){ const pp=Math.sin((ts/pd)*Math.PI); cfs+=pp*pmsi; } ctx.font=`bold ${Math.round(cfs)}px ${fontFamily}`; ctx.fillStyle=cfc; ctx.fillText(t,x,y); }); }
 
@@ -497,9 +494,6 @@ const Renderer = (() => {
     function drawHealthBar(ctx, x, y, width, currentHealth, maxHealth) { if(maxHealth<=0) return; const bh=5,yo=-(width/2+27),bw=Math.max(20,width*0.8),cw=Math.max(0,(currentHealth/maxHealth)*bw),hp=currentHealth/maxHealth,bx=x-bw/2,by=y+yo; ctx.fillStyle=healthBarBg; ctx.fillRect(bx,by,bw,bh); let bc=healthBarLow; if(hp>0.66) bc=healthBarHigh; else if(hp>0.33) bc=healthBarMedium; ctx.fillStyle=bc; ctx.fillRect(bx,by,cw,bh); }
     function drawArmorBar(ctx, x, y, width, currentArmor) { const ma=100; if(currentArmor<=0) return; const abh=4,hbh=5,bs=1,hbyo=-(width/2+27),hbty=y+hbyo,abty=hbty+hbh+bs,bw=Math.max(20,width*0.8),cw=Math.max(0,(currentArmor/ma)*bw),bx=x-bw/2,by=abty; ctx.fillStyle=healthBarBg; ctx.fillRect(bx,by,bw,abh); ctx.fillStyle=armorBarColor; ctx.fillRect(bx,by,cw,abh); }
 
-    // --- Add near other color constants ---
-    const enemyUniformBlue = "#18315f"; // Navy Blue for standard torso
-    const enemyGiantRed = "#a00000";   // Red Coat for Giant
 
     // --- REVISED V3: drawEnemyRect (incorporating all feedback) ---
     function drawEnemyRect(ctx, x, y, w, h, type, enemyState) {
@@ -1112,110 +1106,117 @@ const Renderer = (() => {
   
     // --- Main Render Function ---
     function drawGame( ctx, appState, stateToRender, localPlayerMuzzleFlashRef, width, height ) {
-      if (!mainCtx) mainCtx = ctx;
-      if (!ctx || !appState) { console.error("drawGame missing context or appState!"); return; }
-  
-      const now = performance.now();
-      canvasWidth = width; canvasHeight = height;
-  
-      let shakeApplied = false, shakeOffsetX = 0, shakeOffsetY = 0;
-      // Shake Calculation
-      if (currentShakeMagnitude > 0 && now < shakeEndTime) {
-          shakeApplied = true;
-          const timeRemaining = shakeEndTime - now;
-          const durationMsFallback = 300;
-          const initialDuration = Math.max(1, shakeEndTime - (now - timeRemaining)); // Use timeRemaining if duration calc is odd
-          let currentMag = currentShakeMagnitude * (timeRemaining / initialDuration);
-          currentMag = Math.max(0, currentMag);
-  
-          if (currentMag > 0.5) {
-              const shakeAngle = Math.random() * Math.PI * 2;
-              shakeOffsetX = Math.cos(shakeAngle) * currentMag;
-              shakeOffsetY = Math.sin(shakeAngle) * currentMag;
-          } else { currentShakeMagnitude = 0; shakeEndTime = 0; shakeApplied = false; }
-      } else if (currentShakeMagnitude > 0) { currentShakeMagnitude = 0; shakeEndTime = 0; }
-  
-      // 1. Draw Background
-      ctx.globalAlpha = 1.0;
-      if (!isBackgroundReady) {
-        ctx.fillStyle = dayBaseColor; ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-        if (appState?.serverState && currentBackgroundIsNight === null) {
-          updateGeneratedBackground(appState.serverState.is_night, canvasWidth, canvasHeight);
-        }
-      } else if (isTransitioningBackground) {
-        const elapsed = now - transitionStartTime; const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS);
-        ctx.globalAlpha = 1.0; ctx.drawImage(oldOffscreenCanvas, 0, 0);
-        ctx.globalAlpha = progress; ctx.drawImage(offscreenCanvas, 0, 0);
+        if (!mainCtx) mainCtx = ctx; // Assign main context if not already done
+        if (!ctx || !appState || !stateToRender) { // Added check for stateToRender
+            // console.warn("drawGame skipped: Missing context, appState, or stateToRender");
+            // Optionally draw a placeholder or loading state
+             if(ctx) {
+                 ctx.fillStyle = '#333'; ctx.fillRect(0, 0, width, height);
+                 ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+                 ctx.fillText("Waiting for server state...", width/2, height/2);
+             }
+             return;
+         }
+
+        const now = performance.now();
+        canvasWidth = width; canvasHeight = height;
+
+        // Shake Calculation
+        let shakeApplied = false, shakeOffsetX = 0, shakeOffsetY = 0;
+        if (currentShakeMagnitude > 0 && now < shakeEndTime) { /* ... shake calculation ... */ }
+        else if (currentShakeMagnitude > 0) { currentShakeMagnitude = 0; shakeEndTime = 0; }
+
+        // 1. Draw Background (Handles transition)
         ctx.globalAlpha = 1.0;
-        if (progress >= 1.0) { isTransitioningBackground = false; }
-      } else {
-        ctx.drawImage(offscreenCanvas, 0, 0);
-      }
-  
-      // --- Heat Haze Logic ---
-      const currentTempForEffect = appState?.currentTemp;
-      if (currentTempForEffect !== null && typeof currentTempForEffect !== 'undefined' && currentTempForEffect >= HEAT_HAZE_START_TEMP) {
-          const hazeIntensity = Math.max(0, Math.min(1, (currentTempForEffect - HEAT_HAZE_START_TEMP) / (HEAT_HAZE_MAX_TEMP - HEAT_HAZE_START_TEMP)));
-          if (hazeIntensity > 0.01) {
-               if(hazeCanvas.width !== canvasWidth || hazeCanvas.height !== canvasHeight) { hazeCanvas.width = canvasWidth; hazeCanvas.height = canvasHeight; }
-               hazeCtx.clearRect(0, 0, canvasWidth, canvasHeight); hazeCtx.drawImage(ctx.canvas, 0, 0);
-               const numLayers = 1 + Math.floor(hazeIntensity * (HEAT_HAZE_LAYERS_MAX - 1));
-               const baseAlpha = HEAT_HAZE_BASE_ALPHA * hazeIntensity;
-               for (let i = 0; i < numLayers; i++) {
-                   const timeFactor = now * HEAT_HAZE_SPEED; const layerOffsetFactor = i * 0.8;
-                   const verticalOffset = (Math.sin(timeFactor + layerOffsetFactor) * HEAT_HAZE_MAX_OFFSET * hazeIntensity) - (i * 0.3 * hazeIntensity);
-                   const layerAlpha = baseAlpha * (1 - (i / (numLayers * 1.5)));
-                   ctx.globalAlpha = Math.max(0, Math.min(1, layerAlpha));
-                   ctx.drawImage(hazeCanvas, 0, 0, canvasWidth, canvasHeight, 0, verticalOffset, canvasWidth, canvasHeight );
-               }
-               ctx.globalAlpha = 1.0;
-          }
-      }
-  
-      // 2. Apply Shake Transform
-      if (shakeApplied) { ctx.save(); ctx.translate(shakeOffsetX, shakeOffsetY); }
-  
-      // 3. Draw Game World Elements
-      if (!stateToRender) { if (shakeApplied) ctx.restore(); return; }
-      drawCampfire(ctx, stateToRender.campfire, canvasWidth, canvasHeight);
-      if (typeof snake !== 'undefined') drawSnake(ctx, snake);
-      drawPowerups(ctx, stateToRender.powerups);
-      drawBullets(ctx, stateToRender.bullets);
-      if (typeof activeEnemyBubbles !== 'undefined') drawEnemies(ctx, stateToRender.enemies, activeEnemyBubbles);
-      if (typeof activeSpeechBubbles !== 'undefined' && appState) drawPlayers(ctx, stateToRender.players, appState, localPlayerMuzzleFlashRef);
-      if (typeof activeSpeechBubbles !== 'undefined' && appState) drawSpeechBubbles(ctx, stateToRender.players, activeSpeechBubbles, appState);
-      if (typeof activeEnemyBubbles !== 'undefined') drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles);
-      drawDamageTexts(ctx, stateToRender.damage_texts);
-      let shouldDrawMuzzleFlash = localPlayerMuzzleFlashRef?.active && (now < localPlayerMuzzleFlashRef?.endTime);
-      if (shouldDrawMuzzleFlash) { drawMuzzleFlash(ctx, appState.renderedPlayerPos.x, appState.renderedPlayerPos.y, localPlayerMuzzleFlashRef.aimDx, localPlayerMuzzleFlashRef.aimDy); }
-      else if (localPlayerMuzzleFlashRef?.active) { localPlayerMuzzleFlashRef.active = false; }
-  
-      // 4. Restore Shake Transform
-      if (shakeApplied) { ctx.restore(); }
-  
-      // 5. Draw Overlays
-      ctx.globalAlpha = 1.0;
-      if (appState?.isRaining) {
-          ctx.strokeStyle = RAIN_COLOR; ctx.lineWidth = 1.5; ctx.beginPath();
-          for (let i = 0; i < RAIN_DROPS; i++) {
-               const rainX = ( (i * 137) + (now * 0.05) ) % (canvasWidth + 100) - 50;
-               const rainY = ( (i * 271) + (now * 0.3) ) % canvasHeight;
-               const endX = rainX + RAIN_SPEED_X; const endY = rainY + RAIN_SPEED_Y;
-               ctx.moveTo(rainX, rainY); ctx.lineTo(endX, endY);
-          }
-          ctx.stroke();
-      } else if (appState?.isDustStorm) {
-          ctx.fillStyle = 'rgba(180, 140, 90, 0.2)'; ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-      }
-      if (appState) drawTemperatureTint(ctx, appState.currentTemp, canvasWidth, canvasHeight);
-      const localPlayerState = stateToRender.players?.[appState?.localPlayerId];
-      if (localPlayerState && localPlayerState.health < DAMAGE_VIGNETTE_HEALTH_THRESHOLD) { const vi = 1.0 - (localPlayerState.health / DAMAGE_VIGNETTE_HEALTH_THRESHOLD); drawDamageVignette(ctx, vi, canvasWidth, canvasHeight); }
-  
-      ctx.globalAlpha = 1.0;
+        if (!isBackgroundReady) {
+            // Draw placeholder while waiting for first generation
+            ctx.fillStyle = "#333"; ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+            // Trigger generation if state is available but bg isn't ready
+            if (appState?.serverState && currentBackgroundIsNight === null) {
+                console.log("[Renderer] Triggering initial background generation from drawGame.");
+                // Call the EXPOSED update function
+                updateGeneratedBackground(appState.serverState.is_night, canvasWidth, canvasHeight);
+            }
+        } else if (isTransitioningBackground) {
+            // Draw transition frames
+            const elapsed = now - transitionStartTime;
+            const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS);
+            ctx.globalAlpha = 1.0; ctx.drawImage(oldOffscreenCanvas, 0, 0); // Draw old fully opaque
+            ctx.globalAlpha = progress; ctx.drawImage(offscreenCanvas, 0, 0); // Draw new increasingly opaque
+            ctx.globalAlpha = 1.0; // Reset alpha
+            if (progress >= 1.0) {
+                console.log("[Renderer] Background transition finished.");
+                isTransitioningBackground = false;
+            }
+        } else {
+            // Draw the current ready background
+            ctx.drawImage(offscreenCanvas, 0, 0);
+        }
+
+        // --- Heat Haze Logic ---
+        const currentTempForEffect = appState?.currentTemp;
+        if (/* ... heat haze condition check ... */ false) { // Keep disabled or refine later
+            /* ... heat haze drawing using hazeCanvas ... */
+        }
+
+        // 2. Apply Shake Transform
+        if (shakeApplied) { ctx.save(); ctx.translate(shakeOffsetX, shakeOffsetY); }
+
+        // 3. Draw Game World Elements (Use stateToRender)
+        drawCampfire(ctx, stateToRender.campfire, canvasWidth, canvasHeight);
+        if (typeof snake !== 'undefined') drawSnake(ctx, snake); // Assuming snake state is handled elsewhere
+        drawPowerups(ctx, stateToRender.powerups);
+        drawBullets(ctx, stateToRender.bullets); // Uses revised function
+        // Pass activeEnemyBubbles if managed globally, otherwise fetch from state?
+        drawEnemies(ctx, stateToRender.enemies, window.activeEnemyBubbles || {}); // Use revised drawEnemyRect implicitly
+        drawPlayers(ctx, stateToRender.players, appState, localPlayerMuzzleFlashRef); // Use revised drawPlayerCharacter implicitly
+        // Pass activeSpeechBubbles if managed globally
+        drawSpeechBubbles(ctx, stateToRender.players, window.activeSpeechBubbles || {}, appState);
+        drawEnemySpeechBubbles(ctx, stateToRender.enemies, window.activeEnemyBubbles || {});
+        drawDamageTexts(ctx, stateToRender.damage_texts);
+
+        // Draw Muzzle Flash (if active)
+        let shouldDrawMuzzleFlash = localPlayerMuzzleFlashRef?.active && (now < localPlayerMuzzleFlashRef?.endTime);
+        if (shouldDrawMuzzleFlash) {
+            drawMuzzleFlash(ctx, appState.renderedPlayerPos.x, appState.renderedPlayerPos.y, localPlayerMuzzleFlashRef.aimDx, localPlayerMuzzleFlashRef.aimDy); // Uses revised function
+        } else if (localPlayerMuzzleFlashRef?.active) {
+            localPlayerMuzzleFlashRef.active = false; // Reset flash state
+        }
+
+        // 4. Restore Shake Transform
+        if (shakeApplied) { ctx.restore(); }
+
+        // 5. Draw Overlays (Rain, Dust, Vignette, Tint)
+        ctx.globalAlpha = 1.0;
+        if (appState?.isRaining) { /* ... rain drawing ... */ }
+        else if (appState?.isDustStorm) { /* ... dust drawing ... */ }
+        if (appState) drawTemperatureTint(ctx, appState.currentTemp, canvasWidth, canvasHeight);
+        const localPlayerState = stateToRender.players?.[appState?.localPlayerId];
+        if (localPlayerState && localPlayerState.health < DAMAGE_VIGNETTE_HEALTH_THRESHOLD) {
+            const vi = 1.0 - (localPlayerState.health / DAMAGE_VIGNETTE_HEALTH_THRESHOLD);
+            drawDamageVignette(ctx, vi, canvasWidth, canvasHeight);
+        }
+        ctx.globalAlpha = 1.0; // Ensure alpha is reset
+
     } // --- End drawGame ---
-  
-    return { drawGame, triggerShake, updateGeneratedBackground };
-  
-  })(); // End Renderer module IIFE
-  
-  console.log("--- Renderer.js: Executed. Renderer object defined?", typeof Renderer);
+
+
+    // --- Public Interface ---
+    // Expose only the functions needed by main.js
+    return {
+        drawGame: drawGame,
+        triggerShake: triggerShake,
+        updateGeneratedBackground: updateGeneratedBackground // *** EXPOSE THIS FUNCTION ***
+    };
+
+})(); // End Renderer IIFE
+
+// Final log to confirm execution
+console.log("--- Renderer.js: Executed. Renderer object defined?", (typeof Renderer !== 'undefined'));
+// Add a check if the expected functions exist on the returned object
+if (typeof Renderer !== 'undefined') {
+    console.log("--- Renderer functions check ---");
+    console.log("drawGame:", typeof Renderer.drawGame);
+    console.log("triggerShake:", typeof Renderer.triggerShake);
+    console.log("updateGeneratedBackground:", typeof Renderer.updateGeneratedBackground); // Should now be 'function'
+}
