@@ -746,8 +746,8 @@
                  DOM.dayNightIndicator.style.display = (serverState?.status === 'active') ? 'block' : 'none';
              }
 
-             // Updates day/night indicator text and triggers background rendering update
-             function updateDayNight(serverState) {
+            // Updates day/night indicator text and triggers background rendering update
+            function updateDayNight(serverState) {
                  if (!DOM.dayNightIndicator || !DOM.canvas || !DOM.gameContainer) {
                      error("DOM dayNight/canvas/container not found for day/night update."); return;
                  }
@@ -765,7 +765,7 @@
                      DOM.dayNightIndicator.style.display = 'none';
                      DOM.gameContainer.classList.remove('night-mode');
                  }
-             }
+            }
 
             // Shows the game over screen with final stats
             function showGameOver(finalState) {
@@ -1229,10 +1229,20 @@ return {
         reconcileWithServer();
     }
 
-    // Render the Frame
-       Renderer.drawGame(DOM.ctx, appState, Game, false, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT, 0, localPlayerMuzzleFlash, '#8FBC8F', '#3E2723', 600, 3, Game.getInterpolatedState(currentTime)); // Calls function in Renderer IIFE
-
-    // Request Next Frame
+// Render the Frame
+       // Render the Frame
+       Renderer.drawGame(
+        DOM.ctx, appState, Game, false, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT, 0,
+        localPlayerMuzzleFlash,
+        '#8FBC8F', '#3E2723', 600, 3,
+        Game.getInterpolatedState(currentTime),
+        playerColor, otherPlayerColor,
+        powerupArmorColor,
+        playerSpeechBubbleBg, playerSpeechBubbleOutline, playerSpeechBubbleColor,
+        bulletPlayerColor, bulletEnemyColor,
+        healthBarBg, healthBarHigh, healthBarMedium, healthBarLow
+    ); // Calls function in Renderer IIFE    
+       // Request Next Frame
     if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
         appState.animationFrameId = requestAnimationFrame(gameLoop);
     } else {
@@ -1445,7 +1455,7 @@ return {
                         if (joinedP) { appState.predictedPlayerPos = { x: joinedP.x, y: joinedP.y }; appState.renderedPlayerPos = { x: joinedP.x, y: joinedP.y }; }
                         UI.updateStatus(`Joined game ${appState.currentGameId}. Get ready!`); UI.showSection('game-area');
                         if (appState.serverState) { // Trigger initial UI updates for joined client
-                            Renderer.updateGeneratedBackground(appState.serverState.is_night);
+                            Renderer.updateGeneratedBackground(appState.serverState.is_night, CANVAS_WIDTH, CANVAS_HEIGHT, dayBaseColor, nightBaseColor);
                             UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState);
                         }
                         Game.startGameLoop(); // Joining client starts loop immediately
@@ -1459,7 +1469,7 @@ return {
                         if (spP) { appState.predictedPlayerPos = { x: spP.x, y: spP.y }; appState.renderedPlayerPos = { x: spP.x, y: spP.y }; }
                         UI.updateStatus("Single Player Game Started!"); UI.showSection('game-area');
                         if (appState.serverState) { // Trigger initial UI updates
-                             Renderer.updateGeneratedBackground(appState.serverState.is_night);
+                            Renderer.updateGeneratedBackground(appState.serverState.is_night, CANVAS_WIDTH, CANVAS_HEIGHT, dayBaseColor, nightBaseColor);
                              UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState);
                         }
                         Game.startGameLoop(); // SP client starts loop immediately
