@@ -172,8 +172,33 @@ const Network = (() => {
 const Input = (() => {
      let keys = {}; let lastShotTime = 0; let movementInterval = null; let mouseCanvasPos = { x: 0, y: 0 }; let isMouseDown = false;
      function setup() { cleanup(); document.addEventListener('keydown', handleKeyDown); document.addEventListener('keyup', handleKeyUp); DOM.chatInput.addEventListener('keydown', handleChatEnter); if (DOM.canvas) { DOM.canvas.addEventListener('mousemove', handleMouseMove); DOM.canvas.addEventListener('mousedown', handleMouseDown); } else { error("Input setup failed: Canvas element not found."); } document.addEventListener('mouseup', handleMouseUp); movementInterval = setInterval(sendMovementInput, INPUT_SEND_INTERVAL); log("Input listeners setup."); }
-     function cleanup() { document.removeEventListener('keydown', handleKeyDown); document.removeEventListener('keyup', handleKeyUp); DOM.chatInput.removeEventListener('keydown', handleChatEnter); if (DOM.canvas) { DOM.canvas.removeEventListener('mousemove', handleMouseMove); DOM.canvas.removeEventListener('mousedown', handleMouseDown); } document.removeEventListener('mouseup', handleMouseUp); clearInterval(movementInterval); movementInterval = null; keys = {}; isMouseDown = false; mouseCanvasPos = { x: 0, y: 0 }; log("Input listeners cleaned up."); }
-     function handleMouseMove(event) { if (!DOM.canvas) return; const rect = DOM.canvas.getBoundingClientRect(); const rawMouseX = event.clientX - rect.left; const rawMouseY = event.clientY - rect.top; const visualWidth = rect.width; const visualHeight = rect.height; const internalWidth = DOM.canvas.width; const internalHeight = DOM.canvas.height; const scaleX = (visualWidth > 0) ? internalWidth / visualWidth : 1; const scaleY = (visualHeight > 0) ? internalHeight / visualHeight : 1; mouseCanvasPos.x = rawMouseX * scaleX; mouseCanvasPos.y = rawMouseY * scaleY; }
+     function cleanup() {
+        document.removeEventListener('keydown', handleKeyDown);
+        document.removeEventListener('keyup', handleKeyUp);
+        DOM.chatInput.removeEventListener('keydown', handleChatEnter);
+        if (DOM.canvas) {
+            DOM.canvas.removeEventListener('mousemove', handleMouseMove);
+            DOM.canvas.removeEventListener('mousedown', handleMouseDown);
+            // --- ADD THIS LINE ---
+            DOM.canvas.removeEventListener('contextmenu', preventContextMenu);
+            // ---------------------
+        }
+        document.removeEventListener('mouseup', handleMouseUp);
+        clearInterval(movementInterval);
+        movementInterval = null;
+        keys = {};
+        isMouseDown = false;
+        mouseCanvasPos = { x: 0, y: 0 };
+        log("Input listeners cleaned up.");
+    }     
+    
+
+    function preventContextMenu(event) {
+        event.preventDefault(); // The magic line!
+    }
+    
+    
+    function handleMouseMove(event) { if (!DOM.canvas) return; const rect = DOM.canvas.getBoundingClientRect(); const rawMouseX = event.clientX - rect.left; const rawMouseY = event.clientY - rect.top; const visualWidth = rect.width; const visualHeight = rect.height; const internalWidth = DOM.canvas.width; const internalHeight = DOM.canvas.height; const scaleX = (visualWidth > 0) ? internalWidth / visualWidth : 1; const scaleY = (visualHeight > 0) ? internalHeight / visualHeight : 1; mouseCanvasPos.x = rawMouseX * scaleX; mouseCanvasPos.y = rawMouseY * scaleY; }
     function handleMouseDown(event) { if (document.activeElement === DOM.chatInput) return; if (event.button === 0) { isMouseDown = true; event.preventDefault(); } }
     function handleMouseUp(event) { if (event.button === 0) { isMouseDown = false; } }
      function handleKeyDown(e) { if (document.activeElement === DOM.chatInput) return; const key = e.key.toLowerCase(); if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' '].includes(key)) { if (!keys[key]) { keys[key] = true; } e.preventDefault(); return; } if (key === 'e') { if (appState.serverState?.status === 'active' && appState.isConnected) { log("Sending player_pushback message."); Network.sendMessage({ type: 'player_pushback' }); e.preventDefault(); } else { log("Pushback ('e') ignored: Game not active or not connected."); } return; } }
