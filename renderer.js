@@ -117,35 +117,125 @@ const Renderer = (() => {
     }
   
     function updateGeneratedBackground(targetIsNight, targetCanvasWidth, targetCanvasHeight) {
-      console.log(`[Renderer] updateGeneratedBackground request. TargetNight: ${targetIsNight}, CurrentNight: ${currentBackgroundIsNight}, Ready: ${isBackgroundReady}`);
-      canvasWidth = targetCanvasWidth; canvasHeight = targetCanvasHeight;
-      if ( offscreenCanvas.width !== canvasWidth || offscreenCanvas.height !== canvasHeight ) {
-        offscreenCanvas.width = canvasWidth; offscreenCanvas.height = canvasHeight;
-        oldOffscreenCanvas.width = canvasWidth; oldOffscreenCanvas.height = canvasHeight;
-        isBackgroundReady = false;
-        console.log("[Renderer] Canvas size changed, forcing background regeneration.");
-      }
-      if (targetIsNight === currentBackgroundIsNight && isBackgroundReady) {
-        console.log("[Renderer] Background update skipped (already correct state and ready).");
-        return;
-      }
-      console.log("[Renderer] Proceeding with background update...");
-      if (isBackgroundReady) {
-        console.log("[Renderer] Starting background transition...");
-        isTransitioningBackground = true; transitionStartTime = performance.now();
-        oldOffscreenCtx.clearRect(0, 0, canvasWidth, canvasHeight);
-        oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0);
+        // console.log(`[Renderer] updateGeneratedBackground request. TargetNight: ${targetIsNight}, CurrentNight: ${currentBackgroundIsNight}, Ready: ${isBackgroundReady}, Transitioning: ${isTransitioningBackground}`);
+
+        // Update dimensions and potentially reset state if size changed
+        canvasWidth = targetCanvasWidth; canvasHeight = targetCanvasHeight;
+        if ( offscreenCanvas.width !== canvasWidth || offscreenCanvas.height !== canvasHeight ) {
+            offscreenCanvas.width = canvasWidth; offscreenCanvas.height = canvasHeight;
+            oldOffscreenCanvas.width = canvasWidth; oldOffscreenCanvas.height = canvasHeight;
+            isBackgroundReady = false; // Force regeneration
+            currentBackgroundIsNight = null; // Reset known state
+            isTransitioningBackground = false; // Stop any ongoing transition
+            console.log("[Renderer] Canvas size changed, resetting background state.");
+        }
+
+        // --- Core Logic: Check if an update is actually needed ---
+        if (targetIsNight === currentBackgroundIsNight && isBackgroundReady) {
+            // console.log("[Renderer] Background update skipped (already correct state and ready).");
+            return; // No change needed
+        }
+         // --- Prevent starting a new transition if one is already in progress for the *same target* ---
+         // (This might happen if messages arrive very quickly)
+         if (isTransitioningBackground && targetIsNight === (offscreenCanvas.dataset.isNight === 'true')) {
+             // console.log("[Renderer] Background update skipped (already transitioning to this state).");
+             return;
+         }
+
+
+        console.log(`[Renderer] Background change needed or first generation. Target: ${targetIsNight}`);
+
+        // --- Prepare for update/transition ---
+        if (isBackgroundReady) {
+             // If ready, copy the *current* background to the 'old' canvas *before* regenerating
+             console.log("[Renderer] Saving current background for transition.");
+             oldOffscreenCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+             oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0);
+             isTransitioningBackground = true; // Start transition
+             transitionStartTime = performance.now();
+        } else {
+            // If not ready, this is the first generation, no transition needed
+            isTransitioningBackground = false;
+        }
+
+        // --- Generate the NEW background onto the main offscreen canvas ---
+        console.log(`[Renderer] Generating new background (isNight=${targetIsNight}) onto offscreenCanvas.`);
         generateBackground(offscreenCtx, targetIsNight, canvasWidth, canvasHeight);
-        // currentBackgroundIsNight is updated at the *end* of the transition in drawGame
-      } else {
-        console.log("[Renderer] First background generation or regeneration.");
-        currentBackgroundIsNight = generateBackground(offscreenCtx, targetIsNight, canvasWidth, canvasHeight);
-        isBackgroundReady = true;
-        isTransitioningBackground = false;
-        console.log(`[Renderer] isBackgroundReady set to true. CurrentNight: ${currentBackgroundIsNight}`);
-      }
-    }
-  
+
+        // --- **** IMMEDIATE STATE UPDATE **** ---
+        // Set the internal state variable to the *target* state NOW.
+        currentBackgroundIsNight = targetIsNight;
+        isBackgroundReady = true; // Mark as ready after the first successful generation
+        // Note: isTransitioningBackground is handled above based on whether it was previously ready
+
+        console.log(`[Renderer] Background state updated: CurrentNight=${currentBackgroundIsNight}, Ready=${isBackgroundReady}, Transitioning=${isTransitioningBackground}`);
+
+    } // --- End updateGeneratedBackground ---
+
+
+    // --- REVISED drawGame Function (Showing relevant transition part) ---
+    function drawGame(ctx, appState, stateToRender, localPlayerMuzzleFlashRef, width, height) {
+         if (!mainCtx) mainCtx = ctx;
+         if (!ctx) { console.error("drawGame called without valid context!"); return; }
+
+         const now = performance.now();
+         canvasWidth = width; canvasHeight = height; // Update dimensions used by helpers
+
+         let shakeApplied = false, shakeOffsetX = 0, shakeOffsetY = 0;
+         // ... (Shake calculation logic remains the same) ...
+          if (currentShakeMagnitude > 0 && now < shakeEndTime) { shakeApplied = true; const tr = shakeEndTime - now; const id = shakeEndTime - (shakeEndTime - currentShakeMagnitude > 0 ? (shakeEndTime - (currentShakeMagnitude * 1000)) : 0); let cm = currentShakeMagnitude; if(id>0) cm=currentShakeMagnitude*(tr/id); if(cm>0.5){ const sa=Math.random()*Math.PI*2; shakeOffsetX=Math.cos(sa)*cm; shakeOffsetY=Math.sin(sa)*cm; } else { currentShakeMagnitude = 0; } } else if (currentShakeMagnitude > 0 && now >= shakeEndTime) { currentShakeMagnitude = 0; shakeEndTime = 0; }
+
+
+         // 1. Draw Background
+         ctx.globalAlpha = 1.0;
+         if (!isBackgroundReady) {
+             // Fallback if generation hasn't happened (should be rare now)
+             ctx.fillStyle = dayBaseColor; ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+             if (appState?.serverState && currentBackgroundIsNight === null) {
+                 console.warn("drawGame: Background wasn't ready, forcing initial generation.");
+                 updateGeneratedBackground(appState.serverState.is_night, canvasWidth, canvasHeight);
+             }
+         } else if (isTransitioningBackground) {
+             const elapsed = now - transitionStartTime;
+             const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS);
+             ctx.globalAlpha = 1.0;
+             ctx.drawImage(oldOffscreenCanvas, 0, 0); // Draw old
+             ctx.globalAlpha = progress;
+             ctx.drawImage(offscreenCanvas, 0, 0); // Fade in new
+             ctx.globalAlpha = 1.0;
+             if (progress >= 1.0) {
+                 isTransitioningBackground = false;
+                 // --- **** REMOVED STATE UPDATE FROM HERE **** ---
+                 // currentBackgroundIsNight is now set immediately in updateGeneratedBackground
+                 console.log("[Renderer] Background transition complete (visual).");
+             }
+         } else {
+             // Draw the current, non-transitioning background
+             ctx.drawImage(offscreenCanvas, 0, 0);
+         }
+
+         // 2. Apply Shake Transform
+         if (shakeApplied) { ctx.save(); ctx.translate(shakeOffsetX, shakeOffsetY); }
+
+         // 3. Draw Game World Elements
+         // ... (rest of world drawing calls remain the same) ...
+          if (!stateToRender) { if (shakeApplied) ctx.restore(); return; } drawCampfire(ctx, stateToRender.campfire, canvasWidth, canvasHeight); if (typeof snake !== 'undefined') drawSnake(ctx, snake); drawPowerups(ctx, stateToRender.powerups); drawBullets(ctx, stateToRender.bullets); if (typeof activeEnemyBubbles !== 'undefined') drawEnemies(ctx, stateToRender.enemies, activeEnemyBubbles); if (typeof activeSpeechBubbles !== 'undefined' && appState) drawPlayers(ctx, stateToRender.players, appState, localPlayerMuzzleFlashRef); if (typeof activeSpeechBubbles !== 'undefined' && appState) drawSpeechBubbles(ctx, stateToRender.players, activeSpeechBubbles, appState); if (typeof activeEnemyBubbles !== 'undefined') drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles); drawDamageTexts(ctx, stateToRender.damage_texts); let shouldDrawMuzzleFlash = localPlayerMuzzleFlashRef?.active && (now < localPlayerMuzzleFlashRef?.endTime); if (shouldDrawMuzzleFlash) { drawMuzzleFlash(ctx, appState.renderedPlayerPos.x, appState.renderedPlayerPos.y, localPlayerMuzzleFlashRef.aimDx, localPlayerMuzzleFlashRef.aimDy); } else if (localPlayerMuzzleFlashRef?.active) { localPlayerMuzzleFlashRef.active = false; }
+
+
+         // 4. Restore Shake Transform
+         if (shakeApplied) { ctx.restore(); }
+
+         // 5. Draw Overlays
+         // ... (Vignette, Tint, Rain/Dust logic remains the same) ...
+          ctx.globalAlpha = 1.0; const localPlayerState = stateToRender.players?.[appState?.localPlayerId]; if (localPlayerState && localPlayerState.health < DAMAGE_VIGNETTE_HEALTH_THRESHOLD) { const vi = 1.0 - (localPlayerState.health / DAMAGE_VIGNETTE_HEALTH_THRESHOLD); drawDamageVignette(ctx, vi, canvasWidth, canvasHeight); } if (appState) drawTemperatureTint(ctx, appState.currentTemp, canvasWidth, canvasHeight); if (appState?.isRaining) { ctx.fillStyle = 'rgba(50, 80, 150, 0.15)'; ctx.fillRect(0, 0, canvasWidth, canvasHeight); } else if (appState?.isDustStorm) { ctx.fillStyle = 'rgba(180, 140, 90, 0.2)'; ctx.fillRect(0, 0, canvasWidth, canvasHeight); }
+
+
+         ctx.globalAlpha = 1.0; // Final reset
+     } // --- End drawGame function ---
+
+
+    return { drawGame, triggerShake, updateGeneratedBackground };
+
     // --- Drawing Helpers ---
     function drawDamageTexts(ctx, damageTexts) { if(!damageTexts) return; const now=performance.now(),pd=250,pmsi=4; ctx.textAlign='center'; ctx.textBaseline='bottom'; Object.values(damageTexts).forEach(dt=>{ if(!dt) return; const x=dt.x??0,y=dt.y??0,t=dt.text??'?',ic=dt.is_crit??false,st=dt.spawn_time?dt.spawn_time*1000:now,ts=now-st; let cfs=ic?damageTextCritFontSize:damageTextFontSize,cfc=ic?damageTextCritColor:damageTextColor; if(ic&&ts<pd){ const pp=Math.sin((ts/pd)*Math.PI); cfs+=pp*pmsi; } ctx.font=`bold ${Math.round(cfs)}px ${fontFamily}`; ctx.fillStyle=cfc; ctx.fillText(t,x,y); }); }
     function drawCampfire(ctx, campfireData, width, height) { if(!campfireData||!campfireData.active) return; const x=campfireData.x??width/2,y=campfireData.y??height/2,r=campfireData.radius??0; if(r<=0) return; const sw=20,sh=4,fw=15,fh=25; ctx.save(); ctx.fillStyle=campfireAuraColor; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); const soy=5; ctx.fillStyle=campfireStickColor; ctx.translate(x,y+soy); ctx.rotate(Math.PI/5); ctx.fillRect(-sw/2,-sh/2,sw,sh); ctx.rotate(-Math.PI/5); ctx.rotate(-Math.PI/6); ctx.fillRect(-sw/2,-sh/2,sw,sh); ctx.rotate(Math.PI/6); ctx.translate(-x,-(y+soy)); const foy=-10,fcx=x,fcy=y+foy; ctx.fillStyle=campfireFlameOuterColor; ctx.beginPath(); ctx.ellipse(fcx,fcy,fw/2,fh/2,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle=campfireFlameInnerColor; ctx.beginPath(); ctx.ellipse(fcx,fcy-3,fw/3,fh/3,0,0,Math.PI*2); ctx.fill(); ctx.restore(); }
@@ -263,5 +353,5 @@ const Renderer = (() => {
   
   console.log(
     "--- Renderer.js: Executed. Renderer object defined?",
-    typeof Renderer
+    typeof Renderer  
   );
