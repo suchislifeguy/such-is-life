@@ -83,67 +83,70 @@ const Renderer = (() => { // Start IIFE (Immediately Invoked Function Expression
     // Background Specific Colors
     const dayBaseGroundColor = "#CD853F"; // Peru (Ochre/Brown)
     const nightBaseSkyColor = "#0b102a"; // Deep Midnight Blue
+
     const nightGroundColor = "#1a1412"; // Very dark desaturated brown
 
+    
     // Internal State
     let currentShakeMagnitude = 0;
     let shakeEndTime = 0;
 
     // --- Utility Functions ---
-    function drawRoundedRect(ctx, x, y, width, height, radius) { /* ... implementation ... */ } // Keep implementation
-
-    // --- NEW Background Generation Function ---
-    // --- REVISED V3: generateBackground ---
+    // Utility Functions (like drawRoundedRect - keep implementation)
+    function drawRoundedRect(ctx, x, y, width, height, radius) { if (width < 2 * radius) radius = width / 2; if (height < 2 * radius) radius = height / 2; ctx.beginPath(); ctx.moveTo(x + radius, y); ctx.arcTo(x + width, y, x + width, y + height, radius); ctx.arcTo(x + width, y + height, x, y + height, radius); ctx.arcTo(x, y + height, x, y, radius); ctx.arcTo(x, y, x + width, y, radius); ctx.closePath(); }
+    
+    
     function generateBackground(ctx, targetIsNight, width, height) {
-        console.log(`[Renderer] generateBackground V3 called. TargetNight: ${targetIsNight}`);
+        console.log(`[Renderer] generateBackground V5 called. TargetNight: ${targetIsNight}`);
         ctx.clearRect(0, 0, width, height); // Clear previous content
-
+    
         // =============================
-        // --- DAY TIME BACKGROUND (Top-Down Wombat Ranges Style) ---
+        // --- DAY TIME BACKGROUND (Top-Down Dusty Green Wombat Ranges Style) ---
         // =============================
         if (!targetIsNight) {
+            // --- PALETTE ---
+            const dayBaseGroundColor = "#7a8c79"; // Dusty Green Base
+            const grassColor1 = `rgba(128, 140, 120, 0.12)`; // Desaturated green, low alpha
+            const grassColor2 = `rgba(210, 180, 140, 0.08)`; // Tan/Dry grass hint, low alpha
+            const rockColorBase = "#908070"; // Brownish Grey
+            const rockColorShadow = "rgba(0, 0, 0, 0.15)";
+            const treeCanopyColors = ["#607B34", "#556B2F", "#8FBC8F"]; // Olives, Desaturated SeaGreen
+            const bushColors = ["#8B7355", "#9ACD3250", "#CD853F50"]; // GreyBrown, YellowGreen(trans), Ochre(trans)
+    
             ctx.fillStyle = dayBaseGroundColor;
             ctx.fillRect(0, 0, width, height); // Base ground fill
-
+    
             // 1. Subtle Ground Mottling/Noise
-            const numMottles = 1500;
+            const numMottles = 1800;
             for (let i = 0; i < numMottles; i++) {
                 const mottleX = Math.random() * width; const mottleY = Math.random() * height;
-                const mottleR = Math.random() * 35 + 20; // Slightly larger range
-                const mottleAlpha = Math.random() * 0.05 + 0.015; // Subtle alpha
-                const shadeAdjust = (Math.random() - 0.5) * 25;
-                const r = Math.min(255, Math.max(0, 205 + shadeAdjust)); const g = Math.min(255, Math.max(0, 133 + shadeAdjust)); const b = Math.min(255, Math.max(0, 63 + shadeAdjust));
+                const mottleR = Math.random() * 25 + 10;
+                const mottleAlpha = Math.random() * 0.06 + 0.02;
+                const shadeAdjust = (Math.random() - 0.5) * 20;
+                const r = Math.min(255, Math.max(0, 122 + shadeAdjust));
+                const g = Math.min(255, Math.max(0, 140 + shadeAdjust * 1.2));
+                const b = Math.min(255, Math.max(0, 121 + shadeAdjust));
                 ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${mottleAlpha.toFixed(3)})`;
                 ctx.beginPath(); ctx.arc(mottleX, mottleY, mottleR, 0, Math.PI * 2); ctx.fill();
             }
-
-            // 2. Widespread Dry Grass Layer (Low Alpha Blobs)
-            const numGrassPatches = 400; // More patches for coverage
-            const grassColor1 = `rgba(173, 216, 130, ${0.08 + Math.random()*0.05})`; // LightGreen base, vary alpha
-            const grassColor2 = `rgba(205, 133, 63, ${0.05 + Math.random()*0.04})`; // Ochre base, vary alpha
+    
+            // 2. Widespread Dry Grass Layer
+            const numGrassPatches = 450;
             for (let i = 0; i < numGrassPatches; i++) {
                 const patchX = Math.random() * width; const patchY = Math.random() * height;
-                const patchW = Math.random() * 120 + 60; // Wide, less tall blobs
-                const patchH = Math.random() * 80 + 40;
-                ctx.fillStyle = (i % 2 === 0) ? grassColor1 : grassColor2;
-                // Draw irregular blob shape
+                const patchW = Math.random() * 110 + 50;
+                const patchH = Math.random() * 70 + 30;
+                ctx.fillStyle = (i % 3 === 0) ? grassColor2 : grassColor1;
                 const points = 6; ctx.beginPath(); ctx.moveTo(patchX + patchW / 2, patchY);
-                for (let j = 1; j <= points; j++) {
-                    const angle = (j / points) * Math.PI * 2;
-                    const radiusX = patchW / 2 * (0.7 + Math.random() * 0.6);
-                    const radiusY = patchH / 2 * (0.7 + Math.random() * 0.6);
-                    ctx.lineTo(patchX + Math.cos(angle) * radiusX, patchY + Math.sin(angle) * radiusY);
-                }
+                for (let j = 1; j <= points; j++) { /* ... irregular blob points ... */ }
                 ctx.closePath(); ctx.fill();
             }
-
+    
             // 3. Reduced Rocks
-            const numRocks = 25; // Significantly fewer rocks
-            const rockColorBase = "#778899"; // Lighter Grey (SlateGray)
-            const rockColorShadow = "rgba(0, 0, 0, 0.15)";
+            const numRocks = 18;
             for (let i = 0; i < numRocks; i++) {
                 const rockX = Math.random() * width; const rockY = Math.random() * height;
-                const rockSize = Math.random() * 20 + 8; // Smaller rocks on average
+                const rockSize = Math.random() * 18 + 7;
                 const rockSides = Math.floor(Math.random() * 3) + 5;
                 // Draw main rock shape
                 ctx.fillStyle = rockColorBase; ctx.beginPath();
@@ -152,150 +155,114 @@ const Renderer = (() => { // Start IIFE (Immediately Invoked Function Expression
                 ctx.closePath(); ctx.fill();
                 // Simple Shadow/Bottom Edge
                 ctx.fillStyle = rockColorShadow; ctx.beginPath();
-                ctx.arc(rockX + rockSize * 0.1, rockY + rockSize * 0.15, rockSize * 0.55, Math.PI * 0.25, Math.PI * 0.75);
+                ctx.arc(rockX + rockSize * 0.15, rockY + rockSize * 0.20, rockSize * 0.50, Math.PI * 0.3, Math.PI * 0.7);
                 ctx.fill();
             }
-
-            // 4. Top-Down Trees (Eucalypt style) & Bushes
-            const numVeg = 50; // Reduced total vegetation
-            const treeTrunkColor = "#5a3a1e";
-            const treeCanopyColors = ["#6B8E23", "#808069", "#556B2F"]; // OliveDrab, Grey-Olive, DarkOliveGreen
-            const bushColors = ["#8B7355", "#9ACD3270", "#CD853F70"]; // GreyishBrown, YellowGreen(trans), Ochre(trans)
+    
+            // 4. Top-Down Trees & Bushes (NO TRUNK DOT)
+            const numVeg = 55;
             for (let i = 0; i < numVeg; i++) {
-                const isTree = Math.random() < 0.65; // Slightly more trees than bushes
+                const isTree = Math.random() < 0.70;
                 const itemX = Math.random() * width; const itemY = Math.random() * height;
-
                 if (isTree) {
-                    const trunkRadius = Math.random() * 1.5 + 1;
-                    const canopyRadius = trunkRadius * (Math.random() * 6 + 6); // Relatively large canopy
+                    const canopyRadius = (Math.random() * 8 + 8);
                     const canopyColor = treeCanopyColors[Math.floor(Math.random() * treeCanopyColors.length)];
                     // Shadow Blob
-                    ctx.fillStyle = "rgba(0, 0, 0, 0.1)"; ctx.beginPath();
-                    ctx.ellipse(itemX + canopyRadius * 0.15, itemY + canopyRadius * 0.15, canopyRadius * 1.05, canopyRadius * 0.95, Math.random() * Math.PI, 0, Math.PI * 2);
+                    ctx.fillStyle = "rgba(0, 0, 0, 0.12)"; ctx.beginPath();
+                    ctx.ellipse(itemX + canopyRadius * 0.2, itemY + canopyRadius * 0.2, canopyRadius * 1.1, canopyRadius * 1.0, Math.random() * Math.PI, 0, Math.PI * 2);
                     ctx.fill();
-                    // Trunk
-                    ctx.fillStyle = treeTrunkColor; ctx.beginPath(); ctx.arc(itemX, itemY, trunkRadius, 0, Math.PI * 2); ctx.fill();
                     // Canopy Blob
-                    ctx.fillStyle = canopyColor; const points = 10; ctx.beginPath(); ctx.moveTo(itemX + canopyRadius, itemY);
+                    ctx.fillStyle = canopyColor; const points = 10; ctx.beginPath();
+                    ctx.moveTo(itemX + canopyRadius, itemY);
                     for (let j = 1; j <= points; j++) { /* ... canopy points ... */ }
                     ctx.closePath(); ctx.fill();
                 } else { // Bush
-                    const bushSize = Math.random() * 12 + 6; // Smaller bushes
+                    const bushSize = Math.random() * 10 + 5;
                     const bushColor = bushColors[Math.floor(Math.random() * bushColors.length)];
-                    ctx.fillStyle = bushColor; const numCircles = Math.floor(Math.random()*3)+2; // Fewer circles per bush
+                    ctx.fillStyle = bushColor; const numCircles = Math.floor(Math.random()*3)+2;
                     for(let k=0; k<numCircles; k++) { /* ... bush circle cluster ... */ }
                 }
             }
-
-            // 5. Subtle Atmospheric Tint (Optional)
+    
+            // 5. Improved Wispy Clouds
+             const numClouds = 10;
+             for (let i = 0; i < numClouds; i++) {
+                  const cloudX = Math.random() * width;
+                  const cloudY = Math.random() * height; // Clouds can overlap anything
+                  const cloudLength = Math.random() * 200 + 100;
+                  const cloudHeight = Math.random() * 30 + 20;
+                  const cloudAlpha = Math.random() * 0.06 + 0.03;
+                  const cloudAngle = (Math.random() - 0.5) * 0.2;
+                  ctx.save(); ctx.translate(cloudX, cloudY); ctx.rotate(cloudAngle);
+                  ctx.fillStyle = `rgba(255, 255, 255, ${cloudAlpha})`;
+                  const parts = 5;
+                  for (let j = 0; j < parts; j++) { /* ... overlapping cloud ellipses ... */ }
+                  ctx.restore();
+              }
+    
+            // 6. Subtle Atmospheric Tint
             const atmosGradient = ctx.createLinearGradient(0, 0, 0, height);
-            atmosGradient.addColorStop(0, "rgba(255, 255, 230, 0.04)"); // Slightly pale yellow top
-            atmosGradient.addColorStop(1, "rgba(100, 50, 0, 0.03)");   // Slightly darker brown bottom
+            atmosGradient.addColorStop(0, "rgba(230, 255, 230, 0.03)");
+            atmosGradient.addColorStop(1, "rgba(80, 100, 80, 0.03)");
             ctx.fillStyle = atmosGradient; ctx.fillRect(0, 0, width, height);
         }
         // =============================
-        // --- NIGHT TIME BACKGROUND (Enhanced Original Style) ---
+        // --- NIGHT TIME BACKGROUND (Enhanced Simple Style V5 - Looking UP!) ---
         // =============================
         else {
-            ctx.fillStyle = nightBaseSkyColor; // Deep Blue/Black base
-            ctx.fillRect(0, 0, width, height);
-
-            // 1. Dark Ground Plane
-            const groundLevel = height * 0.9; // Relatively high horizon
-            ctx.fillStyle = nightGroundColor;
-            ctx.fillRect(0, groundLevel, width, height - groundLevel);
-            // Subtle Ground Texture (Optional - similar to day but darker)
-            const numGroundPatches = 100;
-            for (let i = 0; i < numGroundPatches; i++) {
-                const patchX = Math.random() * width;
-                const patchY = groundLevel + Math.random() * (height - groundLevel);
-                const patchR = Math.random() * 25 + 10;
-                const patchAlpha = Math.random() * 0.06 + 0.02;
-                ctx.fillStyle = `rgba(5, 3, 2, ${patchAlpha.toFixed(2)})`; // Very dark brown/black patches
-                ctx.beginPath(); ctx.arc(patchX, patchY, patchR, 0, Math.PI * 2); ctx.fill();
-            }
-
-            // 2. Dark Nebulae/Patches (Enhanced Original `np` loop)
-            const numNebulae = 70; // Moderate number of patches
+            const baseSkyColor = "#050815"; // Very Dark Blue/Black base
+            ctx.fillStyle = baseSkyColor;
+            ctx.fillRect(0, 0, width, height); // Fill ENTIRE canvas
+    
+            // NO ground plane for night!
+    
+            // 1. Dark Nebulae/Patches (Distributed everywhere)
+            const numNebulae = 70;
             for (let i = 0; i < numNebulae; i++) {
                 const nebX = Math.random() * width;
-                const nebY = Math.random() * groundLevel; // Keep above ground
-                const nebR = Math.random() * 120 + 60; // Larger radius range than original
-                const nebAlpha = Math.random() * 0.1 + 0.04; // Low alpha range
-                // Dark blue/purple tones
-                const r = 10 + Math.random() * 20;
-                const g = 10 + Math.random() * 25;
-                const b = 35 + Math.random() * 45; // Slightly more blue/purple bias
+                const nebY = Math.random() * height; // *** Y covers entire height ***
+                const nebR = Math.random() * 140 + 80; // Large radius range
+                const nebAlpha = Math.random() * 0.06 + 0.025; // Faint
+                // Very dark grey/indigo/deep blue tones
+                const r = 5 + Math.random() * 10;
+                const g = 5 + Math.random() * 15; // Allow slightly more green/blue
+                const b = 15 + Math.random() * 35; // More blue/indigo bias
                 ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${nebAlpha.toFixed(3)})`;
                 ctx.beginPath();
                 ctx.arc(nebX, nebY, nebR, 0, Math.PI * 2);
                 ctx.fill();
             }
-
-            // 3. Star Field (Enhanced Original `ns` loop)
-            const numStars = 800; // More than original, less than the galaxy attempt
+    
+            // 2. Star Field (Simulating Twinkle, covering full height)
+            const numStars = 1500; // Good density
             for (let i = 0; i < numStars; i++) {
                 const sx = Math.random() * width;
-                const sy = Math.random() * groundLevel; // Ensure stars are in the sky
-
+                const sy = Math.random() * height; // *** Y covers entire height ***
+    
                 // Size variation (most small)
                 let sr;
                 const sizeRoll = Math.random();
                 if (sizeRoll < 0.8) sr = Math.random() * 0.6 + 0.3;   // 80% tiny
-                else if (sizeRoll < 0.98) sr = Math.random() * 1.0 + 0.8; // 18% small
-                else sr = Math.random() * 1.2 + 1.5;                  // 2% larger
-
-                // Alpha variation (most somewhat faint)
-                let starAlpha;
-                const alphaRoll = Math.random();
-                if (alphaRoll < 0.7) starAlpha = Math.random() * 0.4 + 0.2; // 70% fainter
-                else starAlpha = Math.random() * 0.3 + 0.6;                 // 30% brighter
-
+                else if (sizeRoll < 0.97) sr = Math.random() * 1.0 + 0.8; // 17% small
+                else sr = Math.random() * 1.3 + 1.5;                  // 3% larger
+    
+                // Alpha variation (Simulates twinkle)
+                let starAlpha = Math.pow(Math.random(), 1.5) * 0.8 + 0.2; // Skew towards brighter, range 0.2-1.0
+    
                 // Subtle Color tint for brighter stars
-                let r=255, g=255, b=245; // Default slightly warm white
-                if (sr > 1.2 && Math.random() < 0.15) { // 15% of brighter stars bluish
-                    r=225; g=235; b=255;
-                } else if (sr > 1.2 && Math.random() < 0.10) { // 10% of brighter stars reddish
-                    r=255; g=220; b=210;
-                }
-
+                let r=255, g=255, b=245;
+                if (sr > 1.0 && Math.random() < 0.12) { r=230; g=240; b=255; } // Bluish
+                else if (sr > 1.0 && Math.random() < 0.08) { r=255; g=220; b=210;} // Reddish
+    
                 ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${starAlpha.toFixed(2)})`;
-                // Use fillRect for performance with small stars
-                ctx.fillRect(sx - sr/2, sy - sr/2, sr, sr);
+                ctx.fillRect(sx - sr/2, sy - sr/2, Math.max(0.5, sr), Math.max(0.5, sr)); // Min size 0.5px rect
             }
         } // End Night Time
-
+    
         // Store generated state
         ctx.canvas.dataset.isNight = targetIsNight;
-        console.log(`[Renderer] generateBackground V3 finished. Stored isNight: ${targetIsNight}`);
+        console.log(`[Renderer] generateBackground V5 finished. Stored isNight: ${ctx.canvas.dataset.isNight}`);
         return targetIsNight; // Return the state it generated
-    }
-
-    // --- Update Background Function (Manages transitions) ---
-    // *** This function must be exposed by the IIFE return statement ***
-    function updateGeneratedBackground(targetIsNight, targetCanvasWidth, targetCanvasHeight) {
-        // ... (Implementation is the same as previous version, handles resize and transition logic) ...
-        canvasWidth = targetCanvasWidth; canvasHeight = targetCanvasHeight;
-        if (offscreenCanvas.width !== canvasWidth || offscreenCanvas.height !== canvasHeight) {
-            offscreenCanvas.width = canvasWidth; offscreenCanvas.height = canvasHeight;
-            oldOffscreenCanvas.width = canvasWidth; oldOffscreenCanvas.height = canvasHeight;
-            hazeCanvas.width = canvasWidth; hazeCanvas.height = canvasHeight;
-            isBackgroundReady = false; currentBackgroundIsNight = null; isTransitioningBackground = false;
-            console.log(`[Renderer] Resized offscreen canvases to ${canvasWidth}x${canvasHeight}`);
-        }
-        if ((targetIsNight === currentBackgroundIsNight && isBackgroundReady) || (isTransitioningBackground && targetIsNight === (offscreenCanvas.dataset.isNight === 'true'))) { return; }
-        console.log(`[Renderer] Updating background. TargetNight: ${targetIsNight}, CurrentGenerated: ${currentBackgroundIsNight}, IsReady: ${isBackgroundReady}`);
-        if (isBackgroundReady) {
-            console.log("[Renderer] Starting background transition.");
-            oldOffscreenCtx.clearRect(0, 0, canvasWidth, canvasHeight); oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0);
-            isTransitioningBackground = true; transitionStartTime = performance.now();
-            generateBackground(offscreenCtx, targetIsNight, canvasWidth, canvasHeight); // Generate new
-            currentBackgroundIsNight = targetIsNight;
-        } else {
-            console.log("[Renderer] Generating initial background.");
-            generateBackground(offscreenCtx, targetIsNight, canvasWidth, canvasHeight); // Generate initial
-            currentBackgroundIsNight = targetIsNight; isBackgroundReady = true; isTransitioningBackground = false;
-        }
     }
 
     function drawDamageTexts(ctx, damageTexts) { if(!damageTexts) return; const now=performance.now(),pd=250,pmsi=4; ctx.textAlign='center'; ctx.textBaseline='bottom'; Object.values(damageTexts).forEach(dt=>{ if(!dt) return; const x=dt.x??0,y=dt.y??0,t=dt.text??'?',ic=dt.is_crit??false,st=dt.spawn_time?dt.spawn_time*1000:now,ts=now-st; let cfs=ic?damageTextCritFontSize:damageTextFontSize,cfc=ic?damageTextCritColor:damageTextColor; if(ic&&ts<pd){ const pp=Math.sin((ts/pd)*Math.PI); cfs+=pp*pmsi; } ctx.font=`bold ${Math.round(cfs)}px ${fontFamily}`; ctx.fillStyle=cfc; ctx.fillText(t,x,y); }); }
