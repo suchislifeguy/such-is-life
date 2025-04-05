@@ -194,7 +194,8 @@ const Input = (() => {
     
 
     function preventContextMenu(event) {
-        event.preventDefault(); // The magic line!
+        console.log("Canvas contextmenu event triggered! Preventing default..."); // ADD THIS LINE
+        event.preventDefault();
     }
     
     
