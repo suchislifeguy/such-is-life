@@ -741,6 +741,10 @@
                      const isNight = serverState.is_night;
                      DOM.dayNightIndicator.textContent = isNight ? 'Night' : 'Day';
                      DOM.dayNightIndicator.style.display = 'block';
+
+                      // Add this for display as needed
+                     // console.log(`[DEBUG] (updateDayNight) Setting display to ${isNight ? 'Night' : 'Day'}`);
+
                      Renderer.updateGeneratedBackground(isNight); // Tell Renderer to update/transition bg
                      DOM.gameContainer.classList.toggle('night-mode', isNight); // Toggle CSS class
                  } else {
