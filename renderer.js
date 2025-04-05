@@ -301,58 +301,102 @@ const Renderer = (() => {
     
         ctx.restore();
       }
-    
 
-    
     function drawPlayerCharacter( ctx, x, y, w, h, isSelf, playerState, aimDx, aimDy ) {
-        const jh=playerState?.hit_flash_this_tick??false;
-        const ii=(playerState?.input_vector?.dx??0)===0&&(playerState?.input_vector?.dy??0)===0;
-        const t=performance.now();
-        const bo=ii?Math.sin(t/IDLE_BOB_SPEED_DIVISOR)*IDLE_BOB_AMPLITUDE:0;
-    
-        // --- Check for player snake bite effect ---
+        const jh = playerState?.hit_flash_this_tick ?? false; // Just Hit flag
+        const ii = (playerState?.input_vector?.dx ?? 0) === 0 && (playerState?.input_vector?.dy ?? 0) === 0; // Is Idle
+        const t = performance.now();
+        const bo = ii ? Math.sin(t / IDLE_BOB_SPEED_DIVISOR) * IDLE_BOB_AMPLITUDE : 0; // Idle bob offset
+
+        // Check for player snake bite effect
         const playerSnakeEffect = playerState?.effects?.snake_bite_slow;
-        // Ensure effect exists, is object, has number timestamp, and hasn't expired
         const isPlayerBitten = playerSnakeEffect &&
-                               typeof playerSnakeEffect === 'object' &&
-                               typeof playerSnakeEffect.expires_at === 'number' &&
-                               t < (playerSnakeEffect.expires_at * 1000);    
-        // ... (definitions for hh, hw, sly, etc. remain) ...
+                            typeof playerSnakeEffect === 'object' &&
+                            typeof playerSnakeEffect.expires_at === 'number' &&
+                            t < (playerSnakeEffect.expires_at * 1000);
+
+        // Dimension calculations (remain the same)
         const hh=h*0.3,hw=w*0.95,slh=hh*0.15,slw=hw*0.8,ngh=h*0.06,spw=w*1.25,sph=h*0.1,chestPlateHeight=h*0.3,cpw=w*0.9,aw=w*0.2,al=h*0.4,bh=h*0.05,ph=h*0.35,boh=h*0.1,bow=w*0.32,bos=w*0.4;
         const to=h*0.5,hty=y-to+bo,hby=hty+hh,sly=hty+hh*0.4,ngty=hby-3,ngby=ngty+ngh,sty=ngby-2,sby=sty+sph,cpty=sty+sph*0.15,aty=sty+sph*0.2,bey=cpty+chestPlateHeight+bh*0.1,pty=bey+bh*0.4,pby=pty+ph,boty=pby-5,boby=boty+boh;
         const dc=isSelf?dustyPlayerSelfColor:dustyPlayerOtherColor;
-    
-        ctx.save();
-        // ... (drawing code for player shadow, legs, boots, belt, chestplate, arms, helmet, slit) ...
+
+        ctx.save(); // Save context state before drawing player
+
+        // Draw Shadow
         ctx.beginPath(); const sy=boby+1; ctx.ellipse(x,sy,w*0.45,h*0.05,0,0,Math.PI*2); ctx.fillStyle=backgroundShadowColor; ctx.fill();
+
+        // Draw Legs & Boots (Animated)
         ctx.fillStyle=dc; const lw=w*0.4; ctx.fillRect(x-w*0.45,pty,lw,ph); ctx.fillRect(x+w*0.05,pty,lw,ph);
-        ctx.fillStyle=bootColor; if(!ii){const sd=250,sp=Math.floor(t/sd)%2;if(sp===0){ ctx.fillRect(x-bos-bow/2,boty-2,bow,boh); ctx.fillRect(x+bos-bow/2,boty,bow,boh);}else{ ctx.fillRect(x-bos-bow/2,boty,bow,boh); ctx.fillRect(x+bos-bow/2,boty-2,bow,boh);}}else{ ctx.fillRect(x-bos-bow/2,boty,bow,boh); ctx.fillRect(x+bos-bow/2,boty,bow,boh);}
+        ctx.fillStyle=bootColor;
+        if(!ii){const sd=250,sp=Math.floor(t/sd)%2;if(sp===0){ ctx.fillRect(x-bos-bow/2,boty-2,bow,boh); ctx.fillRect(x+bos-bow/2,boty,bow,boh);}else{ ctx.fillRect(x-bos-bow/2,boty,bow,boh); ctx.fillRect(x+bos-bow/2,boty-2,bow,boh);}}else{ ctx.fillRect(x-bos-bow/2,boty,bow,boh); ctx.fillRect(x+bos-bow/2,boty,bow,boh);}
+
+        // Draw Torso Area (Belt, Chestplate, Shoulder Pad)
         ctx.fillStyle=beltColor; ctx.fillRect(x-w*0.65,bey-bh/2,w*1.3,bh);
         ctx.fillStyle=simpleChestPlateColor; ctx.fillRect(x-cpw/2,cpty,cpw,chestPlateHeight);
         ctx.fillStyle=chestPlateHighlight; ctx.fillRect(x-cpw/2+5,cpty+5,cpw-10,3);
-        ctx.fillStyle=ironHelmetColor; ctx.fillRect(x-spw/2,sty,spw,sph);
-        ctx.fillStyle=ironHelmetHighlight; ctx.fillRect(x-spw/2+3,sty+2,spw-6,2);
+        ctx.fillStyle=ironHelmetColor; ctx.fillRect(x-spw/2,sty,spw,sph); // Shoulder pad base
+        ctx.fillStyle=ironHelmetHighlight; ctx.fillRect(x-spw/2+3,sty+2,spw-6,2); // Shoulder pad highlight
+
+        // Draw Arms
         ctx.fillStyle=dc; ctx.fillRect(x-spw*0.45,aty,aw,al); ctx.fillRect(x+spw*0.45-aw,aty,aw,al);
-        ctx.fillStyle=ironHelmetColor; ctx.fillRect(x-hw*0.4,ngty,hw*0.8,ngh);
-        ctx.fillStyle=ironHelmetColor; ctx.fillRect(x-hw/2,hty,hw,hh);
-        ctx.fillStyle=ironHelmetHighlight; ctx.fillRect(x-hw/2,hty,hw,3);
-        ctx.fillStyle=ironHelmetShadow; ctx.fillRect(x-hw/2+1,hty+3,hw-2,2);
-        ctx.fillStyle=slitColor; ctx.fillRect(x-slw/2,sly,slw,slh);
-    
-        // ... (code for drawing gun) ...
-        if(isSelf&&(aimDx!==0||aimDy!==0)){ /* ... gun drawing ... */ }
-    
+
+        // Draw Helmet
+        ctx.fillStyle=ironHelmetColor; ctx.fillRect(x-hw*0.4,ngty,hw*0.8,ngh); // Neck guard part
+        ctx.fillStyle=ironHelmetColor; ctx.fillRect(x-hw/2,hty,hw,hh); // Main helmet bucket
+        ctx.fillStyle=ironHelmetHighlight; ctx.fillRect(x-hw/2,hty,hw,3); // Top highlight
+        ctx.fillStyle=ironHelmetShadow; ctx.fillRect(x-hw/2+1,hty+3,hw-2,2); // Shadow under highlight
+        ctx.fillStyle=slitColor; ctx.fillRect(x-slw/2,sly,slw,slh); // Eye slit
+
+
+        // --- IMPROVED GUN DRAWING ---
+        if (isSelf && (aimDx !== 0 || aimDy !== 0)) {
+            const gunLevel = playerState?.gun ?? 1;
+            const baseBarrelLength = 18;
+            const barrelLengthIncrease = 2; // How much length increases per level
+            const barrelLength = baseBarrelLength + (gunLevel - 1) * barrelLengthIncrease;
+            const barrelThickness = 3 + (gunLevel - 1) * 0.2; // Slightly thicker at higher levels
+            const stockLength = 8 + (gunLevel - 1) * 0.5;
+            const stockThickness = 5 + (gunLevel - 1) * 0.3;
+            const stockColor = "#8B4513"; // Brown for stock
+            const barrelColor = "#444444"; // Dark grey for barrel
+
+            // Position gun relative to arm/shoulder area
+            const gunOriginYOffset = aty + al * 0.4; // Roughly mid-arm level
+            const gunOriginXOffset = w * 0.1; // Slightly offset from center
+
+            ctx.save();
+            // Translate to the point where the gun rotation should happen
+            ctx.translate(x, gunOriginYOffset);
+            const angle = Math.atan2(aimDy, aimDx);
+            ctx.rotate(angle);
+
+            // Draw Stock (drawn first, behind barrel)
+            ctx.fillStyle = stockColor;
+            // Stock starts slightly behind the rotation origin and extends back
+            ctx.fillRect(-stockLength + gunOriginXOffset - 2, -stockThickness / 2, stockLength, stockThickness);
+
+            // Draw Barrel (extends forward from origin)
+            ctx.fillStyle = barrelColor;
+            ctx.fillRect(gunOriginXOffset, -barrelThickness / 2, barrelLength, barrelThickness);
+
+            // Optional: Add a tiny sight dot on top?
+            // ctx.fillStyle = '#222';
+            // ctx.fillRect(gunOriginXOffset + barrelLength * 0.7, -barrelThickness/2 - 1, 1, 1);
+
+            ctx.restore(); // Restore rotation/translation
+        }
+
+        // Draw Snake Bite Aura (if applicable)
         if (isPlayerBitten) {
             const auraRadius = Math.max(w * 0.6, 18);
             const auraY = y + h * 0.5 + bo - 6; // Position near the base
             const auraLineWidth = 3.5;
             const auraColor = "rgba(0, 255, 50, 0.75)";
-    
+
             const pulseSpeed = 0.004;
             const pulseMagnitude = 2.5;
             const pulseOffset = Math.sin(t * pulseSpeed) * pulseMagnitude;
-    
-            // No need for save/restore if only changing lineWidth/strokeStyle
+
             const originalLineWidth = ctx.lineWidth;
             const originalStrokeStyle = ctx.strokeStyle;
             ctx.lineWidth = auraLineWidth;
@@ -360,15 +404,36 @@ const Renderer = (() => {
             ctx.beginPath();
             ctx.arc(x, auraY, auraRadius + pulseOffset, 0, Math.PI * 2);
             ctx.stroke();
-            // Restore previous styles
             ctx.lineWidth = originalLineWidth;
             ctx.strokeStyle = originalStrokeStyle;
         }
-    
-        if(jh){/* ... spark drawing ... */}
-    
-        ctx.restore(); // Matches the ctx.save() at the beginning
+
+        if (jh) {
+            // Use save/restore for sparks if modifying global alpha or styles heavily
+            ctx.save();
+            const numSparks = 15 + Math.random() * 10;
+            for (let i = 0; i < numSparks; i++) {
+                const sparkAngle = Math.random() * Math.PI * 2;
+                // Sparks emanate from the player's general area
+                const sparkRadius = Math.random() * w * 0.8 + w * 0.2;
+                const sparkX = x + Math.cos(sparkAngle) * sparkRadius;
+                // Position sparks vertically around the torso/upper body
+                const sparkY = y + Math.sin(sparkAngle) * sparkRadius * 0.7 - h * 0.1 + bo;
+                const sparkSize = Math.random() * 3.5 + 1.5;
+                // Choose a random color from the defined spark colors
+                ctx.fillStyle = sparkColors[Math.floor(Math.random() * sparkColors.length)];
+                ctx.beginPath();
+                // Draw small circles for sparks
+                ctx.arc(sparkX, sparkY, sparkSize / 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore(); // Restore context state after drawing sparks
+        }
+
+
+        ctx.restore(); // Matches the ctx.save() at the beginning of the function
     }
+
     function drawPlayers(ctx, players, appStateRef, localPlayerMuzzleFlashRef) { if(!players || !appStateRef) return; Object.values(players).forEach(p=>{ if(!p||p.player_status==='dead') return; const is=p.id===appStateRef.localPlayerId,ps=p.player_status||'alive',dx=is?appStateRef.renderedPlayerPos.x:p.x,dy=is?appStateRef.renderedPlayerPos.y:p.y,w=p.width??48,h=p.height??48,mh=p.max_health??100,ca=p.armor??0,id=(ps==='down'),a=id?0.4:1.0; ctx.save(); ctx.globalAlpha=a; const adx=is?localPlayerMuzzleFlashRef?.aimDx:0,ady=is?localPlayerMuzzleFlashRef?.aimDy:0; drawPlayerCharacter(ctx,dx,dy,w,h,is,p,adx,ady); ctx.restore(); if(ps==='alive'){ drawHealthBar(ctx,dx,dy,w,p.health,mh); if(ca>0) drawArmorBar(ctx,dx,dy,w,ca); } }); }
     function drawEnemies(ctx, enemies, activeEnemyBubblesRef) { if(!enemies) return; const now=performance.now()/1000,fd=0.3; Object.values(enemies).forEach(e=>{ if(!e) return; const w=e.width??20,h=e.height??40,mh=e.max_health??50; let a=1.0,sd=true,id=false; if(e.health<=0&&e.death_timestamp){ id=true; const el=now-e.death_timestamp; if(el<fd) a=0.4; else sd=false; } if(sd){ ctx.save(); ctx.globalAlpha=a; drawEnemyRect(ctx,e.x,e.y,w,h,e.type,e); ctx.restore(); } if(!id&&e.health>0&&sd){ drawHealthBar(ctx,e.x,e.y,w,e.health,mh); } }); }
     function drawMuzzleFlash(ctx, playerX, playerY, aimDx, aimDy) {
