@@ -2323,7 +2323,7 @@ return {
                         Game.startGameLoop(); // SP client starts loop immediately
                         break;
 
-                    // --- Game State Update ---
+                        // --- Game State Update ---
                     case 'game_state':
                         // If client is in menu mode, ignore state updates entirely.
                         if (appState.mode === 'menu') {
@@ -2339,15 +2339,19 @@ return {
                         appState.previousServerState = appState.lastServerState;
                         appState.lastServerState = appState.serverState;
                         appState.serverState = data.state; // Store the new state
-                        // Directly access data.state for temperature to ensure correct value
-                        if (typeof data.state.current_temperature === 'number') {
-                            appState.currentTemp = data.state.current_temperature;
+                        const newState = appState.serverState; // Alias for clarity
+                        const currentPlayerState = newState?.players?.[appState.localPlayerId];
+
+                        if (typeof newState.current_temperature === 'number') {
+                            appState.currentTemp = newState.current_temperature;
                         }
-                        appState.isRaining = data.state.is_raining ?? false;
-                        appState.isDustStorm = data.state.is_dust_storm ?? false;
+                        appState.isRaining = newState.is_raining ?? false;
+                        appState.isDustStorm = newState.is_dust_storm ?? false
+
+                        updateEnvironmentDisplay(); // FORCE IT TO BE UPDATED
 
                         // --- Update Visual Snake State ---
-                        const serverSnakeState = data.state.snake_state;
+                        const serverSnakeState = newState.snake_state;
                         if (serverSnakeState) {
                             snake.isActiveFromServer = serverSnakeState.active;
                             snake.serverHeadX = serverSnakeState.head_x;
