@@ -86,147 +86,175 @@ const Renderer = (() => { // Start IIFE
     // --- Utility Functions ---
     function drawRoundedRect(ctx, x, y, width, height, radius) { if (width < 2 * radius) radius = width / 2; if (height < 2 * radius) radius = height / 2; ctx.beginPath(); ctx.moveTo(x + radius, y); ctx.arcTo(x + width, y, x + width, y + height, radius); ctx.arcTo(x + width, y + height, x, y + height, radius); ctx.arcTo(x, y + height, x, y, radius); ctx.arcTo(x, y, x + width, y, radius); ctx.closePath(); }
 
-    // --- REVISED V6: generateBackground ---
-    // Defined *before* updateGeneratedBackground and drawGame which might call it internally
-    function generateBackground(ctx, targetIsNight, width, height) {
-        console.log(`[Renderer] generateBackground V6 called. TargetNight: ${targetIsNight}`);
-        ctx.clearRect(0, 0, width, height);
+function generateBackground(ctx, targetIsNight, width, height) {
+    // *** DEFINE COLORS LOCALLY TO ENSURE SCOPE ***
+    const dayBaseGroundColor = "#7a8c79"; // Dusty Green Base
+    const nightBaseSkyColor = "#050815"; // Very Dark Blue/Black base
+    const nightGroundColor = "#1a1412"; // Very dark desaturated brown (for night texture)
 
-        // =============================
-        // --- DAY TIME BACKGROUND (Top-Down Dusty Green V6) ---
-        // =============================
-        if (!targetIsNight) {
-            // Palette
-            const grassColor1 = `rgba(128, 140, 120, 0.12)`; const grassColor2 = `rgba(210, 180, 140, 0.08)`;
-            const rockColorBase = "#908070"; const rockColorShadow = "rgba(0, 0, 0, 0.15)";
-            const treeCanopyColors = ["#607B34", "#556B2F", "#8FBC8F"];
-            const bushColors = ["#8B7355", "#9ACD3250", "#CD853F50"];
+    console.log(`[Renderer] generateBackground V6-Fix called. TargetNight: ${targetIsNight}`);
+    ctx.clearRect(0, 0, width, height);
 
-            ctx.fillStyle = dayBaseGroundColor; // Dusty Green Base
-            ctx.fillRect(0, 0, width, height);
+    // =============================
+    // --- DAY TIME BACKGROUND (Top-Down Dusty Green) ---
+    // =============================
+    if (!targetIsNight) {
+        // Palette (defined locally for clarity)
+        const grassColor1 = `rgba(128, 140, 120, 0.12)`;
+        const grassColor2 = `rgba(210, 180, 140, 0.08)`;
+        const rockColorBase = "#908070";
+        const rockColorShadow = "rgba(0, 0, 0, 0.15)";
+        const treeCanopyColors = ["#607B34", "#556B2F", "#8FBC8F"];
+        const bushColors = ["#8B7355", "#9ACD3250", "#CD853F50"];
 
-            // 1. Mottling/Noise
-            const numMottles = 1800;
-            for (let i = 0; i < numMottles; i++) { /* ... Mottling code ... */ }
+        ctx.fillStyle = dayBaseGroundColor;
+        ctx.fillRect(0, 0, width, height);
 
-            // 2. Dry Grass Layer
-            const numGrassPatches = 450;
-            for (let i = 0; i < numGrassPatches; i++) { /* ... Grass blob code ... */ }
+        // 1. Mottling/Noise
+        const numMottles = 1800;
+        for (let i = 0; i < numMottles; i++) {
+            const mottleX = Math.random() * width; const mottleY = Math.random() * height;
+            const mottleR = Math.random() * 25 + 10;
+            const mottleAlpha = Math.random() * 0.06 + 0.02;
+            const shadeAdjust = (Math.random() - 0.5) * 20;
+            const r = Math.min(255, Math.max(0, 122 + shadeAdjust)); // Base R for Dusty Green
+            const g = Math.min(255, Math.max(0, 140 + shadeAdjust * 1.2)); // Base G
+            const b = Math.min(255, Math.max(0, 121 + shadeAdjust)); // Base B
+            ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${mottleAlpha.toFixed(3)})`;
+            ctx.beginPath(); ctx.arc(mottleX, mottleY, mottleR, 0, Math.PI * 2); ctx.fill();
+        }
 
-            // 3. Reduced Rocks
-            const numRocks = 18;
-            for (let i = 0; i < numRocks; i++) { /* ... Rock drawing code ... */ }
+        // 2. Dry Grass Layer
+        const numGrassPatches = 450;
+        for (let i = 0; i < numGrassPatches; i++) {
+            const patchX = Math.random() * width; const patchY = Math.random() * height;
+            const patchW = Math.random() * 110 + 50; const patchH = Math.random() * 70 + 30;
+            ctx.fillStyle = (i % 3 === 0) ? grassColor2 : grassColor1;
+            const points = 6; ctx.beginPath(); ctx.moveTo(patchX + patchW / 2, patchY);
+            for (let j = 1; j <= points; j++) {
+                 const angle = (j / points) * Math.PI * 2;
+                 const radiusX = patchW / 2 * (0.6 + Math.random() * 0.7);
+                 const radiusY = patchH / 2 * (0.6 + Math.random() * 0.7);
+                 ctx.lineTo(patchX + Math.cos(angle) * radiusX, patchY + Math.sin(angle) * radiusY);
+             }
+            ctx.closePath(); ctx.fill();
+        }
 
-            // 4. Trees (NO TRUNK DOT) & Bushes
-            const numVeg = 55;
-            for (let i = 0; i < numVeg; i++) {
-                const isTree = Math.random() < 0.70;
-                const itemX = Math.random() * width; const itemY = Math.random() * height;
-                if (isTree) {
-                    const canopyRadius = (Math.random() * 8 + 8);
-                    const canopyColor = treeCanopyColors[Math.floor(Math.random() * treeCanopyColors.length)];
-                    // Shadow Blob
-                    ctx.fillStyle = "rgba(0, 0, 0, 0.12)"; ctx.beginPath();
-                    ctx.ellipse(itemX + canopyRadius * 0.2, itemY + canopyRadius * 0.2, canopyRadius * 1.1, canopyRadius * 1.0, Math.random() * Math.PI, 0, Math.PI * 2);
+        // 3. Reduced Rocks
+        const numRocks = 18;
+        for (let i = 0; i < numRocks; i++) {
+            const rockX = Math.random() * width; const rockY = Math.random() * height;
+            const rockSize = Math.random() * 18 + 7; const rockSides = Math.floor(Math.random() * 3) + 5;
+            ctx.fillStyle = rockColorBase; ctx.beginPath();
+            ctx.moveTo(rockX + rockSize / 2, rockY);
+            for (let j = 1; j <= rockSides; j++) {
+                const angle = (j / rockSides) * Math.PI * 2;
+                const radius = rockSize / 2 * (0.5 + Math.random() * 0.9);
+                ctx.lineTo(rockX + Math.cos(angle) * radius, rockY + Math.sin(angle) * radius);
+            }
+            ctx.closePath(); ctx.fill();
+            ctx.fillStyle = rockColorShadow; ctx.beginPath();
+            ctx.arc(rockX + rockSize * 0.15, rockY + rockSize * 0.20, rockSize * 0.50, Math.PI * 0.3, Math.PI * 0.7);
+            ctx.fill();
+        }
+
+        // 4. Top-Down Trees & Bushes (NO TRUNK DOT)
+        const numVeg = 55;
+        for (let i = 0; i < numVeg; i++) {
+            const isTree = Math.random() < 0.70;
+            const itemX = Math.random() * width; const itemY = Math.random() * height;
+            if (isTree) {
+                const canopyRadius = (Math.random() * 8 + 8);
+                const canopyColor = treeCanopyColors[Math.floor(Math.random() * treeCanopyColors.length)];
+                ctx.fillStyle = "rgba(0, 0, 0, 0.12)"; ctx.beginPath();
+                ctx.ellipse(itemX + canopyRadius * 0.2, itemY + canopyRadius * 0.2, canopyRadius * 1.1, canopyRadius * 1.0, Math.random() * Math.PI, 0, Math.PI * 2);
+                ctx.fill(); // Shadow
+                ctx.fillStyle = canopyColor; const points = 10; ctx.beginPath();
+                ctx.moveTo(itemX + canopyRadius, itemY);
+                for (let j = 1; j <= points; j++) {
+                    const angle = (j / points) * Math.PI * 2;
+                    const radius = canopyRadius * (0.65 + Math.random() * 0.7);
+                    ctx.lineTo(itemX + Math.cos(angle) * radius, itemY + Math.sin(angle) * radius);
+                }
+                ctx.closePath(); ctx.fill(); // Canopy
+            } else { // Bush
+                const bushSize = Math.random() * 10 + 5;
+                const bushColor = bushColors[Math.floor(Math.random() * bushColors.length)];
+                ctx.fillStyle = bushColor; const numCircles = Math.floor(Math.random()*3)+2;
+                for(let k=0; k<numCircles; k++) {
+                    ctx.beginPath();
+                    const circleR = bushSize * (0.25 + Math.random()*0.35);
+                    ctx.arc(itemX + (Math.random()-0.5)*bushSize*0.7, itemY + (Math.random()-0.5)*bushSize*0.7, circleR, 0, Math.PI*2);
                     ctx.fill();
-                    // Canopy Blob (NO TRUNK)
-                    ctx.fillStyle = canopyColor; const points = 10; ctx.beginPath();
-                    ctx.moveTo(itemX + canopyRadius, itemY);
-                    for (let j = 1; j <= points; j++) {
-                        const angle = (j / points) * Math.PI * 2;
-                        const radius = canopyRadius * (0.65 + Math.random() * 0.7);
-                        ctx.lineTo(itemX + Math.cos(angle) * radius, itemY + Math.sin(angle) * radius);
-                    }
-                    ctx.closePath(); ctx.fill();
-                } else { // Bush
-                    const bushSize = Math.random() * 10 + 5;
-                    const bushColor = bushColors[Math.floor(Math.random() * bushColors.length)];
-                    ctx.fillStyle = bushColor; const numCircles = Math.floor(Math.random()*3)+2;
-                    for(let k=0; k<numCircles; k++) { /* ... bush circle cluster ... */ }
                 }
             }
-
-            // 5. Wispy Clouds
-            const numClouds = 10;
-            for (let i = 0; i < numClouds; i++) { /* ... Cloud drawing code ... */ }
-
-            // 6. REMOVED STATIC ATMOSPHERIC TINT GRADIENT FROM DAY BACKGROUND
-            // The dynamic blue/orange tint is handled ONLY by drawTemperatureTint in drawGame.
-
         }
-        // =============================
-        // --- NIGHT TIME BACKGROUND (Enhanced Simple Style V6 - Looking UP) ---
-        // =============================
-        else {
-            ctx.fillStyle = nightBaseSkyColor; // Very Dark Blue/Black base
-            ctx.fillRect(0, 0, width, height); // Fill ENTIRE canvas
 
-            // 1. Dark Nebulae/Patches (Distributed everywhere)
-            const numNebulae = 65; // Slightly fewer?
-            for (let i = 0; i < numNebulae; i++) {
-                const nebX = Math.random() * width; const nebY = Math.random() * height;
-                const nebR = Math.random() * 140 + 70; // Adjusted range
-                const nebAlpha = Math.random() * 0.05 + 0.02; // Very faint
-                const r = 5 + Math.random() * 8; const g = 5 + Math.random() * 12; const b = 15 + Math.random() * 30; // Darker tones
-                ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${nebAlpha.toFixed(3)})`;
-                ctx.beginPath(); ctx.arc(nebX, nebY, nebR, 0, Math.PI * 2); ctx.fill();
-            }
+        // 5. Wispy Clouds
+        const numClouds = 10;
+        for (let i = 0; i < numClouds; i++) {
+             const cloudX = Math.random() * width; const cloudY = Math.random() * height;
+             const cloudLength = Math.random() * 200 + 100; const cloudHeight = Math.random() * 30 + 20;
+             const cloudAlpha = Math.random() * 0.06 + 0.03; const cloudAngle = (Math.random() - 0.5) * 0.2;
+             ctx.save(); ctx.translate(cloudX, cloudY); ctx.rotate(cloudAngle);
+             ctx.fillStyle = `rgba(255, 255, 255, ${cloudAlpha})`;
+             const parts = 5;
+             for (let j = 0; j < parts; j++) {
+                const partX = (Math.random() - 0.5) * cloudLength * 0.6; const partY = (Math.random() - 0.5) * cloudHeight * 0.4;
+                const partW = cloudLength * (Math.random() * 0.4 + 0.3); const partH = cloudHeight * (Math.random() * 0.5 + 0.5);
+                ctx.beginPath(); ctx.ellipse(partX, partY, partW/2, partH/2, 0, 0, Math.PI*2); ctx.fill();
+             }
+             ctx.restore();
+         }
 
-            // 2. Star Field (Twinkling)
-            const numStars = 1400; // Adjusted count
-            for (let i = 0; i < numStars; i++) {
-                const sx = Math.random() * width; const sy = Math.random() * height; // Full height
-                let sr; // Size
-                const sizeRoll = Math.random();
-                if (sizeRoll < 0.78) sr = Math.random() * 0.5 + 0.2;   // 78% tiny
-                else if (sizeRoll < 0.98) sr = Math.random() * 1.0 + 0.7; // 20% small
-                else sr = Math.random() * 1.2 + 1.4;                  // 2% larger
+        // NO STATIC TINT FOR DAY
 
-                let starAlpha = Math.pow(Math.random(), 1.6) * 0.85 + 0.15; // Skew towards brighter, min 0.15
+    }
+    // =============================
+    // --- NIGHT TIME BACKGROUND (Enhanced Simple Style V6 - Looking UP) ---
+    // =============================
+    else {
+        ctx.fillStyle = nightBaseSkyColor; // Very Dark Blue/Black base
+        ctx.fillRect(0, 0, width, height); // Fill ENTIRE canvas
 
-                let r=255, g=255, b=245; // Color
-                if (sr > 1.0 && Math.random() < 0.10) { r=230; g=240; b=255; } // Bluish
-                else if (sr > 1.0 && Math.random() < 0.07) { r=255; g=220; b=210;} // Reddish
-
-                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${starAlpha.toFixed(2)})`;
-                ctx.fillRect(sx - sr/2, sy - sr/2, Math.max(0.5, sr), Math.max(0.5, sr));
-            }
-        } // End Night Time
-
-        ctx.canvas.dataset.isNight = targetIsNight;
-        console.log(`[Renderer] generateBackground V6 finished. Stored isNight: ${targetIsNight}`);
-        return targetIsNight;
-    } // --- End generateBackground ---
-
-
-    // --- Update Background Function (Manages transitions) ---
-    // *** Defined BEFORE drawGame ***
-    function updateGeneratedBackground(targetIsNight, targetCanvasWidth, targetCanvasHeight) {
-        canvasWidth = targetCanvasWidth; canvasHeight = targetCanvasHeight;
-        // Resize logic
-        if (offscreenCanvas.width !== canvasWidth || offscreenCanvas.height !== canvasHeight) {
-            offscreenCanvas.width = canvasWidth; offscreenCanvas.height = canvasHeight;
-            oldOffscreenCanvas.width = canvasWidth; oldOffscreenCanvas.height = canvasHeight;
-            hazeCanvas.width = canvasWidth; hazeCanvas.height = canvasHeight;
-            isBackgroundReady = false; currentBackgroundIsNight = null; isTransitioningBackground = false;
-            console.log(`[Renderer] Resized offscreen canvases to ${canvasWidth}x${canvasHeight}`);
+        // 1. Dark Nebulae/Patches (Distributed everywhere)
+        const numNebulae = 65;
+        for (let i = 0; i < numNebulae; i++) {
+            const nebX = Math.random() * width; const nebY = Math.random() * height;
+            const nebR = Math.random() * 140 + 70;
+            const nebAlpha = Math.random() * 0.05 + 0.02;
+            const r = 5 + Math.random() * 8; const g = 5 + Math.random() * 12; const b = 15 + Math.random() * 30;
+            ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${nebAlpha.toFixed(3)})`;
+            ctx.beginPath(); ctx.arc(nebX, nebY, nebR, 0, Math.PI * 2); ctx.fill();
         }
-        // Update/transition logic (check if update needed)
-        if ((targetIsNight === currentBackgroundIsNight && isBackgroundReady) || (isTransitioningBackground && targetIsNight === (offscreenCanvas.dataset.isNight === 'true'))) { return; }
-        console.log(`[Renderer] Updating background V6. TargetNight: ${targetIsNight}, CurrentGenerated: ${currentBackgroundIsNight}, IsReady: ${isBackgroundReady}`);
-        // Perform generation/transition
-        if (isBackgroundReady) {
-            console.log("[Renderer] Starting background transition V6.");
-            oldOffscreenCtx.clearRect(0, 0, canvasWidth, canvasHeight); oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0);
-            isTransitioningBackground = true; transitionStartTime = performance.now();
-            generateBackground(offscreenCtx, targetIsNight, canvasWidth, canvasHeight); // Use V6
-            currentBackgroundIsNight = targetIsNight;
-        } else {
-            console.log("[Renderer] Generating initial background V6.");
-            generateBackground(offscreenCtx, targetIsNight, canvasWidth, canvasHeight); // Use V6
-            currentBackgroundIsNight = targetIsNight; isBackgroundReady = true; isTransitioningBackground = false;
+
+        // 2. Star Field (Twinkling)
+        const numStars = 1400;
+        for (let i = 0; i < numStars; i++) {
+            const sx = Math.random() * width; const sy = Math.random() * height;
+            let sr; // Size
+            const sizeRoll = Math.random();
+            if (sizeRoll < 0.78) sr = Math.random() * 0.5 + 0.2;
+            else if (sizeRoll < 0.98) sr = Math.random() * 1.0 + 0.8;
+            else sr = Math.random() * 1.2 + 1.4;
+
+            let starAlpha = Math.pow(Math.random(), 1.6) * 0.85 + 0.15; // Twinkle
+
+            let r=255, g=255, b=245; // Color
+            if (sr > 1.0 && Math.random() < 0.12) { r=230; g=240; b=255; } // Bluish
+            else if (sr > 1.0 && Math.random() < 0.08) { r=255; g=220; b=210;} // Reddish
+
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${starAlpha.toFixed(2)})`;
+            ctx.fillRect(sx - sr/2, sy - sr/2, Math.max(0.5, sr), Math.max(0.5, sr));
         }
-    } // --- End updateGeneratedBackground ---
+
+        // NO GROUND PLANE DRAWN FOR NIGHT
+    } // End Night Time
+
+    ctx.canvas.dataset.isNight = targetIsNight; // Store state on canvas element
+    console.log(`[Renderer] generateBackground V6-Fix finished. Stored isNight: ${targetIsNight}`);
+    return targetIsNight;
+} // --- End generateBackground V6-Fix ---
 
 
     function drawDamageTexts(ctx, damageTexts) { if(!damageTexts) return; const now=performance.now(),pd=250,pmsi=4; ctx.textAlign='center'; ctx.textBaseline='bottom'; Object.values(damageTexts).forEach(dt=>{ if(!dt) return; const x=dt.x??0,y=dt.y??0,t=dt.text??'?',ic=dt.is_crit??false,st=dt.spawn_time?dt.spawn_time*1000:now,ts=now-st; let cfs=ic?damageTextCritFontSize:damageTextFontSize,cfc=ic?damageTextCritColor:damageTextColor; if(ic&&ts<pd){ const pp=Math.sin((ts/pd)*Math.PI); cfs+=pp*pmsi; } ctx.font=`bold ${Math.round(cfs)}px ${fontFamily}`; ctx.fillStyle=cfc; ctx.fillText(t,x,y); }); }
