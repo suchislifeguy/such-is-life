@@ -1,14 +1,13 @@
 // renderer.js
 
-// Ensure Renderer is defined in a scope accessible by main.js
-const Renderer = (() => { // Start IIFE
-    console.log("--- Renderer.js V6 Initializing ---");
-
+const Renderer = (() => {
+    console.log("--- Renderer.js: Initializing ---");
+  
     let mainCtx = null;
     let canvasWidth = 1600;
     let canvasHeight = 900;
-
-    // Offscreen canvases
+  
+    // ... (Keep offscreen canvas, transition state, etc.) ...
     const offscreenCanvas = document.createElement("canvas");
     const offscreenCtx = offscreenCanvas.getContext("2d", { alpha: false });
     let isBackgroundReady = false;
@@ -19,244 +18,100 @@ const Renderer = (() => { // Start IIFE
     const oldOffscreenCanvas = document.createElement("canvas");
     const oldOffscreenCtx = oldOffscreenCanvas.getContext("2d", { alpha: false });
     const hazeCanvas = document.createElement("canvas");
-    const hazeCtx = hazeCanvas.getContext("2d", { willReadFrequently: false });
-
-
-    // --- Internal Constants (Color Palette & Style) ---
-    const playerColor = "#DC143C"; // Crimson
-    const otherPlayerColor = "#4682B4"; // SteelBlue
-    const dustyPlayerSelfColor = "#8B4513"; // SaddleBrown (Player clothing?)
-    const dustyPlayerOtherColor = "#556B2F"; // DarkOliveGreen (Other player clothing?)
-
-    const enemyUniformBlue = "#18315f"; // Dark Navy Blue for standard torso
-    const enemyGiantRed = "#a00000";   // Dark Red for Giant coat
-    const enemySkinColor = "#D2B48C"; // Tan
-    const enemyCoatColor = "#8B4513"; // SaddleBrown (Standard enemy arms/base coat layer)
-    const enemyBootColor = "#222222"; // Very Dark Grey/Black
-    const enemyCapColor = "#111111"; // Black/Very Dark Grey (Standard enemy hat)
-    const beltColor = "#412a19";      // Dark Brown
-    const gunColor = "#444444";
-    const gunStockColor = "#7a4a2a"; // Slightly lighter brown for stock
-
-    const enemyHitFlashColor = "rgba(255, 255, 255, 0.7)";
-    const bulletPlayerColor = "#ffed4a"; // Bright Yellow
-    const bulletEnemyColor = "#ff0000"; // Bright Red
-    const healthBarBg = "#444";
-    const healthBarHigh = "#66bb6a"; // Green
-    const healthBarMedium = "#FFD700"; // Gold/Yellow
-    const healthBarLow = playerColor; // Crimson Red
-    const armorBarColor = "#9e9e9e"; // Grey
-    const powerupHealthColor = "#81c784"; const powerupGunColor = "#442848";
-    const powerupSpeedColor = "#3edef3"; const powerupArmorColor = armorBarColor;
-    const powerupShotgunColor = "#FFA500"; const powerupSlugColor = "#A0522D";
-    const powerupRapidColor = "#FFFF00"; const powerupScoreColor = healthBarMedium;
-    const powerupDefaultColor = "#888";
-    const playerSpeechBubbleColor = "#d0d8d7"; const playerSpeechBubbleBg = "rgba(0, 0, 0, 0.7)";
-    const playerSpeechBubbleOutline = "rgba(200, 200, 200, 0.5)";
-    const enemySpeechBubbleColor = "#FFAAAA"; const enemySpeechBubbleBg = "rgba(70, 0, 0, 0.7)";
-    const enemySpeechBubbleOutline = "rgba(200, 150, 150, 0.5)";
-    const campfireStickColor = "#5a3a1e"; // Darker brown for logs
-    const snakeLineColor = "#261a0d"; // Very dark brown for snake
-    const ironHelmetColor = "#3d3d3d"; const ironHelmetHighlight = "#666666"; const ironHelmetShadow = "#1a1a1a";
-    const bootColor = "#241c1c"; // Slightly different dark for player boots
-    const backgroundShadowColor = "rgba(0,0,0,0.3)";
-    const simpleChestPlateColor = "#777777"; const chestPlateHighlight = "#999999";
-    const slitColor = "#000000";
-    const sparkColors = [ "rgba(255, 100, 0, 0.8)", "rgba(255, 165, 0, 0.9)", "rgba(255, 220, 50, 0.7)", ];
+    const hazeCtx = hazeCanvas.getContext("2d", { willReadFrequently: true });
+  
+    // --- Internal Constants ---
+    // *** FIX: Define playerColor BEFORE healthBarLow uses it ***
+    const playerColor = "#DC143C"; // Define player color first
+  
+    const dayBaseColor = "#8FBC8F";
+    const nightBaseColor = "#3E2723";
     const fontFamily = "'Courier New', monospace";
-    const damageTextColor = "#FFFFFF"; const damageTextCritColor = "#FFD700";
-    const damageTextFontSize = 14; const damageTextCritFontSize = 18;
-
-    // --- Dynamics & Effects Constants ---
-    const IDLE_BOB_SPEED_DIVISOR = 600; const IDLE_BOB_AMPLITUDE = 3;
+    const damageTextColor = "#FFFFFF";
+    const damageTextCritColor = "#FFD700";
+    const damageTextFontSize = 14;
+    const damageTextCritFontSize = 18;
+    // const playerColor = "#DC143C"; // Moved up
+    const otherPlayerColor = "#4682B4";
+    const dustyPlayerSelfColor = "#8B4513";
+    const dustyPlayerOtherColor = "#556B2F";
+    const enemyTorsoChaserColor = "#2F4F4F";
+    const enemyTorsoShooterColor = "#4682B4";
+    const enemyTorsoGiantColor = "#6B4226";
+    const enemySkinColor = "#D2B48C";
+    const enemyCoatColor = "#8B4513";
+    const enemyBootColor = "#222222";
+    const enemyCapColor = "#111111";
+    const enemyHitFlashColor = "rgba(255, 255, 255, 0.7)";
+    const bulletPlayerColor = "#ffed4a";
+    const bulletEnemyColor = "#ff0000";
+    const healthBarBg = "#444";
+    const healthBarHigh = "#66bb6a";
+    const healthBarMedium = "#FFD700";
+    const healthBarLow = playerColor; // Now playerColor is defined
+    const armorBarColor = "#9e9e9e";
+    const powerupHealthColor = "#81c784";
+    const powerupGunColor = "#442848";
+    const powerupSpeedColor = "#3edef3";
+    const powerupArmorColor = armorBarColor; // Reuse armorBarColor
+    const powerupShotgunColor = "#FFA500";
+    const powerupSlugColor = "#A0522D";
+    const powerupRapidColor = "#FFFF00";
+    const powerupScoreColor = healthBarMedium; // Reuse healthBarMedium
+    const powerupDefaultColor = "#888";
+    const playerSpeechBubbleColor = "#d0d8d7";
+    const playerSpeechBubbleBg = "rgba(0, 0, 0, 0.7)";
+    const playerSpeechBubbleOutline = "rgba(200, 200, 200, 0.5)";
+    const enemySpeechBubbleColor = "#FFAAAA";
+    const enemySpeechBubbleBg = "rgba(70, 0, 0, 0.7)";
+    const enemySpeechBubbleOutline = "rgba(200, 150, 150, 0.5)";
+    const campfireAuraColor = "rgba(255, 165, 0, 0.15)";
+    const campfireStickColor = "#8B4513";
+    const campfireFlameOuterColor = "rgba(255, 165, 0, 0.6)";
+    const campfireFlameInnerColor = "rgba(255, 255, 0, 0.7)";
+    const muzzleFlashColor = "rgba(255, 220, 50, 0.9)";
+    const snakeLineColor = "#261a0d";
+    const snakeBiteTintColor = "rgba(0, 200, 50, 0.15)";
+    const ironHelmetColor = "#3d3d3d";
+    const ironHelmetHighlight = "#666666";
+    const ironHelmetShadow = "#1a1a1a";
+    const beltColor = "#412a19";
+    const bootColor = "#241c1c";
+    const backgroundShadowColor = "rgba(0,0,0,0.3)";
+    const simpleChestPlateColor = "#777777";
+    const chestPlateHighlight = "#999999";
+    const slitColor = "#000000";
+    const gunColor = "#444444";
+    const sparkColors = [ "rgba(255, 100, 0, 0.8)", "rgba(255, 165, 0, 0.9)", "rgba(255, 220, 50, 0.7)", ];
+    const IDLE_BOB_SPEED_DIVISOR = 600;
+    const IDLE_BOB_AMPLITUDE = 3;
     const DAMAGE_VIGNETTE_HEALTH_THRESHOLD = 30;
-    const TEMP_FREEZING_CLIENT = 0.0; const TEMP_COLD_CLIENT = 10.0;
-    const TEMP_HOT_CLIENT = 35.0; const TEMP_SCORCHING_CLIENT = 40.0;
+    const TEMP_FREEZING_CLIENT = 0.0;
+    const TEMP_COLD_CLIENT = 10.0;
+    const TEMP_HOT_CLIENT = 35.0;
+    const TEMP_SCORCHING_CLIENT = 40.0;
     const MAX_TINT_ALPHA = 0.25;
-    const RAIN_COLOR = "rgba(170, 190, 230, 0.6)"; const RAIN_DROPS = 150;
-    const RAIN_LENGTH = 15; const RAIN_SPEED_X = 1; const RAIN_SPEED_Y = 12;
-    const HEAT_HAZE_START_TEMP = 28.0; const HEAT_HAZE_MAX_TEMP = 45.0;
-    const HEAT_HAZE_MAX_OFFSET = 4; const HEAT_HAZE_SPEED = 0.004;
-    const HEAT_HAZE_WAVELENGTH = 0.02; const HEAT_HAZE_LAYERS_MAX = 5; const HEAT_HAZE_BASE_ALPHA = 0.03;
-
-    // Internal State
+    const RAIN_COLOR = "rgba(170, 190, 230, 0.6)";
+    const RAIN_DROPS = 150;
+    const RAIN_LENGTH = 15;
+    const RAIN_SPEED_X = 1;
+    const RAIN_SPEED_Y = 12;
+    const HEAT_HAZE_START_TEMP = 28.0;
+    const HEAT_HAZE_MAX_TEMP = 45.0;
+    const HEAT_HAZE_MAX_OFFSET = 4;
+    const HEAT_HAZE_SPEED = 0.004;
+    const HEAT_HAZE_WAVELENGTH = 0.02;
+    const HEAT_HAZE_LAYERS_MAX = 5;
+    const HEAT_HAZE_BASE_ALPHA = 0.03;
+  
     let currentShakeMagnitude = 0;
     let shakeEndTime = 0;
-
-    // --- Utility Functions ---
+  
+    // --- (Keep ALL helper functions: drawRoundedRect, generateBackground, updateGeneratedBackground, etc...) ---
+    // --- ... No changes needed inside the helper functions themselves for this fix ... ---
     function drawRoundedRect(ctx, x, y, width, height, radius) { if (width < 2 * radius) radius = width / 2; if (height < 2 * radius) radius = height / 2; ctx.beginPath(); ctx.moveTo(x + radius, y); ctx.arcTo(x + width, y, x + width, y + height, radius); ctx.arcTo(x + width, y + height, x, y + height, radius); ctx.arcTo(x, y + height, x, y, radius); ctx.arcTo(x, y, x + width, y, radius); ctx.closePath(); }
-
-function generateBackground(ctx, targetIsNight, width, height) {
-    // *** DEFINE COLORS LOCALLY TO ENSURE SCOPE ***
-    const dayBaseGroundColor = "#7a8c79"; // Dusty Green Base
-    const nightBaseSkyColor = "#050815"; // Very Dark Blue/Black base
-    const nightGroundColor = "#1a1412"; // Very dark desaturated brown (for night texture)
-
-    console.log(`[Renderer] generateBackground V6-Fix called. TargetNight: ${targetIsNight}`);
-    ctx.clearRect(0, 0, width, height);
-
-    // =============================
-    // --- DAY TIME BACKGROUND (Top-Down Dusty Green) ---
-    // =============================
-    if (!targetIsNight) {
-        // Palette (defined locally for clarity)
-        const grassColor1 = `rgba(128, 140, 120, 0.12)`;
-        const grassColor2 = `rgba(210, 180, 140, 0.08)`;
-        const rockColorBase = "#908070";
-        const rockColorShadow = "rgba(0, 0, 0, 0.15)";
-        const treeCanopyColors = ["#607B34", "#556B2F", "#8FBC8F"];
-        const bushColors = ["#8B7355", "#9ACD3250", "#CD853F50"];
-
-        ctx.fillStyle = dayBaseGroundColor;
-        ctx.fillRect(0, 0, width, height);
-
-        // 1. Mottling/Noise
-        const numMottles = 1800;
-        for (let i = 0; i < numMottles; i++) {
-            const mottleX = Math.random() * width; const mottleY = Math.random() * height;
-            const mottleR = Math.random() * 25 + 10;
-            const mottleAlpha = Math.random() * 0.06 + 0.02;
-            const shadeAdjust = (Math.random() - 0.5) * 20;
-            const r = Math.min(255, Math.max(0, 122 + shadeAdjust)); // Base R for Dusty Green
-            const g = Math.min(255, Math.max(0, 140 + shadeAdjust * 1.2)); // Base G
-            const b = Math.min(255, Math.max(0, 121 + shadeAdjust)); // Base B
-            ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${mottleAlpha.toFixed(3)})`;
-            ctx.beginPath(); ctx.arc(mottleX, mottleY, mottleR, 0, Math.PI * 2); ctx.fill();
-        }
-
-        // 2. Dry Grass Layer
-        const numGrassPatches = 450;
-        for (let i = 0; i < numGrassPatches; i++) {
-            const patchX = Math.random() * width; const patchY = Math.random() * height;
-            const patchW = Math.random() * 110 + 50; const patchH = Math.random() * 70 + 30;
-            ctx.fillStyle = (i % 3 === 0) ? grassColor2 : grassColor1;
-            const points = 6; ctx.beginPath(); ctx.moveTo(patchX + patchW / 2, patchY);
-            for (let j = 1; j <= points; j++) {
-                 const angle = (j / points) * Math.PI * 2;
-                 const radiusX = patchW / 2 * (0.6 + Math.random() * 0.7);
-                 const radiusY = patchH / 2 * (0.6 + Math.random() * 0.7);
-                 ctx.lineTo(patchX + Math.cos(angle) * radiusX, patchY + Math.sin(angle) * radiusY);
-             }
-            ctx.closePath(); ctx.fill();
-        }
-
-        // 3. Reduced Rocks
-        const numRocks = 18;
-        for (let i = 0; i < numRocks; i++) {
-            const rockX = Math.random() * width; const rockY = Math.random() * height;
-            const rockSize = Math.random() * 18 + 7; const rockSides = Math.floor(Math.random() * 3) + 5;
-            ctx.fillStyle = rockColorBase; ctx.beginPath();
-            ctx.moveTo(rockX + rockSize / 2, rockY);
-            for (let j = 1; j <= rockSides; j++) {
-                const angle = (j / rockSides) * Math.PI * 2;
-                const radius = rockSize / 2 * (0.5 + Math.random() * 0.9);
-                ctx.lineTo(rockX + Math.cos(angle) * radius, rockY + Math.sin(angle) * radius);
-            }
-            ctx.closePath(); ctx.fill();
-            ctx.fillStyle = rockColorShadow; ctx.beginPath();
-            ctx.arc(rockX + rockSize * 0.15, rockY + rockSize * 0.20, rockSize * 0.50, Math.PI * 0.3, Math.PI * 0.7);
-            ctx.fill();
-        }
-
-        // 4. Top-Down Trees & Bushes (NO TRUNK DOT)
-        const numVeg = 55;
-        for (let i = 0; i < numVeg; i++) {
-            const isTree = Math.random() < 0.70;
-            const itemX = Math.random() * width; const itemY = Math.random() * height;
-            if (isTree) {
-                const canopyRadius = (Math.random() * 8 + 8);
-                const canopyColor = treeCanopyColors[Math.floor(Math.random() * treeCanopyColors.length)];
-                ctx.fillStyle = "rgba(0, 0, 0, 0.12)"; ctx.beginPath();
-                ctx.ellipse(itemX + canopyRadius * 0.2, itemY + canopyRadius * 0.2, canopyRadius * 1.1, canopyRadius * 1.0, Math.random() * Math.PI, 0, Math.PI * 2);
-                ctx.fill(); // Shadow
-                ctx.fillStyle = canopyColor; const points = 10; ctx.beginPath();
-                ctx.moveTo(itemX + canopyRadius, itemY);
-                for (let j = 1; j <= points; j++) {
-                    const angle = (j / points) * Math.PI * 2;
-                    const radius = canopyRadius * (0.65 + Math.random() * 0.7);
-                    ctx.lineTo(itemX + Math.cos(angle) * radius, itemY + Math.sin(angle) * radius);
-                }
-                ctx.closePath(); ctx.fill(); // Canopy
-            } else { // Bush
-                const bushSize = Math.random() * 10 + 5;
-                const bushColor = bushColors[Math.floor(Math.random() * bushColors.length)];
-                ctx.fillStyle = bushColor; const numCircles = Math.floor(Math.random()*3)+2;
-                for(let k=0; k<numCircles; k++) {
-                    ctx.beginPath();
-                    const circleR = bushSize * (0.25 + Math.random()*0.35);
-                    ctx.arc(itemX + (Math.random()-0.5)*bushSize*0.7, itemY + (Math.random()-0.5)*bushSize*0.7, circleR, 0, Math.PI*2);
-                    ctx.fill();
-                }
-            }
-        }
-
-        // 5. Wispy Clouds
-        const numClouds = 10;
-        for (let i = 0; i < numClouds; i++) {
-             const cloudX = Math.random() * width; const cloudY = Math.random() * height;
-             const cloudLength = Math.random() * 200 + 100; const cloudHeight = Math.random() * 30 + 20;
-             const cloudAlpha = Math.random() * 0.06 + 0.03; const cloudAngle = (Math.random() - 0.5) * 0.2;
-             ctx.save(); ctx.translate(cloudX, cloudY); ctx.rotate(cloudAngle);
-             ctx.fillStyle = `rgba(255, 255, 255, ${cloudAlpha})`;
-             const parts = 5;
-             for (let j = 0; j < parts; j++) {
-                const partX = (Math.random() - 0.5) * cloudLength * 0.6; const partY = (Math.random() - 0.5) * cloudHeight * 0.4;
-                const partW = cloudLength * (Math.random() * 0.4 + 0.3); const partH = cloudHeight * (Math.random() * 0.5 + 0.5);
-                ctx.beginPath(); ctx.ellipse(partX, partY, partW/2, partH/2, 0, 0, Math.PI*2); ctx.fill();
-             }
-             ctx.restore();
-         }
-
-        // NO STATIC TINT FOR DAY
-
-    }
-    // =============================
-    // --- NIGHT TIME BACKGROUND (Enhanced Simple Style V6 - Looking UP) ---
-    // =============================
-    else {
-        ctx.fillStyle = nightBaseSkyColor; // Very Dark Blue/Black base
-        ctx.fillRect(0, 0, width, height); // Fill ENTIRE canvas
-
-        // 1. Dark Nebulae/Patches (Distributed everywhere)
-        const numNebulae = 65;
-        for (let i = 0; i < numNebulae; i++) {
-            const nebX = Math.random() * width; const nebY = Math.random() * height;
-            const nebR = Math.random() * 140 + 70;
-            const nebAlpha = Math.random() * 0.05 + 0.02;
-            const r = 5 + Math.random() * 8; const g = 5 + Math.random() * 12; const b = 15 + Math.random() * 30;
-            ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${nebAlpha.toFixed(3)})`;
-            ctx.beginPath(); ctx.arc(nebX, nebY, nebR, 0, Math.PI * 2); ctx.fill();
-        }
-
-        // 2. Star Field (Twinkling)
-        const numStars = 1400;
-        for (let i = 0; i < numStars; i++) {
-            const sx = Math.random() * width; const sy = Math.random() * height;
-            let sr; // Size
-            const sizeRoll = Math.random();
-            if (sizeRoll < 0.78) sr = Math.random() * 0.5 + 0.2;
-            else if (sizeRoll < 0.98) sr = Math.random() * 1.0 + 0.8;
-            else sr = Math.random() * 1.2 + 1.4;
-
-            let starAlpha = Math.pow(Math.random(), 1.6) * 0.85 + 0.15; // Twinkle
-
-            let r=255, g=255, b=245; // Color
-            if (sr > 1.0 && Math.random() < 0.12) { r=230; g=240; b=255; } // Bluish
-            else if (sr > 1.0 && Math.random() < 0.08) { r=255; g=220; b=210;} // Reddish
-
-            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${starAlpha.toFixed(2)})`;
-            ctx.fillRect(sx - sr/2, sy - sr/2, Math.max(0.5, sr), Math.max(0.5, sr));
-        }
-
-        // NO GROUND PLANE DRAWN FOR NIGHT
-    } // End Night Time
-
-    ctx.canvas.dataset.isNight = targetIsNight; // Store state on canvas element
-    console.log(`[Renderer] generateBackground V6-Fix finished. Stored isNight: ${targetIsNight}`);
-    return targetIsNight;
-} // --- End generateBackground V6-Fix ---
-
-
+    function generateBackground(ctx, targetIsNight, width, height) { console.log(`[Renderer] generateBackground called. TargetNight: ${targetIsNight}`); const baseColor = targetIsNight ? nightBaseColor : dayBaseColor; ctx.fillStyle = baseColor; ctx.fillRect(0, 0, width, height); if (!targetIsNight) { const np=100,nt=150; for(let i=0;i<np;i++){ const x=Math.random()*width,y=Math.random()*height,r=Math.random()*40+15,c=`rgba(${(101+Math.random()*20-10).toFixed(0)},${(67+Math.random()*20-10).toFixed(0)},${(33+Math.random()*20-10).toFixed(0)},${(Math.random()*0.25+0.20).toFixed(2)})`; ctx.fillStyle=c; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); } ctx.lineWidth=3; ctx.strokeStyle='rgba(34,139,34,0.6)'; for(let i=0;i<nt;i++){ const x=Math.random()*width,y=Math.random()*height; ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+(Math.random()*6-3),y-(Math.random()*6+5)); ctx.stroke(); } } else { const np=60,ns=150; for(let i=0;i<np;i++){ const x=Math.random()*width,y=Math.random()*height,r=Math.random()*50+20,a=Math.random()*0.15+0.1; ctx.fillStyle=`rgba(5,2,2,${a.toFixed(2)})`; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); } ctx.fillStyle='rgba(255,255,240,0.8)'; for(let i=0;i<ns;i++){ const sx=Math.random()*width,sy=Math.random()*height,sr=Math.random()*1.5+0.5; ctx.fillRect(sx,sy,sr,sr); } } ctx.canvas.dataset.isNight = targetIsNight; console.log(`[Renderer] generateBackground finished. Stored isNight: ${ctx.canvas.dataset.isNight}`); return targetIsNight; }
+    function updateGeneratedBackground(targetIsNight, targetCanvasWidth, targetCanvasHeight) { canvasWidth = targetCanvasWidth; canvasHeight = targetCanvasHeight; if ( offscreenCanvas.width !== canvasWidth || offscreenCanvas.height !== canvasHeight ) { offscreenCanvas.width = canvasWidth; offscreenCanvas.height = canvasHeight; oldOffscreenCanvas.width = canvasWidth; oldOffscreenCanvas.height = canvasHeight; hazeCanvas.width = canvasWidth; hazeCanvas.height = canvasHeight; isBackgroundReady = false; currentBackgroundIsNight = null; isTransitioningBackground = false; } if (targetIsNight === currentBackgroundIsNight && isBackgroundReady) { return; } if (isTransitioningBackground && targetIsNight === (offscreenCanvas.dataset.isNight === 'true')) { return; } if (isBackgroundReady) { oldOffscreenCtx.clearRect(0, 0, canvasWidth, canvasHeight); oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0); isTransitioningBackground = true; transitionStartTime = performance.now(); generateBackground(offscreenCtx, targetIsNight, canvasWidth, canvasHeight); currentBackgroundIsNight = targetIsNight; } else { generateBackground(offscreenCtx, targetIsNight, canvasWidth, canvasHeight); currentBackgroundIsNight = targetIsNight; isBackgroundReady = true; isTransitioningBackground = false; } }
     function drawDamageTexts(ctx, damageTexts) { if(!damageTexts) return; const now=performance.now(),pd=250,pmsi=4; ctx.textAlign='center'; ctx.textBaseline='bottom'; Object.values(damageTexts).forEach(dt=>{ if(!dt) return; const x=dt.x??0,y=dt.y??0,t=dt.text??'?',ic=dt.is_crit??false,st=dt.spawn_time?dt.spawn_time*1000:now,ts=now-st; let cfs=ic?damageTextCritFontSize:damageTextFontSize,cfc=ic?damageTextCritColor:damageTextColor; if(ic&&ts<pd){ const pp=Math.sin((ts/pd)*Math.PI); cfs+=pp*pmsi; } ctx.font=`bold ${Math.round(cfs)}px ${fontFamily}`; ctx.fillStyle=cfc; ctx.fillText(t,x,y); }); }
 
     function drawCampfire(ctx, campfireData, width, height) {
@@ -401,6 +256,9 @@ function generateBackground(ctx, targetIsNight, width, height) {
     function drawHealthBar(ctx, x, y, width, currentHealth, maxHealth) { if(maxHealth<=0) return; const bh=5,yo=-(width/2+27),bw=Math.max(20,width*0.8),cw=Math.max(0,(currentHealth/maxHealth)*bw),hp=currentHealth/maxHealth,bx=x-bw/2,by=y+yo; ctx.fillStyle=healthBarBg; ctx.fillRect(bx,by,bw,bh); let bc=healthBarLow; if(hp>0.66) bc=healthBarHigh; else if(hp>0.33) bc=healthBarMedium; ctx.fillStyle=bc; ctx.fillRect(bx,by,cw,bh); }
     function drawArmorBar(ctx, x, y, width, currentArmor) { const ma=100; if(currentArmor<=0) return; const abh=4,hbh=5,bs=1,hbyo=-(width/2+27),hbty=y+hbyo,abty=hbty+hbh+bs,bw=Math.max(20,width*0.8),cw=Math.max(0,(currentArmor/ma)*bw),bx=x-bw/2,by=abty; ctx.fillStyle=healthBarBg; ctx.fillRect(bx,by,bw,abh); ctx.fillStyle=armorBarColor; ctx.fillRect(bx,by,cw,abh); }
 
+    // --- Add near other color constants ---
+    const enemyUniformBlue = "#18315f"; // Navy Blue for standard torso
+    const enemyGiantRed = "#a00000";   // Red Coat for Giant
 
     // --- REVISED V3: drawEnemyRect (incorporating all feedback) ---
     function drawEnemyRect(ctx, x, y, w, h, type, enemyState) {
@@ -1013,92 +871,110 @@ function generateBackground(ctx, targetIsNight, width, height) {
   
     // --- Main Render Function ---
     function drawGame( ctx, appState, stateToRender, localPlayerMuzzleFlashRef, width, height ) {
-        // ... (Basic checks for context, state etc.) ...
-        if (!mainCtx) mainCtx = ctx;
-        if (!ctx || !appState || !stateToRender) { /* ... Handle missing state ... */ return; }
-
-        const now = performance.now();
-        canvasWidth = width; canvasHeight = height;
-
-        // --- Shake Calculation ---
-        let shakeApplied = false, shakeOffsetX = 0, shakeOffsetY = 0;
-        if (currentShakeMagnitude > 0 && now < shakeEndTime) { /* ... shake calculation ... */ }
-        else if (currentShakeMagnitude > 0) { currentShakeMagnitude = 0; shakeEndTime = 0; }
-
-        // --- 1. Draw Background (Handles transition) ---
-        ctx.globalAlpha = 1.0;
-        if (!isBackgroundReady) {
-            ctx.fillStyle = "#333"; ctx.fillRect(0, 0, canvasWidth, canvasHeight); // Placeholder
-            if (appState?.serverState && currentBackgroundIsNight === null) {
-                console.log("[Renderer] Triggering initial background generation V6 from drawGame.");
-                // *** CRITICAL: Calls the LOCAL updateGeneratedBackground ***
-                updateGeneratedBackground(appState.serverState.is_night, canvasWidth, canvasHeight);
-            }
-        } else if (isTransitioningBackground) {
-            const elapsed = now - transitionStartTime; const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS);
-            ctx.globalAlpha = 1.0; ctx.drawImage(oldOffscreenCanvas, 0, 0);
-            ctx.globalAlpha = progress; ctx.drawImage(offscreenCanvas, 0, 0);
-            ctx.globalAlpha = 1.0;
-            if (progress >= 1.0) { isTransitioningBackground = false; }
-        } else {
-            ctx.drawImage(offscreenCanvas, 0, 0); // Draw current static background
+      if (!mainCtx) mainCtx = ctx;
+      if (!ctx || !appState) { console.error("drawGame missing context or appState!"); return; }
+  
+      const now = performance.now();
+      canvasWidth = width; canvasHeight = height;
+  
+      let shakeApplied = false, shakeOffsetX = 0, shakeOffsetY = 0;
+      // Shake Calculation
+      if (currentShakeMagnitude > 0 && now < shakeEndTime) {
+          shakeApplied = true;
+          const timeRemaining = shakeEndTime - now;
+          const durationMsFallback = 300;
+          const initialDuration = Math.max(1, shakeEndTime - (now - timeRemaining)); // Use timeRemaining if duration calc is odd
+          let currentMag = currentShakeMagnitude * (timeRemaining / initialDuration);
+          currentMag = Math.max(0, currentMag);
+  
+          if (currentMag > 0.5) {
+              const shakeAngle = Math.random() * Math.PI * 2;
+              shakeOffsetX = Math.cos(shakeAngle) * currentMag;
+              shakeOffsetY = Math.sin(shakeAngle) * currentMag;
+          } else { currentShakeMagnitude = 0; shakeEndTime = 0; shakeApplied = false; }
+      } else if (currentShakeMagnitude > 0) { currentShakeMagnitude = 0; shakeEndTime = 0; }
+  
+      // 1. Draw Background
+      ctx.globalAlpha = 1.0;
+      if (!isBackgroundReady) {
+        ctx.fillStyle = dayBaseColor; ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        if (appState?.serverState && currentBackgroundIsNight === null) {
+          updateGeneratedBackground(appState.serverState.is_night, canvasWidth, canvasHeight);
         }
-
-        // --- Heat Haze Logic (Keep disabled or refine later) ---
-        // if (/* ... condition ... */ false) { /* ... */ }
-
-        // --- 2. Apply Shake Transform ---
-        if (shakeApplied) { ctx.save(); ctx.translate(shakeOffsetX, shakeOffsetY); }
-
-        // --- 3. Draw Game World Elements ---
-        drawCampfire(ctx, stateToRender.campfire, canvasWidth, canvasHeight);
-        // if (typeof snake !== 'undefined') drawSnake(ctx, snake); // Needs global 'snake' object
-        drawPowerups(ctx, stateToRender.powerups);
-        drawBullets(ctx, stateToRender.bullets);
-        drawEnemies(ctx, stateToRender.enemies, window.activeEnemyBubbles || {});
-        drawPlayers(ctx, stateToRender.players, appState, localPlayerMuzzleFlashRef);
-        drawSpeechBubbles(ctx, stateToRender.players, window.activeSpeechBubbles || {}, appState);
-        drawEnemySpeechBubbles(ctx, stateToRender.enemies, window.activeEnemyBubbles || {});
-        drawDamageTexts(ctx, stateToRender.damage_texts);
-        // Muzzle Flash
-        let shouldDrawMuzzleFlash = localPlayerMuzzleFlashRef?.active && (now < localPlayerMuzzleFlashRef?.endTime);
-        if (shouldDrawMuzzleFlash) { drawMuzzleFlash(ctx, appState.renderedPlayerPos.x, appState.renderedPlayerPos.y, localPlayerMuzzleFlashRef.aimDx, localPlayerMuzzleFlashRef.aimDy); }
-        else if (localPlayerMuzzleFlashRef?.active) { localPlayerMuzzleFlashRef.active = false; }
-
-        // --- 4. Restore Shake Transform ---
-        if (shakeApplied) { ctx.restore(); }
-
-        // --- 5. Draw Overlays ---
+      } else if (isTransitioningBackground) {
+        const elapsed = now - transitionStartTime; const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS);
+        ctx.globalAlpha = 1.0; ctx.drawImage(oldOffscreenCanvas, 0, 0);
+        ctx.globalAlpha = progress; ctx.drawImage(offscreenCanvas, 0, 0);
         ctx.globalAlpha = 1.0;
-        if (appState?.isRaining) { /* ... rain drawing ... */ }
-        else if (appState?.isDustStorm) { /* ... dust drawing ... */ }
-
-        // *** DYNAMIC Temperature Tint (Blue/Orange) ***
-        if (appState) drawTemperatureTint(ctx, appState.currentTemp, canvasWidth, canvasHeight);
-
-        // Damage Vignette
-        const localPlayerState = stateToRender.players?.[appState?.localPlayerId];
-        if (localPlayerState && localPlayerState.health < DAMAGE_VIGNETTE_HEALTH_THRESHOLD) { /* ... vignette drawing ... */ }
-        ctx.globalAlpha = 1.0;
-
+        if (progress >= 1.0) { isTransitioningBackground = false; }
+      } else {
+        ctx.drawImage(offscreenCanvas, 0, 0);
+      }
+  
+      // --- Heat Haze Logic ---
+      const currentTempForEffect = appState?.currentTemp;
+      if (currentTempForEffect !== null && typeof currentTempForEffect !== 'undefined' && currentTempForEffect >= HEAT_HAZE_START_TEMP) {
+          const hazeIntensity = Math.max(0, Math.min(1, (currentTempForEffect - HEAT_HAZE_START_TEMP) / (HEAT_HAZE_MAX_TEMP - HEAT_HAZE_START_TEMP)));
+          if (hazeIntensity > 0.01) {
+               if(hazeCanvas.width !== canvasWidth || hazeCanvas.height !== canvasHeight) { hazeCanvas.width = canvasWidth; hazeCanvas.height = canvasHeight; }
+               hazeCtx.clearRect(0, 0, canvasWidth, canvasHeight); hazeCtx.drawImage(ctx.canvas, 0, 0);
+               const numLayers = 1 + Math.floor(hazeIntensity * (HEAT_HAZE_LAYERS_MAX - 1));
+               const baseAlpha = HEAT_HAZE_BASE_ALPHA * hazeIntensity;
+               for (let i = 0; i < numLayers; i++) {
+                   const timeFactor = now * HEAT_HAZE_SPEED; const layerOffsetFactor = i * 0.8;
+                   const verticalOffset = (Math.sin(timeFactor + layerOffsetFactor) * HEAT_HAZE_MAX_OFFSET * hazeIntensity) - (i * 0.3 * hazeIntensity);
+                   const layerAlpha = baseAlpha * (1 - (i / (numLayers * 1.5)));
+                   ctx.globalAlpha = Math.max(0, Math.min(1, layerAlpha));
+                   ctx.drawImage(hazeCanvas, 0, 0, canvasWidth, canvasHeight, 0, verticalOffset, canvasWidth, canvasHeight );
+               }
+               ctx.globalAlpha = 1.0;
+          }
+      }
+  
+      // 2. Apply Shake Transform
+      if (shakeApplied) { ctx.save(); ctx.translate(shakeOffsetX, shakeOffsetY); }
+  
+      // 3. Draw Game World Elements
+      if (!stateToRender) { if (shakeApplied) ctx.restore(); return; }
+      drawCampfire(ctx, stateToRender.campfire, canvasWidth, canvasHeight);
+      if (typeof snake !== 'undefined') drawSnake(ctx, snake);
+      drawPowerups(ctx, stateToRender.powerups);
+      drawBullets(ctx, stateToRender.bullets);
+      if (typeof activeEnemyBubbles !== 'undefined') drawEnemies(ctx, stateToRender.enemies, activeEnemyBubbles);
+      if (typeof activeSpeechBubbles !== 'undefined' && appState) drawPlayers(ctx, stateToRender.players, appState, localPlayerMuzzleFlashRef);
+      if (typeof activeSpeechBubbles !== 'undefined' && appState) drawSpeechBubbles(ctx, stateToRender.players, activeSpeechBubbles, appState);
+      if (typeof activeEnemyBubbles !== 'undefined') drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles);
+      drawDamageTexts(ctx, stateToRender.damage_texts);
+      let shouldDrawMuzzleFlash = localPlayerMuzzleFlashRef?.active && (now < localPlayerMuzzleFlashRef?.endTime);
+      if (shouldDrawMuzzleFlash) { drawMuzzleFlash(ctx, appState.renderedPlayerPos.x, appState.renderedPlayerPos.y, localPlayerMuzzleFlashRef.aimDx, localPlayerMuzzleFlashRef.aimDy); }
+      else if (localPlayerMuzzleFlashRef?.active) { localPlayerMuzzleFlashRef.active = false; }
+  
+      // 4. Restore Shake Transform
+      if (shakeApplied) { ctx.restore(); }
+  
+      // 5. Draw Overlays
+      ctx.globalAlpha = 1.0;
+      if (appState?.isRaining) {
+          ctx.strokeStyle = RAIN_COLOR; ctx.lineWidth = 1.5; ctx.beginPath();
+          for (let i = 0; i < RAIN_DROPS; i++) {
+               const rainX = ( (i * 137) + (now * 0.05) ) % (canvasWidth + 100) - 50;
+               const rainY = ( (i * 271) + (now * 0.3) ) % canvasHeight;
+               const endX = rainX + RAIN_SPEED_X; const endY = rainY + RAIN_SPEED_Y;
+               ctx.moveTo(rainX, rainY); ctx.lineTo(endX, endY);
+          }
+          ctx.stroke();
+      } else if (appState?.isDustStorm) {
+          ctx.fillStyle = 'rgba(180, 140, 90, 0.2)'; ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+      }
+      if (appState) drawTemperatureTint(ctx, appState.currentTemp, canvasWidth, canvasHeight);
+      const localPlayerState = stateToRender.players?.[appState?.localPlayerId];
+      if (localPlayerState && localPlayerState.health < DAMAGE_VIGNETTE_HEALTH_THRESHOLD) { const vi = 1.0 - (localPlayerState.health / DAMAGE_VIGNETTE_HEALTH_THRESHOLD); drawDamageVignette(ctx, vi, canvasWidth, canvasHeight); }
+  
+      ctx.globalAlpha = 1.0;
     } // --- End drawGame ---
-
-
-    // --- Public Interface ---
-    // Expose only the functions needed by main.js
-    return {
-        drawGame: drawGame,
-        triggerShake: triggerShake,
-        updateGeneratedBackground: updateGeneratedBackground // Exposed!
-    };
-
-})(); // End Renderer IIFE
-
-// Final confirmation logs
-console.log("--- Renderer.js V6: Executed. Renderer object defined?", (typeof Renderer !== 'undefined'));
-if (typeof Renderer !== 'undefined') {
-    console.log("--- Renderer V6 functions check ---");
-    console.log("drawGame:", typeof Renderer.drawGame);
-    console.log("triggerShake:", typeof Renderer.triggerShake);
-    console.log("updateGeneratedBackground:", typeof Renderer.updateGeneratedBackground); // Should be 'function'
-}
+  
+    return { drawGame, triggerShake, updateGeneratedBackground };
+  
+  })(); // End Renderer module IIFE
+  
+  console.log("--- Renderer.js: Executed. Renderer object defined?", typeof Renderer);
