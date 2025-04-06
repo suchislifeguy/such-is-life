@@ -410,17 +410,17 @@ const Game = (() => {
 
         const stateToRender = Game.getInterpolatedState(currentTime);
         if (stateToRender && typeof Renderer !== 'undefined' && DOM.ctx) {
-             // --- MODIFIED: Pass pushback animation state ---
+             // --- MODIFIED: Pass arguments correctly, including pushback animation state ---
              Renderer.drawGame(
-                 DOM.ctx,
-                 appState,
-                 stateToRender,
-                 localPlayerMuzzleFlash, // Pass muzzle flash state
-                 localPlayerPushbackAnim, // Pass pushback animation state
-                 CANVAS_WIDTH,
-                 CANVAS_HEIGHT
+                 DOM.ctx,                        // ctx
+                 appState,                       // appState
+                 stateToRender,                  // stateToRender
+                 localPlayerMuzzleFlash,         // localPlayerMuzzleFlashRef
+                 localPlayerPushbackAnim,        // localPlayerPushbackAnimState 
+                 CANVAS_WIDTH,                   // width
+                 CANVAS_HEIGHT                   // height
              );
-             // -------------------------------------------
+             // ---------------------------------
         } else {
              log("Skipping render: Missing state, Renderer, or context.");
         }
