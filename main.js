@@ -447,7 +447,7 @@ const Game = (() => {
                  DOM.ctx,                        // ctx
                  appState,                       // appState
                  stateToRender,                  // stateToRender
-                 localPlayerMuzzleFlash,         // localPlayerMuzzleFlashRef
+                 localPlayerMuzzleFlash,         //
                  localPlayerPushbackAnim,        // localPlayerPushbackAnimState
                  activeBloodSparkEffects, 
                  activeEnemyBubbles,      
