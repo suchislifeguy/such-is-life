@@ -669,7 +669,7 @@ const Renderer = (() => {
         ctx.restore(); // Restore context from the very start
     }
 
-    function drawPlayerCharacter( ctx, x, y, w, h, isSelf, playerState, aimDx, aimDy ) {
+    function drawPlayerCharacter( ctx, x, y, w, h, isSelf, playerState, aimDx, aimDy, pushbackAnimState ) {
         const jh = playerState?.hit_flash_this_tick ?? false; // Just Hit flag
         const ii = (playerState?.input_vector?.dx ?? 0) === 0 && (playerState?.input_vector?.dy ?? 0) === 0; // Is Idle
         const t = performance.now();
