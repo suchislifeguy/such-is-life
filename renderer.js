@@ -1637,7 +1637,43 @@ const Renderer = (() => {
       }
       ctx.restore(); // Restore context state from the very start of the function
     }
-  
+    function drawPlayers(ctx, players, appStateRef, localPlayerMuzzleFlashRef, localPlayerPushbackAnimStateRef) {
+        if(!players || !appStateRef) return;
+        Object.values(players).forEach(p=>{
+            if(!p||p.player_status==='dead') return;
+            const is=p.id===appStateRef.localPlayerId;
+            const ps=p.player_status||'alive';
+            const dx=is?appStateRef.renderedPlayerPos.x:p.x;
+            const dy=is?appStateRef.renderedPlayerPos.y:p.y;
+            const w=p.width??20; // Use player default width from server/constants
+            const h=p.height??48;// Use player default height from server/constants
+            const mh=p.max_health??100;
+            const ca=p.armor??0;
+            const id=(ps==='down'); // isDown flag
+    
+            // Set alpha based on player status (down or alive)
+            const a=id?0.4:1.0;
+            ctx.save(); // Save before applying alpha
+            ctx.globalAlpha=a; // Apply alpha for drawing the player character
+    
+            // Get aim direction and pushback state ONLY for the local player
+            const adx=is?localPlayerMuzzleFlashRef?.aimDx:0;
+            const ady=is?localPlayerMuzzleFlashRef?.aimDy:0;
+            const pushbackState = is ? localPlayerPushbackAnimStateRef : null;
+    
+            // Call the function to draw the actual character (V2)
+            // This function now draws its own shadow internally
+            drawPlayerCharacter(ctx, dx, dy, w, h, is, p, adx, ady, pushbackState);
+    
+            ctx.restore(); // Restore alpha setting
+    
+            // Draw UI elements (health/armor) on top, unaffected by the alpha change
+            if(ps==='alive'){
+                drawHealthBar(ctx, dx, dy, w, p.health, mh);
+                if(ca > 0) drawArmorBar(ctx, dx, dy, w, ca);
+            }
+        });
+    }
     // --- V2: Added activeBloodSparkEffectsRef parameter ---
     function drawEnemies(
       ctx,
