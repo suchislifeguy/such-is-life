@@ -426,23 +426,29 @@ const Renderer = (() => {
     function drawEnemyRect(ctx, x, y, w, h, type, enemyState) {
         const currentW = w;
         const currentH = h;
-        const t = performance.now();
-
+        const t = performance.now(); // Current time for animations/checks
+    
+        // Define variables used in multiple places early
         const bobOffset = (type !== 'giant') ? Math.sin(t / IDLE_BOB_SPEED_DIVISOR) * IDLE_BOB_AMPLITUDE : 0;
-
-        const nowSeconds = t / 1000.0;
+        const nowSeconds = t / 1000.0; // Time in seconds for effect expiration checks
+    
+        // Check for snake effect
         const snakeEffect = enemyState?.effects?.snake_bite_slow;
         const isSnakeBitten = snakeEffect && typeof snakeEffect.expires_at === 'number' && nowSeconds < snakeEffect.expires_at;
-        // Use last_damage_time for blood sparks
-        const showBloodSparks = enemyState?.last_damage_time && (t - (enemyState.last_damage_time * 1000)) < 150;
-
-        // --- Get Attack State for Visuals ---
-        const attackState = enemyState?.attack_state || 'idle'; // idle, winding_up, attacking
-
-        ctx.save();
-
+    
+        // Get attack state for Giant visuals
+        const attackState = (type === 'giant' && enemyState?.attack_state) ? enemyState.attack_state : 'idle'; // Default to idle
+    
+        // --- CORRECT WAY to determine if blood sparks should show ---
+        const showBloodSparks = enemyState?.last_damage_time && (t - (enemyState.last_damage_time * 1000)) < 150; // Check time difference in ms
+    
+        // --- isHitTriggered is REMOVED ---
+    
+        ctx.save(); // Save context at the start
+    
         // --- Giant Specific Drawing ---
         if (type === 'giant') {
+            // Dimensions
             const bodyWidth = currentW * 0.85; const bodyHeight = currentH * 0.7;
             const bodyTopY = y - currentH * 0.4; const bodyBottomY = bodyTopY + bodyHeight;
             const legHeight = currentH * 0.25; const legWidth = currentW * 0.2; const legSpacing = currentW * 0.2; const legTopY = bodyBottomY;
@@ -450,85 +456,47 @@ const Renderer = (() => {
             const headRadius = currentW * 0.2; const headCenterY = bodyTopY - headRadius * 0.5;
             const shakoHeight = headRadius * 1.5; const shakoWidth = headRadius * 1.8; const shakoBaseY = headCenterY - headRadius * 0.8;
             const shakoPeakHeight = shakoHeight * 0.2; const shakoPeakWidth = shakoWidth * 1.1;
-
-            // Legs & Boots (Unchanged)
+            const armShoulderWidth = currentW * 0.18; const armWristWidth = currentW * 0.14;
+            const armLength = currentH * 0.55; const shoulderY = bodyTopY + bodyHeight * 0.15; const shoulderXOffset = bodyWidth / 2;
+    
+    
+            // Legs & Boots
             ctx.fillStyle = enemyBootColor;
-            ctx.fillRect(x - legSpacing - legWidth / 2, legTopY, legWidth, legHeight);
-            ctx.fillRect(x + legSpacing - legWidth / 2, legTopY, legWidth, legHeight);
+            ctx.fillRect(x - legSpacing - legWidth / 2, legTopY, legWidth, legHeight); ctx.fillRect(x + legSpacing - legWidth / 2, legTopY, legWidth, legHeight);
             ctx.fillStyle = enemyBootColor;
-            ctx.fillRect(x - legSpacing - bootWidth / 2, bootTopY, bootWidth, bootHeight);
-            ctx.fillRect(x + legSpacing - bootWidth / 2, bootTopY, bootWidth, bootHeight);
-
-            // Body (Add Wind-up Tint)
-            ctx.fillStyle = enemyGiantRed;
-            ctx.fillRect(x - bodyWidth / 2, bodyTopY, bodyWidth, bodyHeight);
+            ctx.fillRect(x - legSpacing - bootWidth / 2, bootTopY, bootWidth, bootHeight); ctx.fillRect(x + legSpacing - bootWidth / 2, bootTopY, bootWidth, bootHeight);
+    
+            // Body (Tinted during windup)
+            ctx.fillStyle = enemyGiantRed; ctx.fillRect(x - bodyWidth / 2, bodyTopY, bodyWidth, bodyHeight);
             if (attackState === 'winding_up') {
-                ctx.fillStyle = 'rgba(255, 255, 100, 0.15)'; // Subtle yellow glow/tint
+                ctx.fillStyle = 'rgba(255, 255, 100, 0.15)';
                 ctx.fillRect(x - bodyWidth / 2, bodyTopY, bodyWidth, bodyHeight);
             }
-
-            // Belt (Unchanged)
-            ctx.fillStyle = beltColor;
-            ctx.fillRect(x - bodyWidth / 2, bodyTopY + bodyHeight * 0.7, bodyWidth, bodyHeight * 0.08);
-
-            // --- MODIFIED Arms (Tapered + Wind-up Pose) ---
-            const armShoulderWidth = currentW * 0.18;
-            const armWristWidth = currentW * 0.14; // Narrower wrist
-            const armLength = currentH * 0.55; // Slightly longer
-            const shoulderY = bodyTopY + bodyHeight * 0.15;
-            const shoulderXOffset = bodyWidth / 2;
-
-            ctx.fillStyle = enemyGiantRed; // Arm color
-
+    
+            // Belt
+            ctx.fillStyle = beltColor; ctx.fillRect(x - bodyWidth / 2, bodyTopY + bodyHeight * 0.7, bodyWidth, bodyHeight * 0.08);
+    
+            // Arms (Tapered + Animated pose)
+            ctx.fillStyle = enemyGiantRed;
             if (attackState === 'winding_up' || attackState === 'attacking') {
-                // Draw arms raised/pulled back slightly
-                const windUpAngle = -Math.PI / 6; // Angle arms back
-                const raisedOffsetY = -armLength * 0.1; // Raise shoulder pivot slightly
-
-                // Left Arm (Rotated)
-                ctx.save();
-                ctx.translate(x - shoulderXOffset, shoulderY + raisedOffsetY);
-                ctx.rotate(windUpAngle);
-                ctx.beginPath();
-                ctx.moveTo(0, 0); // Shoulder pivot inner
-                ctx.lineTo(armShoulderWidth, 0); // Shoulder pivot outer
-                ctx.lineTo(armShoulderWidth * 0.7, armLength); // Wrist outer
-                ctx.lineTo(armWristWidth * 0.3, armLength); // Wrist inner
-                ctx.closePath(); ctx.fill();
+                const windUpAngle = -Math.PI / 6; const raisedOffsetY = -armLength * 0.1;
+                // Left Arm
+                ctx.save(); ctx.translate(x - shoulderXOffset, shoulderY + raisedOffsetY); ctx.rotate(windUpAngle);
+                ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(armShoulderWidth, 0); ctx.lineTo(armShoulderWidth * 0.7, armLength); ctx.lineTo(armWristWidth * 0.3, armLength); ctx.closePath(); ctx.fill();
                 ctx.restore();
-
-                // Right Arm (Rotated)
-                ctx.save();
-                ctx.translate(x + shoulderXOffset, shoulderY + raisedOffsetY);
-                ctx.rotate(-windUpAngle); // Rotate opposite direction
-                ctx.beginPath();
-                ctx.moveTo(0, 0); // Shoulder pivot inner
-                ctx.lineTo(-armShoulderWidth, 0); // Shoulder pivot outer
-                ctx.lineTo(-armShoulderWidth * 0.7, armLength); // Wrist outer
-                ctx.lineTo(-armWristWidth * 0.3, armLength); // Wrist inner
-                ctx.closePath(); ctx.fill();
+                // Right Arm
+                ctx.save(); ctx.translate(x + shoulderXOffset, shoulderY + raisedOffsetY); ctx.rotate(-windUpAngle);
+                ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-armShoulderWidth, 0); ctx.lineTo(-armShoulderWidth * 0.7, armLength); ctx.lineTo(-armWristWidth * 0.3, armLength); ctx.closePath(); ctx.fill();
                 ctx.restore();
-
             } else { // Idle pose
                 const armBottomY = shoulderY + armLength;
-                // Left Arm (Tapered)
-                ctx.beginPath();
-                ctx.moveTo(x - shoulderXOffset, shoulderY); // Inner shoulder
-                ctx.lineTo(x - shoulderXOffset - armShoulderWidth, shoulderY); // Outer shoulder
-                ctx.lineTo(x - shoulderXOffset - armWristWidth, armBottomY); // Outer wrist
-                ctx.lineTo(x - shoulderXOffset - (armWristWidth*0.5), armBottomY); // Inner wrist
-                ctx.closePath(); ctx.fill();
-                // Right Arm (Tapered)
-                ctx.beginPath();
-                ctx.moveTo(x + shoulderXOffset, shoulderY); // Inner shoulder
-                ctx.lineTo(x + shoulderXOffset + armShoulderWidth, shoulderY); // Outer shoulder
-                ctx.lineTo(x + shoulderXOffset + armWristWidth, armBottomY); // Outer wrist
-                ctx.lineTo(x + shoulderXOffset + (armWristWidth*0.5), armBottomY); // Inner wrist
-                ctx.closePath(); ctx.fill();
+                // Left Arm
+                ctx.beginPath(); ctx.moveTo(x - shoulderXOffset, shoulderY); ctx.lineTo(x - shoulderXOffset - armShoulderWidth, shoulderY); ctx.lineTo(x - shoulderXOffset - armWristWidth, armBottomY); ctx.lineTo(x - shoulderXOffset - (armWristWidth*0.5), armBottomY); ctx.closePath(); ctx.fill();
+                // Right Arm
+                ctx.beginPath(); ctx.moveTo(x + shoulderXOffset, shoulderY); ctx.lineTo(x + shoulderXOffset + armShoulderWidth, shoulderY); ctx.lineTo(x + shoulderXOffset + armWristWidth, armBottomY); ctx.lineTo(x + shoulderXOffset + (armWristWidth*0.5), armBottomY); ctx.closePath(); ctx.fill();
             }
-            // --- End MODIFIED Arms ---
-
-            // Head & Face (Unchanged)
+    
+            // Head & Face
             ctx.fillStyle = enemySkinColor; ctx.beginPath(); ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2); ctx.fill();
             const beardWidth = headRadius * 1.6; const beardHeight = headRadius * 1.0; const beardTopY = headCenterY + headRadius * 0.2;
             ctx.fillStyle = enemyCapColor; ctx.fillRect(x - beardWidth / 2, beardTopY, beardWidth, beardHeight);
@@ -536,13 +504,15 @@ const Renderer = (() => {
             const giantBrowLength = headRadius * 0.7; const giantBrowY = headCenterY - headRadius * 0.4; const giantBrowXOffset = headRadius * 0.4;
             ctx.moveTo(x - giantBrowXOffset - giantBrowLength / 2, giantBrowY + giantBrowLength / 4); ctx.lineTo(x - giantBrowXOffset + giantBrowLength / 2, giantBrowY - giantBrowLength / 4);
             ctx.moveTo(x + giantBrowXOffset - giantBrowLength / 2, giantBrowY - giantBrowLength / 4); ctx.lineTo(x + giantBrowXOffset + giantBrowLength / 2, giantBrowY + giantBrowLength / 4); ctx.stroke();
-            // Shako Hat (Unchanged)
+    
+            // Shako Hat
             ctx.fillStyle = enemyCapColor; ctx.fillRect(x - shakoWidth / 2, shakoBaseY - shakoHeight, shakoWidth, shakoHeight);
-            ctx.beginPath(); ctx.moveTo(x - shakoPeakWidth / 2, shakoBaseY); ctx.lineTo(x + shakoPeakWidth / 2, shakoBaseY);
-            ctx.lineTo(x + shakoWidth / 2, shakoBaseY - shakoPeakHeight); ctx.lineTo(x - shakoWidth / 2, shakoBaseY - shakoPeakHeight); ctx.closePath(); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(x - shakoPeakWidth / 2, shakoBaseY); ctx.lineTo(x + shakoPeakWidth / 2, shakoBaseY); ctx.lineTo(x + shakoWidth / 2, shakoBaseY - shakoPeakHeight); ctx.lineTo(x - shakoWidth / 2, shakoBaseY - shakoPeakHeight); ctx.closePath(); ctx.fill();
+    
         }
         // --- Standard Enemy Drawing ---
         else {
+            // Dimensions
             const headRadius = currentH * 0.16; const coatShoulderWidth = currentW * 1.1; const coatHemWidth = currentW * 0.9;
             const torsoShoulderWidth = currentW * 0.9; const torsoHemWidth = currentW * 0.7;
             const coatTopY = y - currentH * 0.35 + bobOffset; const coatBottomY = y + currentH * 0.25 + bobOffset; const coatHeight = coatBottomY - coatTopY;
@@ -551,32 +521,30 @@ const Renderer = (() => {
             const bootHeight = currentH * 0.12; const bootWidth = currentW * 0.30; const bootTopY = trouserTopY + trouserHeight;
             const hatBrimWidth = headRadius * 3.5; const hatBrimHeight = headRadius * 0.6; const hatCrownRadiusH = headRadius * 1.5; const hatCrownRadiusV = headRadius * 1.1; const hatCenterY = headCenterY - headRadius * 1.0;
             const stepCycle = 400; const stepPhase = Math.floor(t / stepCycle) % 2;
-
-            // Trousers & Animated Boots
+    
+            // Trousers & Boots
             ctx.fillStyle = enemyBootColor;
             const leftLegX = x - legSpacing; ctx.fillRect(leftLegX - trouserWidth / 2, trouserTopY, trouserWidth, trouserHeight);
             const rightLegX = x + legSpacing; ctx.fillRect(rightLegX - trouserWidth / 2, trouserTopY, trouserWidth, trouserHeight);
             ctx.fillStyle = enemyBootColor;
             if (stepPhase === 0) { ctx.fillRect(leftLegX - bootWidth / 2, bootTopY - 2, bootWidth, bootHeight); ctx.fillRect(rightLegX - bootWidth / 2, bootTopY, bootWidth, bootHeight); }
             else { ctx.fillRect(leftLegX - bootWidth / 2, bootTopY, bootWidth, bootHeight); ctx.fillRect(rightLegX - bootWidth / 2, bootTopY - 2, bootWidth, bootHeight); }
-            // Brown Base Coat
-            ctx.fillStyle = enemyCoatColor; ctx.beginPath(); ctx.moveTo(x - coatShoulderWidth / 2, coatTopY); ctx.lineTo(x + coatShoulderWidth / 2, coatTopY);
-            ctx.lineTo(x + coatHemWidth / 2, coatBottomY); ctx.lineTo(x - coatHemWidth / 2, coatBottomY); ctx.closePath(); ctx.fill();
-            // Brown Arms
-            ctx.fillStyle = enemyCoatColor; ctx.fillRect(x - coatShoulderWidth * 0.45 - armWidth / 2, armOffsetY, armWidth, armHeight);
-            ctx.fillRect(x + coatShoulderWidth * 0.45 - armWidth / 2, armOffsetY, armWidth, armHeight);
-            // Blue Torso
-            ctx.fillStyle = enemyUniformBlue; ctx.beginPath(); ctx.moveTo(x - torsoShoulderWidth / 2, coatTopY); ctx.lineTo(x + torsoShoulderWidth / 2, coatTopY);
-            ctx.lineTo(x + torsoHemWidth / 2, coatBottomY); ctx.lineTo(x - torsoHemWidth / 2, coatBottomY); ctx.closePath(); ctx.fill();
-            // Head
+    
+            // Coats/Arms/Torso Layers
+            ctx.fillStyle = enemyCoatColor; ctx.beginPath(); ctx.moveTo(x - coatShoulderWidth / 2, coatTopY); ctx.lineTo(x + coatShoulderWidth / 2, coatTopY); ctx.lineTo(x + coatHemWidth / 2, coatBottomY); ctx.lineTo(x - coatHemWidth / 2, coatBottomY); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = enemyCoatColor; ctx.fillRect(x - coatShoulderWidth * 0.45 - armWidth / 2, armOffsetY, armWidth, armHeight); ctx.fillRect(x + coatShoulderWidth * 0.45 - armWidth / 2, armOffsetY, armWidth, armHeight);
+            ctx.fillStyle = enemyUniformBlue; ctx.beginPath(); ctx.moveTo(x - torsoShoulderWidth / 2, coatTopY); ctx.lineTo(x + torsoShoulderWidth / 2, coatTopY); ctx.lineTo(x + torsoHemWidth / 2, coatBottomY); ctx.lineTo(x - torsoHemWidth / 2, coatBottomY); ctx.closePath(); ctx.fill();
+    
+            // Head & Face
             ctx.fillStyle = enemySkinColor; ctx.beginPath(); ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2); ctx.fill();
-            // Angry Eyebrows
             ctx.strokeStyle = '#000000'; ctx.lineWidth = 2; ctx.beginPath(); const browLength = headRadius * 0.5; const browY = headCenterY - headRadius * 0.3; const browXOffset = headRadius * 0.3;
             ctx.moveTo(x - browXOffset - browLength / 2, browY - browLength / 3); ctx.lineTo(x - browXOffset + browLength / 2, browY + browLength / 3);
             ctx.moveTo(x + browXOffset - browLength / 2, browY + browLength / 3); ctx.lineTo(x + browXOffset + browLength / 2, browY - browLength / 3); ctx.stroke();
+    
             // Hat
             ctx.fillStyle = enemyCapColor; ctx.beginPath(); ctx.ellipse(x, hatCenterY + hatCrownRadiusV * 0.7, hatBrimWidth / 2, hatBrimHeight / 2, 0, 0, Math.PI * 2); ctx.fill();
             ctx.beginPath(); ctx.ellipse(x, hatCenterY, hatCrownRadiusH / 2, hatCrownRadiusV, 0, 0, Math.PI * 2); ctx.fill();
+    
             // Shooter Gun
             if (type === 'shooter') {
                 const gunBarrelLength = w * 1.2; const gunBarrelThickness = 3; const gunStockLength = w * 0.5; const gunStockThickness = 5;
@@ -586,23 +554,19 @@ const Renderer = (() => {
                 ctx.fillStyle = gunColorBarrel; ctx.fillRect(-gunStockLength * 0.2, -gunBarrelThickness / 2, gunBarrelLength, gunBarrelThickness); ctx.restore();
             }
         } // End Standard Enemy Drawing
-
+    
         // --- Common Effects ---
-
+    
         // Snake Bite Effect (Particles)
         if (isSnakeBitten) {
-            let footY;
-            if (type === 'giant') {
-                const bodyHeight = currentH * 0.7; const legHeight = currentH * 0.25; const bootHeight = currentH * 0.1; const bodyTopY = y - currentH * 0.4;
-                footY = bodyTopY + bodyHeight + legHeight + bootHeight;
-            } else {
-                const coatBottomY = y + currentH * 0.25 + bobOffset; const trouserHeight = currentH * 0.20; const bootHeight = currentH * 0.12;
-                footY = coatBottomY + trouserHeight + bootHeight;
-            }
+            let footY; // Calculate foot position based on type
+            if (type === 'giant') { const bodyHeight = currentH * 0.7; const legHeight = currentH * 0.25; const bootHeight = currentH * 0.1; const bodyTopY = y - currentH * 0.4; footY = bodyTopY + bodyHeight + legHeight + bootHeight; }
+            else { const coatBottomY = y + currentH * 0.25 + bobOffset; const trouserHeight = currentH * 0.20; const bootHeight = currentH * 0.12; footY = coatBottomY + trouserHeight + bootHeight; }
+    
             const numParticles = 6; const particleBaseSize = 3; const particleSpeedY = -50; const particleLifetimeMs = 550;
             ctx.save();
             for (let i = 0; i < numParticles; i++) {
-                const effectStartTime = (snakeEffect.expires_at * 1000) - (SNAKE_BITE_DURATION * 1000); // Requires SNAKE_BITE_DURATION constant client-side
+                const effectStartTime = (snakeEffect.expires_at * 1000) - (SNAKE_BITE_DURATION * 1000);
                 const timeSinceEffectStart = Math.max(0, t - effectStartTime);
                 const particleSimulatedAge = (timeSinceEffectStart + (particleLifetimeMs / numParticles) * i) % particleLifetimeMs;
                 const particleProgress = particleSimulatedAge / particleLifetimeMs;
@@ -617,27 +581,28 @@ const Renderer = (() => {
             }
             ctx.restore();
         }
-
-        // Blood Spark Hit Effect
-        if (isHitTriggered) { // Check the flag from server
+    
+        // Blood Spark Hit Effect (Using timestamp check)
+        if (showBloodSparks) { // *** USE THE CORRECT VARIABLE HERE ***
              ctx.save();
-             const numSparks = 10 + Math.random() * 8;
-             const sparkColors = [ "rgba(180, 0, 0, 0.9)", "rgba(220, 20, 20, 0.8)", "rgba(150, 0, 0, 0.7)", "rgba(255, 50, 50, 0.6)" ];
+             const numSparks = 15 + Math.random() * 10;
+             const sparkColors = [ "rgba(180, 0, 0, 0.9)", "rgba(220, 20, 20, 0.8)", "rgba(150, 0, 0, 0.7)", "rgba(255, 50, 50, 0.6)", "rgba(255, 100, 100, 0.9)" ];
              const sparkCenterY = y + ((type !== 'giant') ? bobOffset : 0);
              for (let i = 0; i < numSparks; i++) {
                  const sparkAngle = Math.random() * Math.PI * 2;
                  const sparkRadius = Math.random() * currentW * 0.7 + currentW * 0.1;
                  const sparkX = x + Math.cos(sparkAngle) * sparkRadius;
                  const sparkY = sparkCenterY + Math.sin(sparkAngle) * sparkRadius * 0.6 - currentH * 0.1;
-                 const sparkSize = Math.random() * 3 + 1;
+                 const sparkSize = Math.random() * 4 + 2;
                  ctx.fillStyle = sparkColors[Math.floor(Math.random() * sparkColors.length)];
                  ctx.fillRect(sparkX - sparkSize/2, sparkY-sparkSize/2, sparkSize, sparkSize);
              }
              ctx.restore();
-        }
-
+        } // End Blood Spark block
+    
+    
         ctx.restore(); // Restore context from start of function
-    }
+    } // --- End drawEnemyRect ---
 
     function drawPlayerCharacter( ctx, x, y, w, h, isSelf, playerState, aimDx, aimDy, pushbackAnimState ) {
         const jh = playerState?.hit_flash_this_tick ?? false; // Just Hit flag
