@@ -2070,7 +2070,6 @@ const Renderer = (() => {
       });
     }
   
-  
     function drawGame(
         ctx, appState, stateToRender,
         localPlayerMuzzleFlash, localPlayerPushbackAnim,
@@ -2087,13 +2086,12 @@ const Renderer = (() => {
             return;
         }
 
-        // ***** ADD THIS LINE *****
+        // Start with a clean slate
         ctx.clearRect(0, 0, width, height);
-        // *************************
 
         // --- 1. Calculate Shake Offset ---
-        // ... (shake calculation logic remains the same) ...
-         let shakeApplied = false, shakeOffsetX = 0, shakeOffsetY = 0;
+        let shakeApplied = false, shakeOffsetX = 0, shakeOffsetY = 0;
+        // ... (shake calculation logic - no change) ...
          if (currentShakeMagnitude > 0 && now < shakeEndTime) {
              shakeApplied = true;
              const timeRemaining = shakeEndTime - now;
@@ -2114,26 +2112,25 @@ const Renderer = (() => {
 
         // --- 2. Draw Static Background ---
         ctx.globalAlpha = 1.0;
-        // ... (background drawing logic remains the same - it will draw over the cleared rect) ...
-        if (!isBackgroundReady) {
-            ctx.fillStyle = dayBaseColor;
-            ctx.fillRect(0, 0, width, height);
-            if (appState?.serverState && currentBackgroundIsNight === null) {
-                updateGeneratedBackground(appState.serverState.is_night, width, height);
-            }
-        } else if (isTransitioningBackground) {
-           // ... transition logic ...
-            const elapsed = now - transitionStartTime;
-            const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS);
-            ctx.globalAlpha = 1.0;
-            ctx.drawImage(oldOffscreenCanvas, 0, 0, width, height);
-            ctx.globalAlpha = progress;
-            ctx.drawImage(offscreenCanvas, 0, 0, width, height);
-            ctx.globalAlpha = 1.0;
-            if (progress >= 1.0) { isTransitioningBackground = false; }
-        } else {
-            ctx.drawImage(offscreenCanvas, 0, 0, width, height);
-        }
+        // ... (background drawing logic - no change) ...
+         if (!isBackgroundReady) {
+             ctx.fillStyle = dayBaseColor;
+             ctx.fillRect(0, 0, width, height);
+             if (appState?.serverState && currentBackgroundIsNight === null) {
+                 updateGeneratedBackground(appState.serverState.is_night, width, height);
+             }
+         } else if (isTransitioningBackground) {
+             const elapsed = now - transitionStartTime;
+             const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS);
+             ctx.globalAlpha = 1.0;
+             ctx.drawImage(oldOffscreenCanvas, 0, 0, width, height);
+             ctx.globalAlpha = progress;
+             ctx.drawImage(offscreenCanvas, 0, 0, width, height);
+             ctx.globalAlpha = 1.0;
+             if (progress >= 1.0) { isTransitioningBackground = false; }
+         } else {
+             ctx.drawImage(offscreenCanvas, 0, 0, width, height);
+         }
 
 
         // --- 3. Apply Shake Transformation ---
@@ -2142,55 +2139,56 @@ const Renderer = (() => {
             ctx.translate(shakeOffsetX, shakeOffsetY);
         }
 
-        // --- 4. Draw Dynamic Game World Elements ---
-        // ... (drawing campfire, snake, powerups, bullets, enemies, players, etc.) ...
-         if (!stateToRender) {
-             if (shakeApplied) { ctx.restore(); }
+        // --- 4. Draw Dynamic Game World Elements (Affected by Shake) ---
+        if (stateToRender) {
+            // Draw elements that SHOULD be shaken
+            drawCampfire(ctx, stateToRender.campfire, width, height);
+            if (typeof snake !== 'undefined') drawSnake(ctx, snake);
+            drawPowerups(ctx, stateToRender.powerups);
+            drawBullets(ctx, stateToRender.bullets);
+            drawEnemies(ctx, stateToRender.enemies, activeBloodSparkEffects);
+
+            const speechBubbles = (typeof activeSpeechBubbles !== 'undefined') ? activeSpeechBubbles : {};
+            if (typeof activeEnemyBubbles !== 'undefined' && stateToRender.enemies) {
+                 drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles);
+            }
+            if (appState && stateToRender.players) {
+                drawPlayers(ctx, stateToRender.players, appState, localPlayerMuzzleFlash, localPlayerPushbackAnim);
+                drawSpeechBubbles(ctx, stateToRender.players, speechBubbles, appState);
+            }
+            drawDamageTexts(ctx, stateToRender.damage_texts);
+
+            let shouldDrawMuzzleFlash = localPlayerMuzzleFlash?.active && now < localPlayerMuzzleFlash?.endTime;
+            if (shouldDrawMuzzleFlash) {
+                drawMuzzleFlash( ctx, appState.renderedPlayerPos.x, appState.renderedPlayerPos.y, localPlayerMuzzleFlash.aimDx, localPlayerMuzzleFlash.aimDy );
+            } else if (localPlayerMuzzleFlash?.active) {
+                localPlayerMuzzleFlash.active = false;
+            }
+        } else {
+             // If no state, but shake was applied, still need to restore
+             if (shakeApplied) { ctx.restore(); shakeApplied = false; } // Restore and clear flag
              console.warn("drawGame called with no stateToRender");
              return;
-         }
-         drawCampfire(ctx, stateToRender.campfire, width, height);
-         if (typeof snake !== "undefined") drawSnake(ctx, snake);
-         drawPowerups(ctx, stateToRender.powerups);
-         drawBullets(ctx, stateToRender.bullets);
-         drawEnemies(ctx, stateToRender.enemies, activeBloodSparkEffects);
-         const speechBubbles = (typeof activeSpeechBubbles !== 'undefined') ? activeSpeechBubbles : {};
-         if (typeof activeEnemyBubbles !== 'undefined' && stateToRender.enemies) {
-              drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles);
-         }
-         if (appState && stateToRender.players) {
-             drawPlayers(ctx, stateToRender.players, appState, localPlayerMuzzleFlash, localPlayerPushbackAnim);
-             drawSpeechBubbles(ctx, stateToRender.players, speechBubbles, appState);
-         }
-         drawDamageTexts(ctx, stateToRender.damage_texts);
-         let shouldDrawMuzzleFlash = localPlayerMuzzleFlash?.active && now < localPlayerMuzzleFlash?.endTime;
-         if (shouldDrawMuzzleFlash) {
-             drawMuzzleFlash( ctx, appState.renderedPlayerPos.x, appState.renderedPlayerPos.y, localPlayerMuzzleFlash.aimDx, localPlayerMuzzleFlash.aimDy );
-         } else if (localPlayerMuzzleFlash?.active) {
-             localPlayerMuzzleFlash.active = false;
-         }
-
-
-        // --- 5. Restore Shake Transformation ---
-        if (shakeApplied) {
-            ctx.restore();
         }
 
-        // --- 6. Draw Non-Shaking Overlays (Rain/Dust) ---
-        // ... (rain/dust drawing logic) ...
-         ctx.globalAlpha = 1.0;
+        // --- 5. Restore Shake Transformation ---
+        // This MUST happen *after* all elements that should be shaken are drawn
+        if (shakeApplied) {
+            ctx.restore(); // <<<=== CRITICAL PLACEMENT
+        }
+
+        // --- 6. Draw Non-Shaking Weather Overlays ---
+        // These are drawn AFTER restoring the context, so they are static
+        ctx.globalAlpha = 1.0;
          if (appState?.isRaining) {
+             // ... rain drawing ...
              const RAIN_SPEED_Y = 12; const RAIN_SPEED_X = 1;
-             ctx.strokeStyle = RAIN_COLOR;
-             ctx.lineWidth = 1.5;
-             ctx.beginPath();
+             ctx.strokeStyle = RAIN_COLOR; ctx.lineWidth = 1.5; ctx.beginPath();
              for (let i = 0; i < RAIN_DROPS; i++) {
                  const rainX = ((i * 137 + now * 0.05) % (width + 100)) - 50;
                  const rainY = (i * 271 + now * 0.3) % height;
-                 const endX = rainX + RAIN_SPEED_X;
-                 const endY = rainY + RAIN_SPEED_Y;
-                 ctx.moveTo(rainX, rainY);
-                 ctx.lineTo(endX, endY);
+                 const endX = rainX + RAIN_SPEED_X; const endY = rainY + RAIN_SPEED_Y;
+                 ctx.moveTo(rainX, rainY); ctx.lineTo(endX, endY);
              }
              ctx.stroke();
          } else if (appState?.isDustStorm) {
@@ -2198,10 +2196,10 @@ const Renderer = (() => {
              ctx.fillRect(0, 0, width, height);
          }
 
-
         // --- 7. Apply Heat Haze ---
-        // ... (heat haze logic remains the same) ...
-         const currentTempForEffect = appState?.currentTemp;
+        // This also happens AFTER restoring the context
+        const currentTempForEffect = appState?.currentTemp;
+        // ... (heat haze logic - no change in its own logic, just its position in sequence) ...
          if (currentTempForEffect !== null && typeof currentTempForEffect !== 'undefined' && currentTempForEffect >= HEAT_HAZE_START_TEMP) {
              const hazeIntensity = Math.max(0, Math.min(1, (currentTempForEffect - HEAT_HAZE_START_TEMP) / (HEAT_HAZE_MAX_TEMP - HEAT_HAZE_START_TEMP)));
              if (hazeIntensity > 0.01) {
@@ -2234,30 +2232,30 @@ const Renderer = (() => {
 
 
         // --- 8. Draw Final Fullscreen Overlays (Tint, Vignette) ---
-        // ... (tint/vignette logic remains the same) ...
-         ctx.globalAlpha = 1.0;
-         if (appState) drawTemperatureTint(ctx, appState.currentTemp, width, height);
-
-         const localPlayerState = stateToRender?.players?.[appState?.localPlayerId];
-         if (localPlayerState && typeof localPlayerState.health === 'number' && localPlayerState.health < DAMAGE_VIGNETTE_HEALTH_THRESHOLD) {
-             const vi = 1.0 - localPlayerState.health / DAMAGE_VIGNETTE_HEALTH_THRESHOLD;
-             drawDamageVignette(ctx, vi, width, height);
-         }
-
+        // These are drawn last, on the fully restored, static canvas
         ctx.globalAlpha = 1.0;
+        if (appState) drawTemperatureTint(ctx, appState.currentTemp, width, height);
+
+        const localPlayerState = stateToRender?.players?.[appState?.localPlayerId];
+        if (localPlayerState && typeof localPlayerState.health === 'number' && localPlayerState.health < DAMAGE_VIGNETTE_HEALTH_THRESHOLD) {
+            const vi = 1.0 - localPlayerState.health / DAMAGE_VIGNETTE_HEALTH_THRESHOLD;
+            drawDamageVignette(ctx, vi, width, height); // <<<=== Drawn AFTER restore
+        }
+
+        ctx.globalAlpha = 1.0; // Final reset
 
     } // --- END of function drawGame ---
 
     // --- Exported Renderer Module ---
     return {
-        drawGame,                 // The main drawing function
-        triggerShake,             // Function to initiate screen shake
-        updateGeneratedBackground // Function to update/generate the background buffer
+        drawGame,
+        triggerShake,
+        updateGeneratedBackground
     };
 
 })(); // --- End of Renderer module IIFE ---
 
-// Final log to confirm the script executed
+// Final log
 console.log(
     "--- Renderer.js: Executed. Renderer object defined?",
     typeof Renderer
