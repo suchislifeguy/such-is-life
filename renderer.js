@@ -760,6 +760,7 @@ const Renderer = (() => {
 
         // --- 1. Draw Shadow ---
         ctx.beginPath();
+        // Use the calculated bootBottomY variable for shadow placement
         ctx.ellipse(x, bootBottomY + 2, w * 0.5, h * 0.06, 0, 0, Math.PI * 2);
         ctx.fillStyle = backgroundShadowColor; // Defined earlier
         ctx.fill();
@@ -1106,22 +1107,31 @@ const Renderer = (() => {
             const ps=p.player_status||'alive';
             const dx=is?appStateRef.renderedPlayerPos.x:p.x;
             const dy=is?appStateRef.renderedPlayerPos.y:p.y;
-            const w=p.width??48; // Using 48 as default if undefined, though PLAYER_DEFAULTS is 20/48
-            const h=p.height??48;
+            const w=p.width??20; // Use player default width from server/constants
+            const h=p.height??48;// Use player default height from server/constants
             const mh=p.max_health??100;
             const ca=p.armor??0;
-            const id=(ps==='down');
-            const a=id?0.4:1.0;
-            ctx.save();
-            ctx.globalAlpha=a;
-            ctx.beginPath(); const sy=boby+1; ctx.ellipse(x,sy,w*0.45,h*0.05,0,0,Math.PI*2); ctx.fillStyle=backgroundShadowColor; ctx.fill();
+            const id=(ps==='down'); // isDown flag
 
+            // Set alpha based on player status (down or alive)
+            const a=id?0.4:1.0;
+            ctx.save(); // Save before applying alpha
+            ctx.globalAlpha=a; // Apply alpha for drawing the player character
+
+            // --- Shadow drawing is REMOVED from here - Handled inside drawPlayerCharacter ---
+
+            // Get aim direction and pushback state ONLY for the local player
             const adx=is?localPlayerMuzzleFlashRef?.aimDx:0;
             const ady=is?localPlayerMuzzleFlashRef?.aimDy:0;
-            // --- MODIFIED CALL to drawPlayerCharacter --- Pass pushback state ONLY for local player
-            const pushbackState = is ? localPlayerPushbackAnimStateRef : null; // Pass null for other players
+            const pushbackState = is ? localPlayerPushbackAnimStateRef : null;
+
+            // Call the (refactored V2) function to draw the actual character
+            // This function now draws its own shadow internally
             drawPlayerCharacter(ctx, dx, dy, w, h, is, p, adx, ady, pushbackState);
-            ctx.restore();
+
+            ctx.restore(); // Restore alpha setting
+
+            // Draw UI elements (health/armor) on top, unaffected by the alpha change
             if(ps==='alive'){
                 drawHealthBar(ctx, dx, dy, w, p.health, mh);
                 if(ca > 0) drawArmorBar(ctx, dx, dy, w, ca);
