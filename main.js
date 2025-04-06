@@ -137,16 +137,27 @@ const UI = (() => {
     }
     function addChatMessage(sender, message, isSelf, isSystem = false) { if (!DOM.chatLog) return; const div = document.createElement('div'); if (isSystem) { div.className = 'system-message'; div.textContent = message; } else { div.className = isSelf ? 'my-message' : 'other-message'; div.textContent = `${sender ? `P:${sender.substring(0,4)}` : '???'}: ${message}`; } DOM.chatLog.appendChild(div); DOM.chatLog.scrollTop = DOM.chatLog.scrollHeight; }
     function updateCountdown(serverState) { if (!DOM.countdownDiv || !DOM.dayNightIndicator) return; const isCountdown = serverState?.status === 'countdown' && serverState?.countdown >= 0; DOM.countdownDiv.textContent = isCountdown ? Math.ceil(serverState.countdown) : ''; DOM.countdownDiv.style.display = isCountdown ? 'block' : 'none'; DOM.dayNightIndicator.style.display = (serverState?.status === 'active') ? 'block' : 'none'; }
+    // Inside the UI Module in main.js
     function updateDayNight(serverState) {
-         if (!DOM.dayNightIndicator || !DOM.canvas || !DOM.gameContainer) return;
-         if (serverState?.status === 'active') {
-             const isNight = serverState.is_night; DOM.dayNightIndicator.textContent = isNight ? 'Night' : 'Day'; DOM.dayNightIndicator.style.display = 'block';
-             if (typeof Renderer !== 'undefined') {
-                 Renderer.updateGeneratedBackground(isNight, CANVAS_WIDTH, CANVAS_HEIGHT);
-             } else { error("Renderer not defined when calling updateGeneratedBackground from UI!"); }
-             DOM.gameContainer.classList.toggle('night-mode', isNight);
-         } else { DOM.dayNightIndicator.style.display = 'none'; DOM.gameContainer.classList.remove('night-mode'); }
-    }
+        if (!DOM.dayNightIndicator || !DOM.canvas || !DOM.gameContainer) return;
+        if (serverState?.status === 'active') {
+            const isNight = serverState.is_night;
+            DOM.dayNightIndicator.textContent = isNight ? 'Night' : 'Day';
+            DOM.dayNightIndicator.style.display = 'block';
+            if (typeof Renderer !== 'undefined') {
+                // --- CORRECTED LINE ---
+                // Use the canvas dimensions stored in appState
+                Renderer.updateGeneratedBackground(isNight, appState.canvasWidth, appState.canvasHeight);
+                // --- END CORRECTION ---
+            } else {
+                error("Renderer not defined when calling updateGeneratedBackground from UI!");
+            }
+            DOM.gameContainer.classList.toggle('night-mode', isNight);
+        } else {
+            DOM.dayNightIndicator.style.display = 'none';
+            DOM.gameContainer.classList.remove('night-mode');
+        }
+   }
     function showGameOver(finalState) { if (!DOM.finalStatsDiv || !DOM.gameOverScreen) return; const player = finalState?.players?.[appState.localPlayerId]; let statsHtml = "Stats Unavailable"; if (player) { statsHtml = `<div class="final-stat-item"><strong>Score:</strong> ${player.score ?? 0}</div><div class="final-stat-item"><strong>Kills:</strong> ${player.kills ?? 0}</div>`; } DOM.finalStatsDiv.innerHTML = statsHtml; log("UI: Showing game over screen."); showSection('game-over-screen'); }
     function updateEnvironmentDisplay() { const tempIndicator = document.getElementById('temperature-indicator'); if (!tempIndicator) return; if ((appState.currentTemp === null && appState.serverState?.status !== 'active') || appState.serverState?.status === 'menu') { tempIndicator.style.display = 'none'; return; } tempIndicator.style.display = 'block'; const temp = appState.currentTemp; tempIndicator.innerHTML = `${temp.toFixed(0)}°C`; }
     return { showSection, updateStatus, updateHUD, addChatMessage, updateCountdown, updateDayNight, showGameOver, updateEnvironmentDisplay };
