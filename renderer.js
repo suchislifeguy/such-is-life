@@ -117,12 +117,12 @@ const Renderer = (() => {
         if (!targetIsNight) {
             // --- Day View (Looking Down - Structured Earthy Ground) ---
             const dayBaseColor = "#949A80"; // More Greyish-Green Base
-            const dirtColor1 = "rgba(53, 80, 27, 0.2)"; // Slightly more opaque Earthy Brown 1
-            const dirtColor2 = "rgba(143, 97, 55, 0.2)";  // Slightly more opaque Earthy Brown 2
+            const dirtColor1 = "rgba(76, 103, 41, 0.2)"; // Slightly more opaque Earthy Brown 1
+            const dirtColor2 = "rgba(143, 121, 55, 0.2)";  // Slightly more opaque Earthy Brown 2
             // Texture Stroke Colors:
-            const textureStrokeDark = "rgba(80, 95, 60, 0.3)";    // Darker Dusty Green Stroke
+            const textureStrokeDark = "rgba(59, 112, 67, 0.3)";    // Darker Dusty Green Stroke
             const textureStrokeLight = "rgba(135, 150, 110, 0.25)"; // Lighter Dusty Green Stroke
-            const textureStrokeEmerald = "rgba(50, 140, 90, 0.15)";// Subtle Emerald Stroke (lower alpha)
+            const textureStrokeEmerald = "rgba(19, 226, 112, 0.15)";// Subtle Emerald Stroke (lower alpha)
     
             const numDirtPatches = 40; // Fewer, more defined patches
             const numTextureStrokes = 2500; // Fewer elements needed for strokes vs fills
@@ -714,56 +714,80 @@ const Renderer = (() => {
         ctx.fillStyle=ironHelmetShadow; ctx.fillRect(x-hw/2+1,hty+3,hw-2,2); // Shadow under highlight
         ctx.fillStyle=slitColor; ctx.fillRect(x-slw/2,sly,slw,slh); // Eye slit
 
+        const now = performance.now();
+        // Check if the passed state object exists and is active based on time
+        const isPushbackAnimating = pushbackAnimState?.active && now < pushbackAnimState?.endTime;
+        // Note: The reset of pushbackAnimState.active is handled in main.js gameLoop now
+
 
         // --- IMPROVED GUN DRAWING ---
-        if (isSelf && (aimDx !== 0 || aimDy !== 0)) {
+        // Logic to determine gun appearance based on animation or aiming
+        let shouldDrawGun = false;
+        let gunDrawAngle = 0; // Angle to draw the gun at
+        let gunDrawMode = 'aiming'; // 'aiming' or 'pushback'
+
+        if (isPushbackAnimating) {
+            shouldDrawGun = true;
+            gunDrawMode = 'pushback';
+            // --- Calculate Pushback Swing Angle ---
+            // Example: Fixed swing outwards (e.g., 90 degrees relative to 'up')
+            // You might want to adjust this based on sprite orientation if it changes later
+            gunDrawAngle = -Math.PI / 2; // Straight out to the player's right if facing up
+            // Alternative: Base it slightly on previous aim? (More complex)
+            // gunDrawAngle = Math.atan2(aimDy, aimDx) + Math.PI / 2; // Swing 90deg from aim?
+
+        } else if (isSelf && (aimDx !== 0 || aimDy !== 0)) {
+            // Normal aiming logic
+            shouldDrawGun = true;
+            gunDrawMode = 'aiming';
+            gunDrawAngle = Math.atan2(aimDy, aimDx); // Aim based on mouse/target
+        }
+
+        // --- Draw Gun if needed ---
+        if (shouldDrawGun) {
             const gunLevel = playerState?.gun ?? 1;
             const baseBarrelLength = 18;
-            const barrelLengthIncrease = 2; // How much length increases per level
+            const barrelLengthIncrease = 2;
             const barrelLength = baseBarrelLength + (gunLevel - 1) * barrelLengthIncrease;
-            const barrelThickness = 3 + (gunLevel - 1) * 0.2; // Slightly thicker at higher levels
+            const barrelThickness = 3 + (gunLevel - 1) * 0.2;
             const stockLength = 8 + (gunLevel - 1) * 0.5;
             const stockThickness = 5 + (gunLevel - 1) * 0.3;
             const stockColor = "#8B4513"; // Brown for stock
             const barrelColor = "#444444"; // Dark grey for barrel
 
-            // Position gun relative to arm/shoulder area
+            // Position gun relative to arm/shoulder area (same calculation for both modes)
             const gunOriginYOffset = aty + al * 0.4; // Roughly mid-arm level
-            const gunOriginXOffset = w * 0.1; // Slightly offset from center
+            // If pushback, maybe bring origin slightly more central? (Optional tweak)
+            const gunOriginXOffset = (gunDrawMode === 'pushback') ? 0 : w * 0.1;
 
             ctx.save();
-            // Translate to the point where the gun rotation should happen
-            ctx.translate(x, gunOriginYOffset);
-            const angle = Math.atan2(aimDy, aimDx);
-            ctx.rotate(angle);
+            // Translate to the rotation point
+            ctx.translate(x + gunOriginXOffset, gunOriginYOffset); // Adjust X origin slightly if needed
+            ctx.rotate(gunDrawAngle); // Apply the calculated angle (aiming or pushback)
 
-            // Draw Stock (drawn first, behind barrel)
+            // Draw Stock (behind barrel)
             ctx.fillStyle = stockColor;
-            // Stock starts slightly behind the rotation origin and extends back
-            ctx.fillRect(-stockLength + gunOriginXOffset - 2, -stockThickness / 2, stockLength, stockThickness);
+            // Adjust position relative to the (potentially shifted) origin
+            ctx.fillRect(-stockLength - 2, -stockThickness / 2, stockLength, stockThickness);
 
-            // Draw Barrel (extends forward from origin)
+            // Draw Barrel (extends forward)
             ctx.fillStyle = barrelColor;
-            ctx.fillRect(gunOriginXOffset, -barrelThickness / 2, barrelLength, barrelThickness);
-
-            // Optional: Add a tiny sight dot on top?
-            // ctx.fillStyle = '#222';
-            // ctx.fillRect(gunOriginXOffset + barrelLength * 0.7, -barrelThickness/2 - 1, 1, 1);
+            ctx.fillRect(0, -barrelThickness / 2, barrelLength, barrelThickness);
 
             ctx.restore(); // Restore rotation/translation
         }
+        // --- End Gun Drawing ---
 
-        // Draw Snake Bite Aura (if applicable)
+
+        // Draw Snake Bite Aura (if applicable) - Unchanged
         if (isPlayerBitten) {
             const auraRadius = Math.max(w * 0.6, 18);
-            const auraY = y + h * 0.5 + bo - 6; // Position near the base
+            const auraY = y + h * 0.5 + bo - 6;
             const auraLineWidth = 3.5;
             const auraColor = "rgba(0, 255, 50, 0.75)";
-
             const pulseSpeed = 0.004;
             const pulseMagnitude = 2.5;
             const pulseOffset = Math.sin(t * pulseSpeed) * pulseMagnitude;
-
             const originalLineWidth = ctx.lineWidth;
             const originalStrokeStyle = ctx.strokeStyle;
             ctx.lineWidth = auraLineWidth;
@@ -775,30 +799,26 @@ const Renderer = (() => {
             ctx.strokeStyle = originalStrokeStyle;
         }
 
+        // Draw Hit Sparks (if applicable) - Unchanged
         if (jh) {
-            // Use save/restore for sparks if modifying global alpha or styles heavily
             ctx.save();
             const numSparks = 15 + Math.random() * 10;
             for (let i = 0; i < numSparks; i++) {
                 const sparkAngle = Math.random() * Math.PI * 2;
-                // Sparks emanate from the player's general area
                 const sparkRadius = Math.random() * w * 0.8 + w * 0.2;
                 const sparkX = x + Math.cos(sparkAngle) * sparkRadius;
-                // Position sparks vertically around the torso/upper body
                 const sparkY = y + Math.sin(sparkAngle) * sparkRadius * 0.7 - h * 0.1 + bo;
                 const sparkSize = Math.random() * 3.5 + 1.5;
-                // Choose a random color from the defined spark colors
                 ctx.fillStyle = sparkColors[Math.floor(Math.random() * sparkColors.length)];
                 ctx.beginPath();
-                // Draw small circles for sparks
                 ctx.arc(sparkX, sparkY, sparkSize / 2, 0, Math.PI * 2);
                 ctx.fill();
             }
-            ctx.restore(); // Restore context state after drawing sparks
+            ctx.restore();
         }
 
 
-        ctx.restore(); // Matches the ctx.save() at the beginning of the function
+        ctx.restore(); 
     }
 
     function drawPlayers(ctx, players, appStateRef, localPlayerMuzzleFlashRef) { if(!players || !appStateRef) return; Object.values(players).forEach(p=>{ if(!p||p.player_status==='dead') return; const is=p.id===appStateRef.localPlayerId,ps=p.player_status||'alive',dx=is?appStateRef.renderedPlayerPos.x:p.x,dy=is?appStateRef.renderedPlayerPos.y:p.y,w=p.width??48,h=p.height??48,mh=p.max_health??100,ca=p.armor??0,id=(ps==='down'),a=id?0.4:1.0; ctx.save(); ctx.globalAlpha=a; const adx=is?localPlayerMuzzleFlashRef?.aimDx:0,ady=is?localPlayerMuzzleFlashRef?.aimDy:0; drawPlayerCharacter(ctx,dx,dy,w,h,is,p,adx,ady); ctx.restore(); if(ps==='alive'){ drawHealthBar(ctx,dx,dy,w,p.health,mh); if(ca>0) drawArmorBar(ctx,dx,dy,w,ca); } }); }
@@ -1127,7 +1147,7 @@ const Renderer = (() => {
           }
           ctx.stroke();
       } else if (appState?.isDustStorm) {
-          ctx.fillStyle = 'rgba(180, 140, 90, 0.2)'; ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+          ctx.fillStyle = 'rgba(229, 169, 96, 0.2)'; ctx.fillRect(0, 0, canvasWidth, canvasHeight);
       }
       if (appState) drawTemperatureTint(ctx, appState.currentTemp, canvasWidth, canvasHeight);
       const localPlayerState = stateToRender.players?.[appState?.localPlayerId];
