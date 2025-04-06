@@ -693,108 +693,328 @@ const Renderer = (() => {
 
     function drawPlayerCharacter( ctx, x, y, w, h, isSelf, playerState, aimDx, aimDy, pushbackAnimState ) {
         const jh = playerState?.hit_flash_this_tick ?? false; // Just Hit flag
-        const ii = (playerState?.input_vector?.dx ?? 0) === 0 && (playerState?.input_vector?.dy ?? 0) === 0; // Is Idle
         const t = performance.now();
+        const now = t; // Use 'now' consistently with how pushbackAnimState is checked
+        const ii = (playerState?.input_vector?.dx ?? 0) === 0 && (playerState?.input_vector?.dy ?? 0) === 0; // Is Idle
         const bo = ii ? Math.sin(t / IDLE_BOB_SPEED_DIVISOR) * IDLE_BOB_AMPLITUDE : 0; // Idle bob offset
 
-        // Check for player snake bite effect
+        // Player snake bite effect check
         const playerSnakeEffect = playerState?.effects?.snake_bite_slow;
-        const isPlayerBitten = playerSnakeEffect &&
-                            typeof playerSnakeEffect === 'object' &&
+        const isPlayerBitten = playerSnakeEffect && typeof playerSnakeEffect === 'object' &&
                             typeof playerSnakeEffect.expires_at === 'number' &&
-                            t < (playerSnakeEffect.expires_at * 1000);
+                            now < (playerSnakeEffect.expires_at * 1000);
 
-        // Dimension calculations (remain the same)
-        const hh=h*0.3,hw=w*0.95,slh=hh*0.15,slw=hw*0.8,ngh=h*0.06,spw=w*1.25,sph=h*0.1,chestPlateHeight=h*0.3,cpw=w*0.9,aw=w*0.2,al=h*0.4,bh=h*0.05,ph=h*0.35,boh=h*0.1,bow=w*0.32,bos=w*0.4;
-        const to=h*0.5,hty=y-to+bo,hby=hty+hh,sly=hty+hh*0.4,ngty=hby-3,ngby=ngty+ngh,sty=ngby-2,sby=sty+sph,cpty=sty+sph*0.15,aty=sty+sph*0.2,bey=cpty+chestPlateHeight+bh*0.1,pty=bey+bh*0.4,pby=pty+ph,boty=pby-5,boby=boty+boh;
-        const dc=isSelf?dustyPlayerSelfColor:dustyPlayerOtherColor;
+        // --- Refined Dimension Calculations ---
+        // Proportions (adjust as needed)
+        const headHeight = h * 0.28;
+        const headWidth = w * 0.9;
+        const neckHeight = h * 0.05;
+        const torsoHeight = h * 0.35;
+        const torsoUpperWidth = w * 0.95;
+        const torsoLowerWidth = w * 0.8;
+        const beltHeight = h * 0.06;
+        const legHeight = h * 0.32; // Remaining height for legs
+        const legUpperWidth = w * 0.4;
+        const legLowerWidth = w * 0.3;
+        const bootShaftHeight = h * 0.10; // Part covering ankle
+        const bootSoleHeight = h * 0.04;
+        const bootWidth = w * 0.35;
+        const armWidth = w * 0.22;
+        const armLength = h * 0.42;
+        const shoulderPadRadius = w * 0.3;
+
+        // Y Positions (Top Down) - Incorporating Bob Offset
+        const headTopY = y - h * 0.5 + bo; // Top of the helmet
+        const headBottomY = headTopY + headHeight;
+        const neckTopY = headBottomY;
+        const neckBottomY = neckTopY + neckHeight;
+        const torsoTopY = neckBottomY;
+        const torsoBottomY = torsoTopY + torsoHeight;
+        const beltTopY = torsoBottomY - beltHeight * 0.3; // Belt slightly overlaps torso bottom
+        const beltBottomY = beltTopY + beltHeight;
+        const legTopY = beltBottomY - beltHeight * 0.2; // Legs start slightly under belt overlap
+        const legBottomY = legTopY + legHeight;
+        const bootTopY = legBottomY - bootShaftHeight * 0.1; // Boots start slightly above leg bottom
+        const bootShaftBottomY = bootTopY + bootShaftHeight;
+        const bootSoleTopY = bootShaftBottomY;
+        const bootBottomY = bootSoleTopY + bootSoleHeight; // Absolute bottom
+
+        // Arm/Shoulder Positions
+        const shoulderCenterY = torsoTopY + torsoHeight * 0.15;
+        const shoulderOffsetX = torsoUpperWidth * 0.5; // Relative to player X center
+        const armTopY = shoulderCenterY + shoulderPadRadius * 0.3; // Arms start under pads
+
+        // Colors (assuming these vars exist from earlier in the file)
+        const playerBodyColor = isSelf ? dustyPlayerSelfColor : dustyPlayerOtherColor; // Base fabric color
+        const helmetColor = ironHelmetColor; // Defined earlier
+        const armorColor = simpleChestPlateColor; // Defined earlier
+        const armorHighlight = chestPlateHighlight; // Defined earlier
+        const armorShadow = ironHelmetShadow; // Reuse for consistency
+        const slitColor = '#000000'; // Keep black
+        const beltColor = '#412a19'; // Existing belt color
+        const beltBuckleColor = '#b0a080'; // Dull metallic
+        const bootColor = '#241c1c'; // Existing boot color
+        const bootSoleColor = '#1a1a1a'; // Darker sole
 
         ctx.save(); // Save context state before drawing player
 
-        // Draw Shadow
-        ctx.beginPath(); const sy=boby+1; ctx.ellipse(x,sy,w*0.45,h*0.05,0,0,Math.PI*2); ctx.fillStyle=backgroundShadowColor; ctx.fill();
+        // --- 1. Draw Shadow ---
+        ctx.beginPath();
+        ctx.ellipse(x, bootBottomY + 2, w * 0.5, h * 0.06, 0, 0, Math.PI * 2);
+        ctx.fillStyle = backgroundShadowColor; // Defined earlier
+        ctx.fill();
 
-        // Draw Legs & Boots (Animated)
-        ctx.fillStyle=dc; const lw=w*0.4; ctx.fillRect(x-w*0.45,pty,lw,ph); ctx.fillRect(x+w*0.05,pty,lw,ph);
-        ctx.fillStyle=bootColor;
-        if(!ii){const sd=250,sp=Math.floor(t/sd)%2;if(sp===0){ ctx.fillRect(x-bos-bow/2,boty-2,bow,boh); ctx.fillRect(x+bos-bow/2,boty,bow,boh);}else{ ctx.fillRect(x-bos-bow/2,boty,bow,boh); ctx.fillRect(x+bos-bow/2,boty-2,bow,boh);}}else{ ctx.fillRect(x-bos-bow/2,boty,bow,boh); ctx.fillRect(x+bos-bow/2,boty,bow,boh);}
+        // --- Helper Function for Boots --- (Reduces repetition)
+        const drawBoot = (bootX, bootTopYCoord, isKick = false, kickAngle = 0) => {
+            ctx.save();
+            if (isKick) {
+                ctx.translate(bootX, bootTopYCoord); // Translate to pivot point (ankle area)
+                ctx.rotate(kickAngle);
+                 // Adjust Y because rotation is around the top of the boot now
+                bootTopYCoord = 0;
+            }
 
-        // Draw Torso Area (Belt, Chestplate, Shoulder Pad)
-        ctx.fillStyle=beltColor; ctx.fillRect(x-w*0.65,bey-bh/2,w*1.3,bh);
-        ctx.fillStyle=simpleChestPlateColor; ctx.fillRect(x-cpw/2,cpty,cpw,chestPlateHeight);
-        ctx.fillStyle=chestPlateHighlight; ctx.fillRect(x-cpw/2+5,cpty+5,cpw-10,3);
-        ctx.fillStyle=ironHelmetColor; ctx.fillRect(x-spw/2,sty,spw,sph); // Shoulder pad base
-        ctx.fillStyle=ironHelmetHighlight; ctx.fillRect(x-spw/2+3,sty+2,spw-6,2); // Shoulder pad highlight
+            const shaftTopY = bootTopYCoord;
+            const shaftBottomY = shaftTopY + bootShaftHeight;
+            const soleTopY = shaftBottomY;
+            const soleBottomY = soleTopY + bootSoleHeight;
 
-        // Draw Arms
-        ctx.fillStyle=dc; ctx.fillRect(x-spw*0.45,aty,aw,al); ctx.fillRect(x+spw*0.45-aw,aty,aw,al);
+            // Boot Shaft
+            ctx.fillStyle = bootColor;
+            ctx.fillRect(bootX - bootWidth / 2, shaftTopY, bootWidth, bootShaftHeight);
+            // Boot Sole (slightly wider)
+            ctx.fillStyle = bootSoleColor;
+            const soleWidth = bootWidth * 1.05;
+            ctx.fillRect(bootX - soleWidth / 2, soleTopY, soleWidth, bootSoleHeight);
+            // Subtle Heel
+            ctx.fillStyle = bootSoleColor;
+            const heelWidth = bootWidth * 0.6;
+            const heelHeight = bootSoleHeight * 0.8;
+            ctx.fillRect(bootX - heelWidth*0.1 , soleBottomY - heelHeight, heelWidth, heelHeight); // Offset heel slightly back
 
-        // Draw Helmet
-        ctx.fillStyle=ironHelmetColor; ctx.fillRect(x-hw*0.4,ngty,hw*0.8,ngh); // Neck guard part
-        ctx.fillStyle=ironHelmetColor; ctx.fillRect(x-hw/2,hty,hw,hh); // Main helmet bucket
-        ctx.fillStyle=ironHelmetHighlight; ctx.fillRect(x-hw/2,hty,hw,3); // Top highlight
-        ctx.fillStyle=ironHelmetShadow; ctx.fillRect(x-hw/2+1,hty+3,hw-2,2); // Shadow under highlight
-        ctx.fillStyle=slitColor; ctx.fillRect(x-slw/2,sly,slw,slh); // Eye slit
+            if (isKick) {
+                ctx.restore(); // Restore rotation and translation
+            }
+        };
 
-        const now = performance.now();
-        // Check if the passed state object exists and is active based on time
+        // --- 2. Draw Legs & Boots (Conditional Animation) ---
         const isPushbackAnimating = pushbackAnimState?.active && now < pushbackAnimState?.endTime;
-        // Note: The reset of pushbackAnimState.active is handled in main.js gameLoop now
 
-
-        // --- IMPROVED GUN DRAWING ---
-        // Logic to determine gun appearance based on animation or aiming
-        let shouldDrawGun = false;
-        let gunDrawAngle = 0; // Angle to draw the gun at
-        let gunDrawMode = 'aiming'; // 'aiming' or 'pushback'
+        ctx.fillStyle = playerBodyColor; // Trouser color
 
         if (isPushbackAnimating) {
             // --- Pushback Animation Pose ---
-            const kickLegAngle = -Math.PI / 5; // Angle kicking leg forward/up
-            const supportLegOffset = w * 0.1; // Back leg slightly offset
-            const kickLegLength = ph * 1.1; // Slightly longer appearance when kicking
+            const kickAngle = -Math.PI / 4.5; // More dynamic kick angle
+            const supportLegX = x + w * 0.15; // Supporting leg further back
+            const kickLegX = x - w * 0.15; // Kicking leg pivot point
+            const kickLegVisualLength = legHeight * 1.05; // Slightly extend kicking leg visually
 
-            // Supporting Leg (Slightly back)
-            ctx.fillStyle = dc; // Trouser color
-            ctx.fillRect(x + supportLegOffset - lw / 2, pty, lw, ph); // Draw back leg trouser
-            ctx.fillStyle = bootColor;
-            ctx.fillRect(x + supportLegOffset - bow / 2, boty, bow, boh); // Draw back leg boot
+            // Draw Supporting Leg (Tapered)
+            ctx.beginPath();
+            ctx.moveTo(supportLegX - legUpperWidth / 2, legTopY); // Top Left
+            ctx.lineTo(supportLegX + legUpperWidth / 2, legTopY); // Top Right
+            ctx.lineTo(supportLegX + legLowerWidth / 2, legBottomY); // Bottom Right
+            ctx.lineTo(supportLegX - legLowerWidth / 2, legBottomY); // Bottom Left
+            ctx.closePath();
+            ctx.fill();
+            drawBoot(supportLegX, bootTopY); // Supporting boot
 
-            // Kicking Leg (Rotated)
+            // Draw Kicking Leg (Rotated) - Draw trouser then boot
             ctx.save();
-            ctx.translate(x - w * 0.2, pty); // Translate to hip area of kicking leg
-            ctx.rotate(kickLegAngle);
-            // Draw rotated trouser
-            ctx.fillStyle = dc;
-            ctx.fillRect(-lw / 2, 0, lw, kickLegLength);
-            // Draw rotated boot at the end of the extended leg
-            ctx.fillStyle = bootColor;
-            ctx.fillRect(-bow / 2, kickLegLength - boh * 0.5, bow, boh);
-            ctx.restore();
+            ctx.translate(kickLegX, legTopY + legHeight * 0.1); // Pivot higher up near hip
+            ctx.rotate(kickAngle);
+            // Rotated Tapered Trouser
+            ctx.fillStyle = playerBodyColor;
+            ctx.beginPath();
+            ctx.moveTo(-legUpperWidth / 2, 0); // Top Left at pivot
+            ctx.lineTo(legUpperWidth / 2, 0); // Top Right at pivot
+            ctx.lineTo(legLowerWidth / 2, kickLegVisualLength); // Bottom Right further out
+            ctx.lineTo(-legLowerWidth / 2, kickLegVisualLength); // Bottom Left further out
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore(); // Restore rotation to draw boot correctly positioned relative to leg end
+
+            // Draw Kicking Boot (Needs calculated position after rotation)
+            // Calculate end point of the rotated leg centerline to position the boot
+             const kickEndX = kickLegX + Math.sin(kickAngle) * kickLegVisualLength; // Use sin for X displacement from vertical kick
+             const kickEndY = (legTopY + legHeight * 0.1) + Math.cos(kickAngle) * kickLegVisualLength; // Use cos for Y displacement from pivot
+            drawBoot(kickEndX, kickEndY - bootShaftHeight, false); // Draw boot at the end point
 
         } else {
             // --- Standard Walking/Idle Animation ---
-            ctx.fillStyle = dc; // Trouser color
-            ctx.fillRect(x - w * 0.45, pty, lw, ph); // Left trouser
-            ctx.fillRect(x + w * 0.05, pty, lw, ph); // Right trouser
-            ctx.fillStyle = bootColor; // Boot color
-            // Walking animation
-            if (!ii) { // If not idle (is moving)
-                const sd = 250, sp = Math.floor(t / sd) % 2;
-                if (sp === 0) { // Left foot forward slightly
-                    ctx.fillRect(x - bos - bow / 2, boty - 2, bow, boh); // Left boot
-                    ctx.fillRect(x + bos - bow / 2, boty, bow, boh);     // Right boot
-                } else { // Right foot forward slightly
-                    ctx.fillRect(x - bos - bow / 2, boty, bow, boh);     // Left boot
-                    ctx.fillRect(x + bos - bow / 2, boty - 2, bow, boh); // Right boot
+            const leftLegX = x - w * 0.2;
+            const rightLegX = x + w * 0.2;
+            let leftBootYOffset = 0;
+            let rightBootYOffset = 0;
+
+            if (!ii) { // Walking animation - subtle foot lift
+                const walkCycleTime = 400; // ms per step cycle
+                const phase = (t % walkCycleTime) / walkCycleTime; // 0 to 1
+                const liftAmount = -2; // How high foot lifts
+                if (phase < 0.5) { // Left foot lifts
+                    leftBootYOffset = Math.sin(phase * 2 * Math.PI) * liftAmount;
+                } else { // Right foot lifts
+                    rightBootYOffset = Math.sin((phase - 0.5) * 2 * Math.PI) * liftAmount;
                 }
-            } else { // Idle stance
-                ctx.fillRect(x - bos - bow / 2, boty, bow, boh); // Left boot idle
-                ctx.fillRect(x + bos - bow / 2, boty, bow, boh); // Right boot idle
             }
+
+            // Left Leg (Tapered)
+            ctx.beginPath();
+            ctx.moveTo(leftLegX - legUpperWidth / 2, legTopY); ctx.lineTo(leftLegX + legUpperWidth / 2, legTopY);
+            ctx.lineTo(leftLegX + legLowerWidth / 2, legBottomY); ctx.lineTo(leftLegX - legLowerWidth / 2, legBottomY);
+            ctx.closePath(); ctx.fill();
+            drawBoot(leftLegX, bootTopY + leftBootYOffset); // Left boot with walk offset
+
+            // Right Leg (Tapered)
+            ctx.beginPath();
+            ctx.moveTo(rightLegX - legUpperWidth / 2, legTopY); ctx.lineTo(rightLegX + legUpperWidth / 2, legTopY);
+            ctx.lineTo(rightLegX + legLowerWidth / 2, legBottomY); ctx.lineTo(rightLegX - legLowerWidth / 2, legBottomY);
+            ctx.closePath(); ctx.fill();
+            drawBoot(rightLegX, bootTopY + rightBootYOffset); // Right boot with walk offset
         }
 
-        // --- Draw Gun if needed ---
+        // --- 3. Draw Base Torso --- (Under armor)
+        ctx.fillStyle = playerBodyColor;
+        ctx.beginPath();
+        ctx.moveTo(x - torsoUpperWidth / 2, torsoTopY); // Top Left
+        ctx.lineTo(x + torsoUpperWidth / 2, torsoTopY); // Top Right
+        ctx.lineTo(x + torsoLowerWidth / 2, torsoBottomY); // Bottom Right (tapered)
+        ctx.lineTo(x - torsoLowerWidth / 2, torsoBottomY); // Bottom Left (tapered)
+        ctx.closePath();
+        ctx.fill();
+
+        // --- 4. Draw Arms --- (Slight Taper)
+        const armPitXLeft = x - torsoUpperWidth * 0.45;
+        const armPitXRight = x + torsoUpperWidth * 0.45;
+        const wristXLeft = x - (torsoUpperWidth * 0.45 + armWidth * 0.3); // Slightly narrower wrist
+        const wristXRight = x + (torsoUpperWidth * 0.45 + armWidth * 0.3);
+        const armBottomY = armTopY + armLength;
+
+        // Left Arm
+        ctx.beginPath();
+        ctx.moveTo(armPitXLeft, armTopY); ctx.lineTo(armPitXLeft + armWidth, armTopY); // Top edge
+        ctx.lineTo(wristXRight - armWidth, armBottomY); ctx.lineTo(wristXLeft, armBottomY); // Bottom edge (tapered)
+        ctx.closePath(); ctx.fill();
+        // Right Arm
+        ctx.beginPath();
+        ctx.moveTo(armPitXRight - armWidth, armTopY); ctx.lineTo(armPitXRight, armTopY); // Top edge
+        ctx.lineTo(wristXRight, armBottomY); ctx.lineTo(wristXRight - armWidth * 0.7, armBottomY); // Bottom edge (tapered) - Adjust taper if needed
+        ctx.closePath(); ctx.fill();
+
+
+        // --- 5. Draw Belt and Buckle ---
+        ctx.fillStyle = beltColor;
+        ctx.fillRect(x - torsoLowerWidth * 0.55, beltTopY, torsoLowerWidth * 1.1, beltHeight); // Belt slightly wider than torso bottom
+        // Buckle
+        ctx.fillStyle = beltBuckleColor;
+        const buckleWidth = w * 0.25;
+        const buckleHeight = beltHeight * 0.8;
+        ctx.fillRect(x - buckleWidth / 2, beltTopY + (beltHeight - buckleHeight) / 2, buckleWidth, buckleHeight);
+        // Buckle Shine
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.fillRect(x - buckleWidth / 2 + 2, beltTopY + (beltHeight - buckleHeight) / 2 + 2, buckleWidth - 4, 2);
+
+        // --- 6. Draw Chest Plate --- (Shaped)
+        const plateWidth = torsoUpperWidth * 0.9;
+        const plateHeight = torsoHeight * 0.9;
+        const plateTopY = torsoTopY + torsoHeight * 0.05;
+        const plateBottomY = plateTopY + plateHeight;
+        ctx.fillStyle = armorColor;
+        ctx.beginPath();
+        ctx.moveTo(x - plateWidth / 2, plateTopY); // Top Left
+        ctx.lineTo(x + plateWidth / 2, plateTopY); // Top Right
+        ctx.lineTo(x + plateWidth * 0.4, plateBottomY); // Bottom Right Angled
+        ctx.lineTo(x - plateWidth * 0.4, plateBottomY); // Bottom Left Angled
+        ctx.closePath();
+        ctx.fill();
+        // Highlight / Shadow
+        ctx.fillStyle = armorHighlight;
+        ctx.fillRect(x - plateWidth / 2 + 4, plateTopY + 4, plateWidth - 8, 3); // Top Highlight
+        ctx.fillStyle = armorShadow;
+        ctx.fillRect(x - plateWidth / 2 + 5, plateTopY + 7, plateWidth - 10, 2); // Shadow below
+
+
+        // --- 7. Draw Shoulder Pauldrons --- (Rounded)
+        ctx.fillStyle = armorColor;
+        // Left Pauldron
+        ctx.beginPath();
+        ctx.arc(x - shoulderOffsetX, shoulderCenterY, shoulderPadRadius, Math.PI * 1.1, Math.PI * 1.9); // Upper arc
+        ctx.closePath(); // Close path to fill correctly
+        ctx.fill();
+         ctx.fillStyle = armorHighlight; // Highlight
+        ctx.beginPath();
+        ctx.arc(x - shoulderOffsetX, shoulderCenterY -2, shoulderPadRadius * 0.8, Math.PI * 1.2, Math.PI * 1.8);
+        ctx.arc(x - shoulderOffsetX, shoulderCenterY, shoulderPadRadius * 0.9, Math.PI * 1.8, Math.PI * 1.2, true); // Inner arc slight offset
+        ctx.closePath();
+        ctx.fill();
+
+
+        // Right Pauldron
+        ctx.fillStyle = armorColor;
+        ctx.beginPath();
+        ctx.arc(x + shoulderOffsetX, shoulderCenterY, shoulderPadRadius, Math.PI * 0.1, Math.PI * 0.9, true); // Flipped arc
+         ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = armorHighlight; // Highlight
+        ctx.beginPath();
+        ctx.arc(x + shoulderOffsetX, shoulderCenterY - 2, shoulderPadRadius*0.8, Math.PI * 0.2, Math.PI*0.8, true);
+        ctx.arc(x + shoulderOffsetX, shoulderCenterY, shoulderPadRadius*0.9, Math.PI * 0.8, Math.PI*0.2, false);
+        ctx.closePath();
+        ctx.fill();
+
+
+        // --- 8. Draw Helmet --- (Refined Bucket)
+        // Main Bucket
+        ctx.fillStyle = helmetColor;
+        ctx.fillRect(x - headWidth / 2, headTopY, headWidth, headHeight);
+        // Rounded Top Edge
+        const curveRadius = headWidth * 0.1;
+        ctx.beginPath();
+        ctx.moveTo(x - headWidth / 2, headTopY + curveRadius);
+        ctx.lineTo(x - headWidth / 2, headTopY);
+        ctx.lineTo(x + headWidth / 2, headTopY);
+        ctx.lineTo(x + headWidth / 2, headTopY + curveRadius);
+        ctx.arcTo(x + headWidth/2, headTopY, x + headWidth/2 - curveRadius, headTopY, curveRadius); // Top right corner
+        ctx.arcTo(x - headWidth/2, headTopY, x - headWidth/2, headTopY + curveRadius, curveRadius); // Top left corner
+        ctx.fill(); // Fill the rounded top part
+
+        // Neck Guard part (below main bucket)
+        ctx.fillStyle = helmetColor;
+        ctx.fillRect(x - headWidth * 0.4, headBottomY - neckHeight * 0.5, headWidth * 0.8, neckHeight * 1.2);
+
+        // Highlights / Rivets
+        ctx.fillStyle = armorHighlight;
+        ctx.fillRect(x - headWidth / 2 + 3, headTopY + 3, headWidth - 6, 2); // Top highlight line
+        // Rivets
+        const rivetRadius = 1.5;
+        ctx.beginPath(); ctx.arc(x - headWidth * 0.4, headBottomY - neckHeight*0.2, rivetRadius, 0, Math.PI*2); ctx.fill(); // Left rivet
+        ctx.beginPath(); ctx.arc(x + headWidth * 0.4, headBottomY - neckHeight*0.2, rivetRadius, 0, Math.PI*2); ctx.fill(); // Right rivet
+        ctx.beginPath(); ctx.arc(x, headTopY + headHeight * 0.85, rivetRadius, 0, Math.PI*2); ctx.fill(); // Forehead rivet?
+
+        // Eye Slit
+        ctx.fillStyle = slitColor;
+        const slitHeight = headHeight * 0.12;
+        const slitWidth = headWidth * 0.8;
+        const slitY = headTopY + headHeight * 0.45;
+        ctx.fillRect(x - slitWidth / 2, slitY, slitWidth, slitHeight);
+
+
+        // --- 9. Draw Gun --- (Conditional based on aim or pushback)
+         // (Using the previously corrected logic)
+        let shouldDrawGun = false;
+        let gunDrawAngle = 0;
+        let gunDrawMode = 'aiming'; // 'aiming' or 'pushback'
+
+        if (isPushbackAnimating) {
+            shouldDrawGun = true;
+            gunDrawMode = 'pushback';
+            gunDrawAngle = -Math.PI / 2; // Straight out right during pushback kick
+        } else if (isSelf && (aimDx !== 0 || aimDy !== 0)) {
+            shouldDrawGun = true;
+            gunDrawMode = 'aiming';
+            gunDrawAngle = Math.atan2(aimDy, aimDx);
+        }
+
         if (shouldDrawGun) {
             const gunLevel = playerState?.gun ?? 1;
             const baseBarrelLength = 18;
@@ -803,98 +1023,80 @@ const Renderer = (() => {
             const barrelThickness = 3 + (gunLevel - 1) * 0.2;
             const stockLength = 8 + (gunLevel - 1) * 0.5;
             const stockThickness = 5 + (gunLevel - 1) * 0.3;
-            const stockColor = "#8B4513"; // Brown for stock
-            const barrelColor = "#444444"; // Dark grey for barrel
+            const stockColor = "#8B4513";
+            const barrelColor = "#444444";
 
-            // Position gun relative to arm/shoulder area (same calculation for both modes)
-            const gunOriginYOffset = aty + al * 0.4; // Roughly mid-arm level
-            // If pushback, maybe bring origin slightly more central? (Optional tweak)
-            const gunOriginXOffset = (gunDrawMode === 'pushback') ? 0 : w * 0.1;
+            const gunOriginYOffset = armTopY + armLength * 0.4; // Relative Y position for gun pivot
+            const gunOriginXOffset = (gunDrawMode === 'pushback') ? w * 0.05 : w * 0.1; // Adjust X pivot slightly
 
             ctx.save();
-            // Translate to the rotation point
-            ctx.translate(x + gunOriginXOffset, gunOriginYOffset); // Adjust X origin slightly if needed
-            ctx.rotate(gunDrawAngle); // Apply the calculated angle (aiming or pushback)
-
-            // Draw Stock (behind barrel)
+            ctx.translate(x + gunOriginXOffset, gunOriginYOffset);
+            ctx.rotate(gunDrawAngle);
             ctx.fillStyle = stockColor;
-            // Adjust position relative to the (potentially shifted) origin
             ctx.fillRect(-stockLength - 2, -stockThickness / 2, stockLength, stockThickness);
-
-            // Draw Barrel (extends forward)
             ctx.fillStyle = barrelColor;
             ctx.fillRect(0, -barrelThickness / 2, barrelLength, barrelThickness);
-
-            ctx.restore(); // Restore rotation/translation
+            ctx.restore();
         }
-        // --- End Gun Drawing ---
 
+        // --- 10. Draw Effects ---
 
-        // --- REVISED: Snake Bite Effect (Green Fire Particles) ---
+        // Snake Bite Particles (Using the previously added code)
         if (isPlayerBitten) {
-            const footY = boby; // Base Y position at player's boot bottom
-            const numParticles = 8; // Number of particles per frame
+            const footY = bootBottomY; // Use calculated boot bottom
+            const numParticles = 8;
             const particleBaseSize = 4;
-            const particleSpeedY = -60; // Pixels per second upward
-            const particleLifetimeMs = 600; // How long each particle lasts
+            const particleSpeedY = -60;
+            const particleLifetimeMs = 600;
 
-            ctx.save();
+            ctx.save(); // Already saved at function start, maybe not needed? Check balancing.
             for (let i = 0; i < numParticles; i++) {
-                // Simulate particle progress based on when the effect started relative to now
-                // This isn't a true particle system, but gives a continuous effect
                 const effectStartTime = (playerSnakeEffect.expires_at * 1000) - (SNAKE_BITE_DURATION * 1000);
-                const timeSinceEffectStart = Math.max(0, t - effectStartTime); // Use current time 't'
-                // Use modulo to simulate continuous emission within the lifetime
+                const timeSinceEffectStart = Math.max(0, now - effectStartTime);
                 const particleSimulatedAge = (timeSinceEffectStart + (particleLifetimeMs / numParticles) * i) % particleLifetimeMs;
-                const particleProgress = particleSimulatedAge / particleLifetimeMs; // 0 to 1
+                const particleProgress = particleSimulatedAge / particleLifetimeMs;
 
-                if (particleProgress < 0 || particleProgress >= 1) continue; // Skip if outside simulated lifetime
+                if (particleProgress < 0 || particleProgress >= 1) continue;
 
-                // Position: Start at feet, move up, add horizontal jitter
-                const particleX = x + (Math.random() - 0.5) * w * 0.7; // Spread horizontally
-                const particleY = footY + (particleSpeedY * (particleSimulatedAge / 1000)); // Move up based on age
-
-                // Size: Start larger, shrink slightly
+                const particleX = x + (Math.random() - 0.5) * w * 0.7;
+                const particleY = footY + (particleSpeedY * (particleSimulatedAge / 1000));
                 const particleSize = particleBaseSize * (1.0 - particleProgress * 0.5) * (0.8 + Math.random() * 0.4);
-
-                // Alpha: Fade out
                 const alpha = 0.8 * (1.0 - particleProgress) * (0.7 + Math.random() * 0.3);
-
-                // Color: Shift from yellow-green to green
-                const green = 180 + Math.floor(75 * particleProgress); // Becomes greener over time
-                const yellow = 200 * (1.0 - particleProgress); // Fades out yellow component
+                const green = 180 + Math.floor(75 * particleProgress);
+                const yellow = 200 * (1.0 - particleProgress);
                 ctx.fillStyle = `rgba(${Math.floor(yellow)}, ${green}, 50, ${alpha.toFixed(2)})`;
-
-                // Draw particle (simple square)
                 ctx.fillRect(particleX - particleSize / 2, particleY - particleSize / 2, particleSize, particleSize);
+            }
+            ctx.restore(); // Balance the save for particles
+        }
+
+        // Hit Sparks (Using the previously added code)
+        if (jh) {
+            ctx.save();
+            const numSparks = 15 + Math.random() * 10;
+             const sparkColors = [ // Re-declare here or make global if used elsewhere often
+                "rgba(255, 100, 0, 0.8)",
+                "rgba(255, 165, 0, 0.9)",
+                "rgba(255, 220, 50, 0.7)",
+            ];
+            for (let i = 0; i < numSparks; i++) {
+                const sparkAngle = Math.random() * Math.PI * 2;
+                const sparkRadius = Math.random() * w * 0.8 + w * 0.2;
+                // Sparks centered roughly on torso/head area
+                const sparkX = x + Math.cos(sparkAngle) * sparkRadius;
+                const sparkY = y + Math.sin(sparkAngle) * sparkRadius * 0.7 - h * 0.1 + bo; // Use bob offset
+                const sparkSize = Math.random() * 3.5 + 1.5;
+                ctx.fillStyle = sparkColors[Math.floor(Math.random() * sparkColors.length)];
+                ctx.beginPath();
+                ctx.arc(sparkX, sparkY, sparkSize / 2, 0, Math.PI * 2);
+                ctx.fill();
             }
             ctx.restore();
         }
-        // --- End Snake Bite Effect ---
 
 
-            // Draw Hit Sparks (if applicable) - Unchanged
-            if (jh) {
-                ctx.save();
-                const numSparks = 15 + Math.random() * 10;
-                for (let i = 0; i < numSparks; i++) {
-                    const sparkAngle = Math.random() * Math.PI * 2;
-                    const sparkRadius = Math.random() * w * 0.8 + w * 0.2;
-                    const sparkX = x + Math.cos(sparkAngle) * sparkRadius;
-                    const sparkY = y + Math.sin(sparkAngle) * sparkRadius * 0.7 - h * 0.1 + bo;
-                    const sparkSize = Math.random() * 3.5 + 1.5;
-                    ctx.fillStyle = sparkColors[Math.floor(Math.random() * sparkColors.length)];
-                    ctx.beginPath();
-                    ctx.arc(sparkX, sparkY, sparkSize / 2, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-                ctx.restore();
-            }
-
-
-            ctx.restore(); 
-        }
-
+        ctx.restore(); // Restore context state from the very start of the function
+    }
 
     function drawPlayers(ctx, players, appStateRef, localPlayerMuzzleFlashRef, localPlayerPushbackAnimStateRef) {
         if(!players || !appStateRef) return;
