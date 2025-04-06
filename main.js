@@ -397,9 +397,11 @@ const Game = (() => {
     function resetClientState(showMenu = true) {
         log(`Resetting client state. Show Menu: ${showMenu}`); cleanupLoop();
         appState.localPlayerId = null; appState.currentGameId = null; appState.serverState = null; appState.lastServerState = null; appState.previousServerState = null; appState.maxPlayersInGame = null;
-        appState.predictedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 }; appState.renderedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 }; appState.lastLoopTime = null;
+        appState.predictedPlayerPos = { x: appState.canvasWidth / 2, y: appState.canvasHeight / 2 }; // USE appState.canvasWidth and appState.canvasHeight
+        appState.renderedPlayerPos = { x: appState.canvasWidth / 2, y: appState.canvasHeight / 2 }; // USE appState.canvasWidth and appState.canvasHeight
+        appState.lastLoopTime = null;
         localPlayerMuzzleFlash = { active: false, endTime: 0, aimDx: 0, aimDy: 0 };
-        localPlayerPushbackAnim = { active: false, endTime: 0, duration: 250 }; // Reset pushback anim state
+        localPlayerPushbackAnim = { active: false, endTime: 0, duration: 250 };
         hitPauseFrames = 0; activeSpeechBubbles = {}; activeEnemyBubbles = {}; if(typeof snake !== 'undefined'){ snake.isActiveFromServer = false; snake.segments = []; }
         DOM.chatLog.innerHTML = ''; DOM.gameCodeDisplay.textContent = '------'; DOM.gameIdInput.value = ''; if(DOM.countdownDiv) DOM.countdownDiv.style.display = 'none'; if(DOM.dayNightIndicator) DOM.dayNightIndicator.style.display = 'none'; if(DOM.gameOverScreen) DOM.gameOverScreen.style.display = 'none';
         const gridContainer = document.getElementById('player-stats-grid'); if (gridContainer) gridContainer.innerHTML = 'Loading Stats...';
