@@ -447,6 +447,7 @@ const Game = (() => {
                  stateToRender,                  // stateToRender
                  localPlayerMuzzleFlash,         // localPlayerMuzzleFlashRef
                  localPlayerPushbackAnim,        // localPlayerPushbackAnimState
+                 activeBloodSparkEffectsRef,
                  CANVAS_WIDTH,                   // width
                  CANVAS_HEIGHT                   // height
              );
