@@ -1678,7 +1678,6 @@ const Renderer = (() => {
     function drawEnemies(
       ctx,
       enemies,
-      activeEnemyBubblesRef,
       activeBloodSparkEffectsRef
     ) {
       if (!enemies) return;
@@ -2060,7 +2059,7 @@ const Renderer = (() => {
       appState,
       stateToRender,
       localPlayerMuzzleFlashRef,
-      localPlayerPushbackAnimState,
+      localPlayerPushbackAnimState, 
       activeBloodSparkEffectsRef,
       width,
       height
