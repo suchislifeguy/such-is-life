@@ -1,571 +1,1195 @@
-// main.js
+// renderer.js
 
-console.log("--- main.js: Starting execution ---");
+const Renderer = (() => {
+    console.log("--- Renderer.js: Initializing ---");
+  
+    let mainCtx = null;
+    let canvasWidth = 1600;
+    let canvasHeight = 900;
+  
+    // ... (Keep offscreen canvas, transition state, etc.) ...
+    const offscreenCanvas = document.createElement("canvas");
+    const offscreenCtx = offscreenCanvas.getContext("2d", { alpha: false });
+    let isBackgroundReady = false;
+    let currentBackgroundIsNight = null;
+    let isTransitioningBackground = false;
+    let transitionStartTime = 0;
+    const BACKGROUND_FADE_DURATION_MS = 1000;
+    const oldOffscreenCanvas = document.createElement("canvas");
+    const oldOffscreenCtx = oldOffscreenCanvas.getContext("2d", { alpha: false });
+    const hazeCanvas = document.createElement("canvas");
+    const hazeCtx = hazeCanvas.getContext("2d", { willReadFrequently: true });
+  
+    // --- Internal Constants ---
+    // *** FIX: Define playerColor BEFORE healthBarLow uses it ***
+    const playerColor = "#DC143C"; // Define player color first
+  
+    const dayBaseColor = "#8FBC8F";
+    const nightBaseColor = "#3E2723";
+    const fontFamily = "'Courier New', monospace";
+    const damageTextColor = "#FFFFFF";
+    const damageTextCritColor = "#FFD700";
+    const damageTextFontSize = 14;
+    const damageTextCritFontSize = 18;
+    // const playerColor = "#DC143C"; // Moved up
+    const otherPlayerColor = "#4682B4";
+    const dustyPlayerSelfColor = "#8B4513";
+    const dustyPlayerOtherColor = "#556B2F";
+    const enemyTorsoChaserColor = "#2F4F4F";
+    const enemyTorsoShooterColor = "#4682B4";
+    const enemyTorsoGiantColor = "#6B4226";
+    const enemySkinColor = "#D2B48C";
+    const enemyCoatColor = "#8B4513";
+    const enemyBootColor = "#222222";
+    const enemyCapColor = "#111111";
+    const enemyHitFlashColor = "rgba(255, 255, 255, 0.7)";
+    const bulletPlayerColor = "#ffed4a";
+    const bulletEnemyColor = "#ff0000";
+    const healthBarBg = "#444";
+    const healthBarHigh = "#66bb6a";
+    const healthBarMedium = "#FFD700";
+    const healthBarLow = playerColor; // Now playerColor is defined
+    const armorBarColor = "#9e9e9e";
+    const powerupHealthColor = "#81c784";
+    const powerupGunColor = "#442848";
+    const powerupSpeedColor = "#3edef3";
+    const powerupArmorColor = armorBarColor; // Reuse armorBarColor
+    const powerupShotgunColor = "#FFA500";
+    const powerupSlugColor = "#A0522D";
+    const powerupRapidColor = "#FFFF00";
+    const powerupScoreColor = healthBarMedium; // Reuse healthBarMedium
+    const powerupDefaultColor = "#888";
+    const playerSpeechBubbleColor = "#d0d8d7";
+    const playerSpeechBubbleBg = "rgba(0, 0, 0, 0.7)";
+    const playerSpeechBubbleOutline = "rgba(200, 200, 200, 0.5)";
+    const enemySpeechBubbleColor = "#FFAAAA";
+    const enemySpeechBubbleBg = "rgba(70, 0, 0, 0.7)";
+    const enemySpeechBubbleOutline = "rgba(200, 150, 150, 0.5)";
+    const campfireAuraColor = "rgba(255, 165, 0, 0.15)";
+    const campfireStickColor = "#8B4513";
+    const campfireFlameOuterColor = "rgba(255, 165, 0, 0.6)";
+    const campfireFlameInnerColor = "rgba(255, 255, 0, 0.7)";
+    const muzzleFlashColor = "rgba(255, 220, 50, 0.9)";
+    const snakeLineColor = "#261a0d";
+    const snakeBiteTintColor = "rgba(0, 200, 50, 0.15)";
+    const ironHelmetColor = "#3d3d3d";
+    const ironHelmetHighlight = "#666666";
+    const ironHelmetShadow = "#1a1a1a";
+    const beltColor = "#412a19";
+    const bootColor = "#241c1c";
+    const backgroundShadowColor = "rgba(0,0,0,0.3)";
+    const simpleChestPlateColor = "#777777";
+    const chestPlateHighlight = "#999999";
+    const slitColor = "#000000";
+    const gunColor = "#444444";
+    const sparkColors = [ "rgba(255, 100, 0, 0.8)", "rgba(255, 165, 0, 0.9)", "rgba(255, 220, 50, 0.7)", ];
+    const IDLE_BOB_SPEED_DIVISOR = 600;
+    const IDLE_BOB_AMPLITUDE = 3;
+    const DAMAGE_VIGNETTE_HEALTH_THRESHOLD = 30;
+    const TEMP_FREEZING_CLIENT = 0.0;
+    const TEMP_COLD_CLIENT = 10.0;
+    const TEMP_HOT_CLIENT = 35.0;
+    const TEMP_SCORCHING_CLIENT = 40.0;
+    const MAX_TINT_ALPHA = 0.25;
+    const RAIN_COLOR = "rgba(170, 190, 230, 0.6)";
+    const RAIN_DROPS = 150;
+    const RAIN_LENGTH = 15;
+    const RAIN_SPEED_X = 1;
+    const RAIN_SPEED_Y = 12;
+    const HEAT_HAZE_START_TEMP = 28.0;
+    const HEAT_HAZE_MAX_TEMP = 45.0;
+    const HEAT_HAZE_MAX_OFFSET = 4;
+    const HEAT_HAZE_SPEED = 0.004;
+    const HEAT_HAZE_WAVELENGTH = 0.02;
+    const HEAT_HAZE_LAYERS_MAX = 5;
+    const HEAT_HAZE_BASE_ALPHA = 0.03;
+  
+    let currentShakeMagnitude = 0;
+    let shakeEndTime = 0;
+  
+    function drawRoundedRect(ctx, x, y, width, height, radius) { if (width < 2 * radius) radius = width / 2; if (height < 2 * radius) radius = height / 2; ctx.beginPath(); ctx.moveTo(x + radius, y); ctx.arcTo(x + width, y, x + width, y + height, radius); ctx.arcTo(x + width, y + height, x, y + height, radius); ctx.arcTo(x, y + height, x, y, radius); ctx.arcTo(x, y, x + width, y, radius); ctx.closePath(); }
 
-// --- Client Configuration & Core Constants ---
-const WEBSOCKET_URL = 'wss://such-is-life.glitch.me/ws';
-const CANVAS_WIDTH = 1600;
-const CANVAS_HEIGHT = 900;
-const SHOOT_COOLDOWN = 750;
-const RAPID_FIRE_COOLDOWN_MULTIPLIER = 0.4;
-const INPUT_SEND_INTERVAL = 33;
-const RECONNECT_DELAY = 3000;
-const TEMP_FREEZING_CLIENT = 0.0;
-const TEMP_COLD_CLIENT = 10.0;
-const TEMP_TEMPERATE_CLIENT = 25.0;
-const TEMP_HOT_CLIENT = 35.0;
-const TEMP_SCORCHING_CLIENT = 40.0;
-const MAX_TINT_ALPHA = 0.25;
-const PLAYER_DEFAULTS = { width: 25, height: 48, max_health: 100, base_speed: 150 };
-const ENEMY_DEFAULTS = { width: 20, height: 40, max_health: 50 };
-const BULLET_DEFAULTS = { radius: 4 };
-const POWERUP_DEFAULTS = { size: 20 };
-const PLAYER_STATUS_ALIVE = 'alive';
-const PLAYER_STATUS_DOWN = 'down';
-const PLAYER_STATUS_DEAD = 'dead';
-const ENEMY_TYPE_CHASER = 'chaser';
-const ENEMY_TYPE_SHOOTER = 'shooter';
 
-// --- Utility Functions ---
-function getCssVar(varName) { return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || ''; }
-function lerp(start, end, amount) { return start + (end - start) * amount; }
-function distance(x1, y1, x2, y2) { const dx = x1 - x2; const dy = y1 - y2; return Math.sqrt(dx * dx + dy * dy); }
-
-// --- DOM Element References ---
-const DOM = {
-    gameContainer: document.getElementById('game-container'), gameStatus: document.getElementById('game-status'),
-    mainMenuSection: document.getElementById('main-menu-section'), multiplayerMenuSection: document.getElementById('multiplayer-menu-section'),
-    hostWaitSection: document.getElementById('host-wait-section'), joinCodeSection: document.getElementById('join-code-section'),
-    gameArea: document.getElementById('game-area'), gameOverScreen: document.getElementById('game-over-screen'),
-    gameCodeDisplay: document.getElementById('game-code-display'), waitingMessage: document.getElementById('waiting-message'),
-    gameIdInput: document.getElementById('gameIdInput'), canvas: document.getElementById('gameCanvas'),
-    ctx: null,
-    dayNightIndicator: document.getElementById('day-night-indicator'),
-    countdownDiv: document.getElementById('countdown'), finalStatsDiv: document.getElementById('final-stats'),
-    chatInput: document.getElementById('chatInput'), chatLog: document.getElementById('chat-log'),
-    singlePlayerBtn: document.getElementById('singlePlayerBtn'), multiplayerBtn: document.getElementById('multiplayerBtn'),
-    hostGameBtn2: document.getElementById('hostGameBtn2'), hostGameBtn3: document.getElementById('hostGameBtn3'),
-    hostGameBtn4: document.getElementById('hostGameBtn4'), showJoinUIBtn: document.getElementById('showJoinUIBtn'),
-    cancelHostBtn: document.getElementById('cancelHostBtn'), joinGameSubmitBtn: document.getElementById('joinGameSubmitBtn'),
-    sendChatBtn: document.getElementById('sendChatBtn'), leaveGameBtn: document.getElementById('leaveGameBtn'),
-    gameOverBackBtn: document.getElementById('gameOverBackBtn'),
-};
-if (DOM.canvas) {
-    DOM.ctx = DOM.canvas.getContext('2d');
-    if (!DOM.ctx) { console.error("Failed to get 2D context from canvas!"); }
-} else { console.error("Canvas element not found!"); }
-
-
-// --- Global Client State ---
-let appState = {
-    mode: 'menu', localPlayerId: null, maxPlayersInGame: null, currentGameId: null,
-    serverState: null, animationFrameId: null, isConnected: false,
-    renderedPlayerPos: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 },
-    predictedPlayerPos: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 },
-    lastServerState: null, previousServerState: null, lastLoopTime: null,
-    lastStateReceiveTime: performance.now(), currentTemp: 18.0, isRaining: false,
-    isDustStorm: false, targetTint: null, targetTintAlpha: 0.0,
-};
-
-// --- Local Effects State ---
-let localPlayerMuzzleFlash = { active: false, endTime: 0, aimDx: 0, aimDy: 0 };
-// --- NEW: Pushback Animation State ---
-let localPlayerPushbackAnim = {
-    active: false,
-    endTime: 0,
-    duration: 250 // Animation duration in ms (adjust for desired speed)
-};
-// -------------------------------------
-let hitPauseFrames = 0;
-let activeSpeechBubbles = {};
-let activeEnemyBubbles = {};
-let socket = null;
-
-// --- Snake Effect State ---
-let snake = {
-    segmentLength: 6.0, segments: [], maxSegments: 12, frequency: 0.03, amplitude: 15.0,
-    lineWidth: 3, serverHeadX: 0, serverHeadY: 0, serverBaseY: 0, isActiveFromServer: false,
-    update: function(currentTime) {
-        if (!this.isActiveFromServer) { this.segments = []; return; }
-        const lerpFn = lerp;
-        if (this.segments.length === 0) { this.segments.push({ x: this.serverHeadX, y: this.serverHeadY, time: currentTime }); }
-        else { this.segments[0].x = this.serverHeadX; this.segments[0].y = this.serverHeadY; this.segments[0].time = currentTime; }
-        const waveTime = currentTime * 0.005; const phaseOffsetPerSegment = 1.2; const followLerp = 0.4;
-        for (let i = 1; i < this.segments.length; i++) {
-            const seg = this.segments[i]; const prevSeg = this.segments[i - 1]; if (!seg || !prevSeg) continue;
-            const dx = prevSeg.x - seg.x; const dy = prevSeg.y - seg.y; const dist = Math.sqrt(dx*dx + dy*dy);
-            const dirX = dist > 0.01 ? dx / dist : 0; const dirY = dist > 0.01 ? dy / dist : 0;
-            const targetFollowX = prevSeg.x - dirX * this.segmentLength; const wavePhase = waveTime - (i * phaseOffsetPerSegment);
-            const midPoint = (this.segments.length - 1) / 2.0; const distanceFromMid = Math.abs(i - midPoint);
-            const normDist = midPoint > 0 ? distanceFromMid / midPoint : 0; const amplitudeFactor = Math.cos(normDist * (Math.PI / 2));
-            const targetWaveY = this.serverBaseY + Math.sin(wavePhase) * this.amplitude * amplitudeFactor;
-            seg.x = lerpFn(seg.x, targetFollowX, followLerp); seg.y = lerpFn(seg.y, targetWaveY, followLerp * 1.2);
-        }
-        if (this.segments.length > 0 && this.segments.length < this.maxSegments) {
-            const head = this.segments[0]; const neck = this.segments[1];
-            if (neck) { const headNeckDistSq = (head.x - neck.x)**2 + (head.y - neck.y)**2; if (headNeckDistSq > (this.segmentLength * 1.1)**2) { this.segments.splice(1, 0, { x: lerpFn(neck.x, head.x, 0.5), y: lerpFn(neck.y, head.y, 0.5), time: currentTime }); } }
-            else { this.segments.push({ x: head.x - (this.segmentLength*0.5), y: head.y, time: currentTime }); }
-        }
-        while (this.segments.length > this.maxSegments) { this.segments.pop(); }
+    function generateBackground(ctx, targetIsNight, width, height) {
+        console.log(`[Renderer] generateBackground v5 called. TargetNight: ${targetIsNight}`);
+        ctx.clearRect(0, 0, width, height); // Start fresh
+    
+        if (!targetIsNight) {
+            // --- Day View (Looking Down - Structured Earthy Ground) ---
+            const dayBaseColor = "#949A80"; // More Greyish-Green Base
+            const dirtColor1 = "rgba(76, 103, 41, 0.2)"; // Slightly more opaque Earthy Brown 1
+            const dirtColor2 = "rgba(143, 121, 55, 0.2)";  // Slightly more opaque Earthy Brown 2
+            // Texture Stroke Colors:
+            const textureStrokeDark = "rgba(59, 112, 67, 0.3)";    // Darker Dusty Green Stroke
+            const textureStrokeLight = "rgba(135, 150, 110, 0.25)"; // Lighter Dusty Green Stroke
+            const textureStrokeEmerald = "rgba(19, 226, 112, 0.15)";// Subtle Emerald Stroke (lower alpha)
+    
+            const numDirtPatches = 40; // Fewer, more defined patches
+            const numTextureStrokes = 2500; // Fewer elements needed for strokes vs fills
+    
+            // 1. Base ground color
+            ctx.fillStyle = dayBaseColor;
+            ctx.fillRect(0, 0, width, height);
+    
+            // 2. Irregular Dirt Patches (Polygons - under texture)
+            for (let i = 0; i < numDirtPatches; i++) {
+                const x = Math.random() * width;
+                const y = Math.random() * height;
+                const avgRadius = Math.random() * 100 + 50; // Average size
+                const points = 5 + Math.floor(Math.random() * 4); // 5-8 points for irregularity
+                const color = Math.random() < 0.5 ? dirtColor1 : dirtColor2;
+    
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.moveTo(x + avgRadius * Math.cos(0), y + avgRadius * Math.sin(0));
+                for (let j = 1; j <= points; j++) {
+                    const angle = (j / points) * Math.PI * 2;
+                    // Add randomness to radius for each point
+                    const radius = avgRadius * (0.7 + Math.random() * 0.6);
+                    ctx.lineTo(x + radius * Math.cos(angle), y + radius * Math.sin(angle));
+                }
+                ctx.closePath();
+                ctx.fill();
+            }
+    
+            // 3. Ground Texture using Strokes (Organic feel)
+            ctx.lineWidth = 1.5; // Slightly thicker strokes
+            ctx.lineCap = 'round'; // Softer ends
+    
+            for (let i = 0; i < numTextureStrokes; i++) {
+                const x = Math.random() * width;
+                const y = Math.random() * height;
+                const length = Math.random() * 5 + 2; // Short strokes
+                const angle = Math.random() * Math.PI * 2; // Random direction
+    
+                // Choose texture color, giving emerald a lower chance
+                let strokeColor;
+                const randColor = Math.random();
+                if (randColor < 0.10) { // ~10% chance for emerald touch
+                    strokeColor = textureStrokeEmerald;
+                } else if (randColor < 0.55) { // ~45% chance for lighter dusty
+                    strokeColor = textureStrokeLight;
+                } else { // ~45% chance for darker dusty
+                    strokeColor = textureStrokeDark;
+                }
+    
+                ctx.strokeStyle = strokeColor;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
+                ctx.stroke();
+            }
+            ctx.lineCap = 'butt'; // Reset lineCap
+    
+        } else {
+            // --- Night View (Looking Up - Aggressively Neutral Dark Sky) ---
+            const baseNightColor = "#080808"; // Near Black / Very Dark Grey Base
+            const nebulaeColors = [
+                // Removed blue/purple, using faint greys & reds
+                [180, 180, 190, 0.05], // Faint Grey/White Cloud
+                [200, 80, 80, 0.04],  // Faint Hydrogen-Alpha Red Cloud
+                [160, 160, 160, 0.06], // Slightly Brighter Grey Cloud
+                [210, 100, 100, 0.035] // Fainter Red Cloud
+            ];
+            const darkCloudColor = "rgba(8, 8, 8, 0.18)"; // Dark grey clouds, slightly more opaque
+            const numNebulae = 10; // Fewer nebulae now they aren't the main color source
+            const numDarkClouds = 20; // More dark clouds
+            const numDustStars = 2000; // More dust
+            const numMidStars = 500;
+            const numHeroStars = 70;
+    
+            // 1. Base Sky Color (Very Neutral)
+            ctx.fillStyle = baseNightColor;
+            ctx.fillRect(0, 0, width, height);
+    
+            // 2. Nebulae / Gas Clouds (Faint Greys/Reds)
+            for (let i = 0; i < numNebulae; i++) {
+                const x = Math.random() * width;
+                const y = Math.random() * height;
+                const radius = Math.random() * (width * 0.4) + (width * 0.15); // Can be large
+                const colorData = nebulaeColors[Math.floor(Math.random() * nebulaeColors.length)];
+                const [r, g, b, baseAlpha] = colorData;
+                try {
+                    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+                    gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${Math.min(0.1, baseAlpha * 1.5).toFixed(2)})`); // Faint core
+                    gradient.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${baseAlpha.toFixed(2)})`); // Main color
+                    gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`); // Fade out
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
+                } catch (e) { console.error("Failed to create nebula gradient:", e); }
+            }
+    
+            // --- Star Fields --- (Helper function remains the same)
+            const drawStars = (count, minSize, maxSize, minAlpha, maxAlpha, colorVariance = 0) => {
+                for (let i = 0; i < count; i++) {
+                    const sx = Math.random() * width;
+                    const sy = Math.random() * height;
+                    const size = Math.random() * (maxSize - minSize) + minSize;
+                    const alpha = Math.random() * (maxAlpha - minAlpha) + minAlpha;
+                    let r = 255, g = 255, b = 255;
+                    if (colorVariance > 0 && Math.random() < 0.3) { // Reduced chance for color variance
+                        const variance = Math.random() * colorVariance;
+                        // Focus variance more on yellow/white, less pure blue
+                         if (Math.random() < 0.7) { // 70% yellow/white shift
+                            b -= variance;
+                            r = Math.max(0, Math.min(255, r));
+                            g = Math.max(0, Math.min(255, g));
+                            b = Math.max(0, Math.min(255, b));
+                        }
+                        // Keep pure blue shift minimal or non-existent
+                        // else { // Optional: very faint blue shift
+                        //     r -= variance * 0.3;
+                        //     g -= variance * 0.3;
+                        // }
+                    }
+                    ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${alpha.toFixed(2)})`;
+                    ctx.fillRect(sx - size / 2, sy - size / 2, size, size);
+                }
+            };
+            // 3. Draw Star Layers (Increased dust count)
+            drawStars(numDustStars, 0.4, 0.9, 0.06, 0.30); // Even fainter dust base alpha
+            drawStars(numMidStars, 0.7, 1.6, 0.20, 0.70, 25); // Less color variance
+            drawStars(numHeroStars, 1.4, 2.6, 0.50, 1.0, 40); // Less color variance
+    
+            // 4. Draw Dark Space Clouds (Neutral Dark Grey)
+            for (let i = 0; i < numDarkClouds; i++) {
+                const x = Math.random() * width;
+                const y = Math.random() * height;
+                const radiusX = Math.random() * (width * 0.3) + (width * 0.12);
+                const radiusY = Math.random() * (height * 0.25) + (height * 0.1);
+                const rotation = Math.random() * Math.PI;
+                ctx.fillStyle = darkCloudColor; // Neutral dark grey/black cloud color
+                ctx.beginPath();
+                ctx.ellipse(x, y, radiusX, radiusY, rotation, 0, Math.PI * 2);
+                ctx.fill();
+            }
+    
+        } // End Night View
+    
+        // Store the state on the canvas element itself for the transition logic
+        ctx.canvas.dataset.isNight = String(targetIsNight);
+        console.log(`[Renderer] generateBackground v5 finished. Stored isNight: ${ctx.canvas.dataset.isNight}`);
+        return targetIsNight; // Return the state we just generated
     }
-};
 
-// --- Logging Wrappers ---
-function log(...args) { console.log("[Client]", ...args); }
-function error(...args) { console.error("[Client]", ...args); }
 
-// --- UI Management Module ---
-const UI = (() => {
-    const allSections = [ DOM.mainMenuSection, DOM.multiplayerMenuSection, DOM.hostWaitSection, DOM.joinCodeSection, DOM.gameArea, DOM.gameOverScreen ];
-    const gameSections = ['game-area'];
-    function showSection(sectionId) { allSections.forEach(s => { if(s) s.style.display = 'none'; }); const sectionToShow = DOM[sectionId] || document.getElementById(sectionId); if (sectionToShow) { sectionToShow.style.display = (sectionId === 'game-area' || sectionId === 'game-over-screen') ? 'flex' : 'block'; log(`UI: Showing section: ${sectionId}`); DOM.gameContainer.classList.toggle('in-game', gameSections.includes(sectionId)); } else { error(`UI: Section not found: ${sectionId}`); } }
-    function updateStatus(message, isError = false) { if (!DOM.gameStatus) return; DOM.gameStatus.textContent = message; DOM.gameStatus.style.color = isError ? (getCssVar('--player-color') || 'red') : (getCssVar('--accent-color') || 'yellow'); (isError ? error : log)("Status Update:", message); }
-    function updateHUD(serverState) {
-        const gridContainer = document.getElementById('player-stats-grid'); if (!gridContainer) return;
-        const players = serverState?.players; const localPlayerId = appState.localPlayerId; gridContainer.innerHTML = '';
-        if (!players || Object.keys(players).length === 0) { gridContainer.innerHTML = '<span>Waiting for players...</span>'; return; }
-        const sortedPlayerIds = Object.keys(players).sort((a, b) => { if (a === localPlayerId) return -1; if (b === localPlayerId) return 1; return a.localeCompare(b); });
-        sortedPlayerIds.forEach(playerId => {
-            const pData = players[playerId]; if (!pData) return; const isSelf = (playerId === localPlayerId); const header = isSelf ? "YOU" : `P:${playerId.substring(0, 4)}`;
-            const status = pData.player_status || PLAYER_STATUS_ALIVE; const health = pData.health ?? 0; const armor = pData.armor ?? 0;
-            let healthDisplay; if (status === PLAYER_STATUS_DOWN) healthDisplay = `<span style='color: var(--health-bar-medium);'>DOWN</span>`; else if (status === PLAYER_STATUS_DEAD || health <= 0) healthDisplay = `<span style='color: var(--health-bar-low);'>DEAD</span>`; else healthDisplay = `${health.toFixed(1)}`;
-            gridContainer.innerHTML += `<div class="player-stats-box"><div class="stats-header">${header}</div><div class="stats-content"><span>HP:</span> ${healthDisplay}<br><span>Armor:</span> ${Math.round(armor)}<br><span>Gun:</span> ${pData.gun ?? 1}<br><span>Speed:</span> ${pData.speed ?? PLAYER_DEFAULTS.base_speed}<br><span>Kills:</span> ${pData.kills ?? 0}<br><span>Score:</span> ${pData.score ?? 0}</div></div>`;
+
+    function updateGeneratedBackground(targetIsNight, targetCanvasWidth, targetCanvasHeight) { canvasWidth = targetCanvasWidth; canvasHeight = targetCanvasHeight; if ( offscreenCanvas.width !== canvasWidth || offscreenCanvas.height !== canvasHeight ) { offscreenCanvas.width = canvasWidth; offscreenCanvas.height = canvasHeight; oldOffscreenCanvas.width = canvasWidth; oldOffscreenCanvas.height = canvasHeight; hazeCanvas.width = canvasWidth; hazeCanvas.height = canvasHeight; isBackgroundReady = false; currentBackgroundIsNight = null; isTransitioningBackground = false; } if (targetIsNight === currentBackgroundIsNight && isBackgroundReady) { return; } if (isTransitioningBackground && targetIsNight === (offscreenCanvas.dataset.isNight === 'true')) { return; } if (isBackgroundReady) { oldOffscreenCtx.clearRect(0, 0, canvasWidth, canvasHeight); oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0); isTransitioningBackground = true; transitionStartTime = performance.now(); generateBackground(offscreenCtx, targetIsNight, canvasWidth, canvasHeight); currentBackgroundIsNight = targetIsNight; } else { generateBackground(offscreenCtx, targetIsNight, canvasWidth, canvasHeight); currentBackgroundIsNight = targetIsNight; isBackgroundReady = true; isTransitioningBackground = false; } }
+    function drawDamageTexts(ctx, damageTexts) { if(!damageTexts) return; const now=performance.now(),pd=250,pmsi=4; ctx.textAlign='center'; ctx.textBaseline='bottom'; Object.values(damageTexts).forEach(dt=>{ if(!dt) return; const x=dt.x??0,y=dt.y??0,t=dt.text??'?',ic=dt.is_crit??false,st=dt.spawn_time?dt.spawn_time*1000:now,ts=now-st; let cfs=ic?damageTextCritFontSize:damageTextFontSize,cfc=ic?damageTextCritColor:damageTextColor; if(ic&&ts<pd){ const pp=Math.sin((ts/pd)*Math.PI); cfs+=pp*pmsi; } ctx.font=`bold ${Math.round(cfs)}px ${fontFamily}`; ctx.fillStyle=cfc; ctx.fillText(t,x,y); }); }
+
+    function drawCampfire(ctx, campfireData, width, height) {
+        if (!campfireData || !campfireData.active) return; // Only draw if active (server controls this via is_night)
+
+        const now = performance.now();
+        const x = campfireData.x ?? width / 2;
+        const y = campfireData.y ?? height / 2;
+        const baseRadius = campfireData.radius ?? 0; // Used for glow radius
+        if (baseRadius <= 0) return;
+
+        // Stick properties
+        const stickWidth = 35;
+        const stickHeight = 8;
+        const stickColor = "#5a3a1e"; // Slightly darker, less red
+        const stickYOffset = 6; // How far sticks sit below the logical 'y'
+        const logBaseY = y + stickYOffset;
+
+        // Flame base properties
+        const flameBaseWidth = stickWidth * 0.8; // Flames originate from log area
+        const numFlames = 4; // Draw multiple distinct flame shapes
+
+        // Flicker parameters
+        const timeSlow = now * 0.0015; // Slower base time for flicker
+        const heightMagnitude = 0.6; // How much height changes (%)
+        const widthMagnitude = 0.3; // How much width changes (%)
+        const curveMagnitude = 5;   // How much control points sway
+
+        ctx.save();
+
+        // 1. Draw Radial Glow (Vignette Style) on the ground first
+        const glowRadius = baseRadius * 1.1; // Slightly larger than logical radius
+        const glowPulse = Math.sin(now * 0.001) * 0.05; // Subtle pulse
+        const currentGlowRadius = glowRadius * (1 + glowPulse);
+        try {
+            const gradient = ctx.createRadialGradient(x, logBaseY, 0, x, logBaseY, currentGlowRadius);
+            gradient.addColorStop(0, `rgba(255, 165, 0, ${0.35 + glowPulse * 2})`); // Inner color pulses alpha slightly
+            gradient.addColorStop(0.6, "rgba(255, 165, 0, 0.1)");
+            gradient.addColorStop(1, "rgba(255, 165, 0, 0)");
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(x, logBaseY, currentGlowRadius, 0, Math.PI * 2);
+            ctx.fill();
+        } catch (e) { console.error("Failed to create campfire gradient:", e)}
+
+
+        // 2. Draw Logs/Sticks (on top of glow)
+        ctx.fillStyle = stickColor;
+        ctx.translate(x, logBaseY); // Translate to base of logs
+        // Draw two crossed logs slightly overlapping
+        ctx.rotate(Math.PI / 6);
+        ctx.fillRect(-stickWidth / 2, -stickHeight / 2, stickWidth, stickHeight);
+        // Add simple grain lines
+        ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(-stickWidth/2 + 2, 0); ctx.lineTo(stickWidth/2 - 2, 0); ctx.stroke();
+        ctx.rotate(-Math.PI / 6); // Rotate back
+
+        ctx.rotate(-Math.PI / 5);
+        ctx.fillRect(-stickWidth / 2, -stickHeight / 2, stickWidth, stickHeight);
+        // Add simple grain lines
+        ctx.beginPath(); ctx.moveTo(-stickWidth/2 + 2, 0); ctx.lineTo(stickWidth/2 - 2, 0); ctx.stroke();
+        ctx.rotate(Math.PI / 5); // Rotate back
+        ctx.translate(-x, -logBaseY); // Reset translation
+
+
+        // 3. Draw Flickering Flames (Using Curves)
+        const flameColors = [
+            { // Outer layer
+                color: `rgba(255, 100, 0, ${0.5 + Math.sin(timeSlow * 1.1 + 1) * 0.1})`, // Orange-Red base
+                baseHeight: 45,
+                widthFactor: 1.0
+            },
+            { // Mid layer
+                color: `rgba(255, 165, 0, ${0.6 + Math.sin(timeSlow * 0.9 + 2) * 0.15})`, // Orange-Yellow base
+                baseHeight: 35,
+                widthFactor: 0.7
+            },
+            { // Core layer
+                color: `rgba(255, 255, 180, ${0.7 + Math.sin(timeSlow * 1.3 + 3) * 0.2})`, // Pale Yellow base
+                baseHeight: 25,
+                widthFactor: 0.4
+            }
+        ];
+
+        for (let layer = 0; layer < flameColors.length; layer++) {
+            const layerData = flameColors[layer];
+            ctx.fillStyle = layerData.color;
+
+            for (let i = 0; i < numFlames; i++) {
+                // Base position offset for each flame instance
+                const flameOffsetX = (i - (numFlames - 1) / 2) * (flameBaseWidth / numFlames) * 0.8;
+                const uniqueTimeOffset = i * 1.57; // Use index for phase offset
+
+                // Calculate dynamic properties for this flame instance
+                const flickerHeight = Math.sin(timeSlow * (1.0 + i * 0.1) + uniqueTimeOffset) * heightMagnitude + 1.0; // Additive flicker + base 1.0
+                const flickerWidth = Math.sin(timeSlow * (0.8 + i * 0.15) - uniqueTimeOffset) * widthMagnitude + 1.0;
+                const currentHeight = layerData.baseHeight * flickerHeight * (1.0 - layer * 0.1); // Inner flames slightly shorter base
+                const currentWidth = (flameBaseWidth * layerData.widthFactor * flickerWidth) / numFlames;
+
+                // Control point sway - makes the flame curve and waver
+                const swayX1 = Math.sin(timeSlow * 1.2 + uniqueTimeOffset + i) * curveMagnitude;
+                const swayY1 = Math.sin(timeSlow * 1.4 + uniqueTimeOffset + i + 1) * curveMagnitude * 0.5; // Less Y sway
+                const swayX2 = Math.sin(timeSlow * 1.3 - uniqueTimeOffset + i + 2) * curveMagnitude;
+                const swayY2 = Math.sin(timeSlow * 1.5 - uniqueTimeOffset + i + 3) * curveMagnitude * 0.5;
+
+                const startX = x + flameOffsetX;
+                const startY = logBaseY - stickHeight / 2; // Start slightly above logs
+                const tipY = startY - currentHeight;
+                const midY1 = startY - currentHeight * 0.33;
+                const midY2 = startY - currentHeight * 0.66;
+
+                // Draw flame shape using bezier curve
+                ctx.beginPath();
+                ctx.moveTo(startX - currentWidth / 2, startY); // Bottom left corner
+                // Curve up the left side
+                ctx.bezierCurveTo(
+                    startX - currentWidth / 2 + swayX1, midY2 + swayY1, // Control point 1
+                    startX + swayX2, midY1 + swayY2,                   // Control point 2
+                    startX, tipY                                       // Tip
+                );
+                // Curve down the right side
+                ctx.bezierCurveTo(
+                    startX - swayX2, midY1 + swayY2,                   // Control point 3 (mirrored sway)
+                    startX + currentWidth / 2 - swayX1, midY2 + swayY1, // Control point 4 (mirrored sway)
+                    startX + currentWidth / 2, startY                  // Bottom right corner
+                );
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+
+        ctx.restore();
+    }
+
+    function drawDamageVignette(ctx, intensity, width, height) { if(intensity<=0) return; ctx.save(); const or=Math.sqrt(width**2+height**2)/2,g=ctx.createRadialGradient(width/2,height/2,0,width/2,height/2,or),ra=0.4*intensity; g.addColorStop(0,'rgba(255,0,0,0)'); g.addColorStop(0.75,'rgba(255,0,0,0)'); g.addColorStop(1,`rgba(255,0,0,${ra.toFixed(2)})`); ctx.fillStyle=g; ctx.fillRect(0,0,width,height); ctx.restore(); }
+    function drawTemperatureTint(ctx, temperature, width, height) { let tcs=null, a=0.0; const tfc=TEMP_FREEZING_CLIENT, tcc=TEMP_COLD_CLIENT, thc=TEMP_HOT_CLIENT, tsc=TEMP_SCORCHING_CLIENT, mta=MAX_TINT_ALPHA; if(temperature===null || typeof temperature === 'undefined'){ return; } if(temperature<=tfc){ tcs='rgba(100,150,255,A)'; a=mta*Math.min(1.0,(tfc-temperature+5)/5.0); } else if(temperature<=tcc){ tcs='rgba(150,180,255,A)'; a=mta*((tcc-temperature)/(tcc-tfc)); } else if(temperature>=tsc){ tcs='rgba(255,100,0,A)'; a=mta*Math.min(1.0,(temperature-tsc+5)/5.0); } else if(temperature>=thc){ tcs='rgba(255,150,50,A)'; a=mta*((temperature-thc)/(tsc-thc)); } a=Math.max(0,Math.min(mta,a)); if(tcs&&a>0.01){ ctx.globalAlpha=1.0; ctx.fillStyle=tcs.replace('A',a.toFixed(2)); ctx.fillRect(0,0,width,height); ctx.globalAlpha=1.0; } }
+    function drawEnemySpeechBubbles(ctx, enemiesToRender, activeEnemyBubblesRef) { if(!activeEnemyBubblesRef) return; const now=performance.now(),bf='italic 11px '+fontFamily,cr=4,tp=3,bo=20; ctx.font=bf; ctx.textAlign='center'; ctx.textBaseline='bottom'; const etr=[]; for(const eid in activeEnemyBubblesRef){ const b=activeEnemyBubblesRef[eid]; if(now>=b.endTime){etr.push(eid);continue;} const e=enemiesToRender?.[eid]; if(e&&e.health>0){ const edx=e.x,edy=e.y,eh=e.height??40,by=edy-eh/2-bo,tm=ctx.measureText(b.text),tw=tm.width,bw=tw+tp*2,afh=11,bh=afh+tp*2,bx=edx-bw/2,bby=by-bh; ctx.fillStyle=enemySpeechBubbleBg; drawRoundedRect(ctx,bx,bby,bw,bh,cr); ctx.fill(); ctx.strokeStyle=enemySpeechBubbleOutline; ctx.lineWidth=1; ctx.stroke(); ctx.fillStyle=enemySpeechBubbleColor; ctx.fillText(b.text,edx,by-tp); } else {etr.push(eid);} } etr.forEach(id=>{ if (activeEnemyBubblesRef) delete activeEnemyBubblesRef[id]; }); }
+    function drawSpeechBubbles(ctx, playersToRender, activeSpeechBubblesRef, appStateRef) { if(!activeSpeechBubblesRef || !appStateRef) return; const now=performance.now(),bf='bold 12px '+fontFamily,cr=5,tp=4,bo=30; ctx.font=bf; ctx.textAlign='center'; ctx.textBaseline='bottom'; const ptr=[]; for(const pid in activeSpeechBubblesRef){ const b=activeSpeechBubblesRef[pid]; if(now>=b.endTime){ptr.push(pid);continue;} const p=playersToRender?.[pid]; if(p&&p.player_status!=='dead'&&p.health>0){ const pdx=(pid===appStateRef.localPlayerId)?appStateRef.renderedPlayerPos.x:p.x,pdy=(pid===appStateRef.localPlayerId)?appStateRef.renderedPlayerPos.y:p.y,ph=p.height,by=pdy-ph/2-bo,tm=ctx.measureText(b.text),tw=tm.width,bw=tw+tp*2,afh=12,bh=afh+tp*2,bx=pdx-bw/2,bby=by-bh; ctx.fillStyle=playerSpeechBubbleBg; drawRoundedRect(ctx,bx,bby,bw,bh,cr); ctx.fill(); ctx.strokeStyle=playerSpeechBubbleOutline; ctx.lineWidth=1; ctx.stroke(); ctx.fillStyle=playerSpeechBubbleColor; ctx.fillText(b.text,pdx,by-tp); } else {ptr.push(pid);} } ptr.forEach(id=>{ if (activeSpeechBubblesRef) delete activeSpeechBubblesRef[id]; }); }
+    function drawSnake(ctx, snakeRef) { if(!snakeRef||!snakeRef.isActiveFromServer||!snakeRef.segments||snakeRef.segments.length<2) return; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.strokeStyle=snakeLineColor; ctx.lineWidth=snakeRef.lineWidth; ctx.beginPath(); ctx.moveTo(snakeRef.segments[snakeRef.segments.length-1].x,snakeRef.segments[snakeRef.segments.length-1].y); for(let i=snakeRef.segments.length-2;i>=1;i--){ const s=snakeRef.segments[i],ns=snakeRef.segments[i-1]; if(!s||!ns) continue; const xc=(s.x+ns.x)/2,yc=(s.y+ns.y)/2; ctx.quadraticCurveTo(s.x,s.y,xc,yc); } if(snakeRef.segments.length>0){ const h=snakeRef.segments[0]; if(snakeRef.segments.length>1){ const n=snakeRef.segments[1],xc=(n.x+h.x)/2,yc=(n.y+h.y)/2; ctx.quadraticCurveTo(n.x,n.y,xc,yc); } ctx.lineTo(h.x,h.y); } ctx.stroke(); }
+    function drawHealthBar(ctx, x, y, width, currentHealth, maxHealth) { if(maxHealth<=0) return; const bh=5,yo=-(width/2+27),bw=Math.max(20,width*0.8),cw=Math.max(0,(currentHealth/maxHealth)*bw),hp=currentHealth/maxHealth,bx=x-bw/2,by=y+yo; ctx.fillStyle=healthBarBg; ctx.fillRect(bx,by,bw,bh); let bc=healthBarLow; if(hp>0.66) bc=healthBarHigh; else if(hp>0.33) bc=healthBarMedium; ctx.fillStyle=bc; ctx.fillRect(bx,by,cw,bh); }
+    function drawArmorBar(ctx, x, y, width, currentArmor) { const ma=100; if(currentArmor<=0) return; const abh=4,hbh=5,bs=1,hbyo=-(width/2+27),hbty=y+hbyo,abty=hbty+hbh+bs,bw=Math.max(20,width*0.8),cw=Math.max(0,(currentArmor/ma)*bw),bx=x-bw/2,by=abty; ctx.fillStyle=healthBarBg; ctx.fillRect(bx,by,bw,abh); ctx.fillStyle=armorBarColor; ctx.fillRect(bx,by,cw,abh); }
+
+    // --- Add near other color constants ---
+    const enemyUniformBlue = "#18315f"; // Navy Blue for standard torso
+    const enemyGiantRed = "#a00000";   // Red Coat for Giant
+
+    // --- REVISED V3: drawEnemyRect (incorporating all feedback) ---
+    function drawEnemyRect(ctx, x, y, w, h, type, enemyState) {
+        const currentW = w;
+        const currentH = h;
+        const t = performance.now(); // Time for animations
+
+        // Determine bobbing (only for standard enemies)
+        const bobOffset = (type !== 'giant') ? Math.sin(t / IDLE_BOB_SPEED_DIVISOR) * IDLE_BOB_AMPLITUDE : 0;
+
+        // --- Effect Checks ---
+        const nowSeconds = t / 1000.0;
+        const snakeEffect = enemyState?.effects?.snake_bite_slow;
+        const isSnakeBitten = snakeEffect && typeof snakeEffect.expires_at === 'number' && nowSeconds < snakeEffect.expires_at;
+        const isHitFlashing = enemyState?.hit_flash_this_tick ?? false;
+
+        ctx.save(); // Save context at the start
+
+        // ========================================
+        // --- Giant Specific Drawing Logic ---
+        // ========================================
+        if (type === 'giant') {
+            // Giant proportions (relative to its larger w/h)
+            const bodyWidth = currentW * 0.85;
+            const bodyHeight = currentH * 0.7;
+            const bodyTopY = y - currentH * 0.4; // No bob offset for giant
+            const bodyBottomY = bodyTopY + bodyHeight;
+
+            const legHeight = currentH * 0.25;
+            const legWidth = currentW * 0.2;
+            const legSpacing = currentW * 0.2;
+            const legTopY = bodyBottomY;
+
+            const bootHeight = currentH * 0.1;
+            const bootWidth = legWidth * 1.2;
+            const bootTopY = legTopY + legHeight;
+
+            const headRadius = currentW * 0.2;
+            const headCenterY = bodyTopY - headRadius * 0.5;
+
+            // Shako Hat properties
+            const shakoHeight = headRadius * 1.5;
+            const shakoWidth = headRadius * 1.8;
+            const shakoBaseY = headCenterY - headRadius * 0.8;
+            const shakoPeakHeight = shakoHeight * 0.2;
+            const shakoPeakWidth = shakoWidth * 1.1;
+
+            // 1. Draw Legs & Boots (Static, Large)
+            ctx.fillStyle = enemyBootColor; // Dark trousers/legs part
+            ctx.fillRect(x - legSpacing - legWidth / 2, legTopY, legWidth, legHeight); // Left
+            ctx.fillRect(x + legSpacing - legWidth / 2, legTopY, legWidth, legHeight); // Right
+            ctx.fillStyle = enemyBootColor; // Dark boots
+            ctx.fillRect(x - legSpacing - bootWidth / 2, bootTopY, bootWidth, bootHeight); // Left
+            ctx.fillRect(x + legSpacing - bootWidth / 2, bootTopY, bootWidth, bootHeight); // Right
+
+            // 2. Draw Main Body (Red Coat)
+            ctx.fillStyle = enemyGiantRed; // *** USE RED COAT COLOR ***
+            ctx.fillRect(x - bodyWidth / 2, bodyTopY, bodyWidth, bodyHeight);
+            // Belt
+            ctx.fillStyle = beltColor;
+            ctx.fillRect(x - bodyWidth / 2, bodyTopY + bodyHeight * 0.7, bodyWidth, bodyHeight * 0.08);
+
+            // 3. Draw Arms (Simple Red Rects)
+            ctx.fillStyle = enemyGiantRed; // Red sleeves
+            const armWidth = currentW * 0.18;
+            const armHeight = currentH * 0.5;
+            const armOffsetY = bodyTopY + bodyHeight * 0.1;
+            ctx.fillRect(x - bodyWidth / 2 - armWidth, armOffsetY, armWidth, armHeight); // Left
+            ctx.fillRect(x + bodyWidth / 2, armOffsetY, armWidth, armHeight);          // Right
+
+            // 4. Draw Head
+            ctx.fillStyle = enemySkinColor;
+            ctx.beginPath();
+            ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 5. Draw Shako Hat
+            ctx.fillStyle = enemyCapColor; // Black base
+            ctx.fillRect(x - shakoWidth / 2, shakoBaseY - shakoHeight, shakoWidth, shakoHeight); // Cylinder
+            ctx.beginPath(); // Peak/Brim
+            ctx.moveTo(x - shakoPeakWidth / 2, shakoBaseY);
+            ctx.lineTo(x + shakoPeakWidth / 2, shakoBaseY);
+            ctx.lineTo(x + shakoWidth / 2, shakoBaseY - shakoPeakHeight);
+            ctx.lineTo(x - shakoWidth / 2, shakoBaseY - shakoPeakHeight);
+            ctx.closePath();
+            ctx.fill();
+
+        }
+        // =================================================
+        // --- Standard Enemy Drawing (Chaser/Shooter) ---
+        // =================================================
+        else {
+            // Proportions
+            const headRadius = currentH * 0.16;
+            const coatShoulderWidth = currentW * 1.1; // Brown coat layer width at top
+            const coatHemWidth = currentW * 0.9;      // Brown coat layer width at bottom
+            const torsoShoulderWidth = currentW * 0.9; // Blue torso layer width at top
+            const torsoHemWidth = currentW * 0.7;     // Blue torso layer width at bottom
+
+            // Y positions use bobOffset
+            const coatTopY = y - currentH * 0.35 + bobOffset;
+            const coatBottomY = y + currentH * 0.25 + bobOffset;
+            const coatHeight = coatBottomY - coatTopY;
+            const headCenterY = coatTopY - headRadius * 0.6; // Adjusted head Y
+
+            const armWidth = currentW * 0.2;
+            const armHeight = currentH * 0.45;
+            const armOffsetY = coatTopY + coatHeight * 0.1;
+
+            const trouserHeight = currentH * 0.20;
+            const trouserWidth = currentW * 0.25;
+            const trouserTopY = coatBottomY; // Trousers start below coat hem
+            const legSpacing = currentW * 0.15;
+
+            const bootHeight = currentH * 0.12;
+            const bootWidth = currentW * 0.30;
+            const bootTopY = trouserTopY + trouserHeight;
+
+            // Hat properties (Slouch Hat - Wider & Higher)
+            const hatBrimWidth = headRadius * 3.5; // Wider brim
+            const hatBrimHeight = headRadius * 0.6; // Thicker brim
+            const hatCrownRadiusH = headRadius * 1.5; // Wider crown
+            const hatCrownRadiusV = headRadius * 1.1; // Taller crown
+            const hatCenterY = headCenterY - headRadius * 1.0; // Higher on head
+
+            // Animation state for boots
+            const stepCycle = 400;
+            const stepPhase = Math.floor(t / stepCycle) % 2;
+
+            // --- Draw Layers: Back to Front ---
+
+            // 1. Draw Trousers & Animated Boots FIRST (Furthest back)
+            ctx.fillStyle = enemyBootColor; // Dark trousers
+            const leftLegX = x - legSpacing;
+            ctx.fillRect(leftLegX - trouserWidth / 2, trouserTopY, trouserWidth, trouserHeight);
+            const rightLegX = x + legSpacing;
+            ctx.fillRect(rightLegX - trouserWidth / 2, trouserTopY, trouserWidth, trouserHeight);
+
+            ctx.fillStyle = enemyBootColor; // Dark boots
+            if (stepPhase === 0) { // Left foot forward animation
+                ctx.fillRect(leftLegX - bootWidth / 2, bootTopY - 2, bootWidth, bootHeight);
+                ctx.fillRect(rightLegX - bootWidth / 2, bootTopY, bootWidth, bootHeight);
+            } else { // Right foot forward animation
+                ctx.fillRect(leftLegX - bootWidth / 2, bootTopY, bootWidth, bootHeight);
+                ctx.fillRect(rightLegX - bootWidth / 2, bootTopY - 2, bootWidth, bootHeight);
+            }
+
+            // 2. Draw Brown Base Coat Layer (Underneath blue torso)
+            ctx.fillStyle = enemyCoatColor; // Brown coat
+            ctx.beginPath();
+            ctx.moveTo(x - coatShoulderWidth / 2, coatTopY); // Top left wide
+            ctx.lineTo(x + coatShoulderWidth / 2, coatTopY); // Top right wide
+            ctx.lineTo(x + coatHemWidth / 2, coatBottomY);   // Bottom right narrow
+            ctx.lineTo(x - coatHemWidth / 2, coatBottomY);   // Bottom left narrow
+            ctx.closePath();
+            ctx.fill();
+
+            // 3. Draw Brown Arms (Over brown coat, under blue torso)
+            ctx.fillStyle = enemyCoatColor;
+            ctx.fillRect(x - coatShoulderWidth * 0.45 - armWidth / 2, armOffsetY, armWidth, armHeight); // Left Arm
+            ctx.fillRect(x + coatShoulderWidth * 0.45 - armWidth / 2, armOffsetY, armWidth, armHeight); // Right Arm
+
+            // 4. Draw Blue Torso Layer (Over brown coat/arms)
+            ctx.fillStyle = enemyUniformBlue; // *** USE NAVY BLUE ***
+            ctx.beginPath();
+            ctx.moveTo(x - torsoShoulderWidth / 2, coatTopY);   // Top left (narrower than coat)
+            ctx.lineTo(x + torsoShoulderWidth / 2, coatTopY);   // Top right
+            ctx.lineTo(x + torsoHemWidth / 2, coatBottomY);     // Bottom right (narrower than coat)
+            ctx.lineTo(x - torsoHemWidth / 2, coatBottomY);     // Bottom left
+            ctx.closePath();
+            ctx.fill();
+
+            // 5. Draw Head
+            ctx.fillStyle = enemySkinColor;
+            ctx.beginPath();
+            ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 6. Draw Angry Eyebrows
+            ctx.strokeStyle = '#000000'; ctx.lineWidth = 2; ctx.beginPath();
+            const browLength = headRadius * 0.5;
+            const browY = headCenterY - headRadius * 0.3;
+            const browXOffset = headRadius * 0.3;
+            ctx.moveTo(x - browXOffset - browLength / 2, browY - browLength / 3); // Left \
+            ctx.lineTo(x - browXOffset + browLength / 2, browY + browLength / 3);
+            ctx.moveTo(x + browXOffset - browLength / 2, browY + browLength / 3); // Right /
+            ctx.lineTo(x + browXOffset + browLength / 2, browY - browLength / 3);
+            ctx.stroke();
+
+            // 7. Draw Hat (Slouch Hat - Wider & Higher)
+            ctx.fillStyle = enemyCapColor; // Dark hat color
+            ctx.beginPath(); // Brim
+            ctx.ellipse(x, hatCenterY + hatCrownRadiusV * 0.7, hatBrimWidth / 2, hatBrimHeight / 2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath(); // Crown
+            ctx.ellipse(x, hatCenterY, hatCrownRadiusH / 2, hatCrownRadiusV, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 8. Conditionally Draw Gun for Shooters (Over torso/arms)
+            if (type === 'shooter') {
+                const gunBarrelLength = w * 1.2; const gunBarrelThickness = 3;
+                const gunStockLength = w * 0.5; const gunStockThickness = 5;
+                const gunColorBarrel = "#555555"; const gunColorStock = "#7a4a2a";
+                ctx.save();
+                const gunAngle = Math.PI / 10;
+                const gunCenterY = y + bobOffset; const gunCenterX = x; // Position relative to bobbing center
+                ctx.translate(gunCenterX, gunCenterY); ctx.rotate(gunAngle);
+                ctx.fillStyle = gunColorStock;
+                ctx.fillRect(-gunStockLength * 0.8, -gunStockThickness / 2, gunStockLength, gunStockThickness);
+                ctx.fillStyle = gunColorBarrel;
+                ctx.fillRect(-gunStockLength * 0.2, -gunBarrelThickness / 2, gunBarrelLength, gunBarrelThickness);
+                ctx.restore();
+            }
+        } // --- End Standard Enemy Drawing ---
+
+
+        // ===============================================
+        // --- Draw Effects Over Everything (Common) ---
+        // ===============================================
+
+        // Snake Bite Aura (Circular, Pulsing)
+        if (isSnakeBitten) {
+            const auraRadius = Math.max(currentW * 0.6, 15);
+            // Aura Y position accounts for bob only on standard enemies
+            const auraBaseY = y + currentH * 0.45 + ((type !== 'giant') ? bobOffset : 0); // Adjusted base Y slightly higher
+            const auraLineWidth = 3;
+            const auraColor = "rgba(0, 255, 50, 0.7)";
+            const pulseSpeed = 0.004; const pulseMagnitude = 2;
+            const pulseOffset = Math.sin(t * pulseSpeed) * pulseMagnitude;
+
+            const originalLineWidth = ctx.lineWidth; const originalStrokeStyle = ctx.strokeStyle;
+            ctx.lineWidth = auraLineWidth; ctx.strokeStyle = auraColor;
+            ctx.beginPath(); ctx.arc(x, auraBaseY, auraRadius + pulseOffset, 0, Math.PI * 2); ctx.stroke();
+            ctx.lineWidth = originalLineWidth; ctx.strokeStyle = originalStrokeStyle;
+        }
+
+        // Hit Flash
+        if (isHitFlashing) {
+            ctx.fillStyle = enemyHitFlashColor; const fm = 2;
+            // Flash Y center accounts for bob only on standard enemies
+            const flashYCenter = y + ((type !== 'giant') ? bobOffset : 0);
+            ctx.fillRect(x - currentW / 2 - fm, flashYCenter - currentH / 2 - fm, currentW + fm * 2, currentH + fm * 2);
+        }
+
+        ctx.restore(); // Restore context from the very start
+    }
+
+    function drawPlayerCharacter( ctx, x, y, w, h, isSelf, playerState, aimDx, aimDy, pushbackAnimState ) {
+        const jh = playerState?.hit_flash_this_tick ?? false; // Just Hit flag
+        const ii = (playerState?.input_vector?.dx ?? 0) === 0 && (playerState?.input_vector?.dy ?? 0) === 0; // Is Idle
+        const t = performance.now();
+        const bo = ii ? Math.sin(t / IDLE_BOB_SPEED_DIVISOR) * IDLE_BOB_AMPLITUDE : 0; // Idle bob offset
+
+        // Check for player snake bite effect
+        const playerSnakeEffect = playerState?.effects?.snake_bite_slow;
+        const isPlayerBitten = playerSnakeEffect &&
+                            typeof playerSnakeEffect === 'object' &&
+                            typeof playerSnakeEffect.expires_at === 'number' &&
+                            t < (playerSnakeEffect.expires_at * 1000);
+
+        // Dimension calculations (remain the same)
+        const hh=h*0.3,hw=w*0.95,slh=hh*0.15,slw=hw*0.8,ngh=h*0.06,spw=w*1.25,sph=h*0.1,chestPlateHeight=h*0.3,cpw=w*0.9,aw=w*0.2,al=h*0.4,bh=h*0.05,ph=h*0.35,boh=h*0.1,bow=w*0.32,bos=w*0.4;
+        const to=h*0.5,hty=y-to+bo,hby=hty+hh,sly=hty+hh*0.4,ngty=hby-3,ngby=ngty+ngh,sty=ngby-2,sby=sty+sph,cpty=sty+sph*0.15,aty=sty+sph*0.2,bey=cpty+chestPlateHeight+bh*0.1,pty=bey+bh*0.4,pby=pty+ph,boty=pby-5,boby=boty+boh;
+        const dc=isSelf?dustyPlayerSelfColor:dustyPlayerOtherColor;
+
+        ctx.save(); // Save context state before drawing player
+
+        // Draw Shadow
+        ctx.beginPath(); const sy=boby+1; ctx.ellipse(x,sy,w*0.45,h*0.05,0,0,Math.PI*2); ctx.fillStyle=backgroundShadowColor; ctx.fill();
+
+        // Draw Legs & Boots (Animated)
+        ctx.fillStyle=dc; const lw=w*0.4; ctx.fillRect(x-w*0.45,pty,lw,ph); ctx.fillRect(x+w*0.05,pty,lw,ph);
+        ctx.fillStyle=bootColor;
+        if(!ii){const sd=250,sp=Math.floor(t/sd)%2;if(sp===0){ ctx.fillRect(x-bos-bow/2,boty-2,bow,boh); ctx.fillRect(x+bos-bow/2,boty,bow,boh);}else{ ctx.fillRect(x-bos-bow/2,boty,bow,boh); ctx.fillRect(x+bos-bow/2,boty-2,bow,boh);}}else{ ctx.fillRect(x-bos-bow/2,boty,bow,boh); ctx.fillRect(x+bos-bow/2,boty,bow,boh);}
+
+        // Draw Torso Area (Belt, Chestplate, Shoulder Pad)
+        ctx.fillStyle=beltColor; ctx.fillRect(x-w*0.65,bey-bh/2,w*1.3,bh);
+        ctx.fillStyle=simpleChestPlateColor; ctx.fillRect(x-cpw/2,cpty,cpw,chestPlateHeight);
+        ctx.fillStyle=chestPlateHighlight; ctx.fillRect(x-cpw/2+5,cpty+5,cpw-10,3);
+        ctx.fillStyle=ironHelmetColor; ctx.fillRect(x-spw/2,sty,spw,sph); // Shoulder pad base
+        ctx.fillStyle=ironHelmetHighlight; ctx.fillRect(x-spw/2+3,sty+2,spw-6,2); // Shoulder pad highlight
+
+        // Draw Arms
+        ctx.fillStyle=dc; ctx.fillRect(x-spw*0.45,aty,aw,al); ctx.fillRect(x+spw*0.45-aw,aty,aw,al);
+
+        // Draw Helmet
+        ctx.fillStyle=ironHelmetColor; ctx.fillRect(x-hw*0.4,ngty,hw*0.8,ngh); // Neck guard part
+        ctx.fillStyle=ironHelmetColor; ctx.fillRect(x-hw/2,hty,hw,hh); // Main helmet bucket
+        ctx.fillStyle=ironHelmetHighlight; ctx.fillRect(x-hw/2,hty,hw,3); // Top highlight
+        ctx.fillStyle=ironHelmetShadow; ctx.fillRect(x-hw/2+1,hty+3,hw-2,2); // Shadow under highlight
+        ctx.fillStyle=slitColor; ctx.fillRect(x-slw/2,sly,slw,slh); // Eye slit
+
+        const now = performance.now();
+        // Check if the passed state object exists and is active based on time
+        const isPushbackAnimating = pushbackAnimState?.active && now < pushbackAnimState?.endTime;
+        // Note: The reset of pushbackAnimState.active is handled in main.js gameLoop now
+
+
+        // --- IMPROVED GUN DRAWING ---
+        // Logic to determine gun appearance based on animation or aiming
+        let shouldDrawGun = false;
+        let gunDrawAngle = 0; // Angle to draw the gun at
+        let gunDrawMode = 'aiming'; // 'aiming' or 'pushback'
+
+        if (isPushbackAnimating) {
+            shouldDrawGun = true;
+            gunDrawMode = 'pushback';
+            // --- Calculate Pushback Swing Angle ---
+            // Example: Fixed swing outwards (e.g., 90 degrees relative to 'up')
+            // You might want to adjust this based on sprite orientation if it changes later
+            gunDrawAngle = -Math.PI / 2; // Straight out to the player's right if facing up
+            // Alternative: Base it slightly on previous aim? (More complex)
+            // gunDrawAngle = Math.atan2(aimDy, aimDx) + Math.PI / 2; // Swing 90deg from aim?
+
+        } else if (isSelf && (aimDx !== 0 || aimDy !== 0)) {
+            // Normal aiming logic
+            shouldDrawGun = true;
+            gunDrawMode = 'aiming';
+            gunDrawAngle = Math.atan2(aimDy, aimDx); // Aim based on mouse/target
+        }
+
+        // --- Draw Gun if needed ---
+        if (shouldDrawGun) {
+            const gunLevel = playerState?.gun ?? 1;
+            const baseBarrelLength = 18;
+            const barrelLengthIncrease = 2;
+            const barrelLength = baseBarrelLength + (gunLevel - 1) * barrelLengthIncrease;
+            const barrelThickness = 3 + (gunLevel - 1) * 0.2;
+            const stockLength = 8 + (gunLevel - 1) * 0.5;
+            const stockThickness = 5 + (gunLevel - 1) * 0.3;
+            const stockColor = "#8B4513"; // Brown for stock
+            const barrelColor = "#444444"; // Dark grey for barrel
+
+            // Position gun relative to arm/shoulder area (same calculation for both modes)
+            const gunOriginYOffset = aty + al * 0.4; // Roughly mid-arm level
+            // If pushback, maybe bring origin slightly more central? (Optional tweak)
+            const gunOriginXOffset = (gunDrawMode === 'pushback') ? 0 : w * 0.1;
+
+            ctx.save();
+            // Translate to the rotation point
+            ctx.translate(x + gunOriginXOffset, gunOriginYOffset); // Adjust X origin slightly if needed
+            ctx.rotate(gunDrawAngle); // Apply the calculated angle (aiming or pushback)
+
+            // Draw Stock (behind barrel)
+            ctx.fillStyle = stockColor;
+            // Adjust position relative to the (potentially shifted) origin
+            ctx.fillRect(-stockLength - 2, -stockThickness / 2, stockLength, stockThickness);
+
+            // Draw Barrel (extends forward)
+            ctx.fillStyle = barrelColor;
+            ctx.fillRect(0, -barrelThickness / 2, barrelLength, barrelThickness);
+
+            ctx.restore(); // Restore rotation/translation
+        }
+        // --- End Gun Drawing ---
+
+
+        // Draw Snake Bite Aura (if applicable) - Unchanged
+        if (isPlayerBitten) {
+            const auraRadius = Math.max(w * 0.6, 18);
+            const auraY = y + h * 0.5 + bo - 6;
+            const auraLineWidth = 3.5;
+            const auraColor = "rgba(0, 255, 50, 0.75)";
+            const pulseSpeed = 0.004;
+            const pulseMagnitude = 2.5;
+            const pulseOffset = Math.sin(t * pulseSpeed) * pulseMagnitude;
+            const originalLineWidth = ctx.lineWidth;
+            const originalStrokeStyle = ctx.strokeStyle;
+            ctx.lineWidth = auraLineWidth;
+            ctx.strokeStyle = auraColor;
+            ctx.beginPath();
+            ctx.arc(x, auraY, auraRadius + pulseOffset, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.lineWidth = originalLineWidth;
+            ctx.strokeStyle = originalStrokeStyle;
+        }
+
+        // Draw Hit Sparks (if applicable) - Unchanged
+        if (jh) {
+            ctx.save();
+            const numSparks = 15 + Math.random() * 10;
+            for (let i = 0; i < numSparks; i++) {
+                const sparkAngle = Math.random() * Math.PI * 2;
+                const sparkRadius = Math.random() * w * 0.8 + w * 0.2;
+                const sparkX = x + Math.cos(sparkAngle) * sparkRadius;
+                const sparkY = y + Math.sin(sparkAngle) * sparkRadius * 0.7 - h * 0.1 + bo;
+                const sparkSize = Math.random() * 3.5 + 1.5;
+                ctx.fillStyle = sparkColors[Math.floor(Math.random() * sparkColors.length)];
+                ctx.beginPath();
+                ctx.arc(sparkX, sparkY, sparkSize / 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+
+        ctx.restore(); 
+    }
+
+
+    function drawPlayers(ctx, players, appStateRef, localPlayerMuzzleFlashRef, localPlayerPushbackAnimStateRef) {
+        if(!players || !appStateRef) return;
+        Object.values(players).forEach(p=>{
+            if(!p||p.player_status==='dead') return;
+            const is=p.id===appStateRef.localPlayerId;
+            const ps=p.player_status||'alive';
+            const dx=is?appStateRef.renderedPlayerPos.x:p.x;
+            const dy=is?appStateRef.renderedPlayerPos.y:p.y;
+            const w=p.width??48; // Using 48 as default if undefined, though PLAYER_DEFAULTS is 20/48
+            const h=p.height??48;
+            const mh=p.max_health??100;
+            const ca=p.armor??0;
+            const id=(ps==='down');
+            const a=id?0.4:1.0;
+            ctx.save();
+            ctx.globalAlpha=a;
+            const adx=is?localPlayerMuzzleFlashRef?.aimDx:0;
+            const ady=is?localPlayerMuzzleFlashRef?.aimDy:0;
+            // --- MODIFIED CALL to drawPlayerCharacter --- Pass pushback state ONLY for local player
+            const pushbackState = is ? localPlayerPushbackAnimStateRef : null; // Pass null for other players
+            drawPlayerCharacter(ctx, dx, dy, w, h, is, p, adx, ady, pushbackState);
+            ctx.restore();
+            if(ps==='alive'){
+                drawHealthBar(ctx, dx, dy, w, p.health, mh);
+                if(ca > 0) drawArmorBar(ctx, dx, dy, w, ca);
+            }
         });
     }
-    function addChatMessage(sender, message, isSelf, isSystem = false) { if (!DOM.chatLog) return; const div = document.createElement('div'); if (isSystem) { div.className = 'system-message'; div.textContent = message; } else { div.className = isSelf ? 'my-message' : 'other-message'; div.textContent = `${sender ? `P:${sender.substring(0,4)}` : '???'}: ${message}`; } DOM.chatLog.appendChild(div); DOM.chatLog.scrollTop = DOM.chatLog.scrollHeight; }
-    function updateCountdown(serverState) { if (!DOM.countdownDiv || !DOM.dayNightIndicator) return; const isCountdown = serverState?.status === 'countdown' && serverState?.countdown >= 0; DOM.countdownDiv.textContent = isCountdown ? Math.ceil(serverState.countdown) : ''; DOM.countdownDiv.style.display = isCountdown ? 'block' : 'none'; DOM.dayNightIndicator.style.display = (serverState?.status === 'active') ? 'block' : 'none'; }
-    function updateDayNight(serverState) {
-         if (!DOM.dayNightIndicator || !DOM.canvas || !DOM.gameContainer) return;
-         if (serverState?.status === 'active') {
-             const isNight = serverState.is_night; DOM.dayNightIndicator.textContent = isNight ? 'Night' : 'Day'; DOM.dayNightIndicator.style.display = 'block';
-             if (typeof Renderer !== 'undefined') {
-                 Renderer.updateGeneratedBackground(isNight, CANVAS_WIDTH, CANVAS_HEIGHT);
-             } else { error("Renderer not defined when calling updateGeneratedBackground from UI!"); }
-             DOM.gameContainer.classList.toggle('night-mode', isNight);
-         } else { DOM.dayNightIndicator.style.display = 'none'; DOM.gameContainer.classList.remove('night-mode'); }
-    }
-    function showGameOver(finalState) { if (!DOM.finalStatsDiv || !DOM.gameOverScreen) return; const player = finalState?.players?.[appState.localPlayerId]; let statsHtml = "Stats Unavailable"; if (player) { statsHtml = `<div class="final-stat-item"><strong>Score:</strong> ${player.score ?? 0}</div><div class="final-stat-item"><strong>Kills:</strong> ${player.kills ?? 0}</div>`; } DOM.finalStatsDiv.innerHTML = statsHtml; log("UI: Showing game over screen."); showSection('game-over-screen'); }
-    function updateEnvironmentDisplay() { const tempIndicator = document.getElementById('temperature-indicator'); if (!tempIndicator) return; if ((appState.currentTemp === null && appState.serverState?.status !== 'active') || appState.serverState?.status === 'menu') { tempIndicator.style.display = 'none'; return; } tempIndicator.style.display = 'block'; const temp = appState.currentTemp; tempIndicator.innerHTML = `${temp.toFixed(0)}°C`; }
-    return { showSection, updateStatus, updateHUD, addChatMessage, updateCountdown, updateDayNight, showGameOver, updateEnvironmentDisplay };
-})();
 
-// --- Network Module ---
-const Network = (() => {
-    let reconnectTimer = null;
-    function connect(onOpenCallback) {
-        if (socket && socket.readyState !== WebSocket.CLOSED) { if (socket.readyState === WebSocket.OPEN && onOpenCallback) onOpenCallback(); return; }
-        clearTimeout(reconnectTimer); UI.updateStatus('Connecting...'); log("Attempting WebSocket connection to:", WEBSOCKET_URL);
-        try { socket = new WebSocket(WEBSOCKET_URL); } catch (err) { error("WebSocket creation failed:", err); UI.updateStatus('Connection failed. Please refresh.', true); return; }
-        socket.onopen = () => { log('WebSocket connection established.'); appState.isConnected = true; const loadingScreen = document.getElementById('loading-screen'); const gameContainer = DOM.gameContainer; if (loadingScreen) { loadingScreen.style.opacity = '0'; loadingScreen.style.pointerEvents = 'none'; } if (gameContainer) { gameContainer.style.visibility = 'visible'; gameContainer.style.opacity = '1'; } UI.updateStatus('Connected. Select Mode.'); UI.showSection('main-menu-section'); if (onOpenCallback) onOpenCallback(); };
-        socket.onmessage = handleServerMessage; socket.onerror = (event) => { error('WebSocket Error Event:', event); };
-        socket.onclose = (event) => { error(`WebSocket Closed: Code=${event.code}, Reason='${event.reason || 'N/A'}'`); const wasConnected = appState.isConnected; appState.isConnected = false; socket = null; Game.resetClientState(false); if (event.code === 1000) { UI.updateStatus('Disconnected.'); UI.showSection('main-menu-section'); } else if (wasConnected) { UI.updateStatus('Connection lost. Reconnecting...', true); scheduleReconnect(); } else { UI.updateStatus('Connection failed. Please refresh.', true); } if (appState.animationFrameId) { cancelAnimationFrame(appState.animationFrameId); appState.animationFrameId = null; Input.cleanup(); log("Game loop stopped due to connection close."); } };
-    }
-    function scheduleReconnect() { clearTimeout(reconnectTimer); log(`Scheduling reconnect in ${RECONNECT_DELAY}ms`); reconnectTimer = setTimeout(() => { log("Attempting reconnect..."); connect(() => { UI.updateStatus('Reconnected.'); UI.showSection('main-menu-section'); }); }, RECONNECT_DELAY); }
-    function sendMessage(payload) { if (socket && socket.readyState === WebSocket.OPEN) { try { socket.send(JSON.stringify(payload)); } catch (err) { error("Error sending message:", err, payload); } } else { error('Cannot send message, WebSocket not open or null.', payload); } }
-    function closeConnection(code = 1000, reason = "User action") { clearTimeout(reconnectTimer); if (socket && socket.readyState === WebSocket.OPEN) { log(`Closing WebSocket explicitly: ${reason} (Code: ${code})`); socket.close(code, reason); } socket = null; appState.isConnected = false; }
-    return { connect, sendMessage, closeConnection };
-})();
+    function drawEnemies(ctx, enemies, activeEnemyBubblesRef) { if(!enemies) return; const now=performance.now()/1000,fd=0.3; Object.values(enemies).forEach(e=>{ if(!e) return; const w=e.width??20,h=e.height??40,mh=e.max_health??50; let a=1.0,sd=true,id=false; if(e.health<=0&&e.death_timestamp){ id=true; const el=now-e.death_timestamp; if(el<fd) a=0.4; else sd=false; } if(sd){ ctx.save(); ctx.globalAlpha=a; drawEnemyRect(ctx,e.x,e.y,w,h,e.type,e); ctx.restore(); } if(!id&&e.health>0&&sd){ drawHealthBar(ctx,e.x,e.y,w,e.health,mh); } }); }
 
-// --- Input Handling Module ---
-const Input = (() => {
-    let keys = {}; let lastShotTime = 0; let movementInterval = null; let mouseCanvasPos = { x: 0, y: 0 }; let isMouseDown = false;
 
-    // Named function for context menu prevention
-    function preventContextMenu(event) {
-        console.log("Canvas contextmenu event triggered! Preventing default...");
-        event.preventDefault();
-    }
+    function drawMuzzleFlash(ctx, playerX, playerY, aimDx, aimDy) {
+        // Original Radii: outerBase=18, outerVar=6, innerBase=7, innerVar=3
+        // Reduced Radii (approx 50%):
+        const numPoints = 5;
+        const outerRadiusBase = 9;      // Reduced from 18
+        const outerRadiusVariance = 3;  // Reduced from 6
+        const innerRadiusBase = 4;      // Reduced from 7
+        const innerRadiusVariance = 1.5;// Reduced from 3
 
-    function setup() {
-        cleanup(); // Calls cleanup first
-        document.addEventListener('keydown', handleKeyDown);
-        document.addEventListener('keyup', handleKeyUp);
-        DOM.chatInput.addEventListener('keydown', handleChatEnter);
-        if (DOM.canvas) {
-            DOM.canvas.addEventListener('mousemove', handleMouseMove);
-            DOM.canvas.addEventListener('mousedown', handleMouseDown);
-            DOM.canvas.addEventListener('contextmenu', preventContextMenu); // Add listener
-        } else {
-            error("Input setup failed: Canvas element not found.");
-        }
-        document.addEventListener('mouseup', handleMouseUp);
-        movementInterval = setInterval(sendMovementInput, INPUT_SEND_INTERVAL);
-        log("Input listeners setup.");
-    }
+        // Glow size can also be reduced slightly, or kept similar for effect
+        const glowRadius = 25; // Reduced from 35, adjust as needed
+        const glowColor = "rgba(255, 200, 50, 0.25)"; // Maybe slightly fainter glow
 
-    function cleanup() {
-        document.removeEventListener('keydown', handleKeyDown);
-        document.removeEventListener('keyup', handleKeyUp);
-        DOM.chatInput.removeEventListener('keydown', handleChatEnter);
-        if (DOM.canvas) {
-            DOM.canvas.removeEventListener('mousemove', handleMouseMove);
-            DOM.canvas.removeEventListener('mousedown', handleMouseDown);
-            DOM.canvas.removeEventListener('contextmenu', preventContextMenu); // Remove listener
-        }
-        document.removeEventListener('mouseup', handleMouseUp);
-        clearInterval(movementInterval);
-        movementInterval = null;
-        keys = {};
-        isMouseDown = false;
-        mouseCanvasPos = { x: 0, y: 0 };
-        log("Input listeners cleaned up.");
-    }
+        // Flash color remains intense
+        const flashColor = "rgba(255, 230, 100, 0.95)";
 
-    function handleMouseMove(event) {
-        if (!DOM.canvas) return;
-        const rect = DOM.canvas.getBoundingClientRect();
-        const rawMouseX = event.clientX - rect.left;
-        const rawMouseY = event.clientY - rect.top;
-        const visualWidth = rect.width;
-        const visualHeight = rect.height;
-        const internalWidth = DOM.canvas.width;
-        const internalHeight = DOM.canvas.height;
-        const scaleX = (visualWidth > 0) ? internalWidth / visualWidth : 1;
-        const scaleY = (visualHeight > 0) ? internalHeight / visualHeight : 1;
-        mouseCanvasPos.x = rawMouseX * scaleX;
-        mouseCanvasPos.y = rawMouseY * scaleY;
-    }
+        // Increased distance from player center
+        const offsetDistance = 30; // Increased from 12
 
-    // --- MODIFIED: handleMouseDown ---
-    function handleMouseDown(event) {
-        if (document.activeElement === DOM.chatInput) return; // Ignore if typing in chat
+        const flashX = playerX + aimDx * offsetDistance;
+        const flashY = playerY + aimDy * offsetDistance;
+        const angle = Math.atan2(aimDy, aimDx);
 
-        // Button mapping: 0 = Left, 1 = Middle, 2 = Right
-        if (event.button === 0) { // Left Click - Shoot
-            isMouseDown = true;
-            event.preventDefault(); // Prevent text selection, etc.
-            // Shooting logic is handled by isShootHeld() check in game loop
-        } else if (event.button === 2) { // Right Click - Pushback
-            event.preventDefault(); // Prevent context menu (extra safety)
+        ctx.save();
+        ctx.translate(flashX, flashY);
+        ctx.rotate(angle);
 
-            // Check game state before sending
-            if (appState.serverState?.status === 'active' && appState.isConnected) {
-                log("Sending player_pushback message (triggered by RMB).");
-                Network.sendMessage({ type: 'player_pushback' });
+        // 1. Draw the Glow (Possibly smaller radius now)
+        const glowGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, glowRadius);
+        glowGradient.addColorStop(0, glowColor);
+        glowGradient.addColorStop(1, "rgba(255, 200, 50, 0)");
+        ctx.fillStyle = glowGradient;
+        ctx.beginPath();
+        ctx.arc(0, 0, glowRadius, 0, Math.PI * 2);
+        ctx.fill();
 
-                // Trigger the visual animation
-                localPlayerPushbackAnim.active = true;
-                localPlayerPushbackAnim.endTime = performance.now() + localPlayerPushbackAnim.duration;
-                log("Pushback animation triggered.");
-
+        // 2. Draw the Smaller Starburst
+        ctx.fillStyle = flashColor;
+        ctx.beginPath();
+        for (let i = 0; i < numPoints * 2; i++) {
+            const radius = (i % 2 === 0)
+                ? outerRadiusBase + Math.random() * outerRadiusVariance
+                : innerRadiusBase + Math.random() * innerRadiusVariance;
+            const pointAngle = (i / (numPoints * 2)) * (Math.PI * 2) - Math.PI / 2;
+            const px = Math.cos(pointAngle) * radius;
+            const py = Math.sin(pointAngle) * radius;
+            if (i === 0) {
+                ctx.moveTo(px, py);
             } else {
-                log("Pushback (RMB) ignored: Game not active or not connected.");
+                ctx.lineTo(px, py);
             }
         }
-        // Ignore middle mouse button (event.button === 1) for now
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
     }
-    // -----------------------------
-
-    function handleMouseUp(event) {
-        if (event.button === 0) { // Left Click Release
-            isMouseDown = false;
+        
+    // --- MODIFIED: drawBulletCircle (Adds trail logic) ---
+    function drawBulletCircle(ctx, bullet, trailLengthFactor = 0.8, trailBaseAlpha = 0.6) {
+        const { x, y, vx = 0, vy = 0, radius: r = 4, owner_type } = bullet;
+        const isPlayerBullet = owner_type === 'player';
+        const color = isPlayerBullet ? bulletPlayerColor : bulletEnemyColor;
+        const speed = Math.sqrt(vx * vx + vy * vy);
+    
+        // Trail calculations
+        const trailLength = r * 2 * trailLengthFactor * Math.min(1, speed / 100); // Scale trail with speed, capped
+        let startX = x, startY = y;
+        if (speed > 1) {
+            startX = x - (vx / speed) * trailLength;
+            startY = y - (vy / speed) * trailLength;
         }
-        // No action needed for right-click release
-    }
-
-    function handleKeyDown(e) {
-        if (document.activeElement === DOM.chatInput) return;
-        const key = e.key.toLowerCase();
-        if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) {
-            if (!keys[key]) { keys[key] = true; }
-            e.preventDefault();
-            return;
-        }
-        if (key === 'e') { // Keep 'E' key functional too
-            if (appState.serverState?.status === 'active' && appState.isConnected) {
-                log("Sending player_pushback message (triggered by E key).");
-                Network.sendMessage({ type: 'player_pushback' });
-
-                 // Trigger the visual animation (same as RMB)
-                localPlayerPushbackAnim.active = true;
-                localPlayerPushbackAnim.endTime = performance.now() + localPlayerPushbackAnim.duration;
-                 log("Pushback animation triggered.");
-
-                e.preventDefault();
-            } else {
-                log("Pushback ('e') ignored: Game not active or not connected.");
+    
+        // Draw Trail (gradient line)
+        if (trailLength > 1 && speed > 1) {
+            try {
+                const gradient = ctx.createLinearGradient(startX, startY, x, y);
+                // Parse base color to set alpha for trail start
+                let trailStartColor = color; // Default if parse fails
+                if (color.startsWith('#')) { // Basic hex handling
+                     let alphaHex = Math.round(trailBaseAlpha * 255).toString(16).padStart(2, '0');
+                     trailStartColor = color + alphaHex; // Append alpha hex
+                } else if (color.startsWith('rgb')) { // Basic rgb/rgba handling
+                     trailStartColor = color.replace(/rgb/i, 'rgba').replace(')', `, ${trailBaseAlpha})`);
+                }
+                gradient.addColorStop(0, trailStartColor); // Faded start
+                gradient.addColorStop(1, color);           // Solid end (at bullet position)
+    
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = r * 0.8; // Trail slightly thinner than bullet
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            } catch (e) {
+                // Fallback if gradient fails (e.g., invalid color format)
+                ctx.strokeStyle = color;
+                ctx.lineWidth = r * 0.8;
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
             }
-            return;
         }
+    
+        // Draw Bullet Head
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+    
+        // Reset lineCap if changed
+        ctx.lineCap = 'butt';
     }
-
-    function handleKeyUp(e) {
-        const key = e.key.toLowerCase();
-        if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) {
-            if (keys[key]) { keys[key] = false; }
+    
+    // --- MODIFIED: drawShapedBullet (Adds trail logic) ---
+    function drawShapedBullet(ctx, bullet, trailLengthFactor = 1.0, trailBaseAlpha = 0.7) {
+        const { x, y, vx = 0, vy = 0, radius: r = 4, owner_type } = bullet;
+        const isPlayerBullet = owner_type === 'player';
+        const color = isPlayerBullet ? bulletPlayerColor : bulletEnemyColor;
+        const speed = Math.sqrt(vx * vx + vy * vy);
+    
+        // Bullet shape parameters (relative to radius)
+        const baseLength = 8, baseWidth = 4;
+        const scaleFactor = r / 4; // Use radius to scale base shape
+        const shapeLength = baseLength * scaleFactor;
+        const shapeWidth = baseWidth * scaleFactor;
+    
+        // Trail calculations
+        const trailLength = shapeLength * trailLengthFactor * Math.min(1, speed / 150); // Scale trail with speed, capped
+        let startX = x, startY = y;
+        if (speed > 1) {
+            startX = x - (vx / speed) * trailLength;
+            startY = y - (vy / speed) * trailLength;
         }
-    }
-
-    function handleChatEnter(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            log("Enter key detected in chat input.");
-            Game.sendChatMessage();
+    
+        // Draw Trail (gradient line)
+        if (trailLength > 1 && speed > 1) {
+             try {
+                const gradient = ctx.createLinearGradient(startX, startY, x, y);
+                let trailStartColor = color; // Default if parse fails
+                if (color.startsWith('#')) {
+                     let alphaHex = Math.round(trailBaseAlpha * 255).toString(16).padStart(2, '0');
+                     trailStartColor = color + alphaHex;
+                } else if (color.startsWith('rgb')) {
+                     trailStartColor = color.replace(/rgb/i, 'rgba').replace(')', `, ${trailBaseAlpha})`);
+                }
+                gradient.addColorStop(0, trailStartColor); // Faded start
+                gradient.addColorStop(1, color);           // Solid end
+    
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = shapeWidth * 0.6; // Trail slightly thinner than bullet body
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            } catch(e) {
+                 // Fallback
+                ctx.strokeStyle = color;
+                ctx.lineWidth = shapeWidth * 0.6;
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            }
         }
+    
+        // Draw Bullet Head (rotated rect with triangle nose)
+        const angle = Math.atan2(vy, vx);
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+        ctx.fillStyle = color;
+        // Main body
+        ctx.fillRect(-shapeLength / 2, -shapeWidth / 2, shapeLength, shapeWidth);
+        // Nose cone
+        const noseLength = shapeLength * 0.4;
+        ctx.beginPath();
+        ctx.moveTo(shapeLength / 2, 0);
+        ctx.lineTo(shapeLength / 2 - noseLength, -shapeWidth / 2);
+        ctx.lineTo(shapeLength / 2 - noseLength, shapeWidth / 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    
+        // Reset lineCap if changed
+        ctx.lineCap = 'butt';
     }
-
-    function getMovementInputVector() {
-        let dx = 0, dy = 0;
-        if (keys['w'] || keys['arrowup']) dy -= 1;
-        if (keys['s'] || keys['arrowdown']) dy += 1;
-        if (keys['a'] || keys['arrowleft']) dx -= 1;
-        if (keys['d'] || keys['arrowright']) dx += 1;
-        if (dx !== 0 && dy !== 0) {
-            const factor = 1 / Math.sqrt(2);
-            dx *= factor;
-            dy *= factor;
-        }
-        return { dx, dy };
+    
+    // --- MODIFIED: drawBullets ---
+    function drawBullets(ctx, bullets) {
+        if (!bullets) return;
+    
+        Object.values(bullets).forEach(b => {
+            if (!b) return;
+            const bt = b.bullet_type || 'standard';
+            const ot = b.owner_type;
+            const hv = Math.abs(b.vx ?? 0) > 0.01 || Math.abs(b.vy ?? 0) > 0.01; // Has velocity
+    
+            // Choose drawing function and trail parameters based on type
+            if (bt === 'ammo_heavy_slug') {
+                if (hv) {
+                    drawShapedBullet(ctx, b, 0.6, 0.8); // Shorter, thicker trail? (adjust alpha)
+                } else {
+                    drawBulletCircle(ctx, b, 0.4, 0.8); // Shorter trail if somehow static
+                }
+            } else if (bt === 'ammo_shotgun') {
+                 // Shotgun pellets are circles with shorter trails
+                drawBulletCircle(ctx, b, 0.5, 0.5); // Shorter, fainter trails
+            } else if (bt === 'ammo_rapid_fire' || bt === 'standard' || bt === 'standard_enemy') {
+                if (hv) {
+                    drawShapedBullet(ctx, b, 1.0, 0.7); // Standard trail
+                } else {
+                    // Draw static bullet as circle without trail maybe?
+                    drawBulletCircle(ctx, b, 0, 0); // No trail if no velocity
+                }
+            } else {
+                // Default fallback: circle with standard trail
+                drawBulletCircle(ctx, b, 0.8, 0.6);
+            }
+        });
     }
-
-    function sendMovementInput() {
-        if (appState.mode !== 'menu' && appState.serverState?.status === 'active' && appState.isConnected) {
-            Network.sendMessage({ type: 'player_move', direction: getMovementInputVector() });
-        }
-    }
-
-    function handleShooting() {
-        if (appState.serverState?.status !== 'active') return;
-        const playerState = appState.serverState?.players?.[appState.localPlayerId];
-        const currentAmmo = playerState?.active_ammo_type || 'standard';
-        let actualCooldown = SHOOT_COOLDOWN * (currentAmmo === 'ammo_rapid_fire' ? RAPID_FIRE_COOLDOWN_MULTIPLIER : 1);
-        const now = Date.now();
-        if (now - lastShotTime < actualCooldown) return;
-        lastShotTime = now;
-        const playerRenderX = appState.renderedPlayerPos.x;
-        const playerRenderY = appState.renderedPlayerPos.y;
-        let flashDx = mouseCanvasPos.x - playerRenderX;
-        let flashDy = mouseCanvasPos.y - playerRenderY;
-        const flashMag = Math.sqrt(flashDx * flashDx + flashDy * flashDy);
-        if (flashMag > 0.01) {
-            flashDx /= flashMag;
-            flashDy /= flashMag;
-        } else {
-            flashDx = 0;
-            flashDy = -1;
-        }
-        localPlayerMuzzleFlash.active = true;
-        localPlayerMuzzleFlash.endTime = performance.now() + 75; // Keep muzzle flash short
-        localPlayerMuzzleFlash.aimDx = flashDx;
-        localPlayerMuzzleFlash.aimDy = flashDy;
-        log("Sending shoot message with Target Coords:", mouseCanvasPos);
-        Network.sendMessage({ type: 'player_shoot', target: { x: mouseCanvasPos.x, y: mouseCanvasPos.y } });
-    }
-
-    function isShootHeld() {
-        // Shoot is triggered by holding Space or Left Mouse Button
-        return keys[' '] || isMouseDown;
-    }
-
-    return { setup, cleanup, getMovementInputVector, handleShooting, isShootHeld };
-})();
-
-// --- Game Logic & Flow Module ---
-const Game = (() => {
-    function startSinglePlayer() { log("Requesting Single Player game..."); resetClientState(false); appState.mode = 'singleplayer'; UI.updateStatus("Starting Single Player..."); Network.sendMessage({ type: 'start_single_player' }); }
-    function joinMultiplayer() { const gameId = DOM.gameIdInput.value.trim().toUpperCase(); if (!gameId || gameId.length !== 6) { UI.updateStatus('Invalid Game ID format.', true); return; } log(`Attempting to join game: ${gameId}`); resetClientState(false); appState.mode = 'multiplayer-client'; UI.updateStatus(`Joining game ${gameId}...`); Network.sendMessage({ type: 'join_game', game_id: gameId }); }
-    function hostMultiplayer(maxPlayers) { log(`Requesting to Host MP game for ${maxPlayers} players...`); if (![2, 3, 4].includes(maxPlayers)) { error("Invalid max player count requested:", maxPlayers); UI.updateStatus("Invalid player count.", true); return; } resetClientState(false); appState.mode = 'multiplayer-host'; UI.updateStatus(`Creating ${maxPlayers}-player game...`); Network.sendMessage({ type: 'create_game', max_players: maxPlayers }); }
-    function leaveGame() { log("Leaving current game..."); if (appState.isConnected && appState.currentGameId && appState.localPlayerId) { Network.sendMessage({ type: 'leave_game' }); } resetClientState(true); }
-    function sendChatMessage() { const message = DOM.chatInput.value.trim(); if (message && appState.isConnected && appState.currentGameId && appState.localPlayerId) { Network.sendMessage({ type: 'player_chat', message: message }); DOM.chatInput.value = ''; } }
-    function resetClientState(showMenu = true) {
-        log(`Resetting client state. Show Menu: ${showMenu}`); cleanupLoop();
-        appState.localPlayerId = null; appState.currentGameId = null; appState.serverState = null; appState.lastServerState = null; appState.previousServerState = null; appState.maxPlayersInGame = null;
-        appState.predictedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 }; appState.renderedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 }; appState.lastLoopTime = null;
-        localPlayerMuzzleFlash = { active: false, endTime: 0, aimDx: 0, aimDy: 0 };
-        localPlayerPushbackAnim = { active: false, endTime: 0, duration: 250 }; // Reset pushback anim state
-        hitPauseFrames = 0; activeSpeechBubbles = {}; activeEnemyBubbles = {}; if(typeof snake !== 'undefined'){ snake.isActiveFromServer = false; snake.segments = []; }
-        DOM.chatLog.innerHTML = ''; DOM.gameCodeDisplay.textContent = '------'; DOM.gameIdInput.value = ''; if(DOM.countdownDiv) DOM.countdownDiv.style.display = 'none'; if(DOM.dayNightIndicator) DOM.dayNightIndicator.style.display = 'none'; if(DOM.gameOverScreen) DOM.gameOverScreen.style.display = 'none';
-        const gridContainer = document.getElementById('player-stats-grid'); if (gridContainer) gridContainer.innerHTML = 'Loading Stats...';
-        if (showMenu) { appState.mode = 'menu'; UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected."); UI.showSection('main-menu-section'); }
-    }
-    function gameLoop(currentTime) {
-        // --- Animation State Reset ---
-        // Check and reset expired animations at the start of the loop
+    function drawPowerupSquare(ctx, x, y, size, type) { let fc=powerupDefaultColor,s='?'; if(type==='health'){s='+';fc=powerupHealthColor;} else if(type==='gun_upgrade'){s='G';fc=powerupGunColor;} else if(type==='speed_boost'){s='S';fc=powerupSpeedColor;} else if(type==='armor'){s='#';fc=powerupArmorColor;} else if(type==='ammo_shotgun'){s='::';fc=powerupShotgunColor;} else if(type==='ammo_heavy_slug'){s='■';fc=powerupSlugColor;} else if(type==='ammo_rapid_fire'){s='>';fc=powerupRapidColor;} else if(type==='bonus_score'){s='$';fc=powerupScoreColor;} ctx.fillStyle=fc; ctx.fillRect(x-size/2,y-size/2,size,size); ctx.fillStyle='#000'; let fs=Math.round(size*0.7); ctx.font=`bold ${fs}px ${fontFamily}`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(s,x,y+(size*0.05)); }
+    function drawPowerups(ctx, powerups) { if(!powerups) return; Object.values(powerups).forEach(p=>{ if(!p) return; const s=p.size??20; drawPowerupSquare(ctx,p.x,p.y,s,p.type); }); }
+  
+    function triggerShake(magnitude, durationMs) { const now=performance.now(),net=now+durationMs; if(magnitude>=currentShakeMagnitude||net>=shakeEndTime){ currentShakeMagnitude=Math.max(magnitude,currentShakeMagnitude); shakeEndTime=Math.max(net,shakeEndTime); } }
+  
+    // --- Main Render Function ---
+    function drawGame( ctx, appState, stateToRender, localPlayerMuzzleFlashRef, localPlayerPushbackAnimState, width, height ) {
+        if (!mainCtx) mainCtx = ctx;
+        if (!ctx || !appState) { console.error("drawGame missing context or appState!"); return; }
+  
         const now = performance.now();
-        if (localPlayerPushbackAnim.active && now >= localPlayerPushbackAnim.endTime) {
-            localPlayerPushbackAnim.active = false;
+        canvasWidth = width; canvasHeight = height;
+  
+        let shakeApplied = false, shakeOffsetX = 0, shakeOffsetY = 0;
+        // Shake Calculation
+        if (currentShakeMagnitude > 0 && now < shakeEndTime) {
+            shakeApplied = true;
+            const timeRemaining = shakeEndTime - now;
+            const durationMsFallback = 300;
+            const initialDuration = Math.max(1, shakeEndTime - (now - timeRemaining)); // Use timeRemaining if duration calc is odd
+            let currentMag = currentShakeMagnitude * (timeRemaining / initialDuration);
+            currentMag = Math.max(0, currentMag);
+  
+            if (currentMag > 0.5) {
+                const shakeAngle = Math.random() * Math.PI * 2;
+                shakeOffsetX = Math.cos(shakeAngle) * currentMag;
+                shakeOffsetY = Math.sin(shakeAngle) * currentMag;
+            } else { currentShakeMagnitude = 0; shakeEndTime = 0; shakeApplied = false; }
+        } else if (currentShakeMagnitude > 0) { currentShakeMagnitude = 0; shakeEndTime = 0; }
+  
+        // 1. Draw Background
+        ctx.globalAlpha = 1.0;
+        if (!isBackgroundReady) {
+          ctx.fillStyle = dayBaseColor; ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+          if (appState?.serverState && currentBackgroundIsNight === null) {
+            updateGeneratedBackground(appState.serverState.is_night, canvasWidth, canvasHeight);
+          }
+        } else if (isTransitioningBackground) {
+          const elapsed = now - transitionStartTime; const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS);
+          ctx.globalAlpha = 1.0; ctx.drawImage(oldOffscreenCanvas, 0, 0);
+          ctx.globalAlpha = progress; ctx.drawImage(offscreenCanvas, 0, 0);
+          ctx.globalAlpha = 1.0;
+          if (progress >= 1.0) { isTransitioningBackground = false; }
+        } else {
+          ctx.drawImage(offscreenCanvas, 0, 0);
         }
-        // (Muzzle flash reset is implicitly handled in Renderer when drawing)
-        // ---------------------------
-
-        if (hitPauseFrames > 0) { hitPauseFrames--; if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) { appState.animationFrameId = requestAnimationFrame(gameLoop); } return; }
-        if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) { if (appState.serverState?.game_over) { UI.updateStatus("Game Over!"); UI.showGameOver(appState.serverState); } else if (appState.mode === 'menu') { UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected."); } cleanupLoop(); return; }
-        if (!appState.serverState && appState.mode !== 'singleplayer') { appState.animationFrameId = requestAnimationFrame(gameLoop); return; }
-        if (appState.lastLoopTime === null) { appState.lastLoopTime = currentTime; } const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000); appState.lastLoopTime = currentTime;
-        if (typeof snake !== 'undefined' && typeof snake.update === 'function') { snake.update(currentTime); }
-        if (appState.serverState?.status === 'active' && Input.isShootHeld()) { Input.handleShooting(); }
-
-        if (appState.serverState?.status === 'active') {
-            if (appState.mode === 'singleplayer') {
-                const playerState = appState.serverState?.players?.[appState.localPlayerId];
-                if (playerState && typeof playerState.x === 'number' && typeof playerState.y === 'number') {
-                    appState.renderedPlayerPos.x = playerState.x;
-                    appState.renderedPlayerPos.y = playerState.y;
-                }
-            } else {
-                updatePredictedPosition(deltaTime);
-                reconcileWithServer();
+  
+        // --- Heat Haze Logic ---
+        const currentTempForEffect = appState?.currentTemp;
+        if (currentTempForEffect !== null && typeof currentTempForEffect !== 'undefined' && currentTempForEffect >= HEAT_HAZE_START_TEMP) {
+            const hazeIntensity = Math.max(0, Math.min(1, (currentTempForEffect - HEAT_HAZE_START_TEMP) / (HEAT_HAZE_MAX_TEMP - HEAT_HAZE_START_TEMP)));
+            if (hazeIntensity > 0.01) {
+                 if(hazeCanvas.width !== canvasWidth || hazeCanvas.height !== canvasHeight) { hazeCanvas.width = canvasWidth; hazeCanvas.height = canvasHeight; }
+                 hazeCtx.clearRect(0, 0, canvasWidth, canvasHeight); hazeCtx.drawImage(ctx.canvas, 0, 0);
+                 const numLayers = 1 + Math.floor(hazeIntensity * (HEAT_HAZE_LAYERS_MAX - 1));
+                 const baseAlpha = HEAT_HAZE_BASE_ALPHA * hazeIntensity;
+                 for (let i = 0; i < numLayers; i++) {
+                     const timeFactor = now * HEAT_HAZE_SPEED; const layerOffsetFactor = i * 0.8;
+                     const verticalOffset = (Math.sin(timeFactor + layerOffsetFactor) * HEAT_HAZE_MAX_OFFSET * hazeIntensity) - (i * 0.3 * hazeIntensity);
+                     const layerAlpha = baseAlpha * (1 - (i / (numLayers * 1.5)));
+                     ctx.globalAlpha = Math.max(0, Math.min(1, layerAlpha));
+                     ctx.drawImage(hazeCanvas, 0, 0, canvasWidth, canvasHeight, 0, verticalOffset, canvasWidth, canvasHeight );
+                 }
+                 ctx.globalAlpha = 1.0;
             }
         }
-
-        const stateToRender = Game.getInterpolatedState(currentTime);
-        if (stateToRender && typeof Renderer !== 'undefined' && DOM.ctx) {
-             // --- MODIFIED: Pass arguments correctly, including pushback animation state ---
-             Renderer.drawGame(
-                 DOM.ctx,                        // ctx
-                 appState,                       // appState
-                 stateToRender,                  // stateToRender
-                 localPlayerMuzzleFlash,         // localPlayerMuzzleFlashRef
-                 localPlayerPushbackAnim,        // localPlayerPushbackAnimState 
-                 CANVAS_WIDTH,                   // width
-                 CANVAS_HEIGHT                   // height
-             );
-             // ---------------------------------
-        } else {
-             log("Skipping render: Missing state, Renderer, or context.");
+  
+        // 2. Apply Shake Transform
+        if (shakeApplied) { ctx.save(); ctx.translate(shakeOffsetX, shakeOffsetY); }
+  
+        // 3. Draw Game World Elements
+        if (!stateToRender) { if (shakeApplied) ctx.restore(); return; }
+        drawCampfire(ctx, stateToRender.campfire, canvasWidth, canvasHeight);
+        if (typeof snake !== 'undefined') drawSnake(ctx, snake);
+        drawPowerups(ctx, stateToRender.powerups);
+        drawBullets(ctx, stateToRender.bullets);
+        if (typeof activeEnemyBubbles !== 'undefined') drawEnemies(ctx, stateToRender.enemies, activeEnemyBubbles);
+        // --- MODIFIED CALL to drawPlayers --- Pass pushback state
+        if (typeof activeSpeechBubbles !== 'undefined' && appState) drawPlayers(ctx, stateToRender.players, appState, localPlayerMuzzleFlashRef, localPlayerPushbackAnimState);
+        if (typeof activeSpeechBubbles !== 'undefined' && appState) drawSpeechBubbles(ctx, stateToRender.players, activeSpeechBubbles, appState);
+        if (typeof activeEnemyBubbles !== 'undefined') drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles);
+        drawDamageTexts(ctx, stateToRender.damage_texts);
+        let shouldDrawMuzzleFlash = localPlayerMuzzleFlashRef?.active && (now < localPlayerMuzzleFlashRef?.endTime);
+        if (shouldDrawMuzzleFlash) { drawMuzzleFlash(ctx, appState.renderedPlayerPos.x, appState.renderedPlayerPos.y, localPlayerMuzzleFlashRef.aimDx, localPlayerMuzzleFlashRef.aimDy); }
+        else if (localPlayerMuzzleFlashRef?.active) { localPlayerMuzzleFlashRef.active = false; }
+  
+        // 4. Restore Shake Transform
+        if (shakeApplied) { ctx.restore(); }
+  
+        // 5. Draw Overlays
+        ctx.globalAlpha = 1.0;
+        if (appState?.isRaining) {
+            ctx.strokeStyle = RAIN_COLOR; ctx.lineWidth = 1.5; ctx.beginPath();
+            for (let i = 0; i < RAIN_DROPS; i++) {
+                 const rainX = ( (i * 137) + (now * 0.05) ) % (canvasWidth + 100) - 50;
+                 const rainY = ( (i * 271) + (now * 0.3) ) % canvasHeight;
+                 const endX = rainX + RAIN_SPEED_X; const endY = rainY + RAIN_SPEED_Y;
+                 ctx.moveTo(rainX, rainY); ctx.lineTo(endX, endY);
+            }
+            ctx.stroke();
+        } else if (appState?.isDustStorm) {
+            ctx.fillStyle = 'rgba(229, 169, 96, 0.2)'; ctx.fillRect(0, 0, canvasWidth, canvasHeight);
         }
-
-        if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) { appState.animationFrameId = requestAnimationFrame(gameLoop); } else { if(appState.animationFrameId) cleanupLoop(); }
-    }
-    function startGameLoop() { if (appState.mode === 'menu') return; if (appState.animationFrameId) return; if (!appState.serverState && appState.mode !== 'singleplayer') return; Input.setup(); log("Starting game loop..."); appState.lastLoopTime = null; appState.animationFrameId = requestAnimationFrame(gameLoop); }
-    function getInterpolatedState(renderTime) {
-        const INTERPOLATION_BUFFER_MS = 100; const serverTime = appState.serverState?.timestamp * 1000; const lastServerTime = appState.lastServerState?.timestamp * 1000;
-        if (!appState.serverState || !appState.lastServerState || !serverTime || !lastServerTime || serverTime <= lastServerTime) { return appState.serverState; }
-        const renderTargetTime = renderTime - INTERPOLATION_BUFFER_MS; const timeBetweenStates = serverTime - lastServerTime;
-        const timeSinceLastState = renderTargetTime - lastServerTime; let t = Math.max(0, Math.min(1, timeSinceLastState / timeBetweenStates));
-        let interpolatedState = { ...appState.serverState }; interpolatedState.players = {}; interpolatedState.enemies = {}; interpolatedState.bullets = {};
-        if (appState.serverState.players) { for (const pId in appState.serverState.players) { const currentP = appState.serverState.players[pId]; const lastP = appState.lastServerState.players?.[pId]; if (pId === appState.localPlayerId) { interpolatedState.players[pId] = { ...currentP, x: appState.renderedPlayerPos.x, y: appState.renderedPlayerPos.y }; } else if (lastP && typeof currentP.x === 'number' && typeof lastP.x === 'number') { interpolatedState.players[pId] = { ...currentP, x: lerp(lastP.x, currentP.x, t), y: lerp(lastP.y, currentP.y, t) }; } else { interpolatedState.players[pId] = { ...currentP }; } } }
-        if (appState.serverState.enemies) { for (const eId in appState.serverState.enemies) { const currentE = appState.serverState.enemies[eId]; const lastE = appState.lastServerState.enemies?.[eId]; if (lastE && typeof currentE.x === 'number' && typeof lastE.x === 'number' && currentE.health > 0) { interpolatedState.enemies[eId] = { ...currentE, x: lerp(lastE.x, currentE.x, t), y: lerp(lastE.y, currentE.y, t) }; } else { interpolatedState.enemies[eId] = { ...currentE }; } } }
-        if (appState.serverState.bullets) { for (const bId in appState.serverState.bullets) { const currentB = appState.serverState.bullets[bId]; const lastB = appState.lastServerState.bullets?.[bId]; if (lastB && typeof currentB.x === 'number' && typeof lastB.x === 'number') { interpolatedState.bullets[bId] = { ...currentB, x: lerp(lastB.x, currentB.x, t), y: lerp(lastB.y, currentB.y, t) }; } else { interpolatedState.bullets[bId] = { ...currentB }; } } }
-        interpolatedState.powerups = appState.serverState.powerups; interpolatedState.damage_texts = appState.serverState.damage_texts;
-        return interpolatedState;
-    }
-    function cleanupLoop() { if (appState.animationFrameId) { cancelAnimationFrame(appState.animationFrameId); appState.animationFrameId = null; log("Game loop stopped and cleaned up."); } Input.cleanup(); appState.lastLoopTime = null; }
-    function updatePredictedPosition(deltaTime) {
-        if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return;
-        const moveVector = Input.getMovementInputVector(); const playerState = appState.serverState.players[appState.localPlayerId];
-        const playerSpeed = playerState?.speed ?? PLAYER_DEFAULTS.base_speed;
-        if (moveVector.dx !== 0 || moveVector.dy !== 0) { appState.predictedPlayerPos.x += moveVector.dx * playerSpeed * deltaTime; appState.predictedPlayerPos.y += moveVector.dy * playerSpeed * deltaTime; }
-        const w_half = (playerState?.width ?? PLAYER_DEFAULTS.width) / 2; const h_half = (playerState?.height ?? PLAYER_DEFAULTS.height) / 2;
-        appState.predictedPlayerPos.x = Math.max(w_half, Math.min(CANVAS_WIDTH - w_half, appState.predictedPlayerPos.x)); appState.predictedPlayerPos.y = Math.max(h_half, Math.min(CANVAS_HEIGHT - h_half, appState.predictedPlayerPos.y));
-    }
-    function reconcileWithServer() {
-        if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return;
-        const serverPos = appState.serverState.players[appState.localPlayerId]; if (typeof serverPos.x !== 'number' || typeof serverPos.y !== 'number') return;
-        const predictedPos = appState.predictedPlayerPos; const renderedPos = appState.renderedPlayerPos; const dist = distance(predictedPos.x, predictedPos.y, serverPos.x, serverPos.y);
-        const snapThreshold = (parseFloat(getCssVar('--reconciliation-threshold')) || 35); const renderLerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.15;
-        if (dist > snapThreshold) { predictedPos.x = serverPos.x; predictedPos.y = serverPos.y; renderedPos.x = serverPos.x; renderedPos.y = serverPos.y; }
-        else { renderedPos.x = lerp(renderedPos.x, predictedPos.x, renderLerpFactor); renderedPos.y = lerp(renderedPos.y, predictedPos.y, renderLerpFactor); }
-    }
-    function initListeners() {
-        log("Initializing button listeners..."); DOM.singlePlayerBtn.onclick = startSinglePlayer; DOM.multiplayerBtn.onclick = () => UI.showSection('multiplayer-menu-section');
-        DOM.hostGameBtn2.onclick = () => hostMultiplayer(2); DOM.hostGameBtn3.onclick = () => hostMultiplayer(3); DOM.hostGameBtn4.onclick = () => hostMultiplayer(4);
-        DOM.showJoinUIBtn.onclick = () => UI.showSection('join-code-section'); DOM.cancelHostBtn.onclick = leaveGame; DOM.joinGameSubmitBtn.onclick = joinMultiplayer;
-        DOM.sendChatBtn.onclick = sendChatMessage; DOM.leaveGameBtn.onclick = leaveGame; DOM.gameOverBackBtn.onclick = () => resetClientState(true);
-        DOM.gameContainer.querySelectorAll('.back-button').forEach(btn => { const targetMatch = btn.getAttribute('onclick')?.match(/'([^']+)'/); if (targetMatch && targetMatch[1]) { const targetId = targetMatch[1]; if (DOM[targetId] || document.getElementById(targetId)) { btn.onclick = (e) => { e.preventDefault(); UI.showSection(targetId); }; } else { log(`Warning: Back button target section invalid: ${targetId}`); } } else { log("Warning: Back button found without valid target in onclick:", btn); } });
-    }
-    return { resetClientState, startGameLoop, cleanupLoop, sendChatMessage, initListeners, getInterpolatedState };
-})();
-
-// --- Global Server Message Handler ---
-function handleServerMessage(event) {
-    let data; try { data = JSON.parse(event.data); } catch (err) { error("Failed to parse server message:", err, event.data); UI.updateStatus("Received invalid data from server.", true); return; }
-    try {
-        if (typeof Renderer === 'undefined' && ['sp_game_started', 'game_joined', 'game_state'].includes(data.type)) {
-             error(`Received critical message type '${data.type}' before Renderer was ready!`);
-             return;
-        }
-
-        switch (data.type) {
-            case 'game_created':
-                log("Received 'game_created'"); appState.localPlayerId = data.player_id; appState.currentGameId = data.game_id; appState.serverState = data.initial_state; appState.maxPlayersInGame = data.max_players;
-                const hostP = appState.serverState?.players[appState.localPlayerId]; if (hostP) { appState.predictedPlayerPos = { x: hostP.x, y: hostP.y }; appState.renderedPlayerPos = { x: hostP.x, y: hostP.y }; }
-                if (!appState.maxPlayersInGame) { appState.maxPlayersInGame = '?'; } DOM.gameCodeDisplay.textContent = appState.currentGameId || 'ERROR'; const currentP = Object.keys(appState.serverState?.players || {}).length; DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentP}/${appState.maxPlayersInGame})`; UI.updateStatus(`Game hosted. Code: ${appState.currentGameId}`); UI.showSection('host-wait-section');
-                break;
-            case 'game_joined':
-                log("Received 'game_joined'"); appState.localPlayerId = data.player_id; appState.currentGameId = data.game_id; appState.serverState = data.initial_state; appState.maxPlayersInGame = appState.serverState?.max_players;
-                if (!appState.maxPlayersInGame) { appState.maxPlayersInGame = '?'; } const joinedP = appState.serverState?.players[appState.localPlayerId]; if (joinedP) { appState.predictedPlayerPos = { x: joinedP.x, y: joinedP.y }; appState.renderedPlayerPos = { x: joinedP.x, y: joinedP.y }; }
-                UI.updateStatus(`Joined game ${appState.currentGameId}. Get ready!`); UI.showSection('game-area');
-                if (appState.serverState) { Renderer.updateGeneratedBackground(appState.serverState.is_night, CANVAS_WIDTH, CANVAS_HEIGHT); UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState); }
-                Game.startGameLoop();
-                break;
-            case 'sp_game_started':
-                log("Received 'sp_game_started'"); appState.localPlayerId = data.player_id; appState.currentGameId = data.game_id; appState.serverState = data.initial_state; appState.maxPlayersInGame = 1;
-                const spP = appState.serverState?.players[appState.localPlayerId]; if (spP) { appState.predictedPlayerPos = { x: spP.x, y: spP.y }; appState.renderedPlayerPos = { x: spP.x, y: spP.y }; }
-                UI.updateStatus("Single Player Game Started!"); UI.showSection('game-area');
-                if (appState.serverState) { Renderer.updateGeneratedBackground(appState.serverState.is_night, CANVAS_WIDTH, CANVAS_HEIGHT); UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState); }
-                Game.startGameLoop();
-                break;
-            case 'game_state':
-                if (appState.mode === 'menu') return;
-                const previousStatus = appState.serverState?.status; const previousPlayerState = appState.serverState?.players?.[appState.localPlayerId];
-                appState.previousServerState = appState.lastServerState; appState.lastServerState = appState.serverState; appState.serverState = data.state;
-                const newState = appState.serverState; const currentPlayerState = newState?.players?.[appState.localPlayerId];
-                appState.currentTemp = newState.current_temperature ?? 18.0; appState.isRaining = newState.is_raining ?? false; appState.isDustStorm = newState.is_dust_storm ?? false; UI.updateEnvironmentDisplay();
-                const serverSnakeState = newState.snake_state; if (serverSnakeState && typeof snake !== 'undefined') { snake.isActiveFromServer = serverSnakeState.active; snake.serverHeadX = serverSnakeState.head_x; snake.serverHeadY = serverSnakeState.head_y; snake.serverBaseY = serverSnakeState.base_y; if (snake.isActiveFromServer && snake.segments.length === 0) { snake.segments = [{ x: snake.serverHeadX, y: snake.serverHeadY, time: performance.now() }]; } else if (!snake.isActiveFromServer) { snake.segments = []; } }
-                if (currentPlayerState?.trigger_snake_bite_shake_this_tick) { Renderer.triggerShake(15.0, 400.0); }
-                if (previousPlayerState && currentPlayerState && typeof currentPlayerState.health === 'number' && typeof previousPlayerState.health === 'number' && currentPlayerState.health < previousPlayerState.health) { const damageTaken = previousPlayerState.health - currentPlayerState.health; const baseMag = 5; const dmgScale = 0.18; const maxMag = 18; const shakeMagnitude = Math.min(maxMag, baseMag + damageTaken * dmgScale); Renderer.triggerShake(shakeMagnitude, 250); }
-                 if (currentPlayerState?.hit_flash_this_tick && hitPauseFrames <= 0) { hitPauseFrames = 3; }
-                if (!appState.maxPlayersInGame && newState.max_players) { appState.maxPlayersInGame = newState.max_players; }
-                if (newState.status !== previousStatus) {
-                    log(`[Client State Change] From ${previousStatus || 'null'} to ${newState.status}`);
-                    if ((newState.status === 'countdown' || newState.status === 'active') && previousStatus !== 'active' && previousStatus !== 'countdown') { UI.updateStatus(newState.status === 'countdown' ? "Countdown starting..." : "Game active!"); UI.showSection('game-area'); if (!appState.animationFrameId) { log(`--> Starting game loop NOW (triggered by ${newState.status} state update).`); if (newState) { Renderer.updateGeneratedBackground(newState.is_night, CANVAS_WIDTH, CANVAS_HEIGHT); } Game.startGameLoop(); } }
-                    else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host' && previousStatus !== 'waiting') { UI.updateStatus("Game reverted to waiting lobby.", true); UI.showSection('host-wait-section'); const currentPWaiting = Object.keys(newState.players || {}).length; DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentPWaiting}/${appState.maxPlayersInGame || '?'})`; Game.cleanupLoop(); }
-                }
-                if (appState.animationFrameId && (newState.status === 'countdown' || newState.status === 'active')) { UI.updateHUD(newState); UI.updateCountdown(newState); UI.updateDayNight(newState); }
-                else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') { const pCount = Object.keys(newState.players || {}).length; DOM.waitingMessage.textContent = `Waiting for Team Mate... (${pCount}/${appState.maxPlayersInGame || '?'})`; }
-                const speakerId = newState.enemy_speaker_id; const speechText = newState.enemy_speech_text; if (speakerId && speechText && typeof activeEnemyBubbles !== 'undefined') { activeEnemyBubbles[speakerId] = { text: speechText.substring(0, 50), endTime: performance.now() + 3000 }; }
-                break;
-            case 'game_over_notification':
-                log("Received 'game_over_notification'"); if (data.final_state) { appState.serverState = data.final_state; UI.updateStatus("Game Over!"); Game.cleanupLoop(); UI.showGameOver(data.final_state); log("-> Game Over sequence initiated by notification."); } else { error("Received 'game_over_notification' without final_state data."); Game.resetClientState(true); }
-                break;
-             case 'chat_message':
-                 const senderId = data.sender_id; const msgText = data.message; const isSelf = senderId === appState.localPlayerId; UI.addChatMessage(senderId, msgText, isSelf); if (senderId && msgText && typeof activeSpeechBubbles !== 'undefined') { activeSpeechBubbles[senderId] = { text: msgText.substring(0, 50), endTime: performance.now() + 4000 }; }
-                 break;
-             case 'error':
-                 error("[Client] Server Error Message:", data.message); UI.updateStatus(`Server Error: ${data.message}`, true);
-                 if (appState.mode === 'multiplayer-client' && (data.message.includes('not found') || data.message.includes('not waiting') || data.message.includes('full') || data.message.includes('finished'))) { UI.showSection('join-code-section'); appState.mode = 'menu'; }
-                 else if (appState.mode === 'multiplayer-host' && data.message.includes('Creation Error')) { Game.resetClientState(true); }
-                 else if (data.message === 'Please create or join a game first.') { Game.resetClientState(true); }
-                 break;
-            default: log(`Unknown message type received: ${data.type}`);
-        }
-    } catch (handlerError) { error("Error inside handleServerMessage logic:", handlerError); UI.updateStatus("Client error processing message.", true); }
-} // End handleServerMessage
-
-// --- Global Initialization ---
-function showSection(sectionId) { UI.showSection(sectionId); }
-
-// Initialize after the DOM is fully loaded
-document.addEventListener('DOMContentLoaded', () => {
-    log("DOM fully loaded and parsed.");
-
-    if (typeof Renderer === 'undefined') {
-        error("CRITICAL: Renderer is not defined after DOM load! Check renderer.js loading and errors.");
-        UI.updateStatus("Initialization Error: Renderer failed. Refresh.", true);
-        return;
-    }
-    if (DOM.canvas) {
-        DOM.ctx = DOM.canvas.getContext('2d');
-        if (!DOM.ctx) {
-            error("Failed to get 2D context from canvas!");
-            UI.updateStatus("Error: Cannot get canvas context. Refresh.", true);
-            return;
-        }
-    } else {
-        error("Canvas element not found!");
-        UI.updateStatus("Error: Canvas element missing. Refresh.", true);
-        return;
-    }
-
-    UI.updateStatus("Initializing Connection...");
-    try {
-        Game.initListeners();
-        Network.connect(() => { /* Connection success handled within Network.connect */ });
-    } catch (initError) {
-        error("Initialization failed:", initError);
-        UI.updateStatus("Error initializing game. Please refresh.", true);
-    }
-});
-
-// --- End main.js ---
+        if (appState) drawTemperatureTint(ctx, appState.currentTemp, canvasWidth, canvasHeight);
+        const localPlayerState = stateToRender.players?.[appState?.localPlayerId];
+        if (localPlayerState && localPlayerState.health < DAMAGE_VIGNETTE_HEALTH_THRESHOLD) { const vi = 1.0 - (localPlayerState.health / DAMAGE_VIGNETTE_HEALTH_THRESHOLD); drawDamageVignette(ctx, vi, canvasWidth, canvasHeight); }
+  
+        ctx.globalAlpha = 1.0;
+      } // --- End drawGame ---
+  
+      return { drawGame, triggerShake, updateGeneratedBackground };
+  
+  })(); // End Renderer module IIFE
+  
+  console.log("--- Renderer.js: Executed. Renderer object defined?", typeof Renderer);
