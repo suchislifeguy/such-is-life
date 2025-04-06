@@ -447,7 +447,8 @@ const Game = (() => {
                  stateToRender,                  // stateToRender
                  localPlayerMuzzleFlash,         // localPlayerMuzzleFlashRef
                  localPlayerPushbackAnim,        // localPlayerPushbackAnimState
-                 activeBloodSparkEffects, // <-- Use the ACTUAL variable name from main.js
+                 activeBloodSparkEffects, 
+                 activeEnemyBubbles,      
                  CANVAS_WIDTH,                   // width
                  CANVAS_HEIGHT                   // height
              );
