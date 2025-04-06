@@ -32,7 +32,6 @@ function lerp(start, end, amount) { return start + (end - start) * amount; }
 function distance(x1, y1, x2, y2) { const dx = x1 - x2; const dy = y1 - y2; return Math.sqrt(dx * dx + dy * dy); }
 
 // --- DOM Element References ---
-// Note: This runs after the HTML is parsed when using defer, so DOM elements should exist.
 const DOM = {
     gameContainer: document.getElementById('game-container'), gameStatus: document.getElementById('game-status'),
     mainMenuSection: document.getElementById('main-menu-section'), multiplayerMenuSection: document.getElementById('multiplayer-menu-section'),
@@ -40,7 +39,7 @@ const DOM = {
     gameArea: document.getElementById('game-area'), gameOverScreen: document.getElementById('game-over-screen'),
     gameCodeDisplay: document.getElementById('game-code-display'), waitingMessage: document.getElementById('waiting-message'),
     gameIdInput: document.getElementById('gameIdInput'), canvas: document.getElementById('gameCanvas'),
-    ctx: null, // Initialize ctx later after checking canvas exists
+    ctx: null,
     dayNightIndicator: document.getElementById('day-night-indicator'),
     countdownDiv: document.getElementById('countdown'), finalStatsDiv: document.getElementById('final-stats'),
     chatInput: document.getElementById('chatInput'), chatLog: document.getElementById('chat-log'),
@@ -51,17 +50,10 @@ const DOM = {
     sendChatBtn: document.getElementById('sendChatBtn'), leaveGameBtn: document.getElementById('leaveGameBtn'),
     gameOverBackBtn: document.getElementById('gameOverBackBtn'),
 };
-// Get canvas context safely
 if (DOM.canvas) {
     DOM.ctx = DOM.canvas.getContext('2d');
-    if (!DOM.ctx) {
-        console.error("Failed to get 2D context from canvas!");
-        // Handle error appropriately - maybe show an error message to the user
-    }
-} else {
-    console.error("Canvas element not found!");
-    // Handle error - the game cannot run
-}
+    if (!DOM.ctx) { console.error("Failed to get 2D context from canvas!"); }
+} else { console.error("Canvas element not found!"); }
 
 
 // --- Global Client State ---
@@ -77,6 +69,13 @@ let appState = {
 
 // --- Local Effects State ---
 let localPlayerMuzzleFlash = { active: false, endTime: 0, aimDx: 0, aimDy: 0 };
+// --- NEW: Pushback Animation State ---
+let localPlayerPushbackAnim = {
+    active: false,
+    endTime: 0,
+    duration: 250 // Animation duration in ms (adjust for desired speed)
+};
+// -------------------------------------
 let hitPauseFrames = 0;
 let activeSpeechBubbles = {};
 let activeEnemyBubbles = {};
@@ -88,7 +87,7 @@ let snake = {
     lineWidth: 3, serverHeadX: 0, serverHeadY: 0, serverBaseY: 0, isActiveFromServer: false,
     update: function(currentTime) {
         if (!this.isActiveFromServer) { this.segments = []; return; }
-        const lerpFn = lerp; // Use global lerp
+        const lerpFn = lerp;
         if (this.segments.length === 0) { this.segments.push({ x: this.serverHeadX, y: this.serverHeadY, time: currentTime }); }
         else { this.segments[0].x = this.serverHeadX; this.segments[0].y = this.serverHeadY; this.segments[0].time = currentTime; }
         const waveTime = currentTime * 0.005; const phaseOffsetPerSegment = 1.2; const followLerp = 0.4;
@@ -139,7 +138,6 @@ const UI = (() => {
          if (!DOM.dayNightIndicator || !DOM.canvas || !DOM.gameContainer) return;
          if (serverState?.status === 'active') {
              const isNight = serverState.is_night; DOM.dayNightIndicator.textContent = isNight ? 'Night' : 'Day'; DOM.dayNightIndicator.style.display = 'block';
-             // Ensure Renderer exists before calling
              if (typeof Renderer !== 'undefined') {
                  Renderer.updateGeneratedBackground(isNight, CANVAS_WIDTH, CANVAS_HEIGHT);
              } else { error("Renderer not defined when calling updateGeneratedBackground from UI!"); }
@@ -170,8 +168,15 @@ const Network = (() => {
 
 // --- Input Handling Module ---
 const Input = (() => {
-     let keys = {}; let lastShotTime = 0; let movementInterval = null; let mouseCanvasPos = { x: 0, y: 0 }; let isMouseDown = false;
-     function setup() {
+    let keys = {}; let lastShotTime = 0; let movementInterval = null; let mouseCanvasPos = { x: 0, y: 0 }; let isMouseDown = false;
+
+    // Named function for context menu prevention
+    function preventContextMenu(event) {
+        console.log("Canvas contextmenu event triggered! Preventing default...");
+        event.preventDefault();
+    }
+
+    function setup() {
         cleanup(); // Calls cleanup first
         document.addEventListener('keydown', handleKeyDown);
         document.addEventListener('keyup', handleKeyUp);
@@ -179,25 +184,23 @@ const Input = (() => {
         if (DOM.canvas) {
             DOM.canvas.addEventListener('mousemove', handleMouseMove);
             DOM.canvas.addEventListener('mousedown', handleMouseDown);
-            // --- ADD THIS LINE ---
-            DOM.canvas.addEventListener('contextmenu', preventContextMenu); // <-- Add this!
-            // ---------------------
+            DOM.canvas.addEventListener('contextmenu', preventContextMenu); // Add listener
         } else {
             error("Input setup failed: Canvas element not found.");
         }
         document.addEventListener('mouseup', handleMouseUp);
         movementInterval = setInterval(sendMovementInput, INPUT_SEND_INTERVAL);
         log("Input listeners setup.");
-    }     function cleanup() {
+    }
+
+    function cleanup() {
         document.removeEventListener('keydown', handleKeyDown);
         document.removeEventListener('keyup', handleKeyUp);
         DOM.chatInput.removeEventListener('keydown', handleChatEnter);
         if (DOM.canvas) {
             DOM.canvas.removeEventListener('mousemove', handleMouseMove);
             DOM.canvas.removeEventListener('mousedown', handleMouseDown);
-            // --- ADD THIS LINE ---
-            DOM.canvas.removeEventListener('contextmenu', preventContextMenu);
-            // ---------------------
+            DOM.canvas.removeEventListener('contextmenu', preventContextMenu); // Remove listener
         }
         document.removeEventListener('mouseup', handleMouseUp);
         clearInterval(movementInterval);
@@ -206,25 +209,154 @@ const Input = (() => {
         isMouseDown = false;
         mouseCanvasPos = { x: 0, y: 0 };
         log("Input listeners cleaned up.");
-    }     
-    
-
-    function preventContextMenu(event) {
-        console.log("Canvas contextmenu event triggered! Preventing default..."); // ADD THIS LINE
-        event.preventDefault();
     }
-    
-    
-    function handleMouseMove(event) { if (!DOM.canvas) return; const rect = DOM.canvas.getBoundingClientRect(); const rawMouseX = event.clientX - rect.left; const rawMouseY = event.clientY - rect.top; const visualWidth = rect.width; const visualHeight = rect.height; const internalWidth = DOM.canvas.width; const internalHeight = DOM.canvas.height; const scaleX = (visualWidth > 0) ? internalWidth / visualWidth : 1; const scaleY = (visualHeight > 0) ? internalHeight / visualHeight : 1; mouseCanvasPos.x = rawMouseX * scaleX; mouseCanvasPos.y = rawMouseY * scaleY; }
-    function handleMouseDown(event) { if (document.activeElement === DOM.chatInput) return; if (event.button === 0) { isMouseDown = true; event.preventDefault(); } }
-    function handleMouseUp(event) { if (event.button === 0) { isMouseDown = false; } }
-     function handleKeyDown(e) { if (document.activeElement === DOM.chatInput) return; const key = e.key.toLowerCase(); if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' '].includes(key)) { if (!keys[key]) { keys[key] = true; } e.preventDefault(); return; } if (key === 'e') { if (appState.serverState?.status === 'active' && appState.isConnected) { log("Sending player_pushback message."); Network.sendMessage({ type: 'player_pushback' }); e.preventDefault(); } else { log("Pushback ('e') ignored: Game not active or not connected."); } return; } }
-     function handleKeyUp(e) { const key = e.key.toLowerCase(); if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' '].includes(key)) { if (keys[key]) { keys[key] = false; } } }
-     function handleChatEnter(e) { if (e.key === 'Enter') { e.preventDefault(); log("Enter key detected in chat input."); Game.sendChatMessage(); } }
-     function getMovementInputVector() { let dx = 0, dy = 0; if (keys['w'] || keys['arrowup']) dy -= 1; if (keys['s'] || keys['arrowdown']) dy += 1; if (keys['a'] || keys['arrowleft']) dx -= 1; if (keys['d'] || keys['arrowright']) dx += 1; if (dx !== 0 && dy !== 0) { const factor = 1 / Math.sqrt(2); dx *= factor; dy *= factor; } return { dx, dy }; }
-     function sendMovementInput() { if (appState.mode !== 'menu' && appState.serverState?.status === 'active' && appState.isConnected) { Network.sendMessage({ type: 'player_move', direction: getMovementInputVector() }); } }
-    function handleShooting() { if (appState.serverState?.status !== 'active') return; const playerState = appState.serverState?.players?.[appState.localPlayerId]; const currentAmmo = playerState?.active_ammo_type || 'standard'; let actualCooldown = SHOOT_COOLDOWN * (currentAmmo === 'ammo_rapid_fire' ? RAPID_FIRE_COOLDOWN_MULTIPLIER : 1); const now = Date.now(); if (now - lastShotTime < actualCooldown) return; lastShotTime = now; const playerRenderX = appState.renderedPlayerPos.x; const playerRenderY = appState.renderedPlayerPos.y; let flashDx = mouseCanvasPos.x - playerRenderX; let flashDy = mouseCanvasPos.y - playerRenderY; const flashMag = Math.sqrt(flashDx*flashDx + flashDy*flashDy); if (flashMag > 0.01) { flashDx /= flashMag; flashDy /= flashMag; } else { flashDx = 0; flashDy = -1; } localPlayerMuzzleFlash.active = true; localPlayerMuzzleFlash.endTime = performance.now() + 75; localPlayerMuzzleFlash.aimDx = flashDx; localPlayerMuzzleFlash.aimDy = flashDy; log("Sending shoot message with Target Coords:", mouseCanvasPos); Network.sendMessage({ type: 'player_shoot', target: { x: mouseCanvasPos.x, y: mouseCanvasPos.y } }); }
-    function isShootHeld() { return keys[' '] || isMouseDown; }
+
+    function handleMouseMove(event) {
+        if (!DOM.canvas) return;
+        const rect = DOM.canvas.getBoundingClientRect();
+        const rawMouseX = event.clientX - rect.left;
+        const rawMouseY = event.clientY - rect.top;
+        const visualWidth = rect.width;
+        const visualHeight = rect.height;
+        const internalWidth = DOM.canvas.width;
+        const internalHeight = DOM.canvas.height;
+        const scaleX = (visualWidth > 0) ? internalWidth / visualWidth : 1;
+        const scaleY = (visualHeight > 0) ? internalHeight / visualHeight : 1;
+        mouseCanvasPos.x = rawMouseX * scaleX;
+        mouseCanvasPos.y = rawMouseY * scaleY;
+    }
+
+    // --- MODIFIED: handleMouseDown ---
+    function handleMouseDown(event) {
+        if (document.activeElement === DOM.chatInput) return; // Ignore if typing in chat
+
+        // Button mapping: 0 = Left, 1 = Middle, 2 = Right
+        if (event.button === 0) { // Left Click - Shoot
+            isMouseDown = true;
+            event.preventDefault(); // Prevent text selection, etc.
+            // Shooting logic is handled by isShootHeld() check in game loop
+        } else if (event.button === 2) { // Right Click - Pushback
+            event.preventDefault(); // Prevent context menu (extra safety)
+
+            // Check game state before sending
+            if (appState.serverState?.status === 'active' && appState.isConnected) {
+                log("Sending player_pushback message (triggered by RMB).");
+                Network.sendMessage({ type: 'player_pushback' });
+
+                // Trigger the visual animation
+                localPlayerPushbackAnim.active = true;
+                localPlayerPushbackAnim.endTime = performance.now() + localPlayerPushbackAnim.duration;
+                log("Pushback animation triggered.");
+
+            } else {
+                log("Pushback (RMB) ignored: Game not active or not connected.");
+            }
+        }
+        // Ignore middle mouse button (event.button === 1) for now
+    }
+    // -----------------------------
+
+    function handleMouseUp(event) {
+        if (event.button === 0) { // Left Click Release
+            isMouseDown = false;
+        }
+        // No action needed for right-click release
+    }
+
+    function handleKeyDown(e) {
+        if (document.activeElement === DOM.chatInput) return;
+        const key = e.key.toLowerCase();
+        if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) {
+            if (!keys[key]) { keys[key] = true; }
+            e.preventDefault();
+            return;
+        }
+        if (key === 'e') { // Keep 'E' key functional too
+            if (appState.serverState?.status === 'active' && appState.isConnected) {
+                log("Sending player_pushback message (triggered by E key).");
+                Network.sendMessage({ type: 'player_pushback' });
+
+                 // Trigger the visual animation (same as RMB)
+                localPlayerPushbackAnim.active = true;
+                localPlayerPushbackAnim.endTime = performance.now() + localPlayerPushbackAnim.duration;
+                 log("Pushback animation triggered.");
+
+                e.preventDefault();
+            } else {
+                log("Pushback ('e') ignored: Game not active or not connected.");
+            }
+            return;
+        }
+    }
+
+    function handleKeyUp(e) {
+        const key = e.key.toLowerCase();
+        if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) {
+            if (keys[key]) { keys[key] = false; }
+        }
+    }
+
+    function handleChatEnter(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            log("Enter key detected in chat input.");
+            Game.sendChatMessage();
+        }
+    }
+
+    function getMovementInputVector() {
+        let dx = 0, dy = 0;
+        if (keys['w'] || keys['arrowup']) dy -= 1;
+        if (keys['s'] || keys['arrowdown']) dy += 1;
+        if (keys['a'] || keys['arrowleft']) dx -= 1;
+        if (keys['d'] || keys['arrowright']) dx += 1;
+        if (dx !== 0 && dy !== 0) {
+            const factor = 1 / Math.sqrt(2);
+            dx *= factor;
+            dy *= factor;
+        }
+        return { dx, dy };
+    }
+
+    function sendMovementInput() {
+        if (appState.mode !== 'menu' && appState.serverState?.status === 'active' && appState.isConnected) {
+            Network.sendMessage({ type: 'player_move', direction: getMovementInputVector() });
+        }
+    }
+
+    function handleShooting() {
+        if (appState.serverState?.status !== 'active') return;
+        const playerState = appState.serverState?.players?.[appState.localPlayerId];
+        const currentAmmo = playerState?.active_ammo_type || 'standard';
+        let actualCooldown = SHOOT_COOLDOWN * (currentAmmo === 'ammo_rapid_fire' ? RAPID_FIRE_COOLDOWN_MULTIPLIER : 1);
+        const now = Date.now();
+        if (now - lastShotTime < actualCooldown) return;
+        lastShotTime = now;
+        const playerRenderX = appState.renderedPlayerPos.x;
+        const playerRenderY = appState.renderedPlayerPos.y;
+        let flashDx = mouseCanvasPos.x - playerRenderX;
+        let flashDy = mouseCanvasPos.y - playerRenderY;
+        const flashMag = Math.sqrt(flashDx * flashDx + flashDy * flashDy);
+        if (flashMag > 0.01) {
+            flashDx /= flashMag;
+            flashDy /= flashMag;
+        } else {
+            flashDx = 0;
+            flashDy = -1;
+        }
+        localPlayerMuzzleFlash.active = true;
+        localPlayerMuzzleFlash.endTime = performance.now() + 75; // Keep muzzle flash short
+        localPlayerMuzzleFlash.aimDx = flashDx;
+        localPlayerMuzzleFlash.aimDy = flashDy;
+        log("Sending shoot message with Target Coords:", mouseCanvasPos);
+        Network.sendMessage({ type: 'player_shoot', target: { x: mouseCanvasPos.x, y: mouseCanvasPos.y } });
+    }
+
+    function isShootHeld() {
+        // Shoot is triggered by holding Space or Left Mouse Button
+        return keys[' '] || isMouseDown;
+    }
+
     return { setup, cleanup, getMovementInputVector, handleShooting, isShootHeld };
 })();
 
@@ -239,12 +371,23 @@ const Game = (() => {
         log(`Resetting client state. Show Menu: ${showMenu}`); cleanupLoop();
         appState.localPlayerId = null; appState.currentGameId = null; appState.serverState = null; appState.lastServerState = null; appState.previousServerState = null; appState.maxPlayersInGame = null;
         appState.predictedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 }; appState.renderedPlayerPos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 }; appState.lastLoopTime = null;
-        localPlayerMuzzleFlash = { active: false, endTime: 0, aimDx: 0, aimDy: 0 }; hitPauseFrames = 0; activeSpeechBubbles = {}; activeEnemyBubbles = {}; if(typeof snake !== 'undefined'){ snake.isActiveFromServer = false; snake.segments = []; }
+        localPlayerMuzzleFlash = { active: false, endTime: 0, aimDx: 0, aimDy: 0 };
+        localPlayerPushbackAnim = { active: false, endTime: 0, duration: 250 }; // Reset pushback anim state
+        hitPauseFrames = 0; activeSpeechBubbles = {}; activeEnemyBubbles = {}; if(typeof snake !== 'undefined'){ snake.isActiveFromServer = false; snake.segments = []; }
         DOM.chatLog.innerHTML = ''; DOM.gameCodeDisplay.textContent = '------'; DOM.gameIdInput.value = ''; if(DOM.countdownDiv) DOM.countdownDiv.style.display = 'none'; if(DOM.dayNightIndicator) DOM.dayNightIndicator.style.display = 'none'; if(DOM.gameOverScreen) DOM.gameOverScreen.style.display = 'none';
         const gridContainer = document.getElementById('player-stats-grid'); if (gridContainer) gridContainer.innerHTML = 'Loading Stats...';
         if (showMenu) { appState.mode = 'menu'; UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected."); UI.showSection('main-menu-section'); }
     }
     function gameLoop(currentTime) {
+        // --- Animation State Reset ---
+        // Check and reset expired animations at the start of the loop
+        const now = performance.now();
+        if (localPlayerPushbackAnim.active && now >= localPlayerPushbackAnim.endTime) {
+            localPlayerPushbackAnim.active = false;
+        }
+        // (Muzzle flash reset is implicitly handled in Renderer when drawing)
+        // ---------------------------
+
         if (hitPauseFrames > 0) { hitPauseFrames--; if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) { appState.animationFrameId = requestAnimationFrame(gameLoop); } return; }
         if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) { if (appState.serverState?.game_over) { UI.updateStatus("Game Over!"); UI.showGameOver(appState.serverState); } else if (appState.mode === 'menu') { UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected."); } cleanupLoop(); return; }
         if (!appState.serverState && appState.mode !== 'singleplayer') { appState.animationFrameId = requestAnimationFrame(gameLoop); return; }
@@ -267,7 +410,17 @@ const Game = (() => {
 
         const stateToRender = Game.getInterpolatedState(currentTime);
         if (stateToRender && typeof Renderer !== 'undefined' && DOM.ctx) {
-             Renderer.drawGame( DOM.ctx, appState, stateToRender, localPlayerMuzzleFlash, CANVAS_WIDTH, CANVAS_HEIGHT );
+             // --- MODIFIED: Pass pushback animation state ---
+             Renderer.drawGame(
+                 DOM.ctx,
+                 appState,
+                 stateToRender,
+                 localPlayerMuzzleFlash, // Pass muzzle flash state
+                 localPlayerPushbackAnim, // Pass pushback animation state
+                 CANVAS_WIDTH,
+                 CANVAS_HEIGHT
+             );
+             // -------------------------------------------
         } else {
              log("Skipping render: Missing state, Renderer, or context.");
         }
@@ -318,10 +471,8 @@ const Game = (() => {
 function handleServerMessage(event) {
     let data; try { data = JSON.parse(event.data); } catch (err) { error("Failed to parse server message:", err, event.data); UI.updateStatus("Received invalid data from server.", true); return; }
     try {
-        // Ensure Renderer is available before processing messages that might use it
         if (typeof Renderer === 'undefined' && ['sp_game_started', 'game_joined', 'game_state'].includes(data.type)) {
              error(`Received critical message type '${data.type}' before Renderer was ready!`);
-             // Optionally queue message or handle error, for now just log and potentially return
              return;
         }
 
@@ -389,34 +540,28 @@ function showSection(sectionId) { UI.showSection(sectionId); }
 document.addEventListener('DOMContentLoaded', () => {
     log("DOM fully loaded and parsed.");
 
-    // Check if Renderer is defined *after* DOM load, before connecting
     if (typeof Renderer === 'undefined') {
         error("CRITICAL: Renderer is not defined after DOM load! Check renderer.js loading and errors.");
         UI.updateStatus("Initialization Error: Renderer failed. Refresh.", true);
-        return; // Stop initialization
+        return;
     }
-
-    // Get canvas context now that DOM is ready
     if (DOM.canvas) {
         DOM.ctx = DOM.canvas.getContext('2d');
         if (!DOM.ctx) {
             error("Failed to get 2D context from canvas!");
             UI.updateStatus("Error: Cannot get canvas context. Refresh.", true);
-            return; // Stop initialization
+            return;
         }
     } else {
         error("Canvas element not found!");
         UI.updateStatus("Error: Canvas element missing. Refresh.", true);
-        return; // Stop initialization
+        return;
     }
 
     UI.updateStatus("Initializing Connection...");
     try {
         Game.initListeners();
-        Network.connect(() => {
-            // This callback runs on successful WebSocket connection
-            // UI status is already updated by Network.connect
-        });
+        Network.connect(() => { /* Connection success handled within Network.connect */ });
     } catch (initError) {
         error("Initialization failed:", initError);
         UI.updateStatus("Error initializing game. Please refresh.", true);
