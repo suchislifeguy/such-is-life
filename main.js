@@ -25,6 +25,7 @@ const PLAYER_STATUS_DOWN = 'down';
 const PLAYER_STATUS_DEAD = 'dead';
 const ENEMY_TYPE_CHASER = 'chaser';
 const ENEMY_TYPE_SHOOTER = 'shooter';
+const SNAKE_BITE_DURATION = 8.0; 
 
 // --- Utility Functions ---
 function getCssVar(varName) { return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || ''; }
