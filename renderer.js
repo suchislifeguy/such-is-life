@@ -423,272 +423,163 @@ const Renderer = (() => {
     const enemyUniformBlue = "#18315f"; // Navy Blue for standard torso
     const enemyGiantRed = "#a00000";   // Red Coat for Giant
 
-    // --- REVISED V3: drawEnemyRect (incorporating all feedback) ---
     function drawEnemyRect(ctx, x, y, w, h, type, enemyState) {
         const currentW = w;
         const currentH = h;
-        const t = performance.now(); // Time for animations
+        const t = performance.now();
 
-        // Determine bobbing (only for standard enemies)
         const bobOffset = (type !== 'giant') ? Math.sin(t / IDLE_BOB_SPEED_DIVISOR) * IDLE_BOB_AMPLITUDE : 0;
 
-        // --- Effect Checks ---
         const nowSeconds = t / 1000.0;
         const snakeEffect = enemyState?.effects?.snake_bite_slow;
         const isSnakeBitten = snakeEffect && typeof snakeEffect.expires_at === 'number' && nowSeconds < snakeEffect.expires_at;
-        const isHitFlashing = enemyState?.hit_flash_this_tick ?? false;
+        // Use the hit_flash_this_tick flag sent from server to trigger blood sparks
+        const isHitTriggered = enemyState?.hit_flash_this_tick ?? false;
 
-        ctx.save(); // Save context at the start
+        ctx.save();
 
-        // ========================================
-        // --- Giant Specific Drawing Logic ---
-        // ========================================
+        // --- Giant Specific Drawing ---
         if (type === 'giant') {
-            // Giant proportions (relative to its larger w/h)
-            const bodyWidth = currentW * 0.85;
-            const bodyHeight = currentH * 0.7;
-            const bodyTopY = y - currentH * 0.4; // No bob offset for giant
-            const bodyBottomY = bodyTopY + bodyHeight;
+            const bodyWidth = currentW * 0.85; const bodyHeight = currentH * 0.7;
+            const bodyTopY = y - currentH * 0.4; const bodyBottomY = bodyTopY + bodyHeight;
+            const legHeight = currentH * 0.25; const legWidth = currentW * 0.2; const legSpacing = currentW * 0.2; const legTopY = bodyBottomY;
+            const bootHeight = currentH * 0.1; const bootWidth = legWidth * 1.2; const bootTopY = legTopY + legHeight;
+            const headRadius = currentW * 0.2; const headCenterY = bodyTopY - headRadius * 0.5;
+            const shakoHeight = headRadius * 1.5; const shakoWidth = headRadius * 1.8; const shakoBaseY = headCenterY - headRadius * 0.8;
+            const shakoPeakHeight = shakoHeight * 0.2; const shakoPeakWidth = shakoWidth * 1.1;
 
-            const legHeight = currentH * 0.25;
-            const legWidth = currentW * 0.2;
-            const legSpacing = currentW * 0.2;
-            const legTopY = bodyBottomY;
-
-            const bootHeight = currentH * 0.1;
-            const bootWidth = legWidth * 1.2;
-            const bootTopY = legTopY + legHeight;
-
-            const headRadius = currentW * 0.2;
-            const headCenterY = bodyTopY - headRadius * 0.5;
-
-            // Shako Hat properties
-            const shakoHeight = headRadius * 1.5;
-            const shakoWidth = headRadius * 1.8;
-            const shakoBaseY = headCenterY - headRadius * 0.8;
-            const shakoPeakHeight = shakoHeight * 0.2;
-            const shakoPeakWidth = shakoWidth * 1.1;
-
-            // 1. Draw Legs & Boots (Static, Large)
-            ctx.fillStyle = enemyBootColor; // Dark trousers/legs part
-            ctx.fillRect(x - legSpacing - legWidth / 2, legTopY, legWidth, legHeight); // Left
-            ctx.fillRect(x + legSpacing - legWidth / 2, legTopY, legWidth, legHeight); // Right
-            ctx.fillStyle = enemyBootColor; // Dark boots
-            ctx.fillRect(x - legSpacing - bootWidth / 2, bootTopY, bootWidth, bootHeight); // Left
-            ctx.fillRect(x + legSpacing - bootWidth / 2, bootTopY, bootWidth, bootHeight); // Right
-
-            // 2. Draw Main Body (Red Coat)
-            ctx.fillStyle = enemyGiantRed; // *** USE RED COAT COLOR ***
+            // Legs & Boots
+            ctx.fillStyle = enemyBootColor;
+            ctx.fillRect(x - legSpacing - legWidth / 2, legTopY, legWidth, legHeight);
+            ctx.fillRect(x + legSpacing - legWidth / 2, legTopY, legWidth, legHeight);
+            ctx.fillStyle = enemyBootColor;
+            ctx.fillRect(x - legSpacing - bootWidth / 2, bootTopY, bootWidth, bootHeight);
+            ctx.fillRect(x + legSpacing - bootWidth / 2, bootTopY, bootWidth, bootHeight);
+            // Body
+            ctx.fillStyle = enemyGiantRed;
             ctx.fillRect(x - bodyWidth / 2, bodyTopY, bodyWidth, bodyHeight);
             // Belt
             ctx.fillStyle = beltColor;
             ctx.fillRect(x - bodyWidth / 2, bodyTopY + bodyHeight * 0.7, bodyWidth, bodyHeight * 0.08);
-
-            // 3. Draw Arms (Simple Red Rects)
-            ctx.fillStyle = enemyGiantRed; // Red sleeves
-            const armWidth = currentW * 0.18;
-            const armHeight = currentH * 0.5;
-            const armOffsetY = bodyTopY + bodyHeight * 0.1;
-            ctx.fillRect(x - bodyWidth / 2 - armWidth, armOffsetY, armWidth, armHeight); // Left
-            ctx.fillRect(x + bodyWidth / 2, armOffsetY, armWidth, armHeight);          // Right
-
-            // 4. Draw Head
-            ctx.fillStyle = enemySkinColor;
-            ctx.beginPath();
-            ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2);
-            ctx.fill();
-
-            // --- NEW: Giant Facial Features ---
-            // Beard (Simple dark shape below head center)
-            const beardWidth = headRadius * 1.6;
-            const beardHeight = headRadius * 1.0;
-            const beardTopY = headCenterY + headRadius * 0.2;
-            ctx.fillStyle = enemyCapColor; // Use hat color for beard
-            ctx.fillRect(x - beardWidth / 2, beardTopY, beardWidth, beardHeight);
-            // Angry Eyebrows (Thicker and lower than standard enemy)
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 3; // Thicker brows
-            ctx.beginPath();
-            const giantBrowLength = headRadius * 0.7;
-            const giantBrowY = headCenterY - headRadius * 0.4; // Lower on face
-            const giantBrowXOffset = headRadius * 0.4;
-            // Steeper angle for anger
-            ctx.moveTo(x - giantBrowXOffset - giantBrowLength / 2, giantBrowY + giantBrowLength / 4); // Inner point lower
-            ctx.lineTo(x - giantBrowXOffset + giantBrowLength / 2, giantBrowY - giantBrowLength / 4); // Outer point higher
-            ctx.moveTo(x + giantBrowXOffset - giantBrowLength / 2, giantBrowY - giantBrowLength / 4); // Inner point higher
-            ctx.lineTo(x + giantBrowXOffset + giantBrowLength / 2, giantBrowY + giantBrowLength / 4); // Outer point lower
-            ctx.stroke();
-            // --- End Giant Facial Features ---
-
-            // 5. Draw Shako Hat
-            ctx.fillStyle = enemyCapColor; // Black base
-            ctx.fillRect(x - shakoWidth / 2, shakoBaseY - shakoHeight, shakoWidth, shakoHeight); // Cylinder
-            ctx.beginPath(); // Peak/Brim
-            ctx.moveTo(x - shakoPeakWidth / 2, shakoBaseY);
-            ctx.lineTo(x + shakoPeakWidth / 2, shakoBaseY);
-            ctx.lineTo(x + shakoWidth / 2, shakoBaseY - shakoPeakHeight);
-            ctx.lineTo(x - shakoWidth / 2, shakoBaseY - shakoPeakHeight);
-            ctx.closePath();
-            ctx.fill();
-
+            // Arms
+            ctx.fillStyle = enemyGiantRed;
+            const armWidth = currentW * 0.18; const armHeight = currentH * 0.5; const armOffsetY = bodyTopY + bodyHeight * 0.1;
+            ctx.fillRect(x - bodyWidth / 2 - armWidth, armOffsetY, armWidth, armHeight);
+            ctx.fillRect(x + bodyWidth / 2, armOffsetY, armWidth, armHeight);
+            // Head
+            ctx.fillStyle = enemySkinColor; ctx.beginPath(); ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2); ctx.fill();
+            // Giant Facial Features
+            const beardWidth = headRadius * 1.6; const beardHeight = headRadius * 1.0; const beardTopY = headCenterY + headRadius * 0.2;
+            ctx.fillStyle = enemyCapColor; ctx.fillRect(x - beardWidth / 2, beardTopY, beardWidth, beardHeight);
+            ctx.strokeStyle = '#000000'; ctx.lineWidth = 3; ctx.beginPath();
+            const giantBrowLength = headRadius * 0.7; const giantBrowY = headCenterY - headRadius * 0.4; const giantBrowXOffset = headRadius * 0.4;
+            ctx.moveTo(x - giantBrowXOffset - giantBrowLength / 2, giantBrowY + giantBrowLength / 4);
+            ctx.lineTo(x - giantBrowXOffset + giantBrowLength / 2, giantBrowY - giantBrowLength / 4);
+            ctx.moveTo(x + giantBrowXOffset - giantBrowLength / 2, giantBrowY - giantBrowLength / 4);
+            ctx.lineTo(x + giantBrowXOffset + giantBrowLength / 2, giantBrowY + giantBrowLength / 4); ctx.stroke();
+            // Shako Hat
+            ctx.fillStyle = enemyCapColor;
+            ctx.fillRect(x - shakoWidth / 2, shakoBaseY - shakoHeight, shakoWidth, shakoHeight);
+            ctx.beginPath(); ctx.moveTo(x - shakoPeakWidth / 2, shakoBaseY); ctx.lineTo(x + shakoPeakWidth / 2, shakoBaseY);
+            ctx.lineTo(x + shakoWidth / 2, shakoBaseY - shakoPeakHeight); ctx.lineTo(x - shakoWidth / 2, shakoBaseY - shakoPeakHeight);
+            ctx.closePath(); ctx.fill();
         }
-        // =================================================
-        // --- Standard Enemy Drawing (Chaser/Shooter) ---
-        // =================================================
+        // --- Standard Enemy Drawing ---
         else {
-            // Proportions
-            const headRadius = currentH * 0.16;
-            const coatShoulderWidth = currentW * 1.1; // Brown coat layer width at top
-            const coatHemWidth = currentW * 0.9;      // Brown coat layer width at bottom
-            const torsoShoulderWidth = currentW * 0.9; // Blue torso layer width at top
-            const torsoHemWidth = currentW * 0.7;     // Blue torso layer width at bottom
+            const headRadius = currentH * 0.16; const coatShoulderWidth = currentW * 1.1; const coatHemWidth = currentW * 0.9;
+            const torsoShoulderWidth = currentW * 0.9; const torsoHemWidth = currentW * 0.7;
+            const coatTopY = y - currentH * 0.35 + bobOffset; const coatBottomY = y + currentH * 0.25 + bobOffset; const coatHeight = coatBottomY - coatTopY;
+            const headCenterY = coatTopY - headRadius * 0.6; const armWidth = currentW * 0.2; const armHeight = currentH * 0.45; const armOffsetY = coatTopY + coatHeight * 0.1;
+            const trouserHeight = currentH * 0.20; const trouserWidth = currentW * 0.25; const trouserTopY = coatBottomY; const legSpacing = currentW * 0.15;
+            const bootHeight = currentH * 0.12; const bootWidth = currentW * 0.30; const bootTopY = trouserTopY + trouserHeight;
+            const hatBrimWidth = headRadius * 3.5; const hatBrimHeight = headRadius * 0.6; const hatCrownRadiusH = headRadius * 1.5; const hatCrownRadiusV = headRadius * 1.1; const hatCenterY = headCenterY - headRadius * 1.0;
+            const stepCycle = 400; const stepPhase = Math.floor(t / stepCycle) % 2;
 
-            // Y positions use bobOffset
-            const coatTopY = y - currentH * 0.35 + bobOffset;
-            const coatBottomY = y + currentH * 0.25 + bobOffset;
-            const coatHeight = coatBottomY - coatTopY;
-            const headCenterY = coatTopY - headRadius * 0.6; // Adjusted head Y
-
-            const armWidth = currentW * 0.2;
-            const armHeight = currentH * 0.45;
-            const armOffsetY = coatTopY + coatHeight * 0.1;
-
-            const trouserHeight = currentH * 0.20;
-            const trouserWidth = currentW * 0.25;
-            const trouserTopY = coatBottomY; // Trousers start below coat hem
-            const legSpacing = currentW * 0.15;
-
-            const bootHeight = currentH * 0.12;
-            const bootWidth = currentW * 0.30;
-            const bootTopY = trouserTopY + trouserHeight;
-
-            // Hat properties (Slouch Hat - Wider & Higher)
-            const hatBrimWidth = headRadius * 3.5; // Wider brim
-            const hatBrimHeight = headRadius * 0.6; // Thicker brim
-            const hatCrownRadiusH = headRadius * 1.5; // Wider crown
-            const hatCrownRadiusV = headRadius * 1.1; // Taller crown
-            const hatCenterY = headCenterY - headRadius * 1.0; // Higher on head
-
-            // Animation state for boots
-            const stepCycle = 400;
-            const stepPhase = Math.floor(t / stepCycle) % 2;
-
-            // --- Draw Layers: Back to Front ---
-
-            // 1. Draw Trousers & Animated Boots FIRST (Furthest back)
-            ctx.fillStyle = enemyBootColor; // Dark trousers
-            const leftLegX = x - legSpacing;
-            ctx.fillRect(leftLegX - trouserWidth / 2, trouserTopY, trouserWidth, trouserHeight);
-            const rightLegX = x + legSpacing;
-            ctx.fillRect(rightLegX - trouserWidth / 2, trouserTopY, trouserWidth, trouserHeight);
-
-            ctx.fillStyle = enemyBootColor; // Dark boots
-            if (stepPhase === 0) { // Left foot forward animation
-                ctx.fillRect(leftLegX - bootWidth / 2, bootTopY - 2, bootWidth, bootHeight);
-                ctx.fillRect(rightLegX - bootWidth / 2, bootTopY, bootWidth, bootHeight);
-            } else { // Right foot forward animation
-                ctx.fillRect(leftLegX - bootWidth / 2, bootTopY, bootWidth, bootHeight);
-                ctx.fillRect(rightLegX - bootWidth / 2, bootTopY - 2, bootWidth, bootHeight);
-            }
-
-            // 2. Draw Brown Base Coat Layer (Underneath blue torso)
-            ctx.fillStyle = enemyCoatColor; // Brown coat
-            ctx.beginPath();
-            ctx.moveTo(x - coatShoulderWidth / 2, coatTopY); // Top left wide
-            ctx.lineTo(x + coatShoulderWidth / 2, coatTopY); // Top right wide
-            ctx.lineTo(x + coatHemWidth / 2, coatBottomY);   // Bottom right narrow
-            ctx.lineTo(x - coatHemWidth / 2, coatBottomY);   // Bottom left narrow
-            ctx.closePath();
-            ctx.fill();
-
-            // 3. Draw Brown Arms (Over brown coat, under blue torso)
-            ctx.fillStyle = enemyCoatColor;
-            ctx.fillRect(x - coatShoulderWidth * 0.45 - armWidth / 2, armOffsetY, armWidth, armHeight); // Left Arm
-            ctx.fillRect(x + coatShoulderWidth * 0.45 - armWidth / 2, armOffsetY, armWidth, armHeight); // Right Arm
-
-            // 4. Draw Blue Torso Layer (Over brown coat/arms)
-            ctx.fillStyle = enemyUniformBlue; // *** USE NAVY BLUE ***
-            ctx.beginPath();
-            ctx.moveTo(x - torsoShoulderWidth / 2, coatTopY);   // Top left (narrower than coat)
-            ctx.lineTo(x + torsoShoulderWidth / 2, coatTopY);   // Top right
-            ctx.lineTo(x + torsoHemWidth / 2, coatBottomY);     // Bottom right (narrower than coat)
-            ctx.lineTo(x - torsoHemWidth / 2, coatBottomY);     // Bottom left
-            ctx.closePath();
-            ctx.fill();
-
-            // 5. Draw Head
-            ctx.fillStyle = enemySkinColor;
-            ctx.beginPath();
-            ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2);
-            ctx.fill();
-
-            // 6. Draw Angry Eyebrows
-            ctx.strokeStyle = '#000000'; ctx.lineWidth = 2; ctx.beginPath();
-            const browLength = headRadius * 0.5;
-            const browY = headCenterY - headRadius * 0.3;
-            const browXOffset = headRadius * 0.3;
-            ctx.moveTo(x - browXOffset - browLength / 2, browY - browLength / 3); // Left \
-            ctx.lineTo(x - browXOffset + browLength / 2, browY + browLength / 3);
-            ctx.moveTo(x + browXOffset - browLength / 2, browY + browLength / 3); // Right /
-            ctx.lineTo(x + browXOffset + browLength / 2, browY - browLength / 3);
-            ctx.stroke();
-
-            // 7. Draw Hat (Slouch Hat - Wider & Higher)
-            ctx.fillStyle = enemyCapColor; // Dark hat color
-            ctx.beginPath(); // Brim
-            ctx.ellipse(x, hatCenterY + hatCrownRadiusV * 0.7, hatBrimWidth / 2, hatBrimHeight / 2, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.beginPath(); // Crown
-            ctx.ellipse(x, hatCenterY, hatCrownRadiusH / 2, hatCrownRadiusV, 0, 0, Math.PI * 2);
-            ctx.fill();
-
-            // 8. Conditionally Draw Gun for Shooters (Over torso/arms)
+            // Trousers & Animated Boots
+            ctx.fillStyle = enemyBootColor;
+            const leftLegX = x - legSpacing; ctx.fillRect(leftLegX - trouserWidth / 2, trouserTopY, trouserWidth, trouserHeight);
+            const rightLegX = x + legSpacing; ctx.fillRect(rightLegX - trouserWidth / 2, trouserTopY, trouserWidth, trouserHeight);
+            ctx.fillStyle = enemyBootColor;
+            if (stepPhase === 0) { ctx.fillRect(leftLegX - bootWidth / 2, bootTopY - 2, bootWidth, bootHeight); ctx.fillRect(rightLegX - bootWidth / 2, bootTopY, bootWidth, bootHeight); }
+            else { ctx.fillRect(leftLegX - bootWidth / 2, bootTopY, bootWidth, bootHeight); ctx.fillRect(rightLegX - bootWidth / 2, bootTopY - 2, bootWidth, bootHeight); }
+            // Brown Base Coat
+            ctx.fillStyle = enemyCoatColor; ctx.beginPath(); ctx.moveTo(x - coatShoulderWidth / 2, coatTopY); ctx.lineTo(x + coatShoulderWidth / 2, coatTopY);
+            ctx.lineTo(x + coatHemWidth / 2, coatBottomY); ctx.lineTo(x - coatHemWidth / 2, coatBottomY); ctx.closePath(); ctx.fill();
+            // Brown Arms
+            ctx.fillStyle = enemyCoatColor; ctx.fillRect(x - coatShoulderWidth * 0.45 - armWidth / 2, armOffsetY, armWidth, armHeight);
+            ctx.fillRect(x + coatShoulderWidth * 0.45 - armWidth / 2, armOffsetY, armWidth, armHeight);
+            // Blue Torso
+            ctx.fillStyle = enemyUniformBlue; ctx.beginPath(); ctx.moveTo(x - torsoShoulderWidth / 2, coatTopY); ctx.lineTo(x + torsoShoulderWidth / 2, coatTopY);
+            ctx.lineTo(x + torsoHemWidth / 2, coatBottomY); ctx.lineTo(x - torsoHemWidth / 2, coatBottomY); ctx.closePath(); ctx.fill();
+            // Head
+            ctx.fillStyle = enemySkinColor; ctx.beginPath(); ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2); ctx.fill();
+            // Angry Eyebrows
+            ctx.strokeStyle = '#000000'; ctx.lineWidth = 2; ctx.beginPath(); const browLength = headRadius * 0.5; const browY = headCenterY - headRadius * 0.3; const browXOffset = headRadius * 0.3;
+            ctx.moveTo(x - browXOffset - browLength / 2, browY - browLength / 3); ctx.lineTo(x - browXOffset + browLength / 2, browY + browLength / 3);
+            ctx.moveTo(x + browXOffset - browLength / 2, browY + browLength / 3); ctx.lineTo(x + browXOffset + browLength / 2, browY - browLength / 3); ctx.stroke();
+            // Hat
+            ctx.fillStyle = enemyCapColor; ctx.beginPath(); ctx.ellipse(x, hatCenterY + hatCrownRadiusV * 0.7, hatBrimWidth / 2, hatBrimHeight / 2, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(x, hatCenterY, hatCrownRadiusH / 2, hatCrownRadiusV, 0, 0, Math.PI * 2); ctx.fill();
+            // Shooter Gun
             if (type === 'shooter') {
-                const gunBarrelLength = w * 1.2; const gunBarrelThickness = 3;
-                const gunStockLength = w * 0.5; const gunStockThickness = 5;
-                const gunColorBarrel = "#555555"; const gunColorStock = "#7a4a2a";
-                ctx.save();
-                const gunAngle = Math.PI / 10;
-                const gunCenterY = y + bobOffset; const gunCenterX = x; // Position relative to bobbing center
-                ctx.translate(gunCenterX, gunCenterY); ctx.rotate(gunAngle);
-                ctx.fillStyle = gunColorStock;
-                ctx.fillRect(-gunStockLength * 0.8, -gunStockThickness / 2, gunStockLength, gunStockThickness);
-                ctx.fillStyle = gunColorBarrel;
-                ctx.fillRect(-gunStockLength * 0.2, -gunBarrelThickness / 2, gunBarrelLength, gunBarrelThickness);
-                ctx.restore();
+                const gunBarrelLength = w * 1.2; const gunBarrelThickness = 3; const gunStockLength = w * 0.5; const gunStockThickness = 5;
+                const gunColorBarrel = "#555555"; const gunColorStock = "#7a4a2a"; ctx.save(); const gunAngle = Math.PI / 10;
+                const gunCenterY = y + bobOffset; const gunCenterX = x; ctx.translate(gunCenterX, gunCenterY); ctx.rotate(gunAngle);
+                ctx.fillStyle = gunColorStock; ctx.fillRect(-gunStockLength * 0.8, -gunStockThickness / 2, gunStockLength, gunStockThickness);
+                ctx.fillStyle = gunColorBarrel; ctx.fillRect(-gunStockLength * 0.2, -gunBarrelThickness / 2, gunBarrelLength, gunBarrelThickness); ctx.restore();
             }
-        } // --- End Standard Enemy Drawing ---
+        } // End Standard Enemy Drawing
 
+        // --- Common Effects ---
 
-        // ===============================================
-        // --- Draw Effects Over Everything (Common) ---
-        // ===============================================
-
-        // Snake Bite Aura (Circular, Pulsing)
+        // Snake Bite Effect (Particles)
         if (isSnakeBitten) {
-            const auraRadius = Math.max(currentW * 0.6, 15);
-            // Aura Y position accounts for bob only on standard enemies
-            const auraBaseY = y + currentH * 0.45 + ((type !== 'giant') ? bobOffset : 0); // Adjusted base Y slightly higher
-            const auraLineWidth = 3;
-            const auraColor = "rgba(0, 255, 50, 0.7)";
-            const pulseSpeed = 0.004; const pulseMagnitude = 2;
-            const pulseOffset = Math.sin(t * pulseSpeed) * pulseMagnitude;
-
-            const originalLineWidth = ctx.lineWidth; const originalStrokeStyle = ctx.strokeStyle;
-            ctx.lineWidth = auraLineWidth; ctx.strokeStyle = auraColor;
-            ctx.beginPath(); ctx.arc(x, auraBaseY, auraRadius + pulseOffset, 0, Math.PI * 2); ctx.stroke();
-            ctx.lineWidth = originalLineWidth; ctx.strokeStyle = originalStrokeStyle;
+            let footY;
+            if (type === 'giant') {
+                const bodyHeight = currentH * 0.7; const legHeight = currentH * 0.25; const bootHeight = currentH * 0.1; const bodyTopY = y - currentH * 0.4;
+                footY = bodyTopY + bodyHeight + legHeight + bootHeight;
+            } else {
+                const coatBottomY = y + currentH * 0.25 + bobOffset; const trouserHeight = currentH * 0.20; const bootHeight = currentH * 0.12;
+                footY = coatBottomY + trouserHeight + bootHeight;
+            }
+            const numParticles = 6; const particleBaseSize = 3; const particleSpeedY = -50; const particleLifetimeMs = 550;
+            ctx.save();
+            for (let i = 0; i < numParticles; i++) {
+                const effectStartTime = (snakeEffect.expires_at * 1000) - (SNAKE_BITE_DURATION * 1000); // Requires SNAKE_BITE_DURATION constant client-side
+                const timeSinceEffectStart = Math.max(0, t - effectStartTime);
+                const particleSimulatedAge = (timeSinceEffectStart + (particleLifetimeMs / numParticles) * i) % particleLifetimeMs;
+                const particleProgress = particleSimulatedAge / particleLifetimeMs;
+                if (particleProgress < 0 || particleProgress >= 1) continue;
+                const particleX = x + (Math.random() - 0.5) * currentW * 0.6;
+                const particleY = footY + (particleSpeedY * (particleSimulatedAge / 1000));
+                const particleSize = particleBaseSize * (1.0 - particleProgress * 0.5) * (0.8 + Math.random() * 0.4);
+                const alpha = 0.7 * (1.0 - particleProgress) * (0.7 + Math.random() * 0.3);
+                const green = 180 + Math.floor(75 * particleProgress); const yellow = 180 * (1.0 - particleProgress);
+                ctx.fillStyle = `rgba(${Math.floor(yellow)}, ${green}, 50, ${alpha.toFixed(2)})`;
+                ctx.fillRect(particleX - particleSize / 2, particleY - particleSize / 2, particleSize, particleSize);
+            }
+            ctx.restore();
         }
 
-        // Hit Flash
-        if (isHitFlashing) {
-            ctx.fillStyle = enemyHitFlashColor; const fm = 2;
-            // Flash Y center accounts for bob only on standard enemies
-            const flashYCenter = y + ((type !== 'giant') ? bobOffset : 0);
-            ctx.fillRect(x - currentW / 2 - fm, flashYCenter - currentH / 2 - fm, currentW + fm * 2, currentH + fm * 2);
+        // Blood Spark Hit Effect
+        if (isHitTriggered) { // Check the flag from server
+             ctx.save();
+             const numSparks = 10 + Math.random() * 8;
+             const sparkColors = [ "rgba(180, 0, 0, 0.9)", "rgba(220, 20, 20, 0.8)", "rgba(150, 0, 0, 0.7)", "rgba(255, 50, 50, 0.6)" ];
+             const sparkCenterY = y + ((type !== 'giant') ? bobOffset : 0);
+             for (let i = 0; i < numSparks; i++) {
+                 const sparkAngle = Math.random() * Math.PI * 2;
+                 const sparkRadius = Math.random() * currentW * 0.7 + currentW * 0.1;
+                 const sparkX = x + Math.cos(sparkAngle) * sparkRadius;
+                 const sparkY = sparkCenterY + Math.sin(sparkAngle) * sparkRadius * 0.6 - currentH * 0.1;
+                 const sparkSize = Math.random() * 3 + 1;
+                 ctx.fillStyle = sparkColors[Math.floor(Math.random() * sparkColors.length)];
+                 ctx.fillRect(sparkX - sparkSize/2, sparkY-sparkSize/2, sparkSize, sparkSize);
+             }
+             ctx.restore();
         }
 
-        ctx.restore(); // Restore context from the very start
+        ctx.restore(); // Restore context from start of function
     }
 
     function drawPlayerCharacter( ctx, x, y, w, h, isSelf, playerState, aimDx, aimDy, pushbackAnimState ) {
