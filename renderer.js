@@ -4,8 +4,6 @@ const Renderer = (() => {
     console.log("--- Renderer.js: Initializing ---");
   
     let mainCtx = null;
-    let canvasWidth = 1600;
-    let canvasHeight = 900;
   
     const offscreenCanvas = document.createElement("canvas");
     const offscreenCtx = offscreenCanvas.getContext("2d", { alpha: false });
@@ -84,6 +82,9 @@ const Renderer = (() => {
   
     let currentShakeMagnitude = 0;
     let shakeEndTime = 0;
+    let shakeApplied = false,
+    shakeOffsetX = 0,
+    shakeOffsetY = 0;
   
     function drawRoundedRect(ctx, x, y, width, height, radius) {
       if (width < 2 * radius) radius = width / 2;
@@ -98,236 +99,203 @@ const Renderer = (() => {
     }
   
     function generateBackground(ctx, targetIsNight, width, height) {
-      ctx.clearRect(0, 0, width, height);
-      if (!targetIsNight) {
-        const dayBaseColor = "#949A80";
-        const dirtColor1 = "rgba(76, 103, 41, 0.2)";
-        const dirtColor2 = "rgba(143, 121, 55, 0.2)";
-        const textureStrokeDark = "rgba(59, 112, 67, 0.3)";
-        const textureStrokeLight = "rgba(135, 150, 110, 0.25)";
-        const textureStrokeEmerald = "rgba(19, 226, 112, 0.15)";
-        const numDirtPatches = 40;
-        const numTextureStrokes = 2500;
-        ctx.fillStyle = dayBaseColor;
-        ctx.fillRect(0, 0, width, height);
-        for (let i = 0; i < numDirtPatches; i++) {
-          const x = Math.random() * width;
-          const y = Math.random() * height;
-          const avgRadius = Math.random() * 100 + 50;
-          const points = 5 + Math.floor(Math.random() * 4);
-          const color = Math.random() < 0.5 ? dirtColor1 : dirtColor2;
-          ctx.fillStyle = color;
-          ctx.beginPath();
-          ctx.moveTo(x + avgRadius * Math.cos(0), y + avgRadius * Math.sin(0));
-          for (let j = 1; j <= points; j++) {
-            const angle = (j / points) * Math.PI * 2;
-            const radius = avgRadius * (0.7 + Math.random() * 0.6);
-            ctx.lineTo(
-              x + radius * Math.cos(angle),
-              y + radius * Math.sin(angle)
-            );
-          }
-          ctx.closePath();
-          ctx.fill();
-        }
-        ctx.lineWidth = 1.5;
-        ctx.lineCap = "round";
-        for (let i = 0; i < numTextureStrokes; i++) {
-          const x = Math.random() * width;
-          const y = Math.random() * height;
-          const length = Math.random() * 5 + 2;
-          const angle = Math.random() * Math.PI * 2;
-          let strokeColor;
-          const randColor = Math.random();
-          if (randColor < 0.1) {
-            strokeColor = textureStrokeEmerald;
-          } else if (randColor < 0.55) {
-            strokeColor = textureStrokeLight;
-          } else {
-            strokeColor = textureStrokeDark;
-          }
-          ctx.strokeStyle = strokeColor;
-          ctx.beginPath();
-          ctx.moveTo(x, y);
-          ctx.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
-          ctx.stroke();
-        }
-        ctx.lineCap = "butt";
-      } else {
-        const baseNightColor = "#080808";
-        const nebulaeColors = [
-          [180, 180, 190, 0.05],
-          [200, 80, 80, 0.04],
-          [160, 160, 160, 0.06],
-          [210, 100, 100, 0.035],
-        ];
-        const darkCloudColor = "rgba(8, 8, 8, 0.18)";
-        const numNebulae = 10;
-        const numDarkClouds = 20;
-        const numDustStars = 2000;
-        const numMidStars = 500;
-        const numHeroStars = 70;
-        ctx.fillStyle = baseNightColor;
-        ctx.fillRect(0, 0, width, height);
-        for (let i = 0; i < numNebulae; i++) {
-          const x = Math.random() * width;
-          const y = Math.random() * height;
-          const radius = Math.random() * (width * 0.4) + width * 0.15;
-          const colorData =
-            nebulaeColors[Math.floor(Math.random() * nebulaeColors.length)];
-          const [r, g, b, baseAlpha] = colorData;
-          try {
-            const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-            gradient.addColorStop(
-              0,
-              `rgba(${r}, ${g}, ${b}, ${Math.min(0.1, baseAlpha * 1.5).toFixed(
-                2
-              )})`
-            );
-            gradient.addColorStop(
-              0.5,
-              `rgba(${r}, ${g}, ${b}, ${baseAlpha.toFixed(2)})`
-            );
-            gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
-            ctx.fillStyle = gradient;
+        ctx.clearRect(0, 0, width, height);
+        if (!targetIsNight) {
+          const dayBaseColor = "#949A80";
+          const dirtColor1 = "rgba(76, 103, 41, 0.2)";
+          const dirtColor2 = "rgba(143, 121, 55, 0.2)";
+          const textureStrokeDark = "rgba(59, 112, 67, 0.3)";
+          const textureStrokeLight = "rgba(135, 150, 110, 0.25)";
+          const textureStrokeEmerald = "rgba(19, 226, 112, 0.15)";
+          const numDirtPatches = 40;
+          const numTextureStrokes = 2500;
+          ctx.fillStyle = dayBaseColor;
+          ctx.fillRect(0, 0, width, height);
+          for (let i = 0; i < numDirtPatches; i++) {
+            const x = Math.random() * width;
+            const y = Math.random() * height;
+            const avgRadius = Math.random() * 100 + 50;
+            const points = 5 + Math.floor(Math.random() * 4);
+            const color = Math.random() < 0.5 ? dirtColor1 : dirtColor2;
+            ctx.fillStyle = color;
             ctx.beginPath();
-            ctx.arc(x, y, radius, 0, Math.PI * 2);
-            ctx.fill();
-          } catch (e) {
-            console.error("Failed to create nebula gradient:", e);
-          }
-        }
-        const drawStars = (
-          count,
-          minSize,
-          maxSize,
-          minAlpha,
-          maxAlpha,
-          colorVariance = 0
-        ) => {
-          for (let i = 0; i < count; i++) {
-            const sx = Math.random() * width;
-            const sy = Math.random() * height;
-            const size = Math.random() * (maxSize - minSize) + minSize;
-            const alpha = Math.random() * (maxAlpha - minAlpha) + minAlpha;
-            let r = 255,
-              g = 255,
-              b = 255;
-            if (colorVariance > 0 && Math.random() < 0.3) {
-              const variance = Math.random() * colorVariance;
-              if (Math.random() < 0.7) {
-                b -= variance;
-                r = Math.max(0, Math.min(255, r));
-                g = Math.max(0, Math.min(255, g));
-                b = Math.max(0, Math.min(255, b));
-              }
+            ctx.moveTo(x + avgRadius * Math.cos(0), y + avgRadius * Math.sin(0));
+            for (let j = 1; j <= points; j++) {
+              const angle = (j / points) * Math.PI * 2;
+              const radius = avgRadius * (0.7 + Math.random() * 0.6);
+              ctx.lineTo(
+                x + radius * Math.cos(angle),
+                y + radius * Math.sin(angle)
+              );
             }
-            ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(
-              g
-            )}, ${Math.round(b)}, ${alpha.toFixed(2)})`;
-            ctx.fillRect(sx - size / 2, sy - size / 2, size, size);
+            ctx.closePath();
+            ctx.fill();
           }
-        };
-        drawStars(numDustStars, 0.4, 0.9, 0.06, 0.3);
-        drawStars(numMidStars, 0.7, 1.6, 0.2, 0.7, 25);
-        drawStars(numHeroStars, 1.4, 2.6, 0.5, 1.0, 40);
-        for (let i = 0; i < numDarkClouds; i++) {
-          const x = Math.random() * width;
-          const y = Math.random() * height;
-          const radiusX = Math.random() * (width * 0.3) + width * 0.12;
-          const radiusY = Math.random() * (height * 0.25) + height * 0.1;
-          const rotation = Math.random() * Math.PI;
-          ctx.fillStyle = darkCloudColor;
-          ctx.beginPath();
-          ctx.ellipse(x, y, radiusX, radiusY, rotation, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.lineWidth = 1.5;
+          ctx.lineCap = "round";
+          for (let i = 0; i < numTextureStrokes; i++) {
+            const x = Math.random() * width;
+            const y = Math.random() * height;
+            const length = Math.random() * 5 + 2;
+            const angle = Math.random() * Math.PI * 2;
+            let strokeColor;
+            const randColor = Math.random();
+            if (randColor < 0.1) {
+              strokeColor = textureStrokeEmerald;
+            } else if (randColor < 0.55) {
+              strokeColor = textureStrokeLight;
+            } else {
+              strokeColor = textureStrokeDark;
+            }
+            ctx.strokeStyle = strokeColor;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
+            ctx.stroke();
+          }
+          ctx.lineCap = "butt";
+        } else {
+          const baseNightColor = "#080808";
+          const nebulaeColors = [
+            [180, 180, 190, 0.05],
+            [200, 80, 80, 0.04],
+            [160, 160, 160, 0.06],
+            [210, 100, 100, 0.035],
+          ];
+          const darkCloudColor = "rgba(8, 8, 8, 0.18)";
+          const numNebulae = 10;
+          const numDarkClouds = 20;
+          const numDustStars = 2000;
+          const numMidStars = 500;
+          const numHeroStars = 70;
+          ctx.fillStyle = baseNightColor;
+          ctx.fillRect(0, 0, width, height);
+          for (let i = 0; i < numNebulae; i++) {
+            const x = Math.random() * width;
+            const y = Math.random() * height;
+            const radius = Math.random() * (width * 0.4) + width * 0.15;
+            const colorData =
+              nebulaeColors[Math.floor(Math.random() * nebulaeColors.length)];
+            const [r, g, b, baseAlpha] = colorData;
+            try {
+              const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+              gradient.addColorStop(
+                0,
+                `rgba(${r}, ${g}, ${b}, ${Math.min(0.1, baseAlpha * 1.5).toFixed(
+                  2
+                )})`
+              );
+              gradient.addColorStop(
+                0.5,
+                `rgba(${r}, ${g}, ${b}, ${baseAlpha.toFixed(2)})`
+              );
+              gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+              ctx.fillStyle = gradient;
+              ctx.beginPath();
+              ctx.arc(x, y, radius, 0, Math.PI * 2);
+              ctx.fill();
+            } catch (e) {
+              console.error("Failed to create nebula gradient:", e);
+            }
+          }
+          const drawStars = (
+            count,
+            minSize,
+            maxSize,
+            minAlpha,
+            maxAlpha,
+            colorVariance = 0
+          ) => {
+            for (let i = 0; i < count; i++) {
+              const sx = Math.random() * width;
+              const sy = Math.random() * height;
+              const size = Math.random() * (maxSize - minSize) + minSize;
+              const alpha = Math.random() * (maxAlpha - minAlpha) + minAlpha;
+              let r = 255,
+                g = 255,
+                b = 255;
+              if (colorVariance > 0 && Math.random() < 0.3) {
+                const variance = Math.random() * colorVariance;
+                if (Math.random() < 0.7) {
+                  b -= variance;
+                  r = Math.max(0, Math.min(255, r));
+                  g = Math.max(0, Math.min(255, g));
+                  b = Math.max(0, Math.min(255, b));
+                }
+              }
+              ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(
+                g
+              )}, ${Math.round(b)}, ${alpha.toFixed(2)})`;
+              ctx.fillRect(sx - size / 2, sy - size / 2, size, size);
+            }
+          };
+          drawStars(numDustStars, 0.4, 0.9, 0.06, 0.3);
+          drawStars(numMidStars, 0.7, 1.6, 0.2, 0.7, 25);
+          drawStars(numHeroStars, 1.4, 2.6, 0.5, 1.0, 40);
+          for (let i = 0; i < numDarkClouds; i++) {
+            const x = Math.random() * width;
+            const y = Math.random() * height;
+            const radiusX = Math.random() * (width * 0.3) + width * 0.12;
+            const radiusY = Math.random() * (height * 0.25) + height * 0.1;
+            const rotation = Math.random() * Math.PI;
+            ctx.fillStyle = darkCloudColor;
+            ctx.beginPath();
+            ctx.ellipse(x, y, radiusX, radiusY, rotation, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
+        ctx.canvas.dataset.isNight = String(targetIsNight);
+        return targetIsNight;
       }
-      ctx.canvas.dataset.isNight = String(targetIsNight);
-      return targetIsNight;
-    }
-  
-    function updateGeneratedBackground(
-      targetIsNight,
-      targetCanvasWidth,
-      targetCanvasHeight
-    ) {
-      canvasWidth = targetCanvasWidth;
-      canvasHeight = targetCanvasHeight;
-      if (
-        offscreenCanvas.width !== canvasWidth ||
-        offscreenCanvas.height !== canvasHeight
-      ) {
-        offscreenCanvas.width = canvasWidth;
-        offscreenCanvas.height = canvasHeight;
-        oldOffscreenCanvas.width = canvasWidth;
-        oldOffscreenCanvas.height = canvasHeight;
-        hazeCanvas.width = canvasWidth;
-        hazeCanvas.height = canvasHeight;
-        isBackgroundReady = false;
-        currentBackgroundIsNight = null;
-        isTransitioningBackground = false;
-      }
-      if (targetIsNight === currentBackgroundIsNight && isBackgroundReady) {
-        return;
-      }
-      if (
-        isTransitioningBackground &&
-        targetIsNight === (offscreenCanvas.dataset.isNight === "true")
-      ) {
-        return;
-      }
-      if (isBackgroundReady) {
-        oldOffscreenCtx.clearRect(0, 0, canvasWidth, canvasHeight);
-        oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0);
-        isTransitioningBackground = true;
-        transitionStartTime = performance.now();
-        generateBackground(
-          offscreenCtx,
-          targetIsNight,
-          canvasWidth,
-          canvasHeight
-        );
-        currentBackgroundIsNight = targetIsNight;
-      } else {
-        generateBackground(
-          offscreenCtx,
-          targetIsNight,
-          canvasWidth,
-          canvasHeight
-        );
-        currentBackgroundIsNight = targetIsNight;
-        isBackgroundReady = true;
-        isTransitioningBackground = false;
-      }
-    }
-  
-    function drawDamageTexts(ctx, damageTexts) {
-      if (!damageTexts) return;
-      const now = performance.now(),
-        pd = 250,
-        pmsi = 4;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "bottom";
-      Object.values(damageTexts).forEach((dt) => {
-        if (!dt) return;
-        const x = dt.x ?? 0,
-          y = dt.y ?? 0,
-          txt = dt.text ?? "?",
-          ic = dt.is_crit ?? false,
-          st = dt.spawn_time ? dt.spawn_time * 1000 : now,
-          ts = now - st;
-        let cfs = ic ? damageTextCritFontSize : damageTextFontSize,
-          cfc = ic ? damageTextCritColor : damageTextColor;
-        if (ic && ts < pd) {
-          const pp = Math.sin((ts / pd) * Math.PI);
-          cfs += pp * pmsi;
+      
+      function updateGeneratedBackground(targetIsNight) {
+        if (
+          offscreenCanvas.width !== appState.canvasWidth ||
+          offscreenCanvas.height !== appState.canvasHeight
+        ) {
+          offscreenCanvas.width = appState.canvasWidth;
+          offscreenCanvas.height = appState.canvasHeight;
+          oldOffscreenCanvas.width = appState.canvasWidth;
+          oldOffscreenCanvas.height = appState.canvasHeight;
+          hazeCanvas.width = appState.canvasWidth;
+          hazeCanvas.height = appState.canvasHeight;
+          isBackgroundReady = false;
+          currentBackgroundIsNight = null;
+          isTransitioningBackground = false;
         }
-        ctx.font = `bold ${Math.round(cfs)}px ${fontFamily}`;
-        ctx.fillStyle = cfc;
-        ctx.fillText(txt, x, y);
-      });
-    }
+        if (targetIsNight === currentBackgroundIsNight && isBackgroundReady) {
+          return;
+        }
+        if (
+          isTransitioningBackground &&
+          targetIsNight === (offscreenCanvas.dataset.isNight === "true")
+        ) {
+          return;
+        }
+        if (isBackgroundReady) {
+          oldOffscreenCtx.clearRect(0, 0, appState.canvasWidth, appState.canvasHeight);
+          oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0);
+          isTransitioningBackground = true;
+          transitionStartTime = performance.now();
+          generateBackground(
+            offscreenCtx,
+            targetIsNight,
+            appState.canvasWidth,
+            appState.canvasHeight
+          );
+          currentBackgroundIsNight = targetIsNight;
+        } else {
+          generateBackground(
+            offscreenCtx,
+            targetIsNight,
+            appState.canvasWidth,
+            appState.canvasHeight
+          );
+          currentBackgroundIsNight = targetIsNight;
+          isBackgroundReady = true;
+          isTransitioningBackground = false;
+        }
+     }
   
     function drawCampfire(ctx, campfireData, width, height) {
       if (!campfireData || !campfireData.active) return;
@@ -471,56 +439,71 @@ const Renderer = (() => {
       ctx.restore();
     }
   
-    function drawDamageVignette(ctx, intensity, width, height) {
-      if (intensity <= 0) return;
-      ctx.save();
-      const or = Math.sqrt(width ** 2 + height ** 2) / 2;
-      const g = ctx.createRadialGradient(
-        width / 2,
-        height / 2,
-        0,
-        width / 2,
-        height / 2,
-        or
-      );
-      const ra = Math.min(1.0, Math.max(0.0, 0.4 * intensity)); // Clamped alpha
-      g.addColorStop(0, "rgba(255,0,0,0)");
-      g.addColorStop(0.75, "rgba(255,0,0,0)");
-      g.addColorStop(1, `rgba(255,0,0,${ra.toFixed(2)})`);
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, width, height);
-      ctx.restore();
+    function drawDamageVignette(ctx, intensity, width, height) { // Added width, height params
+        if (intensity <= 0) return; // No vignette if intensity is zero or negative
+    
+        ctx.save(); // Save current context state
+    
+        // Calculate the radius for the gradient based on canvas diagonal
+        // Use the passed width and height parameters
+        const outerRadius = Math.sqrt(width ** 2 + height ** 2) / 2;
+    
+        // Create a radial gradient centered on the canvas
+        // Use the passed width and height parameters
+        const gradient = ctx.createRadialGradient(
+            width / 2, height / 2, 0,           // Inner circle (center, radius 0)
+            width / 2, height / 2, outerRadius  // Outer circle (center, calculated radius)
+        );
+    
+        // Clamp the calculated alpha based on intensity
+        // Ensure alpha is between 0.0 and 0.4 (or adjust max as needed)
+        const vignetteAlpha = Math.min(0.4, Math.max(0.0, 0.4 * intensity));
+    
+        // Define gradient color stops
+        gradient.addColorStop(0, "rgba(255,0,0,0)");     // Center is fully transparent red
+        gradient.addColorStop(0.75, "rgba(255,0,0,0)");  // Stays transparent until 75% of the radius
+        gradient.addColorStop(1, `rgba(255,0,0,${vignetteAlpha.toFixed(2)})`); // Fades to red at the edges
+    
+        // Apply the gradient fill
+        ctx.fillStyle = gradient;
+        // Use the passed width and height parameters to fill the entire canvas
+        ctx.fillRect(0, 0, width, height);
+    
+        ctx.restore(); // Restore context state
     }
   
-    function drawTemperatureTint(ctx, temperature, width, height) {
-      let tcs = null,
-        a = 0.0;
-      const tfc = TEMP_FREEZING_CLIENT,
-        tcc = TEMP_COLD_CLIENT,
-        thc = TEMP_HOT_CLIENT,
-        tsc = TEMP_SCORCHING_CLIENT,
-        mta = MAX_TINT_ALPHA;
-      if (temperature === null || typeof temperature === "undefined") {
-        return;
-      }
-      if (temperature <= tfc) {
-        tcs = "rgba(100,150,255,A)";
-        a = mta * Math.min(1.0, (tfc - temperature + 5) / 5.0);
-      } else if (temperature <= tcc) {
-        tcs = "rgba(150,180,255,A)";
-        a = mta * ((tcc - temperature) / (tcc - tfc));
-      } else if (temperature >= tsc) {
-        tcs = "rgba(255,100,0,A)";
-        a = mta * Math.min(1.0, (temperature - tsc + 5) / 5.0);
-      } else if (temperature >= thc) {
-        tcs = "rgba(255,150,50,A)";
-        a = mta * ((temperature - thc) / (tsc - thc));
-      }
-      a = Math.max(0, Math.min(mta, a));
-      if (tcs && a > 0.01) {
-        ctx.fillStyle = tcs.replace("A", a.toFixed(2));
-        ctx.fillRect(0, 0, width, height);
-      }
+    function drawTemperatureTint(ctx, temperature, width, height) { // Added width, height params
+        let tcs = null, a = 0.0;
+        const tfc = TEMP_FREEZING_CLIENT, tcc = TEMP_COLD_CLIENT,
+              thc = TEMP_HOT_CLIENT, tsc = TEMP_SCORCHING_CLIENT,
+              mta = MAX_TINT_ALPHA;
+    
+        if (temperature === null || typeof temperature === 'undefined') {
+            return; // Exit if temperature is invalid
+        }
+    
+        // Determine tint color and base alpha based on temperature ranges
+        if (temperature <= tfc) {
+            tcs = "rgba(100,150,255,A)"; // Freezing blue
+            a = mta * Math.min(1.0, (tfc - temperature + 5) / 5.0);
+        } else if (temperature <= tcc) {
+            tcs = "rgba(150,180,255,A)"; // Cold blue
+            a = mta * ((tcc - temperature) / (tcc - tfc));
+        } else if (temperature >= tsc) {
+            tcs = "rgba(255,100,0,A)";   // Scorching orange
+            a = mta * Math.min(1.0, (temperature - tsc + 5) / 5.0);
+        } else if (temperature >= thc) {
+            tcs = "rgba(255,150,50,A)";   // Hot orange
+            a = mta * ((temperature - thc) / (tsc - thc));
+        }
+    
+        // Clamp alpha and apply fill if needed
+        a = Math.max(0, Math.min(mta, a)); // Ensure alpha is between 0 and MAX_TINT_ALPHA
+        if (tcs && a > 0.01) { // Only draw if there's a noticeable tint
+            ctx.fillStyle = tcs.replace("A", a.toFixed(2));
+            // Use the passed width and height parameters to fill the entire canvas
+            ctx.fillRect(0, 0, width, height);
+        }
     }
   
     function drawEnemySpeechBubbles(ctx, enemiesToRender, activeEnemyBubblesRef) {
@@ -2055,303 +2038,228 @@ const Renderer = (() => {
   
     // --- Main Render Function --- V3 --- Correct Signature ---
     function drawGame(
-      ctx,
-      appState,
-      stateToRender,
-      localPlayerMuzzleFlashRef,
-      localPlayerPushbackAnimState, 
-      activeBloodSparkEffectsRef,
-      width,
-      height
-    ) {
-      if (!mainCtx) mainCtx = ctx;
-      if (!ctx || !appState) {
-        console.error("drawGame missing context or appState!");
-        return;
-      }
-      const now = performance.now();
-      canvasWidth = typeof width === "number" && isFinite(width) ? width : 1600; // Use fallback
-      canvasHeight =
-        typeof height === "number" && isFinite(height) ? height : 900; // Use fallback
-      if (!isFinite(canvasWidth) || !isFinite(canvasHeight)) {
-        console.error("drawGame received invalid width/height:", width, height);
-        return;
-      }
-  
-      let shakeApplied = false,
-        shakeOffsetX = 0,
-        shakeOffsetY = 0;
-      if (currentShakeMagnitude > 0 && now < shakeEndTime) {
-        shakeApplied = true;
-        const timeRemaining = shakeEndTime - now;
-        const initialDuration = Math.max(1, shakeEndTime - (now - timeRemaining));
-        let currentMag =
-          currentShakeMagnitude * (timeRemaining / initialDuration);
-        currentMag = Math.max(0, currentMag);
-        if (currentMag > 0.5) {
-          const shakeAngle = Math.random() * Math.PI * 2;
-          shakeOffsetX = Math.cos(shakeAngle) * currentMag;
-          shakeOffsetY = Math.sin(shakeAngle) * currentMag;
-        } else {
+        ctx,
+        appState,
+        stateToRender,
+        localPlayerMuzzleFlashRef,
+        localPlayerPushbackAnimState,
+        activeBloodSparkEffectsRef,
+        activeEnemyBubbles
+      ) {
+        if (!mainCtx) mainCtx = ctx;
+        if (!ctx || !appState) {
+          console.error("drawGame missing context or appState!");
+          return;
+        }
+        const now = performance.now();
+      
+        let shakeApplied = false,
+          shakeOffsetX = 0,
+          shakeOffsetY = 0;
+        if (currentShakeMagnitude > 0 && now < shakeEndTime) {
+          shakeApplied = true;
+          const timeRemaining = shakeEndTime - now;
+          const initialDuration = Math.max(1, shakeEndTime - (now - timeRemaining));
+          let currentMag =
+            currentShakeMagnitude * (timeRemaining / initialDuration);
+          currentMag = Math.max(0, currentMag);
+          if (currentMag > 0.5) {
+            const shakeAngle = Math.random() * Math.PI * 2;
+            shakeOffsetX = Math.cos(shakeAngle) * currentMag;
+            shakeOffsetY = Math.sin(shakeAngle) * currentMag;
+          } else {
+            currentShakeMagnitude = 0;
+            shakeEndTime = 0;
+            shakeApplied = false;
+          }
+        } else if (currentShakeMagnitude > 0) {
           currentShakeMagnitude = 0;
           shakeEndTime = 0;
-          shakeApplied = false;
         }
-      } else if (currentShakeMagnitude > 0) {
-        currentShakeMagnitude = 0;
-        shakeEndTime = 0;
-      }
-  
-      // Background
-      ctx.globalAlpha = 1.0;
-      if (!isBackgroundReady) {
-        ctx.fillStyle = dayBaseColor;
-        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-        if (appState?.serverState && currentBackgroundIsNight === null) {
-          updateGeneratedBackground(
-            appState.serverState.is_night,
-            canvasWidth,
-            canvasHeight
+      
+        ctx.globalAlpha = 1.0;
+        if (!isBackgroundReady) {
+          ctx.fillStyle = dayBaseColor;
+          ctx.fillRect(0, 0, appState.canvasWidth, appState.canvasHeight);
+          if (appState?.serverState && currentBackgroundIsNight === null) {
+            updateGeneratedBackground(
+              appState.serverState.is_night
+            );
+          }
+        } else if (isTransitioningBackground) {
+          const elapsed = now - transitionStartTime;
+          const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS);
+          ctx.globalAlpha = 1.0;
+          ctx.drawImage(oldOffscreenCanvas, 0, 0);
+          ctx.globalAlpha = progress;
+          ctx.drawImage(offscreenCanvas, 0, 0);
+          ctx.globalAlpha = 1.0;
+          if (progress >= 1.0) {
+            isTransitioningBackground = false;
+          }
+        } else {
+          ctx.drawImage(offscreenCanvas, 0, 0);
+        }
+      
+        const currentTempForEffect = appState?.currentTemp;
+        if (
+          currentTempForEffect !== null &&
+          typeof currentTempForEffect !== "undefined" &&
+          currentTempForEffect >= HEAT_HAZE_START_TEMP
+        ) {
+          const hazeIntensity = Math.max(
+            0,
+            Math.min(
+              1,
+              (currentTempForEffect - HEAT_HAZE_START_TEMP) /
+                (HEAT_HAZE_MAX_TEMP - HEAT_HAZE_START_TEMP)
+            )
           );
-        }
-      } else if (isTransitioningBackground) {
-        const elapsed = now - transitionStartTime;
-        const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS);
-        ctx.globalAlpha = 1.0;
-        ctx.drawImage(oldOffscreenCanvas, 0, 0);
-        ctx.globalAlpha = progress;
-        ctx.drawImage(offscreenCanvas, 0, 0);
-        ctx.globalAlpha = 1.0;
-        if (progress >= 1.0) {
-          isTransitioningBackground = false;
-        }
-      } else {
-        ctx.drawImage(offscreenCanvas, 0, 0);
-      }
-  
-      // Heat Haze
-      // --- Heat Haze Constants (Ensure these are defined before use) ---
-      const HEAT_HAZE_START_TEMP = 28.0;
-      const HEAT_HAZE_MAX_TEMP = 45.0;
-      const HEAT_HAZE_MAX_OFFSET = 4;
-      const HEAT_HAZE_SPEED = 0.004;
-      // const HEAT_HAZE_WAVELENGTH = 0.02; // Not used in the provided snippet
-      const HEAT_HAZE_LAYERS_MAX = 5;
-      const HEAT_HAZE_BASE_ALPHA = 0.03;
-      // --- End Heat Haze Constants ---
-  
-      // --- Heat Haze Logic ---
-      const currentTempForEffect = appState?.currentTemp;
-      if (
-        currentTempForEffect !== null &&
-        typeof currentTempForEffect !== "undefined" &&
-        currentTempForEffect >= HEAT_HAZE_START_TEMP
-      ) {
-        const hazeIntensity = Math.max(
-          0,
-          Math.min(
-            1,
-            (currentTempForEffect - HEAT_HAZE_START_TEMP) /
-              (HEAT_HAZE_MAX_TEMP - HEAT_HAZE_START_TEMP)
-          )
-        );
-        if (hazeIntensity > 0.01) {
-          // Ensure hazeCanvas and dimensions are valid
-          if (
-              typeof hazeCanvas !== 'undefined' &&
-              typeof hazeCtx !== 'undefined' &&
-              isFinite(canvasWidth) && canvasWidth > 0 &&
-              isFinite(canvasHeight) && canvasHeight > 0
-             )
-          {
-              if (
-                hazeCanvas.width !== canvasWidth ||
-                hazeCanvas.height !== canvasHeight
-              ) {
-                hazeCanvas.width = canvasWidth;
-                hazeCanvas.height = canvasHeight;
-              }
-              hazeCtx.clearRect(0, 0, canvasWidth, canvasHeight);
-              // Ensure main context canvas exists before drawing from it
-              if (ctx.canvas) {
-                  hazeCtx.drawImage(ctx.canvas, 0, 0);
-              } else {
-                  console.error("Heat Haze: Main context canvas missing.");
-                  return; // Skip haze if source canvas is invalid
-              }
-  
-              const numLayers =
-                1 + Math.floor(hazeIntensity * (HEAT_HAZE_LAYERS_MAX - 1));
-              const baseAlpha = HEAT_HAZE_BASE_ALPHA * hazeIntensity;
-              const now = performance.now(); // Need current time for animation
-  
-              for (let i = 0; i < numLayers; i++) {
-                const timeFactor = now * HEAT_HAZE_SPEED;
-                const layerOffsetFactor = i * 0.8;
-                const verticalOffset =
-                  Math.sin(timeFactor + layerOffsetFactor) *
-                    HEAT_HAZE_MAX_OFFSET *
-                    hazeIntensity -
-                  i * 0.3 * hazeIntensity;
-                const layerAlpha = baseAlpha * (1 - i / (numLayers * 1.5));
-                ctx.globalAlpha = Math.max(0, Math.min(1, layerAlpha));
-                ctx.drawImage(
-                  hazeCanvas,
-                  0,
-                  0,
-                  canvasWidth,
-                  canvasHeight,
-                  0,
-                  verticalOffset, // Apply calculated offset
-                  canvasWidth,
-                  canvasHeight
-                );
-              }
-              ctx.globalAlpha = 1.0; // Restore alpha
-          } else {
-               console.error("Heat Haze: Skipping due to invalid canvas/dimensions.");
+          if (hazeIntensity > 0.01) {
+            if (
+                typeof hazeCanvas !== 'undefined' &&
+                typeof hazeCtx !== 'undefined' &&
+                isFinite(appState.canvasWidth) && appState.canvasWidth > 0 &&
+                isFinite(appState.canvasHeight) && appState.canvasHeight > 0
+               )
+            {
+                if (
+                  hazeCanvas.width !== appState.canvasWidth ||
+                  hazeCanvas.height !== appState.canvasHeight
+                ) {
+                  hazeCanvas.width = appState.canvasWidth;
+                  hazeCanvas.height = appState.canvasHeight;
+                }
+                hazeCtx.clearRect(0, 0, appState.canvasWidth, appState.canvasHeight);
+                if (ctx.canvas) {
+                    hazeCtx.drawImage(ctx.canvas, 0, 0);
+                } else {
+                    console.error("Heat Haze: Main context canvas missing.");
+                    return;
+                }
+      
+                const numLayers =
+                  1 + Math.floor(hazeIntensity * (HEAT_HAZE_LAYERS_MAX - 1));
+                const baseAlpha = HEAT_HAZE_BASE_ALPHA * hazeIntensity;
+                for (let i = 0; i < numLayers; i++) {
+                  const timeFactor = now * HEAT_HAZE_SPEED;
+                  const layerOffsetFactor = i * 0.8;
+                  const verticalOffset =
+                    Math.sin(timeFactor + layerOffsetFactor) *
+                      HEAT_HAZE_MAX_OFFSET *
+                      hazeIntensity -
+                    i * 0.3 * hazeIntensity;
+                  const layerAlpha = baseAlpha * (1 - i / (numLayers * 1.5));
+                  ctx.globalAlpha = Math.max(0, Math.min(1, layerAlpha));
+                  ctx.drawImage(
+                    hazeCanvas,
+                    0,
+                    0,
+                    appState.canvasWidth,
+                    appState.canvasHeight,
+                    0,
+                    verticalOffset,
+                    appState.canvasWidth,
+                    appState.canvasHeight
+                  );
+                }
+                ctx.globalAlpha = 1.0;
+            } else {
+                 console.error("Heat Haze: Skipping due to invalid canvas/dimensions.");
+            }
           }
         }
-      }
-      // --- End Heat Haze Logic ---
-  
-      // Apply Shake Transform
-      if (shakeApplied) {
-        ctx.save();
-        ctx.translate(shakeOffsetX, shakeOffsetY);
-      }
-  
-      // Draw Game World Elements
-      if (!stateToRender) {
-        if (shakeApplied) ctx.restore();
-        return;
-      }
-      drawCampfire(ctx, stateToRender.campfire, canvasWidth, canvasHeight);
-      if (typeof snake !== "undefined") drawSnake(ctx, snake);
-      drawPowerups(ctx, stateToRender.powerups);
-      drawBullets(ctx, stateToRender.bullets);
-      function drawEnemies(ctx, enemies, activeEnemyBubblesRef, activeBloodSparkEffectsRef) {
-        if (!enemies) return;
-        const now = performance.now() / 1000; // Server time for fade check
-        const clientNow = performance.now(); // Client time for effects
-        const fd = 0.3; // Fade duration
-
-        Object.values(enemies).forEach(e => {
-            if (!e) return;
-            const w = e.width ?? 20, h = e.height ?? 40, mh = e.max_health ?? 50;
-            let a = 1.0, sd = true, id = false;
-            if (e.health <= 0 && e.death_timestamp) {
-                id = true; const el = now - e.death_timestamp;
-                if (el < fd) a = Math.max(0.1, 1.0 - (el / fd) * 0.9); // Smoother fade
-                else sd = false; // Don't draw if faded
-            }
-            if (sd) {
-                ctx.save(); ctx.globalAlpha = a;
-                // Call drawEnemyRect, passing the necessary parameters
-                drawEnemyRect(ctx, e.x, e.y, w, h, e.type, e, activeBloodSparkEffectsRef, clientNow);
-                ctx.restore();
-            }
-            if (!id && e.health > 0 && sd) { drawHealthBar(ctx, e.x, e.y, w, e.health, mh); }
-        });
-    }
-    // --- End drawEnemies Definition ---
-
-    // --- Existing Drawing Calls ---
-    // Call to drawEnemies
-    drawEnemies(
-      ctx,
-      stateToRender.enemies,
-      activeEnemyBubbles,
-      activeBloodSparkEffectsRef // Ensure this variable is passed correctly from drawGame
-    );
-    // Calls to drawPlayers, drawSpeechBubbles, drawEnemySpeechBubbles...
-    if (typeof activeSpeechBubbles !== "undefined" && appState)
-      drawPlayers(
-        ctx,
-        stateToRender.players,
-        appState,
-        localPlayerMuzzleFlashRef,
-        localPlayerPushbackAnimState
-      );
-    if (typeof activeSpeechBubbles !== "undefined" && appState)
-      drawSpeechBubbles(
-        ctx,
-        stateToRender.players,
-        activeSpeechBubbles,
-        appState
-      );
-    drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles);
-        drawPlayers(
-          ctx,
-          stateToRender.players,
-          appState,
-          localPlayerMuzzleFlashRef,
-          localPlayerPushbackAnimState
-        );
-      if (typeof activeSpeechBubbles !== "undefined" && appState)
-        drawSpeechBubbles(
-          ctx,
-          stateToRender.players,
-          activeSpeechBubbles,
-          appState
-        );
-      drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles);
-      drawDamageTexts(ctx, stateToRender.damage_texts);
-      let shouldDrawMuzzleFlash =
-        localPlayerMuzzleFlashRef?.active &&
-        now < localPlayerMuzzleFlashRef?.endTime;
-      if (shouldDrawMuzzleFlash) {
-        drawMuzzleFlash(
-          ctx,
-          appState.renderedPlayerPos.x,
-          appState.renderedPlayerPos.y,
-          localPlayerMuzzleFlashRef.aimDx,
-          localPlayerMuzzleFlashRef.aimDy
-        );
-      } else if (localPlayerMuzzleFlashRef?.active) {
-        localPlayerMuzzleFlashRef.active = false;
-      }
-  
-      // Restore Shake Transform
-      if (shakeApplied) {
-        ctx.restore();
-      }
-  
-      // Draw Overlays (Rain, Dust, Tint, Vignette)
-      ctx.globalAlpha = 1.0;
-      if (appState?.isRaining) {
-        const RAIN_SPEED_Y = 12;
-        const RAIN_SPEED_X = 1;
-        ctx.strokeStyle = RAIN_COLOR;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        for (let i = 0; i < RAIN_DROPS; i++) {
-          const rainX = ((i * 137 + now * 0.05) % (canvasWidth + 100)) - 50;
-          const rainY = (i * 271 + now * 0.3) % canvasHeight;
-          const endX = rainX + RAIN_SPEED_X;
-          const endY = rainY + RAIN_SPEED_Y;
-          ctx.moveTo(rainX, rainY);
-          ctx.lineTo(endX, endY);
+      
+        if (shakeApplied) {
+          ctx.save();
+          ctx.translate(shakeOffsetX, shakeOffsetY);
         }
-        ctx.stroke();
-      } else if (appState?.isDustStorm) {
-        ctx.fillStyle = "rgba(229, 169, 96, 0.2)";
-        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+      
+        if (!stateToRender) {
+          if (shakeApplied) ctx.restore();
+          return;
+        }
+        drawCampfire(ctx, stateToRender.campfire, appState.canvasWidth, appState.canvasHeight);
+        if (typeof snake !== "undefined") drawSnake(ctx, snake);
+        drawPowerups(ctx, stateToRender.powerups);
+        drawBullets(ctx, stateToRender.bullets);
+      
+          drawEnemies(
+            ctx,
+            stateToRender.enemies,
+            activeEnemyBubblesRef,
+            activeBloodSparkEffectsRef
+          );
+          if (typeof activeSpeechBubbles !== "undefined" && appState)
+            drawPlayers(
+              ctx,
+              stateToRender.players,
+              appState,
+              localPlayerMuzzleFlashRef,
+              localPlayerPushbackAnimState
+            );
+          if (typeof activeSpeechBubbles !== "undefined" && appState)
+            drawSpeechBubbles(
+              ctx,
+              stateToRender.players,
+              activeSpeechBubbles,
+              appState
+            );
+          drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles);
+          drawDamageTexts(ctx, stateToRender.damage_texts);
+          let shouldDrawMuzzleFlash =
+            localPlayerMuzzleFlashRef?.active &&
+            now < localPlayerMuzzleFlashRef?.endTime;
+          if (shouldDrawMuzzleFlash) {
+            drawMuzzleFlash(
+              ctx,
+              appState.renderedPlayerPos.x,
+              appState.renderedPlayerPos.y,
+              localPlayerMuzzleFlashRef.aimDx,
+              localPlayerMuzzleFlashRef.aimDy
+            );
+          } else if (localPlayerMuzzleFlashRef?.active) {
+            localPlayerMuzzleFlashRef.active = false;
+          }
+      
+        if (shakeApplied) {
+          ctx.restore();
+        }
+      
+        ctx.globalAlpha = 1.0;
+        if (appState?.isRaining) {
+          const RAIN_SPEED_Y = 12;
+          const RAIN_SPEED_X = 1;
+          ctx.strokeStyle = RAIN_COLOR;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          for (let i = 0; i < RAIN_DROPS; i++) {
+            const rainX = ((i * 137 + now * 0.05) % (appState.canvasWidth + 100)) - 50;
+            const rainY = (i * 271 + now * 0.3) % appState.canvasHeight;
+            const endX = rainX + RAIN_SPEED_X;
+            const endY = rainY + RAIN_SPEED_Y;
+            ctx.moveTo(rainX, rainY);
+            ctx.lineTo(endX, endY);
+          }
+          ctx.stroke();
+        } else if (appState?.isDustStorm) {
+          ctx.fillStyle = "rgba(229, 169, 96, 0.2)";
+          ctx.fillRect(0, 0, appState.canvasWidth, appState.canvasHeight);
+        }
+        if (appState)
+          drawTemperatureTint(ctx, appState.currentTemp, appState.canvasWidth, appState.canvasHeight);
+        const localPlayerState = stateToRender.players?.[appState?.localPlayerId];
+        if (
+          localPlayerState &&
+          localPlayerState.health < DAMAGE_VIGNETTE_HEALTH_THRESHOLD
+        ) {
+          const vi =
+            1.0 - localPlayerState.health / DAMAGE_VIGNETTE_HEALTH_THRESHOLD;
+          drawDamageVignette(ctx, vi, appState.canvasWidth, appState.canvasHeight);
+        }
+      
+        ctx.globalAlpha = 1.0;
       }
-      if (appState)
-        drawTemperatureTint(ctx, appState.currentTemp, canvasWidth, canvasHeight);
-      const localPlayerState = stateToRender.players?.[appState?.localPlayerId];
-      if (
-        localPlayerState &&
-        localPlayerState.health < DAMAGE_VIGNETTE_HEALTH_THRESHOLD
-      ) {
-        const vi =
-          1.0 - localPlayerState.health / DAMAGE_VIGNETTE_HEALTH_THRESHOLD;
-        drawDamageVignette(ctx, vi, canvasWidth, canvasHeight);
-      }
-  
-      ctx.globalAlpha = 1.0;
-    } // --- End drawGame ---
   
     return { drawGame, triggerShake, updateGeneratedBackground };
   })(); // End Renderer module IIFE
