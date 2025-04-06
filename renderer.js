@@ -311,7 +311,7 @@ const Renderer = (() => {
 
 
     // Draws floating damage numbers, handling crits and pulsing
-    function drawDamageTexts(damageTexts) {
+    function drawDamageTexts(ctx, damageTexts) {
         if (!damageTexts) return;
         const now = performance.now();
         const pulseDuration = 250; const pulseMaxSizeIncrease = 4; // Crit pulse effect params
@@ -614,8 +614,8 @@ const Renderer = (() => {
     function drawSpeechBubbles(
         ctx,
         playersToRender,
-        activeSpeechBubbles, // <-- Changed from 
-        appStateRef
+        activeSpeechBubbles, // OK
+        appStateRef             // Corrected to match variable passed from drawGame
       ) {
         if (!activeSpeechBubbles || !appStateRef) return; // <-- Changed from 
         const now = performance.now();
@@ -2067,16 +2067,16 @@ const Renderer = (() => {
     }
   
   
-    // --- Main Render Function --- V3 --- Correct Signature ---
+        // --- Main Render Function --- V3 --- Correct Signature ---
     function drawGame(
-        ctx,
-        appState,
-        stateToRender,
-        localPlayerMuzzleFlashRef,
-        localPlayerPushbackAnimState,
-        activeBloodSparkEffectsRef,
-        activeEnemyBubbles
-      ) {
+            ctx,
+            appState,
+            stateToRender,
+            localPlayerMuzzleFlash,      // Corrected to match main.js variable
+            localPlayerPushbackAnim,     // Corrected to match main.js variable
+            activeBloodSparkEffects,     // Corrected to match main.js variable
+            activeEnemyBubbles           // This one already matched
+        ) {
         if (!mainCtx) mainCtx = ctx;
         if (!ctx || !appState) {
           console.error("drawGame missing context or appState!");
@@ -2215,11 +2215,10 @@ const Renderer = (() => {
         drawPowerups(ctx, stateToRender.powerups);
         drawBullets(ctx, stateToRender.bullets);
       
-          drawEnemies(
-            ctx,
-            stateToRender.enemies,
-            activeEnemyBubbles,
-            activeBloodSparkEffectsRef
+        drawEnemies(
+            ctx,                          // Correct 1st argument
+            stateToRender.enemies,        // Correct 2nd argument
+            activeBloodSparkEffectsRef    // Correct 3rd argument (was the 4th)
           );
           if (typeof activeSpeechBubbles !== "undefined" && appState)
             drawPlayers(
