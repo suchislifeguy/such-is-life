@@ -498,6 +498,28 @@ const Renderer = (() => {
             ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2);
             ctx.fill();
 
+            // --- NEW: Giant Facial Features ---
+            // Beard (Simple dark shape below head center)
+            const beardWidth = headRadius * 1.6;
+            const beardHeight = headRadius * 1.0;
+            const beardTopY = headCenterY + headRadius * 0.2;
+            ctx.fillStyle = enemyCapColor; // Use hat color for beard
+            ctx.fillRect(x - beardWidth / 2, beardTopY, beardWidth, beardHeight);
+            // Angry Eyebrows (Thicker and lower than standard enemy)
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 3; // Thicker brows
+            ctx.beginPath();
+            const giantBrowLength = headRadius * 0.7;
+            const giantBrowY = headCenterY - headRadius * 0.4; // Lower on face
+            const giantBrowXOffset = headRadius * 0.4;
+            // Steeper angle for anger
+            ctx.moveTo(x - giantBrowXOffset - giantBrowLength / 2, giantBrowY + giantBrowLength / 4); // Inner point lower
+            ctx.lineTo(x - giantBrowXOffset + giantBrowLength / 2, giantBrowY - giantBrowLength / 4); // Outer point higher
+            ctx.moveTo(x + giantBrowXOffset - giantBrowLength / 2, giantBrowY - giantBrowLength / 4); // Inner point higher
+            ctx.lineTo(x + giantBrowXOffset + giantBrowLength / 2, giantBrowY + giantBrowLength / 4); // Outer point lower
+            ctx.stroke();
+            // --- End Giant Facial Features ---
+
             // 5. Draw Shako Hat
             ctx.fillStyle = enemyCapColor; // Black base
             ctx.fillRect(x - shakoWidth / 2, shakoBaseY - shakoHeight, shakoWidth, shakoHeight); // Cylinder
@@ -727,20 +749,49 @@ const Renderer = (() => {
         let gunDrawMode = 'aiming'; // 'aiming' or 'pushback'
 
         if (isPushbackAnimating) {
-            shouldDrawGun = true;
-            gunDrawMode = 'pushback';
-            // --- Calculate Pushback Swing Angle ---
-            // Example: Fixed swing outwards (e.g., 90 degrees relative to 'up')
-            // You might want to adjust this based on sprite orientation if it changes later
-            gunDrawAngle = -Math.PI / 2; // Straight out to the player's right if facing up
-            // Alternative: Base it slightly on previous aim? (More complex)
-            // gunDrawAngle = Math.atan2(aimDy, aimDx) + Math.PI / 2; // Swing 90deg from aim?
+            // --- Pushback Animation Pose ---
+            const kickLegAngle = -Math.PI / 5; // Angle kicking leg forward/up
+            const supportLegOffset = w * 0.1; // Back leg slightly offset
+            const kickLegLength = ph * 1.1; // Slightly longer appearance when kicking
 
-        } else if (isSelf && (aimDx !== 0 || aimDy !== 0)) {
-            // Normal aiming logic
-            shouldDrawGun = true;
-            gunDrawMode = 'aiming';
-            gunDrawAngle = Math.atan2(aimDy, aimDx); // Aim based on mouse/target
+            // Supporting Leg (Slightly back)
+            ctx.fillStyle = dc; // Trouser color
+            ctx.fillRect(x + supportLegOffset - lw / 2, pty, lw, ph); // Draw back leg trouser
+            ctx.fillStyle = bootColor;
+            ctx.fillRect(x + supportLegOffset - bow / 2, boty, bow, boh); // Draw back leg boot
+
+            // Kicking Leg (Rotated)
+            ctx.save();
+            ctx.translate(x - w * 0.2, pty); // Translate to hip area of kicking leg
+            ctx.rotate(kickLegAngle);
+            // Draw rotated trouser
+            ctx.fillStyle = dc;
+            ctx.fillRect(-lw / 2, 0, lw, kickLegLength);
+            // Draw rotated boot at the end of the extended leg
+            ctx.fillStyle = bootColor;
+            ctx.fillRect(-bow / 2, kickLegLength - boh * 0.5, bow, boh);
+            ctx.restore();
+
+        } else {
+            // --- Standard Walking/Idle Animation ---
+            ctx.fillStyle = dc; // Trouser color
+            ctx.fillRect(x - w * 0.45, pty, lw, ph); // Left trouser
+            ctx.fillRect(x + w * 0.05, pty, lw, ph); // Right trouser
+            ctx.fillStyle = bootColor; // Boot color
+            // Walking animation
+            if (!ii) { // If not idle (is moving)
+                const sd = 250, sp = Math.floor(t / sd) % 2;
+                if (sp === 0) { // Left foot forward slightly
+                    ctx.fillRect(x - bos - bow / 2, boty - 2, bow, boh); // Left boot
+                    ctx.fillRect(x + bos - bow / 2, boty, bow, boh);     // Right boot
+                } else { // Right foot forward slightly
+                    ctx.fillRect(x - bos - bow / 2, boty, bow, boh);     // Left boot
+                    ctx.fillRect(x + bos - bow / 2, boty - 2, bow, boh); // Right boot
+                }
+            } else { // Idle stance
+                ctx.fillRect(x - bos - bow / 2, boty, bow, boh); // Left boot idle
+                ctx.fillRect(x + bos - bow / 2, boty, bow, boh); // Right boot idle
+            }
         }
 
         // --- Draw Gun if needed ---
@@ -779,47 +830,70 @@ const Renderer = (() => {
         // --- End Gun Drawing ---
 
 
-        // Draw Snake Bite Aura (if applicable) - Unchanged
+        // --- REVISED: Snake Bite Effect (Green Fire Particles) ---
         if (isPlayerBitten) {
-            const auraRadius = Math.max(w * 0.6, 18);
-            const auraY = y + h * 0.5 + bo - 6;
-            const auraLineWidth = 3.5;
-            const auraColor = "rgba(0, 255, 50, 0.75)";
-            const pulseSpeed = 0.004;
-            const pulseMagnitude = 2.5;
-            const pulseOffset = Math.sin(t * pulseSpeed) * pulseMagnitude;
-            const originalLineWidth = ctx.lineWidth;
-            const originalStrokeStyle = ctx.strokeStyle;
-            ctx.lineWidth = auraLineWidth;
-            ctx.strokeStyle = auraColor;
-            ctx.beginPath();
-            ctx.arc(x, auraY, auraRadius + pulseOffset, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.lineWidth = originalLineWidth;
-            ctx.strokeStyle = originalStrokeStyle;
-        }
+            const footY = boby; // Base Y position at player's boot bottom
+            const numParticles = 8; // Number of particles per frame
+            const particleBaseSize = 4;
+            const particleSpeedY = -60; // Pixels per second upward
+            const particleLifetimeMs = 600; // How long each particle lasts
 
-        // Draw Hit Sparks (if applicable) - Unchanged
-        if (jh) {
             ctx.save();
-            const numSparks = 15 + Math.random() * 10;
-            for (let i = 0; i < numSparks; i++) {
-                const sparkAngle = Math.random() * Math.PI * 2;
-                const sparkRadius = Math.random() * w * 0.8 + w * 0.2;
-                const sparkX = x + Math.cos(sparkAngle) * sparkRadius;
-                const sparkY = y + Math.sin(sparkAngle) * sparkRadius * 0.7 - h * 0.1 + bo;
-                const sparkSize = Math.random() * 3.5 + 1.5;
-                ctx.fillStyle = sparkColors[Math.floor(Math.random() * sparkColors.length)];
-                ctx.beginPath();
-                ctx.arc(sparkX, sparkY, sparkSize / 2, 0, Math.PI * 2);
-                ctx.fill();
+            for (let i = 0; i < numParticles; i++) {
+                // Simulate particle progress based on when the effect started relative to now
+                // This isn't a true particle system, but gives a continuous effect
+                const effectStartTime = (playerSnakeEffect.expires_at * 1000) - (SNAKE_BITE_DURATION * 1000);
+                const timeSinceEffectStart = Math.max(0, t - effectStartTime); // Use current time 't'
+                // Use modulo to simulate continuous emission within the lifetime
+                const particleSimulatedAge = (timeSinceEffectStart + (particleLifetimeMs / numParticles) * i) % particleLifetimeMs;
+                const particleProgress = particleSimulatedAge / particleLifetimeMs; // 0 to 1
+
+                if (particleProgress < 0 || particleProgress >= 1) continue; // Skip if outside simulated lifetime
+
+                // Position: Start at feet, move up, add horizontal jitter
+                const particleX = x + (Math.random() - 0.5) * w * 0.7; // Spread horizontally
+                const particleY = footY + (particleSpeedY * (particleSimulatedAge / 1000)); // Move up based on age
+
+                // Size: Start larger, shrink slightly
+                const particleSize = particleBaseSize * (1.0 - particleProgress * 0.5) * (0.8 + Math.random() * 0.4);
+
+                // Alpha: Fade out
+                const alpha = 0.8 * (1.0 - particleProgress) * (0.7 + Math.random() * 0.3);
+
+                // Color: Shift from yellow-green to green
+                const green = 180 + Math.floor(75 * particleProgress); // Becomes greener over time
+                const yellow = 200 * (1.0 - particleProgress); // Fades out yellow component
+                ctx.fillStyle = `rgba(${Math.floor(yellow)}, ${green}, 50, ${alpha.toFixed(2)})`;
+
+                // Draw particle (simple square)
+                ctx.fillRect(particleX - particleSize / 2, particleY - particleSize / 2, particleSize, particleSize);
             }
             ctx.restore();
         }
+        // --- End Snake Bite Effect ---
 
 
-        ctx.restore(); 
-    }
+            // Draw Hit Sparks (if applicable) - Unchanged
+            if (jh) {
+                ctx.save();
+                const numSparks = 15 + Math.random() * 10;
+                for (let i = 0; i < numSparks; i++) {
+                    const sparkAngle = Math.random() * Math.PI * 2;
+                    const sparkRadius = Math.random() * w * 0.8 + w * 0.2;
+                    const sparkX = x + Math.cos(sparkAngle) * sparkRadius;
+                    const sparkY = y + Math.sin(sparkAngle) * sparkRadius * 0.7 - h * 0.1 + bo;
+                    const sparkSize = Math.random() * 3.5 + 1.5;
+                    ctx.fillStyle = sparkColors[Math.floor(Math.random() * sparkColors.length)];
+                    ctx.beginPath();
+                    ctx.arc(sparkX, sparkY, sparkSize / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
+
+
+            ctx.restore(); 
+        }
 
 
     function drawPlayers(ctx, players, appStateRef, localPlayerMuzzleFlashRef, localPlayerPushbackAnimStateRef) {
@@ -838,6 +912,8 @@ const Renderer = (() => {
             const a=id?0.4:1.0;
             ctx.save();
             ctx.globalAlpha=a;
+            ctx.beginPath(); const sy=boby+1; ctx.ellipse(x,sy,w*0.45,h*0.05,0,0,Math.PI*2); ctx.fillStyle=backgroundShadowColor; ctx.fill();
+
             const adx=is?localPlayerMuzzleFlashRef?.aimDx:0;
             const ady=is?localPlayerMuzzleFlashRef?.aimDy:0;
             // --- MODIFIED CALL to drawPlayerCharacter --- Pass pushback state ONLY for local player
