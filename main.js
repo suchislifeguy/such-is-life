@@ -82,7 +82,7 @@ let activeSpeechBubbles = {};
 let activeEnemyBubbles = {};
 let socket = null;
 let activeAmmoCasings = [];
-
+let activeBloodSparkEffects = {}; // Stores { enemyId: effectEndTime }
 
 // --- Snake Effect State ---
 let snake = {
@@ -564,6 +564,43 @@ function handleServerMessage(event) {
                 const previousStatus = appState.serverState?.status; const previousPlayerState = appState.serverState?.players?.[appState.localPlayerId];
                 appState.previousServerState = appState.lastServerState; appState.lastServerState = appState.serverState; appState.serverState = data.state;
                 const newState = appState.serverState; const currentPlayerState = newState?.players?.[appState.localPlayerId];
+
+                const now = performance.now(); // Use performance.now for client timing
+                const sparkEffectDuration = 30; // --- DURATION SET TO 30ms ---
+
+                // --- Check for new enemy damage to trigger client effect ---
+                if (newState?.enemies) {
+                    Object.entries(newState.enemies).forEach(([id, enemy]) => {
+                        const newDamageTime = enemy.last_damage_time;
+                        const oldDamageTime = previousEnemyDamageTimes[id];
+
+                        // Trigger if damage time exists and is different from previous state's time
+                        if (newDamageTime && newDamageTime !== oldDamageTime) {
+                            // Check if this damage event is recent relative to server time? (Optional, maybe not needed)
+                            // const serverTimeNow = newState.timestamp; // Assuming server sends its timestamp
+                            // if (serverTimeNow - newDamageTime < 0.5) { // If damage happened < 0.5s ago server-time
+
+                            // Set the client-side effect end time
+                            activeBloodSparkEffects[id] = now + sparkEffectDuration;
+                            // }
+                        }
+                    });
+                }
+                // --- End damage check ---
+
+                // Cleanup expired effects (Check every state update)
+                Object.keys(activeBloodSparkEffects).forEach(enemyId => {
+                    if (now >= activeBloodSparkEffects[enemyId]) {
+                        delete activeBloodSparkEffects[enemyId];
+                    }
+                    // Also remove if enemy no longer exists in the new state
+                    if (!newState?.enemies?.[enemyId]) {
+                         delete activeBloodSparkEffects[enemyId];
+                    }
+                });
+
+
+
                 appState.currentTemp = newState.current_temperature ?? 18.0; appState.isRaining = newState.is_raining ?? false; appState.isDustStorm = newState.is_dust_storm ?? false; UI.updateEnvironmentDisplay();
                 const serverSnakeState = newState.snake_state; if (serverSnakeState && typeof snake !== 'undefined') { snake.isActiveFromServer = serverSnakeState.active; snake.serverHeadX = serverSnakeState.head_x; snake.serverHeadY = serverSnakeState.head_y; snake.serverBaseY = serverSnakeState.base_y; if (snake.isActiveFromServer && snake.segments.length === 0) { snake.segments = [{ x: snake.serverHeadX, y: snake.serverHeadY, time: performance.now() }]; } else if (!snake.isActiveFromServer) { snake.segments = []; } }
                 if (currentPlayerState?.trigger_snake_bite_shake_this_tick) { Renderer.triggerShake(15.0, 400.0); }
