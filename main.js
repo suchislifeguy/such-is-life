@@ -81,6 +81,8 @@ let hitPauseFrames = 0;
 let activeSpeechBubbles = {};
 let activeEnemyBubbles = {};
 let socket = null;
+let activeAmmoCasings = [];
+
 
 // --- Snake Effect State ---
 let snake = {
@@ -351,6 +353,30 @@ const Input = (() => {
         localPlayerMuzzleFlash.aimDy = flashDy;
         log("Sending shoot message with Target Coords:", mouseCanvasPos);
         Network.sendMessage({ type: 'player_shoot', target: { x: mouseCanvasPos.x, y: mouseCanvasPos.y } });
+
+        // Spawn Ammo Casing Particle
+        const casingLifetime = 500 + Math.random() * 300;
+        const ejectAngleOffset = Math.PI / 2 + (Math.random() - 0.5) * 0.4;
+        const ejectAngle = Math.atan2(flashDy, flashDx) + ejectAngleOffset;
+        const ejectSpeed = 80 + Math.random() * 40;
+        const gravity = 150;
+        const casing = {
+            id: `casing_${performance.now()}_${Math.random()}`,
+            x: appState.renderedPlayerPos.x + Math.cos(ejectAngle) * 15, // Use rendered position
+            y: appState.renderedPlayerPos.y + Math.sin(ejectAngle) * 15 - 10,
+            vx: Math.cos(ejectAngle) * ejectSpeed,
+            vy: Math.sin(ejectAngle) * ejectSpeed - 40,
+            rotation: Math.random() * Math.PI * 2,
+            rotationSpeed: (Math.random() - 0.5) * 10,
+            spawnTime: performance.now(),
+            lifetime: casingLifetime,
+            gravity: gravity,
+            width: 6, height: 3,
+            color: "rgba(218, 165, 32, 0.9)"
+        };
+        activeAmmoCasings.push(casing);
+        if (activeAmmoCasings.length > 30) { activeAmmoCasings.shift(); } // Limit max casings
+
     }
 
     function isShootHeld() {
@@ -394,6 +420,38 @@ const Game = (() => {
         if (!appState.serverState && appState.mode !== 'singleplayer') { appState.animationFrameId = requestAnimationFrame(gameLoop); return; }
         if (appState.lastLoopTime === null) { appState.lastLoopTime = currentTime; } const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000); appState.lastLoopTime = currentTime;
         if (typeof snake !== 'undefined' && typeof snake.update === 'function') { snake.update(currentTime); }
+        if (appState.serverState?.status === 'active' && Input.isShootHeld()) { Input.handleShooting(); }
+
+        // Update and Draw Ammo Casings
+        activeAmmoCasings = activeAmmoCasings.filter(casing => (now - casing.spawnTime) < casing.lifetime); // Filter expired
+        if (DOM.ctx && activeAmmoCasings.length > 0) {
+             DOM.ctx.save();
+             activeAmmoCasings.forEach(casing => {
+                 // Update physics
+                 const ageSeconds = (now - casing.spawnTime) / 1000;
+                 const tickDeltaTime = Math.min(0.1, (currentTime - (appState.lastLoopTime ?? currentTime)) / 1000); // Use loop delta
+                 casing.vy += casing.gravity * tickDeltaTime;
+                 casing.x += casing.vx * tickDeltaTime;
+                 casing.y += casing.vy * tickDeltaTime;
+                 casing.rotation += casing.rotationSpeed * tickDeltaTime;
+
+                 // Calculate fade alpha
+                 const lifeLeft = casing.lifetime - (now - casing.spawnTime);
+                 const fadeDuration = 200;
+                 const alpha = (lifeLeft < fadeDuration) ? Math.max(0, lifeLeft / fadeDuration) * 0.9 : 0.9;
+
+                 // Draw rotated rectangle
+                 DOM.ctx.fillStyle = casing.color.replace(/[\d\.]+\)$/g, `${alpha.toFixed(2)})`);
+                 DOM.ctx.translate(casing.x, casing.y);
+                 DOM.ctx.rotate(casing.rotation);
+                 DOM.ctx.fillRect(-casing.width / 2, -casing.height / 2, casing.width, casing.height);
+                 DOM.ctx.rotate(-casing.rotation); // Rotate back
+                 DOM.ctx.translate(-casing.x, -casing.y); // Translate back
+             });
+             DOM.ctx.restore();
+        }
+
+        // Client-side prediction / reconciliation
         if (appState.serverState?.status === 'active' && Input.isShootHeld()) { Input.handleShooting(); }
 
         if (appState.serverState?.status === 'active') {
