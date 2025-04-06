@@ -451,8 +451,6 @@ const Game = (() => {
                  localPlayerPushbackAnim,        // localPlayerPushbackAnimState
                  activeBloodSparkEffects, 
                  activeEnemyBubbles,      
-                 CANVAS_WIDTH,                   // width
-                 CANVAS_HEIGHT                   // height
              );
 
             // --- DRAW CASINGS *AFTER* main game render ---
