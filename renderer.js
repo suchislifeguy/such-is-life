@@ -2211,9 +2211,10 @@ const Renderer = (() => {
         }
       
         if (!stateToRender) {
-          if (shakeApplied) ctx.restore();
-          return;
+            if (shakeApplied) ctx.restore(); // Add this line
+            return;
         }
+        
         drawCampfire(ctx, stateToRender.campfire, appState.canvasWidth, appState.canvasHeight);
         if (typeof snake !== "undefined") drawSnake(ctx, snake);
         drawPowerups(ctx, stateToRender.powerups);
