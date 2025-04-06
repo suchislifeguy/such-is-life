@@ -506,148 +506,147 @@ const Renderer = (() => {
         }
     }
   
-    function drawEnemySpeechBubbles(ctx, enemiesToRender, activeEnemyBubblesRef) {
-      if (!activeEnemyBubblesRef) return;
-      const now = performance.now();
-      const bubbleFont = "italic 13px " + fontFamily;
-      const cornerRadius = 5;
-      const textPadding = 5;
-      const bubbleOffsetY = 25;
-      const bubbleBg = enemySpeechBubbleBg;
-      const bubbleColor = enemySpeechBubbleColor;
-      const shadowColor = "rgba(0, 0, 0, 0.5)";
-      const shadowOffsetX = 2;
-      const shadowOffsetY = 2;
-      const shadowBlur = 4;
-      ctx.font = bubbleFont;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "bottom";
-      const expiredBubbleIds = [];
-      for (const enemyId in activeEnemyBubblesRef) {
-        const bubbleData = activeEnemyBubblesRef[enemyId];
-        if (now >= bubbleData.endTime) {
-          expiredBubbleIds.push(enemyId);
-          continue;
+    function drawEnemySpeechBubbles(ctx, enemiesToRender, activeEnemyBubbles) { // <-- Parameter name is now `activeEnemyBubbles`
+        if (!activeEnemyBubbles) return; // <-- Use `activeEnemyBubbles` here as well
+        const now = performance.now();
+        const bubbleFont = "italic 13px " + fontFamily;
+        const cornerRadius = 5;
+        const textPadding = 5;
+        const bubbleOffsetY = 25;
+        const bubbleBg = enemySpeechBubbleBg;
+        const bubbleColor = enemySpeechBubbleColor;
+        const shadowColor = "rgba(0, 0, 0, 0.5)";
+        const shadowOffsetX = 2;
+        const shadowOffsetY = 2;
+        const shadowBlur = 4;
+        ctx.font = bubbleFont;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        const expiredBubbleIds = [];
+        for (const enemyId in activeEnemyBubbles) { // <-- Use `activeEnemyBubbles` here
+            const bubbleData = activeEnemyBubbles[enemyId]; // <-- Use `activeEnemyBubbles` here
+            if (now >= bubbleData.endTime) {
+            expiredBubbleIds.push(enemyId);
+            continue;
+            }
+            const enemy = enemiesToRender?.[enemyId];
+            if (enemy && enemy.health > 0 && !enemy.death_timestamp) {
+            const enemyX = enemy.x;
+            const enemyY = enemy.y;
+            const enemyHeight = enemy.height ?? 40;
+            const bubbleTargetY = enemyY - enemyHeight / 2 - bubbleOffsetY;
+            const textMetrics = ctx.measureText(bubbleData.text);
+            const textWidth = textMetrics.width;
+            const bubbleHeight = 13 + textPadding * 2;
+            const bubbleWidth = textWidth + textPadding * 2;
+            const bubbleX = enemyX - bubbleWidth / 2;
+            const bubbleDrawY = bubbleTargetY - bubbleHeight;
+            ctx.save();
+            ctx.shadowColor = shadowColor;
+            ctx.shadowBlur = shadowBlur;
+            ctx.shadowOffsetX = shadowOffsetX;
+            ctx.shadowOffsetY = shadowOffsetY;
+            ctx.fillStyle = bubbleBg;
+            if (typeof drawRoundedRect === "function") {
+                drawRoundedRect(
+                ctx,
+                bubbleX,
+                bubbleDrawY,
+                bubbleWidth,
+                bubbleHeight,
+                cornerRadius
+                );
+                ctx.fill();
+            } else {
+                ctx.fillRect(bubbleX, bubbleDrawY, bubbleWidth, bubbleHeight);
+            }
+            ctx.restore();
+            ctx.fillStyle = bubbleColor;
+            ctx.fillText(bubbleData.text, enemyX, bubbleTargetY - textPadding);
+            } else {
+            expiredBubbleIds.push(enemyId);
+            }
         }
-        const enemy = enemiesToRender?.[enemyId];
-        if (enemy && enemy.health > 0 && !enemy.death_timestamp) {
-          const enemyX = enemy.x;
-          const enemyY = enemy.y;
-          const enemyHeight = enemy.height ?? 40;
-          const bubbleTargetY = enemyY - enemyHeight / 2 - bubbleOffsetY;
-          const textMetrics = ctx.measureText(bubbleData.text);
-          const textWidth = textMetrics.width;
-          const bubbleHeight = 13 + textPadding * 2;
-          const bubbleWidth = textWidth + textPadding * 2;
-          const bubbleX = enemyX - bubbleWidth / 2;
-          const bubbleDrawY = bubbleTargetY - bubbleHeight;
-          ctx.save();
-          ctx.shadowColor = shadowColor;
-          ctx.shadowBlur = shadowBlur;
-          ctx.shadowOffsetX = shadowOffsetX;
-          ctx.shadowOffsetY = shadowOffsetY;
-          ctx.fillStyle = bubbleBg;
-          if (typeof drawRoundedRect === "function") {
-            drawRoundedRect(
-              ctx,
-              bubbleX,
-              bubbleDrawY,
-              bubbleWidth,
-              bubbleHeight,
-              cornerRadius
-            );
-            ctx.fill();
-          } else {
-            ctx.fillRect(bubbleX, bubbleDrawY, bubbleWidth, bubbleHeight);
-          }
-          ctx.restore();
-          ctx.fillStyle = bubbleColor;
-          ctx.fillText(bubbleData.text, enemyX, bubbleTargetY - textPadding);
-        } else {
-          expiredBubbleIds.push(enemyId);
-        }
-      }
-      expiredBubbleIds.forEach((id) => {
-        if (activeEnemyBubblesRef) delete activeEnemyBubblesRef[id];
-      });
+        expiredBubbleIds.forEach((id) => {
+            if (activeEnemyBubbles) delete activeEnemyBubbles[id]; // <-- Use `activeEnemyBubbles` here
+        });
     }
-  
     function drawSpeechBubbles(
-      ctx,
-      playersToRender,
-      activeSpeechBubblesRef,
-      appStateRef
-    ) {
-      if (!activeSpeechBubblesRef || !appStateRef) return;
-      const now = performance.now();
-      const bubbleFont = "bold 14px " + fontFamily;
-      const cornerRadius = 6;
-      const textPadding = 6;
-      const bubbleOffsetY = 35;
-      const bubbleBg = playerSpeechBubbleBg;
-      const bubbleColor = playerSpeechBubbleColor;
-      const shadowColor = "rgba(0, 0, 0, 0.6)";
-      const shadowOffsetX = 2;
-      const shadowOffsetY = 2;
-      const shadowBlur = 5;
-      ctx.font = bubbleFont;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "bottom";
-      const expiredBubbleIds = [];
-      for (const playerId in activeSpeechBubblesRef) {
-        const bubbleData = activeSpeechBubblesRef[playerId];
-        if (now >= bubbleData.endTime) {
-          expiredBubbleIds.push(playerId);
-          continue;
-        }
-        const player = playersToRender?.[playerId];
-        if (player && player.player_status !== "dead" && player.health > 0) {
-          const playerX =
-            playerId === appStateRef.localPlayerId
-              ? appStateRef.renderedPlayerPos.x
-              : player.x;
-          const playerY =
-            playerId === appStateRef.localPlayerId
-              ? appStateRef.renderedPlayerPos.y
-              : player.y;
-          const playerHeight = player.height ?? 48; // Use hardcoded default if needed
-          const bubbleTargetY = playerY - playerHeight / 2 - bubbleOffsetY;
-          const textMetrics = ctx.measureText(bubbleData.text);
-          const textWidth = textMetrics.width;
-          const bubbleHeight = 14 + textPadding * 2;
-          const bubbleWidth = textWidth + textPadding * 2;
-          const bubbleX = playerX - bubbleWidth / 2;
-          const bubbleDrawY = bubbleTargetY - bubbleHeight;
-          ctx.save();
-          ctx.shadowColor = shadowColor;
-          ctx.shadowBlur = shadowBlur;
-          ctx.shadowOffsetX = shadowOffsetX;
-          ctx.shadowOffsetY = shadowOffsetY;
-          ctx.fillStyle = bubbleBg;
-          if (typeof drawRoundedRect === "function") {
-            drawRoundedRect(
-              ctx,
-              bubbleX,
-              bubbleDrawY,
-              bubbleWidth,
-              bubbleHeight,
-              cornerRadius
-            );
-            ctx.fill();
-          } else {
-            ctx.fillRect(bubbleX, bubbleDrawY, bubbleWidth, bubbleHeight);
+        ctx,
+        playersToRender,
+        activeSpeechBubbles, // <-- Changed from 
+        appStateRef
+      ) {
+        if (!activeSpeechBubbles || !appStateRef) return; // <-- Changed from 
+        const now = performance.now();
+        const bubbleFont = "bold 14px " + fontFamily;
+        const cornerRadius = 6;
+        const textPadding = 6;
+        const bubbleOffsetY = 35;
+        const bubbleBg = playerSpeechBubbleBg;
+        const bubbleColor = playerSpeechBubbleColor;
+        const shadowColor = "rgba(0, 0, 0, 0.6)";
+        const shadowOffsetX = 2;
+        const shadowOffsetY = 2;
+        const shadowBlur = 5;
+        ctx.font = bubbleFont;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        const expiredBubbleIds = [];
+        for (const playerId in activeSpeechBubbles) { // <-- Changed from 
+          const bubbleData = activeSpeechBubbles[playerId]; // <-- Changed from 
+          if (now >= bubbleData.endTime) {
+            expiredBubbleIds.push(playerId);
+            continue;
           }
-          ctx.restore();
-          ctx.fillStyle = bubbleColor;
-          ctx.fillText(bubbleData.text, playerX, bubbleTargetY - textPadding);
-        } else {
-          expiredBubbleIds.push(playerId);
+          const player = playersToRender?.[playerId];
+          if (player && player.player_status !== "dead" && player.health > 0) {
+            const playerX =
+              playerId === appStateRef.localPlayerId
+                ? appStateRef.renderedPlayerPos.x
+                : player.x;
+            const playerY =
+              playerId === appStateRef.localPlayerId
+                ? appStateRef.renderedPlayerPos.y
+                : player.y;
+            const playerHeight = player.height ?? 48;
+            const bubbleTargetY = playerY - playerHeight / 2 - bubbleOffsetY;
+            const textMetrics = ctx.measureText(bubbleData.text);
+            const textWidth = textMetrics.width;
+            const bubbleHeight = 14 + textPadding * 2;
+            const bubbleWidth = textWidth + textPadding * 2;
+            const bubbleX = playerX - bubbleWidth / 2;
+            const bubbleDrawY = bubbleTargetY - bubbleHeight;
+            ctx.save();
+            ctx.shadowColor = shadowColor;
+            ctx.shadowBlur = shadowBlur;
+            ctx.shadowOffsetX = shadowOffsetX;
+            ctx.shadowOffsetY = shadowOffsetY;
+            ctx.fillStyle = bubbleBg;
+            if (typeof drawRoundedRect === "function") {
+              drawRoundedRect(
+                ctx,
+                bubbleX,
+                bubbleDrawY,
+                bubbleWidth,
+                bubbleHeight,
+                cornerRadius
+              );
+              ctx.fill();
+            } else {
+              ctx.fillRect(bubbleX, bubbleDrawY, bubbleWidth, bubbleHeight);
+            }
+            ctx.restore();
+            ctx.fillStyle = bubbleColor;
+            ctx.fillText(bubbleData.text, playerX, bubbleTargetY - textPadding);
+          } else {
+            expiredBubbleIds.push(playerId);
+          }
         }
+        expiredBubbleIds.forEach((id) => {
+          if (activeSpeechBubbles) delete activeSpeechBubbles[id]; // <-- Changed from 
+        });
       }
-      expiredBubbleIds.forEach((id) => {
-        if (activeSpeechBubblesRef) delete activeSpeechBubblesRef[id];
-      });
-    }
   
     function drawSnake(ctx, snakeRef) {
       if (
