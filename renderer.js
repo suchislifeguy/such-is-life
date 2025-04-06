@@ -413,8 +413,164 @@ const Renderer = (() => {
 
     function drawDamageVignette(ctx, intensity, width, height) { if(intensity<=0) return; ctx.save(); const or=Math.sqrt(width**2+height**2)/2,g=ctx.createRadialGradient(width/2,height/2,0,width/2,height/2,or),ra=0.4*intensity; g.addColorStop(0,'rgba(255,0,0,0)'); g.addColorStop(0.75,'rgba(255,0,0,0)'); g.addColorStop(1,`rgba(255,0,0,${ra.toFixed(2)})`); ctx.fillStyle=g; ctx.fillRect(0,0,width,height); ctx.restore(); }
     function drawTemperatureTint(ctx, temperature, width, height) { let tcs=null, a=0.0; const tfc=TEMP_FREEZING_CLIENT, tcc=TEMP_COLD_CLIENT, thc=TEMP_HOT_CLIENT, tsc=TEMP_SCORCHING_CLIENT, mta=MAX_TINT_ALPHA; if(temperature===null || typeof temperature === 'undefined'){ return; } if(temperature<=tfc){ tcs='rgba(100,150,255,A)'; a=mta*Math.min(1.0,(tfc-temperature+5)/5.0); } else if(temperature<=tcc){ tcs='rgba(150,180,255,A)'; a=mta*((tcc-temperature)/(tcc-tfc)); } else if(temperature>=tsc){ tcs='rgba(255,100,0,A)'; a=mta*Math.min(1.0,(temperature-tsc+5)/5.0); } else if(temperature>=thc){ tcs='rgba(255,150,50,A)'; a=mta*((temperature-thc)/(tsc-thc)); } a=Math.max(0,Math.min(mta,a)); if(tcs&&a>0.01){ ctx.globalAlpha=1.0; ctx.fillStyle=tcs.replace('A',a.toFixed(2)); ctx.fillRect(0,0,width,height); ctx.globalAlpha=1.0; } }
-    function drawEnemySpeechBubbles(ctx, enemiesToRender, activeEnemyBubblesRef) { if(!activeEnemyBubblesRef) return; const now=performance.now(),bf='italic 11px '+fontFamily,cr=4,tp=3,bo=20; ctx.font=bf; ctx.textAlign='center'; ctx.textBaseline='bottom'; const etr=[]; for(const eid in activeEnemyBubblesRef){ const b=activeEnemyBubblesRef[eid]; if(now>=b.endTime){etr.push(eid);continue;} const e=enemiesToRender?.[eid]; if(e&&e.health>0){ const edx=e.x,edy=e.y,eh=e.height??40,by=edy-eh/2-bo,tm=ctx.measureText(b.text),tw=tm.width,bw=tw+tp*2,afh=11,bh=afh+tp*2,bx=edx-bw/2,bby=by-bh; ctx.fillStyle=enemySpeechBubbleBg; drawRoundedRect(ctx,bx,bby,bw,bh,cr); ctx.fill(); ctx.strokeStyle=enemySpeechBubbleOutline; ctx.lineWidth=1; ctx.stroke(); ctx.fillStyle=enemySpeechBubbleColor; ctx.fillText(b.text,edx,by-tp); } else {etr.push(eid);} } etr.forEach(id=>{ if (activeEnemyBubblesRef) delete activeEnemyBubblesRef[id]; }); }
-    function drawSpeechBubbles(ctx, playersToRender, activeSpeechBubblesRef, appStateRef) { if(!activeSpeechBubblesRef || !appStateRef) return; const now=performance.now(),bf='bold 12px '+fontFamily,cr=5,tp=4,bo=30; ctx.font=bf; ctx.textAlign='center'; ctx.textBaseline='bottom'; const ptr=[]; for(const pid in activeSpeechBubblesRef){ const b=activeSpeechBubblesRef[pid]; if(now>=b.endTime){ptr.push(pid);continue;} const p=playersToRender?.[pid]; if(p&&p.player_status!=='dead'&&p.health>0){ const pdx=(pid===appStateRef.localPlayerId)?appStateRef.renderedPlayerPos.x:p.x,pdy=(pid===appStateRef.localPlayerId)?appStateRef.renderedPlayerPos.y:p.y,ph=p.height,by=pdy-ph/2-bo,tm=ctx.measureText(b.text),tw=tm.width,bw=tw+tp*2,afh=12,bh=afh+tp*2,bx=pdx-bw/2,bby=by-bh; ctx.fillStyle=playerSpeechBubbleBg; drawRoundedRect(ctx,bx,bby,bw,bh,cr); ctx.fill(); ctx.strokeStyle=playerSpeechBubbleOutline; ctx.lineWidth=1; ctx.stroke(); ctx.fillStyle=playerSpeechBubbleColor; ctx.fillText(b.text,pdx,by-tp); } else {ptr.push(pid);} } ptr.forEach(id=>{ if (activeSpeechBubblesRef) delete activeSpeechBubblesRef[id]; }); }
+
+    function drawEnemySpeechBubbles(ctx, enemiesToRender, activeEnemyBubblesRef) {
+        if (!activeEnemyBubblesRef) return;
+
+        const now = performance.now();
+        // --- Adjusted: Font size & style ---
+        const bubbleFont = 'italic 13px ' + fontFamily; // Larger, kept italic
+        const cornerRadius = 5; // Slightly larger radius
+        const textPadding = 5; // More padding
+        const bubbleOffsetY = 25; // Raise slightly higher
+        const bubbleBg = enemySpeechBubbleBg; // Defined in constants
+        const bubbleColor = enemySpeechBubbleColor; // Defined in constants
+        const shadowColor = 'rgba(0, 0, 0, 0.5)';
+        const shadowOffsetX = 2;
+        const shadowOffsetY = 2;
+        const shadowBlur = 4;
+
+        ctx.font = bubbleFont;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom'; // Text draws above this point
+
+        const expiredBubbleIds = [];
+        for (const enemyId in activeEnemyBubblesRef) {
+            const bubbleData = activeEnemyBubblesRef[enemyId];
+            if (now >= bubbleData.endTime) {
+                expiredBubbleIds.push(enemyId);
+                continue;
+            }
+
+            const enemy = enemiesToRender?.[enemyId];
+            // Only draw if enemy exists and is alive (health > 0, not fading out)
+            if (enemy && enemy.health > 0 && !enemy.death_timestamp) {
+                const enemyX = enemy.x;
+                const enemyY = enemy.y;
+                const enemyHeight = enemy.height ?? 40; // Use default height if needed
+                const bubbleTargetY = enemyY - enemyHeight / 2 - bubbleOffsetY;
+
+                // Measure text AFTER setting font
+                const textMetrics = ctx.measureText(bubbleData.text);
+                const textWidth = textMetrics.width;
+
+                // Calculate bubble dimensions
+                const bubbleHeight = 13 + textPadding * 2; // Use font size approx for height + padding
+                const bubbleWidth = textWidth + textPadding * 2;
+                const bubbleX = enemyX - bubbleWidth / 2;
+                const bubbleDrawY = bubbleTargetY - bubbleHeight; // Top Y coord for drawing
+
+                // --- Draw with Shadow, No Border ---
+                ctx.save();
+                // Apply shadow settings
+                ctx.shadowColor = shadowColor;
+                ctx.shadowBlur = shadowBlur;
+                ctx.shadowOffsetX = shadowOffsetX;
+                ctx.shadowOffsetY = shadowOffsetY;
+
+                // Draw background bubble
+                ctx.fillStyle = bubbleBg;
+                if (typeof drawRoundedRect === 'function') {
+                     drawRoundedRect(ctx, bubbleX, bubbleDrawY, bubbleWidth, bubbleHeight, cornerRadius);
+                     ctx.fill();
+                } else { // Fallback if helper missing
+                     ctx.fillRect(bubbleX, bubbleDrawY, bubbleWidth, bubbleHeight);
+                }
+                ctx.restore(); // Restore context to remove shadow for text
+
+                // Draw text (on top, no shadow)
+                ctx.fillStyle = bubbleColor;
+                ctx.fillText(bubbleData.text, enemyX, bubbleTargetY - textPadding); // Position text inside bubble
+
+            } else {
+                // Enemy doesn't exist or is dead, mark bubble for removal
+                expiredBubbleIds.push(enemyId);
+            }
+        }
+
+        // Cleanup expired bubbles
+        expiredBubbleIds.forEach(id => {
+            if (activeEnemyBubblesRef) delete activeEnemyBubblesRef[id];
+        });
+    }
+
+    // --- REVISED: drawSpeechBubbles (Player) ---
+    function drawSpeechBubbles(ctx, playersToRender, activeSpeechBubblesRef, appStateRef) {
+        if (!activeSpeechBubblesRef || !appStateRef) return;
+
+        const now = performance.now();
+        // --- Adjusted: Font size & style ---
+        const bubbleFont = 'bold 14px ' + fontFamily; // Larger, kept bold
+        const cornerRadius = 6;
+        const textPadding = 6;
+        const bubbleOffsetY = 35; // Slightly higher offset for player
+        const bubbleBg = playerSpeechBubbleBg; // Defined in constants
+        const bubbleColor = playerSpeechBubbleColor; // Defined in constants
+        const shadowColor = 'rgba(0, 0, 0, 0.6)'; // Slightly darker shadow maybe
+        const shadowOffsetX = 2;
+        const shadowOffsetY = 2;
+        const shadowBlur = 5;
+
+        ctx.font = bubbleFont;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+
+        const expiredBubbleIds = [];
+        for (const playerId in activeSpeechBubblesRef) {
+            const bubbleData = activeSpeechBubblesRef[playerId];
+            if (now >= bubbleData.endTime) {
+                expiredBubbleIds.push(playerId);
+                continue;
+            }
+
+            const player = playersToRender?.[playerId];
+            // Only draw if player exists and is not dead
+            if (player && player.player_status !== 'dead' && player.health > 0) {
+                // Use rendered position for local player, server position for others
+                const playerX = (playerId === appStateRef.localPlayerId) ? appStateRef.renderedPlayerPos.x : player.x;
+                const playerY = (playerId === appStateRef.localPlayerId) ? appStateRef.renderedPlayerPos.y : player.y;
+                // Use default height robustly
+                const playerHeight = player.height ?? PLAYER_DEFAULTS.height;
+                const bubbleTargetY = playerY - playerHeight / 2 - bubbleOffsetY;
+
+                const textMetrics = ctx.measureText(bubbleData.text);
+                const textWidth = textMetrics.width;
+
+                const bubbleHeight = 14 + textPadding * 2; // Approx font size + padding
+                const bubbleWidth = textWidth + textPadding * 2;
+                const bubbleX = playerX - bubbleWidth / 2;
+                const bubbleDrawY = bubbleTargetY - bubbleHeight;
+
+                // --- Draw with Shadow, No Border ---
+                ctx.save();
+                ctx.shadowColor = shadowColor;
+                ctx.shadowBlur = shadowBlur;
+                ctx.shadowOffsetX = shadowOffsetX;
+                ctx.shadowOffsetY = shadowOffsetY;
+
+                ctx.fillStyle = bubbleBg;
+                 if (typeof drawRoundedRect === 'function') {
+                     drawRoundedRect(ctx, bubbleX, bubbleDrawY, bubbleWidth, bubbleHeight, cornerRadius);
+                     ctx.fill();
+                 } else {
+                     ctx.fillRect(bubbleX, bubbleDrawY, bubbleWidth, bubbleHeight);
+                 }
+                ctx.restore(); // Remove shadow for text
+
+                // Draw text
+                ctx.fillStyle = bubbleColor;
+                ctx.fillText(bubbleData.text, playerX, bubbleTargetY - textPadding);
+
+            } else {
+                expiredBubbleIds.push(playerId);
+            }
+        }
+
+        expiredBubbleIds.forEach(id => {
+            if (activeSpeechBubblesRef) delete activeSpeechBubblesRef[id];
+        });
+    }
+
     function drawSnake(ctx, snakeRef) { if(!snakeRef||!snakeRef.isActiveFromServer||!snakeRef.segments||snakeRef.segments.length<2) return; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.strokeStyle=snakeLineColor; ctx.lineWidth=snakeRef.lineWidth; ctx.beginPath(); ctx.moveTo(snakeRef.segments[snakeRef.segments.length-1].x,snakeRef.segments[snakeRef.segments.length-1].y); for(let i=snakeRef.segments.length-2;i>=1;i--){ const s=snakeRef.segments[i],ns=snakeRef.segments[i-1]; if(!s||!ns) continue; const xc=(s.x+ns.x)/2,yc=(s.y+ns.y)/2; ctx.quadraticCurveTo(s.x,s.y,xc,yc); } if(snakeRef.segments.length>0){ const h=snakeRef.segments[0]; if(snakeRef.segments.length>1){ const n=snakeRef.segments[1],xc=(n.x+h.x)/2,yc=(n.y+h.y)/2; ctx.quadraticCurveTo(n.x,n.y,xc,yc); } ctx.lineTo(h.x,h.y); } ctx.stroke(); }
     function drawHealthBar(ctx, x, y, width, currentHealth, maxHealth) { if(maxHealth<=0) return; const bh=5,yo=-(width/2+27),bw=Math.max(20,width*0.8),cw=Math.max(0,(currentHealth/maxHealth)*bw),hp=currentHealth/maxHealth,bx=x-bw/2,by=y+yo; ctx.fillStyle=healthBarBg; ctx.fillRect(bx,by,bw,bh); let bc=healthBarLow; if(hp>0.66) bc=healthBarHigh; else if(hp>0.33) bc=healthBarMedium; ctx.fillStyle=bc; ctx.fillRect(bx,by,cw,bh); }
     function drawArmorBar(ctx, x, y, width, currentArmor) { const ma=100; if(currentArmor<=0) return; const abh=4,hbh=5,bs=1,hbyo=-(width/2+27),hbty=y+hbyo,abty=hbty+hbh+bs,bw=Math.max(20,width*0.8),cw=Math.max(0,(currentArmor/ma)*bw),bx=x-bw/2,by=abty; ctx.fillStyle=healthBarBg; ctx.fillRect(bx,by,bw,abh); ctx.fillStyle=armorBarColor; ctx.fillRect(bx,by,cw,abh); }
@@ -440,7 +596,7 @@ const Renderer = (() => {
         const attackState = (type === 'giant' && enemyState?.attack_state) ? enemyState.attack_state : 'idle'; // Default to idle
     
         // --- CORRECT WAY to determine if blood sparks should show ---
-        const showBloodSparks = enemyState?.last_damage_time && (t - (enemyState.last_damage_time * 1000)) < 150; // Check time difference in ms
+        const showBloodSparks = enemyState?.last_damage_time && (t - (enemyState.last_damage_time * 1000)) < 30; // Check time difference in ms
     
         // --- isHitTriggered is REMOVED ---
     
@@ -585,8 +741,8 @@ const Renderer = (() => {
         // Blood Spark Hit Effect (Using timestamp check)
         if (showBloodSparks) { // *** USE THE CORRECT VARIABLE HERE ***
              ctx.save();
-             const numSparks = 15 + Math.random() * 10;
-             const sparkColors = [ "rgba(180, 0, 0, 0.9)", "rgba(220, 20, 20, 0.8)", "rgba(150, 0, 0, 0.7)", "rgba(255, 50, 50, 0.6)", "rgba(255, 100, 100, 0.9)" ];
+             const numSparks = 2 + Math.random() * 6;
+             const sparkColors = [ "rgba(180, 0, 0, 0.9)", "rgba(220, 20, 20, 0.8)", "rgba(150, 0, 0, 0.7)", "rgba(255, 50, 50, 0.6)", "rgba(255, 1, 1, 0.9)" ];
              const sparkCenterY = y + ((type !== 'giant') ? bobOffset : 0);
              for (let i = 0; i < numSparks; i++) {
                  const sparkAngle = Math.random() * Math.PI * 2;
