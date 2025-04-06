@@ -535,93 +535,394 @@ const Game = (() => {
 
 // --- Global Server Message Handler ---
 
+// --- Global Server Message Handler ---
+// Processes all messages received via the WebSocket
 function handleServerMessage(event) {
     let data;
     try { data = JSON.parse(event.data); }
     catch (err) { error("Failed to parse server message:", err, event.data); UI.updateStatus("Received invalid data from server.", true); return; }
 
     try {
-        if (typeof Renderer === 'undefined' && ['sp_game_started', 'game_joined', 'game_state', 'game_created'].includes(data.type)) { // Added 'game_created' to the check
-             error(`Received critical message type '${data.type}' before Renderer was ready!`);
-             return;
+        // Prevent critical errors if Renderer isn't ready yet for drawing-related messages
+        if (typeof Renderer === 'undefined' && ['sp_game_started', 'game_joined', 'game_state', 'game_created'].includes(data.type)) {
+             error(`Received critical message type '${data.type}' before Renderer was ready! Check loading order.`);
+             return; // Don't process further if Renderer isn't loaded
         }
 
         switch (data.type) {
+            // --- Association Cases (Now include canvas dimension setting) ---
             case 'game_created':
                 log("Received 'game_created'");
                 appState.localPlayerId = data.player_id;
                 appState.currentGameId = data.game_id;
-                appState.serverState = data.initial_state;
+                appState.serverState = data.initial_state; // Initial state received
                 appState.maxPlayersInGame = data.max_players;
 
-                // --- NEW LINES TO RECEIVE CANVAS DIMENSIONS ---
-                appState.canvasWidth = data.initial_state.canvas_width;
-                appState.canvasHeight = data.initial_state.canvas_height;
+                // --- NEW: SET CANVAS DIMENSIONS IMMEDIATELY ---
+                if (data.initial_state && typeof data.initial_state.canvas_width === 'number' && typeof data.initial_state.canvas_height === 'number') {
+                    appState.canvasWidth = data.initial_state.canvas_width;
+                    appState.canvasHeight = data.initial_state.canvas_height;
+                    if (DOM.canvas) {
+                        DOM.canvas.width = appState.canvasWidth;
+                        DOM.canvas.height = appState.canvasHeight;
+                        log(`Canvas dimensions set to: ${DOM.canvas.width}x${DOM.canvas.height}`);
+                        // Force initial background generation *after* setting dimensions
+                        if (typeof Renderer !== 'undefined' && appState.serverState) {
+                             Renderer.updateGeneratedBackground(appState.serverState.is_night);
+                        }
+                    } else {
+                        error("DOM.canvas not found when trying to set dimensions!");
+                    }
+                } else {
+                    error("Initial state ('game_created') missing canvas dimensions!", data.initial_state);
+                    // Fallback - dimensions might be set later via game_state if server includes them
+                    appState.canvasWidth = 1600; // Default fallback
+                    appState.canvasHeight = 900; // Default fallback
+                    if (DOM.canvas) {
+                        DOM.canvas.width = appState.canvasWidth;
+                        DOM.canvas.height = appState.canvasHeight;
+                    }
+                }
                 // -------------------------------------------
 
                 const hostP = appState.serverState?.players[appState.localPlayerId];
                 if (hostP) { appState.predictedPlayerPos = { x: hostP.x, y: hostP.y }; appState.renderedPlayerPos = { x: hostP.x, y: hostP.y }; }
-                if (!appState.maxPlayersInGame) { appState.maxPlayersInGame = '?'; }
+                if (!appState.maxPlayersInGame) { error("'game_created' missing 'max_players'!"); appState.maxPlayersInGame = '?'; }
+
                 DOM.gameCodeDisplay.textContent = appState.currentGameId || 'ERROR';
                 const currentP = Object.keys(appState.serverState?.players || {}).length;
                 DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentP}/${appState.maxPlayersInGame})`;
                 UI.updateStatus(`Game hosted. Code: ${appState.currentGameId}`);
                 UI.showSection('host-wait-section');
+                // Host loop starts when game status changes from 'waiting' via game_state update
                 break;
 
             case 'game_joined':
                 log("Received 'game_joined'");
                 appState.localPlayerId = data.player_id;
                 appState.currentGameId = data.game_id;
-                appState.serverState = data.initial_state;
+                appState.serverState = data.initial_state; // Initial state received
                 appState.maxPlayersInGame = appState.serverState?.max_players;
 
-                // --- NEW LINES TO RECEIVE CANVAS DIMENSIONS ---
-                appState.canvasWidth = data.initial_state.canvas_width;
-                appState.canvasHeight = data.initial_state.canvas_height;
+                // --- NEW: SET CANVAS DIMENSIONS IMMEDIATELY ---
+                if (data.initial_state && typeof data.initial_state.canvas_width === 'number' && typeof data.initial_state.canvas_height === 'number') {
+                    appState.canvasWidth = data.initial_state.canvas_width;
+                    appState.canvasHeight = data.initial_state.canvas_height;
+                    if (DOM.canvas) {
+                        DOM.canvas.width = appState.canvasWidth;
+                        DOM.canvas.height = appState.canvasHeight;
+                        log(`Canvas dimensions set to: ${DOM.canvas.width}x${DOM.canvas.height}`);
+                        // Force initial background generation *after* setting dimensions
+                        if (typeof Renderer !== 'undefined' && appState.serverState) {
+                             Renderer.updateGeneratedBackground(appState.serverState.is_night);
+                        }
+                    } else {
+                        error("DOM.canvas not found when trying to set dimensions!");
+                    }
+                } else {
+                    error("Initial state ('game_joined') missing canvas dimensions!", data.initial_state);
+                    appState.canvasWidth = 1600; // Fallback
+                    appState.canvasHeight = 900; // Fallback
+                    if (DOM.canvas) {
+                        DOM.canvas.width = appState.canvasWidth;
+                        DOM.canvas.height = appState.canvasHeight;
+                    }
+                }
                 // -------------------------------------------
 
-                if (!appState.maxPlayersInGame) { appState.maxPlayersInGame = '?'; }
+                if (!appState.maxPlayersInGame) { error("'game_joined' initial_state missing 'max_players'!"); appState.maxPlayersInGame = '?'; }
                 const joinedP = appState.serverState?.players[appState.localPlayerId];
                 if (joinedP) { appState.predictedPlayerPos = { x: joinedP.x, y: joinedP.y }; appState.renderedPlayerPos = { x: joinedP.x, y: joinedP.y }; }
+
                 UI.updateStatus(`Joined game ${appState.currentGameId}. Get ready!`);
                 UI.showSection('game-area');
-                if (appState.serverState) { Renderer.updateGeneratedBackground(appState.serverState.is_night, appState.canvasWidth, appState.canvasHeight); UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState); } // Using appState.canvasWidth and appState.canvasHeight
-                Game.startGameLoop();
+                // Initial UI updates (HUD, Countdown) - Background already triggered above
+                if (appState.serverState) {
+                    UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState);
+                }
+                Game.startGameLoop(); // Joining client starts loop immediately
                 break;
 
             case 'sp_game_started':
                 log("Received 'sp_game_started'");
                 appState.localPlayerId = data.player_id;
                 appState.currentGameId = data.game_id;
-                appState.serverState = data.initial_state;
+                appState.serverState = data.initial_state; // Initial state received
                 appState.maxPlayersInGame = 1;
 
-                // --- NEW LINES TO RECEIVE CANVAS DIMENSIONS ---
-                appState.canvasWidth = data.initial_state.canvas_width;
-                appState.canvasHeight = data.initial_state.canvas_height;
+                // --- NEW: SET CANVAS DIMENSIONS IMMEDIATELY ---
+                if (data.initial_state && typeof data.initial_state.canvas_width === 'number' && typeof data.initial_state.canvas_height === 'number') {
+                    appState.canvasWidth = data.initial_state.canvas_width;
+                    appState.canvasHeight = data.initial_state.canvas_height;
+                    if (DOM.canvas) {
+                        DOM.canvas.width = appState.canvasWidth;
+                        DOM.canvas.height = appState.canvasHeight;
+                        log(`Canvas dimensions set to: ${DOM.canvas.width}x${DOM.canvas.height}`);
+                        // Force initial background generation *after* setting dimensions
+                        if (typeof Renderer !== 'undefined' && appState.serverState) {
+                            Renderer.updateGeneratedBackground(appState.serverState.is_night);
+                        }
+                    } else {
+                        error("DOM.canvas not found when trying to set dimensions!");
+                    }
+                } else {
+                    error("Initial state ('sp_game_started') missing canvas dimensions!", data.initial_state);
+                    appState.canvasWidth = 1600; // Fallback
+                    appState.canvasHeight = 900; // Fallback
+                    if (DOM.canvas) {
+                        DOM.canvas.width = appState.canvasWidth;
+                        DOM.canvas.height = appState.canvasHeight;
+                    }
+                }
                 // -------------------------------------------
 
                 const spP = appState.serverState?.players[appState.localPlayerId];
                 if (spP) { appState.predictedPlayerPos = { x: spP.x, y: spP.y }; appState.renderedPlayerPos = { x: spP.x, y: spP.y }; }
-                UI.updateStatus("Single Player Game Started!");
-                UI.showSection('game-area');
-                if (appState.serverState) { Renderer.updateGeneratedBackground(appState.serverState.is_night,  appState.canvasWidth, appState.canvasHeight); UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState); } // Using appState.canvasWidth and appState.canvasHeight
-                Game.startGameLoop();
+
+                UI.updateStatus("Single Player Game Started!"); UI.showSection('game-area');
+                // Initial UI updates (HUD, Countdown) - Background already triggered above
+                if (appState.serverState) {
+                    UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState);
+                }
+                Game.startGameLoop(); // SP client starts loop immediately
                 break;
 
+                // --- Game State Update ---
             case 'game_state':
-                if (appState.mode === 'menu') return;
+                // If client is in menu mode, ignore state updates entirely.
+                if (appState.mode === 'menu') {
+                    // log("Ignoring game_state message while in menu mode.");
+                    return; // Stop processing this message
+                }
 
-                // ... rest of game_state handling (no changes needed here for canvas dimensions) ...
+                // --- Proceed with processing state if not in menu ---
+                const previousStatus = appState.serverState?.status;
+                const previousPlayerState = appState.serverState?.players?.[appState.localPlayerId];
 
-                break; // End case 'game_state'
+                // Update state history for interpolation
+                appState.previousServerState = appState.lastServerState;
+                appState.lastServerState = appState.serverState;
+                appState.serverState = data.state; // Store the new state
+                const newState = appState.serverState; // Alias for clarity
+                const currentPlayerState = newState?.players?.[appState.localPlayerId];
 
-            // ... rest of handleServerMessage cases (no changes needed) ...
+                // --- CRITICAL: Ensure canvas dimensions are set if missed initially ---
+                // This is a safety net. The primary setting should happen in the association cases.
+                if ((DOM.canvas.width <= 0 || DOM.canvas.height <= 0 || DOM.canvas.width !== newState.canvas_width) &&
+                    newState && typeof newState.canvas_width === 'number' && typeof newState.canvas_height === 'number') {
+                    error(`Correcting canvas dimensions via game_state: ${newState.canvas_width}x${newState.canvas_height}`);
+                    appState.canvasWidth = newState.canvas_width;
+                    appState.canvasHeight = newState.canvas_height;
+                    if (DOM.canvas) {
+                        DOM.canvas.width = appState.canvasWidth;
+                        DOM.canvas.height = appState.canvasHeight;
+                        // Force background update if dimensions changed significantly
+                        if (typeof Renderer !== 'undefined' && newState) {
+                            Renderer.updateGeneratedBackground(newState.is_night);
+                        }
+                    }
+                }
+                // -----------------------------------------------------------------
 
-        }
+
+                // Update local client variables mirrored from server state
+                appState.currentTemp = newState.current_temperature ?? 18.0; // Use a default if missing
+                appState.isRaining = newState.is_raining ?? false;
+                appState.isDustStorm = newState.is_dust_storm ?? false;
+                UI.updateEnvironmentDisplay(); // Update temp display
+
+
+                // --- Update Visual Snake State ---
+                const serverSnakeState = newState.snake_state;
+                if (serverSnakeState && typeof snake !== 'undefined') { // Check if snake object exists
+                    snake.isActiveFromServer = serverSnakeState.active;
+                    snake.serverHeadX = serverSnakeState.head_x;
+                    snake.serverHeadY = serverSnakeState.head_y;
+                    snake.serverBaseY = serverSnakeState.base_y;
+                    // If snake just became active visually, ensure segment array starts correctly
+                    if (snake.isActiveFromServer && snake.segments.length === 0) {
+                        snake.segments = [{ x: snake.serverHeadX, y: snake.serverHeadY, time: performance.now() }];
+                    } else if (!snake.isActiveFromServer) {
+                        snake.segments = []; // Clear if inactive
+                    }
+                } else if (typeof snake !== 'undefined') {
+                     snake.isActiveFromServer = false; // Ensure inactive if state missing
+                     snake.segments = [];
+                }
+                // --- End Snake Update ---
+
+
+                // --- Trigger Screen Shake on Snake Bite (Check Local Player) ---
+                if (currentPlayerState?.trigger_snake_bite_shake_this_tick) {
+                    // Use constants defined in your JS (ensure they match backend if needed)
+                    const shakeMag = snake?.shakeMagnitude ?? 15.0; // Access magnitude from snake object or default
+                    const shakeDur = snake?.shakeDurationMs ?? 400.0; // Access duration from snake object or default
+                    if(typeof Renderer !== 'undefined') {
+                         Renderer.triggerShake(shakeMag, shakeDur);
+                    }
+                }
+                // --- End Shake Trigger ---
+
+
+                 // Trigger screen shake if local player took damage
+                if (previousPlayerState && currentPlayerState &&
+                    typeof currentPlayerState.health === 'number' &&
+                    typeof previousPlayerState.health === 'number' &&
+                    currentPlayerState.health < previousPlayerState.health)
+                {
+                    const damageTaken = previousPlayerState.health - currentPlayerState.health;
+                    const baseMag = 5; const dmgScale = 0.18; const maxMag = 18; // Shake params
+                    const shakeMagnitude = Math.min(maxMag, baseMag + damageTaken * dmgScale);
+                     if(typeof Renderer !== 'undefined') {
+                         Renderer.triggerShake(shakeMagnitude, 250); // Trigger shake effect
+                    }
+                }
+
+                 // Trigger hit pause if local player was hit this tick
+                 // Check currentPlayerState exists before accessing properties
+                 if (currentPlayerState?.hit_flash_this_tick && hitPauseFrames <= 0) {
+                     hitPauseFrames = 3; // Pause rendering for 3 frames
+                 }
+
+                // --- V3: Update Blood Spark Effects ---
+                if (newState.enemies) {
+                    const now = performance.now();
+                    const sparkDuration = 300; // How long sparks stay visible (ms)
+
+                    // Add/refresh sparks for enemies hit *this* tick according to server state
+                    for (const enemyId in newState.enemies) {
+                        const enemy = newState.enemies[enemyId];
+                        // Check if enemy has a *new* last_damage_time compared to previous state
+                        const previousEnemy = appState.lastServerState?.enemies?.[enemyId];
+                        if (enemy && enemy.last_damage_time &&
+                            (!previousEnemy || enemy.last_damage_time > (previousEnemy.last_damage_time || 0)))
+                        {
+                            // Server uses seconds, performance.now() is ms
+                            const serverHitTimeMs = enemy.last_damage_time * 1000;
+                            // Only trigger if the hit happened very recently to avoid re-triggering on late packets
+                            if (now - serverHitTimeMs < 200) {
+                                activeBloodSparkEffects[enemyId] = now + sparkDuration;
+                            }
+                        }
+                    }
+
+                    // Clean up expired sparks (optional, could also be done in renderer)
+                    for (const enemyId in activeBloodSparkEffects) {
+                        if (now >= activeBloodSparkEffects[enemyId]) {
+                            delete activeBloodSparkEffects[enemyId];
+                        }
+                    }
+                }
+                // --- End V3 Blood Spark Update ---
+
+
+                // Store max_players if received in state update (e.g., if missed initial message)
+                if (!appState.maxPlayersInGame && newState.max_players) {
+                     appState.maxPlayersInGame = newState.max_players;
+                }
+
+                // --- Handle transitions between game statuses ---
+                if (newState.status !== previousStatus) {
+                    log(`[Client State Change] From ${previousStatus || 'null'} to ${newState.status}`);
+
+                    // Logic for STARTING the game (Countdown or Active)
+                    if ((newState.status === 'countdown' || newState.status === 'active') && previousStatus !== 'active' && previousStatus !== 'countdown') {
+                        UI.updateStatus(newState.status === 'countdown' ? "Countdown starting..." : "Game active!");
+                        UI.showSection('game-area'); // Ensure game area is visible
+                        if (!appState.animationFrameId) { // Start loop if not already running
+                            log(`--> Starting game loop NOW (triggered by ${newState.status} state update).`);
+                            if (typeof Renderer !== 'undefined' && newState) { Renderer.updateGeneratedBackground(newState.is_night); }
+                            Game.startGameLoop();
+                        }
+                    }
+                    // Logic for HOST potentially returning to WAITING state
+                    else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host' && previousStatus !== 'waiting') {
+                        UI.updateStatus("Game reverted to waiting lobby.", true); // Inform host
+                        UI.showSection('host-wait-section');
+                        const currentPWaiting = Object.keys(newState.players || {}).length;
+                        DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentPWaiting}/${appState.maxPlayersInGame || '?'})`;
+                        Game.cleanupLoop(); // Stop loop if returning to wait
+                    }
+                    // If status becomes 'finished', ensure loop cleanup and show game over
+                    // This is a *fallback* to the 'game_over_notification'
+                    else if (newState.status === 'finished' && previousStatus !== 'finished') {
+                         log("-> Game Over sequence initiated by 'finished' status in game_state.");
+                         Game.cleanupLoop();
+                         UI.showGameOver(newState); // Show game over based on this final state
+                    }
+
+                } // End status change handling
+
+                // --- Update UI elements based on current state ---
+                // Only update HUD/Timers if game is actually running client-side
+                if (appState.animationFrameId && (newState.status === 'countdown' || newState.status === 'active')) {
+                    UI.updateHUD(newState);
+                    UI.updateCountdown(newState);
+                    UI.updateDayNight(newState);
+                }
+                // Update waiting message specifically for hosts in waiting state
+                else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') {
+                    const pCount = Object.keys(newState.players || {}).length;
+                    DOM.waitingMessage.textContent = `Waiting for Team Mate... (${pCount}/${appState.maxPlayersInGame || '?'})`;
+                }
+
+                // Update enemy speech bubbles based on state
+                const speakerId = newState.enemy_speaker_id; const speechText = newState.enemy_speech_text;
+                if (speakerId && speechText) {
+                    activeEnemyBubbles[speakerId] = { text: speechText.substring(0, 50), endTime: performance.now() + 3000 };
+                }
+                break; // End game_state
+
+            // --- Explicit Game Over Notification (Primary Trigger) ---
+            case 'game_over_notification':
+                log("Received 'game_over_notification'");
+                if (data.final_state) {
+                    appState.serverState = data.final_state; // Store final state
+                    UI.updateStatus("Game Over!");
+                    Game.cleanupLoop(); // --- Stop the game loop FIRST
+                    UI.showGameOver(data.final_state); // --- THEN show the game over screen
+                    log("-> Game Over sequence initiated by notification.");
+                } else {
+                    error("Received 'game_over_notification' without final_state data.");
+                    Game.resetClientState(true); // Fallback to menu
+                }
+                break;
+
+             // --- Chat Message ---
+             case 'chat_message':
+                 const senderId = data.sender_id; const msgText = data.message;
+                 if (!senderId || !msgText) { // Basic validation
+                      log("Received incomplete chat message", data);
+                      break;
+                 }
+                 const isSelf = senderId === appState.localPlayerId;
+                 UI.addChatMessage(senderId, msgText, isSelf); // Add to chat log
+                 // Display as speech bubble only if the player is currently in the game state
+                 if (appState.serverState?.players?.[senderId]) {
+                      activeSpeechBubbles[senderId] = { text: msgText.substring(0, 50), endTime: performance.now() + 4000 };
+                 }
+                 break;
+
+             // --- Error Message ---
+             case 'error':
+                 error("[Client] Server Error Message:", data.message);
+                 UI.updateStatus(`Server Error: ${data.message}`, true);
+                 // Handle specific errors causing UI state changes
+                 if (appState.mode === 'multiplayer-client' && (data.message.includes('not found') || data.message.includes('not waiting') || data.message.includes('full') || data.message.includes('finished'))) {
+                     UI.showSection('join-code-section'); appState.mode = 'menu'; // Back to join input
+                 } else if (appState.mode === 'multiplayer-host' && data.message.includes('Creation Error')) {
+                     Game.resetClientState(true); // Back to main menu
+                 } else if (data.message === 'Please create or join a game first.') {
+                      Game.resetClientState(true); // Back to main menu if disconnected/out of sync
+                 }
+                 break;
+
+            // Unknown message type
+            default:
+                log(`Unknown message type received: ${data.type}`);
+        } // End switch
     } catch (handlerError) {
-        error("Error inside handleServerMessage logic:", handlerError); // Log the specific error
+        error("Error inside handleServerMessage logic:", handlerError, "Data:", data); // Log data too
         UI.updateStatus("Client error processing message.", true);
     }
 } // End handleServerMessage
