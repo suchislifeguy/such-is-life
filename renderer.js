@@ -615,9 +615,9 @@ const Renderer = (() => {
         ctx,
         playersToRender,
         activeSpeechBubbles, // OK
-        appStateRef             // Corrected to match variable passed from drawGame
+        appState             // Corrected to match variable passed from drawGame
       ) {
-        if (!activeSpeechBubbles || !appStateRef) return; // <-- Changed from 
+        if (!activeSpeechBubbles || !appState) return; // <-- Changed from 
         const now = performance.now();
         const bubbleFont = "bold 14px " + fontFamily;
         const cornerRadius = 6;
@@ -642,12 +642,12 @@ const Renderer = (() => {
           const player = playersToRender?.[playerId];
           if (player && player.player_status !== "dead" && player.health > 0) {
             const playerX =
-              playerId === appStateRef.localPlayerId
-                ? appStateRef.renderedPlayerPos.x
+              playerId === appState.localPlayerId
+                ? appState.renderedPlayerPos.x
                 : player.x;
             const playerY =
-              playerId === appStateRef.localPlayerId
-                ? appStateRef.renderedPlayerPos.y
+              playerId === appState.localPlayerId
+                ? appState.renderedPlayerPos.y
                 : player.y;
             const playerHeight = player.height ?? 48;
             const bubbleTargetY = playerY - playerHeight / 2 - bubbleOffsetY;
@@ -688,35 +688,35 @@ const Renderer = (() => {
         });
       }
   
-    function drawSnake(ctx, snakeRef) {
+    function drawSnake(ctx, snake) {
       if (
-        !snakeRef ||
-        !snakeRef.isActiveFromServer ||
-        !snakeRef.segments ||
-        snakeRef.segments.length < 2
+        !snake ||
+        !snake.isActiveFromServer ||
+        !snake.segments ||
+        snake.segments.length < 2
       )
         return;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.strokeStyle = snakeLineColor;
-      ctx.lineWidth = snakeRef.lineWidth ?? 3; // Add default width
+      ctx.lineWidth = snake.lineWidth ?? 3; // Add default width
       ctx.beginPath();
       ctx.moveTo(
-        snakeRef.segments[snakeRef.segments.length - 1].x,
-        snakeRef.segments[snakeRef.segments.length - 1].y
+        snake.segments[snake.segments.length - 1].x,
+        snake.segments[snake.segments.length - 1].y
       );
-      for (let i = snakeRef.segments.length - 2; i >= 1; i--) {
-        const s = snakeRef.segments[i],
-          ns = snakeRef.segments[i - 1];
+      for (let i = snake.segments.length - 2; i >= 1; i--) {
+        const s = snake.segments[i],
+          ns = snake.segments[i - 1];
         if (!s || !ns) continue;
         const xc = (s.x + ns.x) / 2,
           yc = (s.y + ns.y) / 2;
         ctx.quadraticCurveTo(s.x, s.y, xc, yc);
       }
-      if (snakeRef.segments.length > 0) {
-        const h = snakeRef.segments[0];
-        if (snakeRef.segments.length > 1) {
-          const n = snakeRef.segments[1],
+      if (snake.segments.length > 0) {
+        const h = snake.segments[0];
+        if (snake.segments.length > 1) {
+          const n = snake.segments[1],
             xc = (n.x + h.x) / 2,
             yc = (n.y + h.y) / 2;
           ctx.quadraticCurveTo(n.x, n.y, xc, yc);
@@ -772,7 +772,7 @@ const Renderer = (() => {
       h,
       type,
       enemyState,
-      activeBloodSparkEffectsRef,
+      activeBloodSparkEffects,
       clientNowTime
     ) {
       const currentW = w;
@@ -795,8 +795,8 @@ const Renderer = (() => {
       const enemyId = enemyState?.id;
       const showBloodSparks =
         enemyId &&
-        activeBloodSparkEffectsRef?.[enemyId] &&
-        t < activeBloodSparkEffectsRef[enemyId];
+        activeBloodSparkEffects?.[enemyId] &&
+        t < activeBloodSparkEffects[enemyId];
   
       ctx.save();
   
@@ -1659,14 +1659,14 @@ const Renderer = (() => {
       }
       ctx.restore(); // Restore context state from the very start of the function
     }
-    function drawPlayers(ctx, players, appStateRef, localPlayerMuzzleFlashRef, localPlayerPushbackAnimStateRef) {
-        if(!players || !appStateRef) return;
+    function drawPlayers(ctx, players, appState, localPlayerMuzzleFlash, localPlayerPushbackAnimState) {
+        if(!players || !appState) return;
         Object.values(players).forEach(p=>{
             if(!p||p.player_status==='dead') return;
-            const is=p.id===appStateRef.localPlayerId;
+            const is=p.id===appState.localPlayerId;
             const ps=p.player_status||'alive';
-            const dx=is?appStateRef.renderedPlayerPos.x:p.x;
-            const dy=is?appStateRef.renderedPlayerPos.y:p.y;
+            const dx=is?appState.renderedPlayerPos.x:p.x;
+            const dy=is?appState.renderedPlayerPos.y:p.y;
             const w=p.width??20; // Use player default width from server/constants
             const h=p.height??48;// Use player default height from server/constants
             const mh=p.max_health??100;
@@ -1679,9 +1679,9 @@ const Renderer = (() => {
             ctx.globalAlpha=a; // Apply alpha for drawing the player character
     
             // Get aim direction and pushback state ONLY for the local player
-            const adx=is?localPlayerMuzzleFlashRef?.aimDx:0;
-            const ady=is?localPlayerMuzzleFlashRef?.aimDy:0;
-            const pushbackState = is ? localPlayerPushbackAnimStateRef : null;
+            const adx=is?localPlayerMuzzleFlash?.aimDx:0;
+            const ady=is?localPlayerMuzzleFlash?.aimDy:0;
+            const pushbackState = is ? localPlayerPushbackAnimState : null;
     
             // Call the function to draw the actual character (V2)
             // This function now draws its own shadow internally
@@ -1696,11 +1696,11 @@ const Renderer = (() => {
             }
         });
     }
-    // --- V2: Added activeBloodSparkEffectsRef parameter ---
+    // --- V2: Added activeBloodSparkEffects parameter ---
     function drawEnemies(
       ctx,
       enemies,
-      activeBloodSparkEffectsRef
+      activeBloodSparkEffects
     ) {
       if (!enemies) return;
       const now = performance.now() / 1000; // Server time for fade check
@@ -1733,7 +1733,7 @@ const Renderer = (() => {
             h,
             e.type,
             e,
-            activeBloodSparkEffectsRef,
+            activeBloodSparkEffects,
             clientNow
           ); // Pass client time & spark map
           ctx.restore();
@@ -2132,17 +2132,17 @@ const Renderer = (() => {
           ctx.drawImage(offscreenCanvas, 0, 0);
         }
       
-        const currentTempForEffect = appState?.currentTemp;
+        const currentTempFofect = appState?.currentTemp;
         if (
-          currentTempForEffect !== null &&
-          typeof currentTempForEffect !== "undefined" &&
-          currentTempForEffect >= HEAT_HAZE_START_TEMP
+          currentTempFofect !== null &&
+          typeof currentTempFofect !== "undefined" &&
+          currentTempFofect >= HEAT_HAZE_START_TEMP
         ) {
           const hazeIntensity = Math.max(
             0,
             Math.min(
               1,
-              (currentTempForEffect - HEAT_HAZE_START_TEMP) /
+              (currentTempFofect - HEAT_HAZE_START_TEMP) /
                 (HEAT_HAZE_MAX_TEMP - HEAT_HAZE_START_TEMP)
             )
           );
@@ -2218,15 +2218,15 @@ const Renderer = (() => {
         drawEnemies(
             ctx,                          // Correct 1st argument
             stateToRender.enemies,        // Correct 2nd argument
-            activeBloodSparkEffectsRef    // Correct 3rd argument (was the 4th)
+            activeBloodSparkEffects    // Correct 3rd argument (was the 4th)
           );
           if (typeof activeSpeechBubbles !== "undefined" && appState)
             drawPlayers(
               ctx,
               stateToRender.players,
               appState,
-              localPlayerMuzzleFlashRef,
-              localPlayerPushbackAnimState
+              localPlayerMuzzleFlash,
+              localPlayerPushbackAnim
             );
           if (typeof activeSpeechBubbles !== "undefined" && appState)
             drawSpeechBubbles(
@@ -2238,18 +2238,18 @@ const Renderer = (() => {
           drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles);
           drawDamageTexts(ctx, stateToRender.damage_texts);
           let shouldDrawMuzzleFlash =
-            localPlayerMuzzleFlashRef?.active &&
-            now < localPlayerMuzzleFlashRef?.endTime;
+            localPlayerMuzzleFlash?.active &&
+            now < localPlayerMuzzleFlash?.endTime;
           if (shouldDrawMuzzleFlash) {
             drawMuzzleFlash(
               ctx,
               appState.renderedPlayerPos.x,
               appState.renderedPlayerPos.y,
-              localPlayerMuzzleFlashRef.aimDx,
-              localPlayerMuzzleFlashRef.aimDy
+              localPlayerMuzzleFlash.aimDx,
+              localPlayerMuzzleFlash.aimDy
             );
-          } else if (localPlayerMuzzleFlashRef?.active) {
-            localPlayerMuzzleFlashRef.active = false;
+          } else if (localPlayerMuzzleFlash?.active) {
+            localPlayerMuzzleFlash.active = false;
           }
       
         if (shakeApplied) {
