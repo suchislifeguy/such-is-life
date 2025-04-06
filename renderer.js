@@ -2187,7 +2187,7 @@ const Renderer = (() => {
           drawEnemies(
             ctx,
             stateToRender.enemies,
-            activeEnemyBubblesRef,
+            activeEnemyBubbles,
             activeBloodSparkEffectsRef
           );
           if (typeof activeSpeechBubbles !== "undefined" && appState)
