@@ -296,7 +296,47 @@ const Renderer = (() => {
           isTransitioningBackground = false;
         }
      }
-  
+
+     
+    // Triggers or extends a screen shake effect
+    function triggerShake(magnitude, durationMs) {
+        const now = performance.now();
+        const newEndTime = now + durationMs;
+        // Apply if new shake is stronger or lasts longer than current one
+        if (magnitude >= currentShakeMagnitude || newEndTime >= shakeEndTime) {
+                currentShakeMagnitude = Math.max(magnitude, currentShakeMagnitude);
+                shakeEndTime = Math.max(newEndTime, shakeEndTime);
+        }
+    }
+
+
+    // Draws floating damage numbers, handling crits and pulsing
+    function drawDamageTexts(damageTexts) {
+        if (!damageTexts) return;
+        const now = performance.now();
+        const pulseDuration = 250; const pulseMaxSizeIncrease = 4; // Crit pulse effect params
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+
+        Object.values(damageTexts).forEach(dmgText => {
+            if (!dmgText) return;
+            const x = dmgText.x ?? 0; const y = dmgText.y ?? 0;
+            const text = dmgText.text ?? '?'; const isCrit = dmgText.is_crit ?? false;
+            const spawnTime = dmgText.spawn_time ? dmgText.spawn_time * 1000 : now; // Server sends seconds
+            const timeSinceSpawn = now - spawnTime;
+            let currentFontSize = isCrit ? damageTextCritFontSize : damageTextFontSize;
+            let currentFillColor = isCrit ? damageTextCritColor : damageTextColor;
+
+            // Apply crit pulse effect
+            if (isCrit && timeSinceSpawn < pulseDuration) {
+                const pulseProgress = Math.sin((timeSinceSpawn / pulseDuration) * Math.PI); // 0 -> 1 -> 0 wave
+                currentFontSize += pulseProgress * pulseMaxSizeIncrease;
+            }
+            ctx.font = `bold ${Math.round(currentFontSize)}px ${fontFamily}`;
+            ctx.fillStyle = currentFillColor;
+            ctx.fillText(text, x, y);
+        });
+    }
+
     function drawCampfire(ctx, campfireData, width, height) {
       if (!campfireData || !campfireData.active) return;
       const now = performance.now();
@@ -2026,14 +2066,6 @@ const Renderer = (() => {
       });
     }
   
-    function triggerShake(magnitude, durationMs) {
-      const now = performance.now(),
-        net = now + durationMs;
-      if (magnitude >= currentShakeMagnitude || net >= shakeEndTime) {
-        currentShakeMagnitude = Math.max(magnitude, currentShakeMagnitude);
-        shakeEndTime = Math.max(net, shakeEndTime);
-      }
-    }
   
     // --- Main Render Function --- V3 --- Correct Signature ---
     function drawGame(
