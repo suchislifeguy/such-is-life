@@ -1511,16 +1511,19 @@ const Renderer = (() => {
         if (typeof snake !== 'undefined') drawSnake(ctx, snake);
         drawPowerups(ctx, stateToRender.powerups);
         drawBullets(ctx, stateToRender.bullets);
-        if (typeof activeEnemyBubbles !== 'undefined') drawEnemies(ctx, stateToRender.enemies, activeEnemyBubbles);
-        // --- MODIFIED CALL to drawPlayers --- Pass pushback state
+        // Pass spark state to drawEnemies
+        drawEnemies(ctx, stateToRender.enemies, activeEnemyBubbles, activeBloodSparkEffectsRef);
         if (typeof activeSpeechBubbles !== 'undefined' && appState) drawPlayers(ctx, stateToRender.players, appState, localPlayerMuzzleFlashRef, localPlayerPushbackAnimState);
         if (typeof activeSpeechBubbles !== 'undefined' && appState) drawSpeechBubbles(ctx, stateToRender.players, activeSpeechBubbles, appState);
-        if (typeof activeEnemyBubbles !== 'undefined') drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles);
+        // Pass spark state to drawEnemySpeechBubbles? No, probably not needed there.
+        drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles);
         drawDamageTexts(ctx, stateToRender.damage_texts);
         let shouldDrawMuzzleFlash = localPlayerMuzzleFlashRef?.active && (now < localPlayerMuzzleFlashRef?.endTime);
         if (shouldDrawMuzzleFlash) { drawMuzzleFlash(ctx, appState.renderedPlayerPos.x, appState.renderedPlayerPos.y, localPlayerMuzzleFlashRef.aimDx, localPlayerMuzzleFlashRef.aimDy); }
         else if (localPlayerMuzzleFlashRef?.active) { localPlayerMuzzleFlashRef.active = false; }
   
+        
+
         // 4. Restore Shake Transform
         if (shakeApplied) { ctx.restore(); }
   
