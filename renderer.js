@@ -79,7 +79,11 @@ const Renderer = (() => {
     const HEAT_HAZE_START_TEMP = 28.0;
     const HEAT_HAZE_MAX_TEMP = 45.0;
     const SNAKE_BITE_DURATION = 8.0; // Added missing constant
-  
+    const HEAT_HAZE_LAYERS_MAX = 3;     // Max number of layers for full intensity
+    const HEAT_HAZE_BASE_ALPHA = 0.06;  // Base transparency for a layer
+    const HEAT_HAZE_SPEED = 0.0008;     // How fast the haze wobbles
+    const HEAT_HAZE_MAX_OFFSET = 6;     // Max vertical pixel offset for a layer
+
     let currentShakeMagnitude = 0;
     let shakeEndTime = 0;
     let shakeApplied = false,
