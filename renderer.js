@@ -821,8 +821,39 @@ const Renderer = (() => {
         ctx.restore(); 
     }
 
-    function drawPlayers(ctx, players, appStateRef, localPlayerMuzzleFlashRef) { if(!players || !appStateRef) return; Object.values(players).forEach(p=>{ if(!p||p.player_status==='dead') return; const is=p.id===appStateRef.localPlayerId,ps=p.player_status||'alive',dx=is?appStateRef.renderedPlayerPos.x:p.x,dy=is?appStateRef.renderedPlayerPos.y:p.y,w=p.width??48,h=p.height??48,mh=p.max_health??100,ca=p.armor??0,id=(ps==='down'),a=id?0.4:1.0; ctx.save(); ctx.globalAlpha=a; const adx=is?localPlayerMuzzleFlashRef?.aimDx:0,ady=is?localPlayerMuzzleFlashRef?.aimDy:0; drawPlayerCharacter(ctx,dx,dy,w,h,is,p,adx,ady); ctx.restore(); if(ps==='alive'){ drawHealthBar(ctx,dx,dy,w,p.health,mh); if(ca>0) drawArmorBar(ctx,dx,dy,w,ca); } }); }
+
+    function drawPlayers(ctx, players, appStateRef, localPlayerMuzzleFlashRef, localPlayerPushbackAnimStateRef) {
+        if(!players || !appStateRef) return;
+        Object.values(players).forEach(p=>{
+            if(!p||p.player_status==='dead') return;
+            const is=p.id===appStateRef.localPlayerId;
+            const ps=p.player_status||'alive';
+            const dx=is?appStateRef.renderedPlayerPos.x:p.x;
+            const dy=is?appStateRef.renderedPlayerPos.y:p.y;
+            const w=p.width??48; // Using 48 as default if undefined, though PLAYER_DEFAULTS is 20/48
+            const h=p.height??48;
+            const mh=p.max_health??100;
+            const ca=p.armor??0;
+            const id=(ps==='down');
+            const a=id?0.4:1.0;
+            ctx.save();
+            ctx.globalAlpha=a;
+            const adx=is?localPlayerMuzzleFlashRef?.aimDx:0;
+            const ady=is?localPlayerMuzzleFlashRef?.aimDy:0;
+            // --- MODIFIED CALL to drawPlayerCharacter --- Pass pushback state ONLY for local player
+            const pushbackState = is ? localPlayerPushbackAnimStateRef : null; // Pass null for other players
+            drawPlayerCharacter(ctx, dx, dy, w, h, is, p, adx, ady, pushbackState);
+            ctx.restore();
+            if(ps==='alive'){
+                drawHealthBar(ctx, dx, dy, w, p.health, mh);
+                if(ca > 0) drawArmorBar(ctx, dx, dy, w, ca);
+            }
+        });
+    }
+
     function drawEnemies(ctx, enemies, activeEnemyBubblesRef) { if(!enemies) return; const now=performance.now()/1000,fd=0.3; Object.values(enemies).forEach(e=>{ if(!e) return; const w=e.width??20,h=e.height??40,mh=e.max_health??50; let a=1.0,sd=true,id=false; if(e.health<=0&&e.death_timestamp){ id=true; const el=now-e.death_timestamp; if(el<fd) a=0.4; else sd=false; } if(sd){ ctx.save(); ctx.globalAlpha=a; drawEnemyRect(ctx,e.x,e.y,w,h,e.type,e); ctx.restore(); } if(!id&&e.health>0&&sd){ drawHealthBar(ctx,e.x,e.y,w,e.health,mh); } }); }
+
+
     function drawMuzzleFlash(ctx, playerX, playerY, aimDx, aimDy) {
         // Original Radii: outerBase=18, outerVar=6, innerBase=7, innerVar=3
         // Reduced Radii (approx 50%):
@@ -1053,110 +1084,111 @@ const Renderer = (() => {
     function triggerShake(magnitude, durationMs) { const now=performance.now(),net=now+durationMs; if(magnitude>=currentShakeMagnitude||net>=shakeEndTime){ currentShakeMagnitude=Math.max(magnitude,currentShakeMagnitude); shakeEndTime=Math.max(net,shakeEndTime); } }
   
     // --- Main Render Function ---
-    function drawGame( ctx, appState, stateToRender, localPlayerMuzzleFlashRef, width, height ) {
-      if (!mainCtx) mainCtx = ctx;
-      if (!ctx || !appState) { console.error("drawGame missing context or appState!"); return; }
+    function drawGame( ctx, appState, stateToRender, localPlayerMuzzleFlashRef, localPlayerPushbackAnimState, width, height ) {
+        if (!mainCtx) mainCtx = ctx;
+        if (!ctx || !appState) { console.error("drawGame missing context or appState!"); return; }
   
-      const now = performance.now();
-      canvasWidth = width; canvasHeight = height;
+        const now = performance.now();
+        canvasWidth = width; canvasHeight = height;
   
-      let shakeApplied = false, shakeOffsetX = 0, shakeOffsetY = 0;
-      // Shake Calculation
-      if (currentShakeMagnitude > 0 && now < shakeEndTime) {
-          shakeApplied = true;
-          const timeRemaining = shakeEndTime - now;
-          const durationMsFallback = 300;
-          const initialDuration = Math.max(1, shakeEndTime - (now - timeRemaining)); // Use timeRemaining if duration calc is odd
-          let currentMag = currentShakeMagnitude * (timeRemaining / initialDuration);
-          currentMag = Math.max(0, currentMag);
+        let shakeApplied = false, shakeOffsetX = 0, shakeOffsetY = 0;
+        // Shake Calculation
+        if (currentShakeMagnitude > 0 && now < shakeEndTime) {
+            shakeApplied = true;
+            const timeRemaining = shakeEndTime - now;
+            const durationMsFallback = 300;
+            const initialDuration = Math.max(1, shakeEndTime - (now - timeRemaining)); // Use timeRemaining if duration calc is odd
+            let currentMag = currentShakeMagnitude * (timeRemaining / initialDuration);
+            currentMag = Math.max(0, currentMag);
   
-          if (currentMag > 0.5) {
-              const shakeAngle = Math.random() * Math.PI * 2;
-              shakeOffsetX = Math.cos(shakeAngle) * currentMag;
-              shakeOffsetY = Math.sin(shakeAngle) * currentMag;
-          } else { currentShakeMagnitude = 0; shakeEndTime = 0; shakeApplied = false; }
-      } else if (currentShakeMagnitude > 0) { currentShakeMagnitude = 0; shakeEndTime = 0; }
+            if (currentMag > 0.5) {
+                const shakeAngle = Math.random() * Math.PI * 2;
+                shakeOffsetX = Math.cos(shakeAngle) * currentMag;
+                shakeOffsetY = Math.sin(shakeAngle) * currentMag;
+            } else { currentShakeMagnitude = 0; shakeEndTime = 0; shakeApplied = false; }
+        } else if (currentShakeMagnitude > 0) { currentShakeMagnitude = 0; shakeEndTime = 0; }
   
-      // 1. Draw Background
-      ctx.globalAlpha = 1.0;
-      if (!isBackgroundReady) {
-        ctx.fillStyle = dayBaseColor; ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-        if (appState?.serverState && currentBackgroundIsNight === null) {
-          updateGeneratedBackground(appState.serverState.is_night, canvasWidth, canvasHeight);
-        }
-      } else if (isTransitioningBackground) {
-        const elapsed = now - transitionStartTime; const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS);
-        ctx.globalAlpha = 1.0; ctx.drawImage(oldOffscreenCanvas, 0, 0);
-        ctx.globalAlpha = progress; ctx.drawImage(offscreenCanvas, 0, 0);
+        // 1. Draw Background
         ctx.globalAlpha = 1.0;
-        if (progress >= 1.0) { isTransitioningBackground = false; }
-      } else {
-        ctx.drawImage(offscreenCanvas, 0, 0);
-      }
-  
-      // --- Heat Haze Logic ---
-      const currentTempForEffect = appState?.currentTemp;
-      if (currentTempForEffect !== null && typeof currentTempForEffect !== 'undefined' && currentTempForEffect >= HEAT_HAZE_START_TEMP) {
-          const hazeIntensity = Math.max(0, Math.min(1, (currentTempForEffect - HEAT_HAZE_START_TEMP) / (HEAT_HAZE_MAX_TEMP - HEAT_HAZE_START_TEMP)));
-          if (hazeIntensity > 0.01) {
-               if(hazeCanvas.width !== canvasWidth || hazeCanvas.height !== canvasHeight) { hazeCanvas.width = canvasWidth; hazeCanvas.height = canvasHeight; }
-               hazeCtx.clearRect(0, 0, canvasWidth, canvasHeight); hazeCtx.drawImage(ctx.canvas, 0, 0);
-               const numLayers = 1 + Math.floor(hazeIntensity * (HEAT_HAZE_LAYERS_MAX - 1));
-               const baseAlpha = HEAT_HAZE_BASE_ALPHA * hazeIntensity;
-               for (let i = 0; i < numLayers; i++) {
-                   const timeFactor = now * HEAT_HAZE_SPEED; const layerOffsetFactor = i * 0.8;
-                   const verticalOffset = (Math.sin(timeFactor + layerOffsetFactor) * HEAT_HAZE_MAX_OFFSET * hazeIntensity) - (i * 0.3 * hazeIntensity);
-                   const layerAlpha = baseAlpha * (1 - (i / (numLayers * 1.5)));
-                   ctx.globalAlpha = Math.max(0, Math.min(1, layerAlpha));
-                   ctx.drawImage(hazeCanvas, 0, 0, canvasWidth, canvasHeight, 0, verticalOffset, canvasWidth, canvasHeight );
-               }
-               ctx.globalAlpha = 1.0;
+        if (!isBackgroundReady) {
+          ctx.fillStyle = dayBaseColor; ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+          if (appState?.serverState && currentBackgroundIsNight === null) {
+            updateGeneratedBackground(appState.serverState.is_night, canvasWidth, canvasHeight);
           }
-      }
+        } else if (isTransitioningBackground) {
+          const elapsed = now - transitionStartTime; const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS);
+          ctx.globalAlpha = 1.0; ctx.drawImage(oldOffscreenCanvas, 0, 0);
+          ctx.globalAlpha = progress; ctx.drawImage(offscreenCanvas, 0, 0);
+          ctx.globalAlpha = 1.0;
+          if (progress >= 1.0) { isTransitioningBackground = false; }
+        } else {
+          ctx.drawImage(offscreenCanvas, 0, 0);
+        }
   
-      // 2. Apply Shake Transform
-      if (shakeApplied) { ctx.save(); ctx.translate(shakeOffsetX, shakeOffsetY); }
+        // --- Heat Haze Logic ---
+        const currentTempForEffect = appState?.currentTemp;
+        if (currentTempForEffect !== null && typeof currentTempForEffect !== 'undefined' && currentTempForEffect >= HEAT_HAZE_START_TEMP) {
+            const hazeIntensity = Math.max(0, Math.min(1, (currentTempForEffect - HEAT_HAZE_START_TEMP) / (HEAT_HAZE_MAX_TEMP - HEAT_HAZE_START_TEMP)));
+            if (hazeIntensity > 0.01) {
+                 if(hazeCanvas.width !== canvasWidth || hazeCanvas.height !== canvasHeight) { hazeCanvas.width = canvasWidth; hazeCanvas.height = canvasHeight; }
+                 hazeCtx.clearRect(0, 0, canvasWidth, canvasHeight); hazeCtx.drawImage(ctx.canvas, 0, 0);
+                 const numLayers = 1 + Math.floor(hazeIntensity * (HEAT_HAZE_LAYERS_MAX - 1));
+                 const baseAlpha = HEAT_HAZE_BASE_ALPHA * hazeIntensity;
+                 for (let i = 0; i < numLayers; i++) {
+                     const timeFactor = now * HEAT_HAZE_SPEED; const layerOffsetFactor = i * 0.8;
+                     const verticalOffset = (Math.sin(timeFactor + layerOffsetFactor) * HEAT_HAZE_MAX_OFFSET * hazeIntensity) - (i * 0.3 * hazeIntensity);
+                     const layerAlpha = baseAlpha * (1 - (i / (numLayers * 1.5)));
+                     ctx.globalAlpha = Math.max(0, Math.min(1, layerAlpha));
+                     ctx.drawImage(hazeCanvas, 0, 0, canvasWidth, canvasHeight, 0, verticalOffset, canvasWidth, canvasHeight );
+                 }
+                 ctx.globalAlpha = 1.0;
+            }
+        }
   
-      // 3. Draw Game World Elements
-      if (!stateToRender) { if (shakeApplied) ctx.restore(); return; }
-      drawCampfire(ctx, stateToRender.campfire, canvasWidth, canvasHeight);
-      if (typeof snake !== 'undefined') drawSnake(ctx, snake);
-      drawPowerups(ctx, stateToRender.powerups);
-      drawBullets(ctx, stateToRender.bullets);
-      if (typeof activeEnemyBubbles !== 'undefined') drawEnemies(ctx, stateToRender.enemies, activeEnemyBubbles);
-      if (typeof activeSpeechBubbles !== 'undefined' && appState) drawPlayers(ctx, stateToRender.players, appState, localPlayerMuzzleFlashRef);
-      if (typeof activeSpeechBubbles !== 'undefined' && appState) drawSpeechBubbles(ctx, stateToRender.players, activeSpeechBubbles, appState);
-      if (typeof activeEnemyBubbles !== 'undefined') drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles);
-      drawDamageTexts(ctx, stateToRender.damage_texts);
-      let shouldDrawMuzzleFlash = localPlayerMuzzleFlashRef?.active && (now < localPlayerMuzzleFlashRef?.endTime);
-      if (shouldDrawMuzzleFlash) { drawMuzzleFlash(ctx, appState.renderedPlayerPos.x, appState.renderedPlayerPos.y, localPlayerMuzzleFlashRef.aimDx, localPlayerMuzzleFlashRef.aimDy); }
-      else if (localPlayerMuzzleFlashRef?.active) { localPlayerMuzzleFlashRef.active = false; }
+        // 2. Apply Shake Transform
+        if (shakeApplied) { ctx.save(); ctx.translate(shakeOffsetX, shakeOffsetY); }
   
-      // 4. Restore Shake Transform
-      if (shakeApplied) { ctx.restore(); }
+        // 3. Draw Game World Elements
+        if (!stateToRender) { if (shakeApplied) ctx.restore(); return; }
+        drawCampfire(ctx, stateToRender.campfire, canvasWidth, canvasHeight);
+        if (typeof snake !== 'undefined') drawSnake(ctx, snake);
+        drawPowerups(ctx, stateToRender.powerups);
+        drawBullets(ctx, stateToRender.bullets);
+        if (typeof activeEnemyBubbles !== 'undefined') drawEnemies(ctx, stateToRender.enemies, activeEnemyBubbles);
+        // --- MODIFIED CALL to drawPlayers --- Pass pushback state
+        if (typeof activeSpeechBubbles !== 'undefined' && appState) drawPlayers(ctx, stateToRender.players, appState, localPlayerMuzzleFlashRef, localPlayerPushbackAnimState);
+        if (typeof activeSpeechBubbles !== 'undefined' && appState) drawSpeechBubbles(ctx, stateToRender.players, activeSpeechBubbles, appState);
+        if (typeof activeEnemyBubbles !== 'undefined') drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles);
+        drawDamageTexts(ctx, stateToRender.damage_texts);
+        let shouldDrawMuzzleFlash = localPlayerMuzzleFlashRef?.active && (now < localPlayerMuzzleFlashRef?.endTime);
+        if (shouldDrawMuzzleFlash) { drawMuzzleFlash(ctx, appState.renderedPlayerPos.x, appState.renderedPlayerPos.y, localPlayerMuzzleFlashRef.aimDx, localPlayerMuzzleFlashRef.aimDy); }
+        else if (localPlayerMuzzleFlashRef?.active) { localPlayerMuzzleFlashRef.active = false; }
   
-      // 5. Draw Overlays
-      ctx.globalAlpha = 1.0;
-      if (appState?.isRaining) {
-          ctx.strokeStyle = RAIN_COLOR; ctx.lineWidth = 1.5; ctx.beginPath();
-          for (let i = 0; i < RAIN_DROPS; i++) {
-               const rainX = ( (i * 137) + (now * 0.05) ) % (canvasWidth + 100) - 50;
-               const rainY = ( (i * 271) + (now * 0.3) ) % canvasHeight;
-               const endX = rainX + RAIN_SPEED_X; const endY = rainY + RAIN_SPEED_Y;
-               ctx.moveTo(rainX, rainY); ctx.lineTo(endX, endY);
-          }
-          ctx.stroke();
-      } else if (appState?.isDustStorm) {
-          ctx.fillStyle = 'rgba(229, 169, 96, 0.2)'; ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-      }
-      if (appState) drawTemperatureTint(ctx, appState.currentTemp, canvasWidth, canvasHeight);
-      const localPlayerState = stateToRender.players?.[appState?.localPlayerId];
-      if (localPlayerState && localPlayerState.health < DAMAGE_VIGNETTE_HEALTH_THRESHOLD) { const vi = 1.0 - (localPlayerState.health / DAMAGE_VIGNETTE_HEALTH_THRESHOLD); drawDamageVignette(ctx, vi, canvasWidth, canvasHeight); }
+        // 4. Restore Shake Transform
+        if (shakeApplied) { ctx.restore(); }
   
-      ctx.globalAlpha = 1.0;
-    } // --- End drawGame ---
+        // 5. Draw Overlays
+        ctx.globalAlpha = 1.0;
+        if (appState?.isRaining) {
+            ctx.strokeStyle = RAIN_COLOR; ctx.lineWidth = 1.5; ctx.beginPath();
+            for (let i = 0; i < RAIN_DROPS; i++) {
+                 const rainX = ( (i * 137) + (now * 0.05) ) % (canvasWidth + 100) - 50;
+                 const rainY = ( (i * 271) + (now * 0.3) ) % canvasHeight;
+                 const endX = rainX + RAIN_SPEED_X; const endY = rainY + RAIN_SPEED_Y;
+                 ctx.moveTo(rainX, rainY); ctx.lineTo(endX, endY);
+            }
+            ctx.stroke();
+        } else if (appState?.isDustStorm) {
+            ctx.fillStyle = 'rgba(229, 169, 96, 0.2)'; ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        }
+        if (appState) drawTemperatureTint(ctx, appState.currentTemp, canvasWidth, canvasHeight);
+        const localPlayerState = stateToRender.players?.[appState?.localPlayerId];
+        if (localPlayerState && localPlayerState.health < DAMAGE_VIGNETTE_HEALTH_THRESHOLD) { const vi = 1.0 - (localPlayerState.health / DAMAGE_VIGNETTE_HEALTH_THRESHOLD); drawDamageVignette(ctx, vi, canvasWidth, canvasHeight); }
   
-    return { drawGame, triggerShake, updateGeneratedBackground };
+        ctx.globalAlpha = 1.0;
+      } // --- End drawGame ---
+  
+      return { drawGame, triggerShake, updateGeneratedBackground };
   
   })(); // End Renderer module IIFE
   
