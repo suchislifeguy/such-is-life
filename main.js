@@ -422,35 +422,6 @@ const Game = (() => {
         if (typeof snake !== 'undefined' && typeof snake.update === 'function') { snake.update(currentTime); }
         if (appState.serverState?.status === 'active' && Input.isShootHeld()) { Input.handleShooting(); }
 
-        // Update and Draw Ammo Casings
-        activeAmmoCasings = activeAmmoCasings.filter(casing => (now - casing.spawnTime) < casing.lifetime); // Filter expired
-        if (DOM.ctx && activeAmmoCasings.length > 0) {
-             DOM.ctx.save();
-             activeAmmoCasings.forEach(casing => {
-                 // Update physics
-                 const ageSeconds = (now - casing.spawnTime) / 1000;
-                 const tickDeltaTime = Math.min(0.1, (currentTime - (appState.lastLoopTime ?? currentTime)) / 1000); // Use loop delta
-                 casing.vy += casing.gravity * tickDeltaTime;
-                 casing.x += casing.vx * tickDeltaTime;
-                 casing.y += casing.vy * tickDeltaTime;
-                 casing.rotation += casing.rotationSpeed * tickDeltaTime;
-
-                 // Calculate fade alpha
-                 const lifeLeft = casing.lifetime - (now - casing.spawnTime);
-                 const fadeDuration = 200;
-                 const alpha = (lifeLeft < fadeDuration) ? Math.max(0, lifeLeft / fadeDuration) * 0.9 : 0.9;
-
-                 // Draw rotated rectangle
-                 DOM.ctx.fillStyle = casing.color.replace(/[\d\.]+\)$/g, `${alpha.toFixed(2)})`);
-                 DOM.ctx.translate(casing.x, casing.y);
-                 DOM.ctx.rotate(casing.rotation);
-                 DOM.ctx.fillRect(-casing.width / 2, -casing.height / 2, casing.width, casing.height);
-                 DOM.ctx.rotate(-casing.rotation); // Rotate back
-                 DOM.ctx.translate(-casing.x, -casing.y); // Translate back
-             });
-             DOM.ctx.restore();
-        }
-
         // Client-side prediction / reconciliation
         if (appState.serverState?.status === 'active' && Input.isShootHeld()) { Input.handleShooting(); }
 
@@ -469,21 +440,54 @@ const Game = (() => {
 
         const stateToRender = Game.getInterpolatedState(currentTime);
         if (stateToRender && typeof Renderer !== 'undefined' && DOM.ctx) {
-             // --- MODIFIED: Pass arguments correctly, including pushback animation state ---
+             // Draw the main game scene
              Renderer.drawGame(
                  DOM.ctx,                        // ctx
                  appState,                       // appState
                  stateToRender,                  // stateToRender
                  localPlayerMuzzleFlash,         // localPlayerMuzzleFlashRef
-                 localPlayerPushbackAnim,        // localPlayerPushbackAnimState 
+                 localPlayerPushbackAnim,        // localPlayerPushbackAnimState
                  CANVAS_WIDTH,                   // width
                  CANVAS_HEIGHT                   // height
              );
-             // ---------------------------------
+
+            // --- DRAW CASINGS *AFTER* main game render ---
+            const now = performance.now(); // Need 'now' again if not declared earlier in this scope after move
+            // Filter expired (redundant if already filtered before drawGame, but safe)
+            activeAmmoCasings = activeAmmoCasings.filter(casing => (now - casing.spawnTime) < casing.lifetime);
+            if (activeAmmoCasings.length > 0) {
+                 DOM.ctx.save();
+                 activeAmmoCasings.forEach(casing => {
+                     // Update physics (using deltaTime from start of loop)
+                     const tickDeltaTime = deltaTime; // Use loop's deltaTime
+                     casing.vy += casing.gravity * tickDeltaTime;
+                     casing.x += casing.vx * tickDeltaTime;
+                     casing.y += casing.vy * tickDeltaTime;
+                     casing.rotation += casing.rotationSpeed * tickDeltaTime;
+
+                     // Calculate fade alpha
+                     const lifeLeft = casing.lifetime - (now - casing.spawnTime);
+                     const fadeDuration = 200;
+                     const alpha = (lifeLeft < fadeDuration) ? Math.max(0, lifeLeft / fadeDuration) * 0.9 : 0.9;
+
+                     // Draw rotated rectangle
+                     DOM.ctx.fillStyle = casing.color.replace(/[\d\.]+\)$/g, `${alpha.toFixed(2)})`);
+                     DOM.ctx.translate(casing.x, casing.y);
+                     DOM.ctx.rotate(casing.rotation);
+                     DOM.ctx.fillRect(-casing.width / 2, -casing.height / 2, casing.width, casing.height);
+                     DOM.ctx.rotate(-casing.rotation);
+                     DOM.ctx.translate(-casing.x, -casing.y);
+                 });
+                 DOM.ctx.restore();
+            }
+            // --- END CASING DRAWING ---
+
         } else {
              log("Skipping render: Missing state, Renderer, or context.");
         }
 
+
+        // Request next frame or clean up loop
         if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) { appState.animationFrameId = requestAnimationFrame(gameLoop); } else { if(appState.animationFrameId) cleanupLoop(); }
     }
     function startGameLoop() { if (appState.mode === 'menu') return; if (appState.animationFrameId) return; if (!appState.serverState && appState.mode !== 'singleplayer') return; Input.setup(); log("Starting game loop..."); appState.lastLoopTime = null; appState.animationFrameId = requestAnimationFrame(gameLoop); }
