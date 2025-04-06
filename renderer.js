@@ -84,6 +84,9 @@ const Renderer = (() => {
   
     let currentShakeMagnitude = 0;
     let shakeEndTime = 0;
+    let shakeApplied = false,
+    shakeOffsetX = 0,
+    shakeOffsetY = 0;
   
     function drawRoundedRect(ctx, x, y, width, height, radius) {
       if (width < 2 * radius) radius = width / 2;
@@ -2077,6 +2080,7 @@ const Renderer = (() => {
         localPlayerPushbackAnimState,
         activeBloodSparkEffectsRef, // Correctly passed variable from main.js
         activeEnemyBubblesRef,      // Pass this in from main.js call as well
+        activeSpeechBubbles,     
         width,                      // Authoritative width for this frame
         height                      // Authoritative height for this frame
     ) {
@@ -2185,39 +2189,7 @@ const Renderer = (() => {
       if (typeof snake !== "undefined") drawSnake(ctx, snake);
       drawPowerups(ctx, stateToRender.powerups);
       drawBullets(ctx, stateToRender.bullets);
-      drawEnemies(
-        ctx,
-        stateToRender.enemies,
-        activeEnemyBubblesRef,      // Use the passed parameter
-        activeBloodSparkEffectsRef  // Use the passed parameter
-    ); {
-        if (!enemies) return;
-        const now = performance.now() / 1000; // Server time for fade check
-        const clientNow = performance.now(); // Client time for effects
-        const fd = 0.3; // Fade duration
 
-        Object.values(enemies).forEach(e => {
-            if (!e) return;
-            const w = e.width ?? 20, h = e.height ?? 40, mh = e.max_health ?? 50;
-            let a = 1.0, sd = true, id = false;
-            if (e.health <= 0 && e.death_timestamp) {
-                id = true; const el = now - e.death_timestamp;
-                if (el < fd) a = Math.max(0.1, 1.0 - (el / fd) * 0.9); // Smoother fade
-                else sd = false; // Don't draw if faded
-            }
-            if (sd) {
-                ctx.save(); ctx.globalAlpha = a;
-                // Call drawEnemyRect, passing the necessary parameters
-                drawEnemyRect(ctx, e.x, e.y, w, h, e.type, e, activeBloodSparkEffectsRef, clientNow);
-                ctx.restore();
-            }
-            if (!id && e.health > 0 && sd) { drawHealthBar(ctx, e.x, e.y, w, e.health, mh); }
-        });
-    }
-    // --- End drawEnemies Definition ---
-
-    // --- Existing Drawing Calls ---
-    // Call to drawEnemies
     drawEnemies(
       ctx,
       stateToRender.enemies,
