@@ -1,2301 +1,976 @@
-// renderer.js
+// main.js
 
-const Renderer = (() => {
-    console.log("--- Renderer.js: Initializing ---");
-  
-    let mainCtx = null;
-  
-    const offscreenCanvas = document.createElement("canvas");
-    const offscreenCtx = offscreenCanvas.getContext("2d", { alpha: false });
-    let isBackgroundReady = false;
-    let currentBackgroundIsNight = null;
-    let isTransitioningBackground = false;
-    let transitionStartTime = 0;
-    const BACKGROUND_FADE_DURATION_MS = 1000;
-    const oldOffscreenCanvas = document.createElement("canvas");
-    const oldOffscreenCtx = oldOffscreenCanvas.getContext("2d", { alpha: false });
-    const hazeCanvas = document.createElement("canvas");
-    const hazeCtx = hazeCanvas.getContext("2d", { willReadFrequently: true });
-  
-    // --- Constants ---
-    const playerColor = "#DC143C";
-    const dayBaseColor = "#8FBC8F";
-    const nightBaseColor = "#3E2723";
-    const fontFamily = "'Courier New', monospace";
-    const damageTextColor = "#FFFFFF";
-    const damageTextCritColor = "#FFD700";
-    const damageTextFontSize = 14;
-    const damageTextCritFontSize = 18;
-    const otherPlayerColor = "#4682B4";
-    const dustyPlayerSelfColor = "#8B4513";
-    const dustyPlayerOtherColor = "#556B2F";
-    const enemyUniformBlue = "#18315f";
-    const enemyGiantRed = "#a00000";
-    const enemySkinColor = "#D2B48C";
-    const enemyCoatColor = "#8B4513";
-    const enemyBootColor = "#222222";
-    const enemyCapColor = "#111111";
-    const bulletPlayerColor = "#ffed4a";
-    const bulletEnemyColor = "#ff0000";
-    const healthBarBg = "#444";
-    const healthBarHigh = "#66bb6a";
-    const healthBarMedium = "#FFD700";
-    const healthBarLow = playerColor;
-    const armorBarColor = "#9e9e9e";
-    const powerupHealthColor = "#81c784";
-    const powerupGunColor = "#442848";
-    const powerupSpeedColor = "#3edef3";
-    const powerupArmorColor = armorBarColor;
-    const powerupShotgunColor = "#FFA500";
-    const powerupSlugColor = "#A0522D";
-    const powerupRapidColor = "#FFFF00";
-    const powerupScoreColor = healthBarMedium;
-    const powerupDefaultColor = "#888";
-    const playerSpeechBubbleColor = "#d0d8d7";
-    const playerSpeechBubbleBg = "rgba(0, 0, 0, 0.7)";
-    const enemySpeechBubbleColor = "#FFAAAA";
-    const enemySpeechBubbleBg = "rgba(70, 0, 0, 0.7)";
-    const campfireStickColor = "#8B4513";
-    const snakeLineColor = "#261a0d";
-    const ironHelmetColor = "#3d3d3d";
-    const ironHelmetHighlight = "#666666";
-    const ironHelmetShadow = "#1a1a1a";
-    const beltColor = "#412a19";
-    const bootColor = "#241c1c";
-    const backgroundShadowColor = "rgba(0,0,0,0.3)";
-    const simpleChestPlateColor = "#777777";
-    const chestPlateHighlight = "#999999";
-    const slitColor = "#000000";
-    const IDLE_BOB_SPEED_DIVISOR = 600;
-    const IDLE_BOB_AMPLITUDE = 3;
-    const DAMAGE_VIGNETTE_HEALTH_THRESHOLD = 30;
-    const TEMP_FREEZING_CLIENT = 0.0;
-    const TEMP_COLD_CLIENT = 10.0;
-    const TEMP_HOT_CLIENT = 35.0;
-    const TEMP_SCORCHING_CLIENT = 40.0;
-    const MAX_TINT_ALPHA = 0.25;
-    const RAIN_COLOR = "rgba(170, 190, 230, 0.6)";
-    const RAIN_DROPS = 150;
-    const HEAT_HAZE_START_TEMP = 28.0;
-    const HEAT_HAZE_MAX_TEMP = 45.0;
-    const SNAKE_BITE_DURATION = 8.0; // Added missing constant
-  
-    let currentShakeMagnitude = 0;
-    let shakeEndTime = 0;
-    let shakeApplied = false,
-    shakeOffsetX = 0,
-    shakeOffsetY = 0;
-  
-    function drawRoundedRect(ctx, x, y, width, height, radius) {
-      if (width < 2 * radius) radius = width / 2;
-      if (height < 2 * radius) radius = height / 2;
-      ctx.beginPath();
-      ctx.moveTo(x + radius, y);
-      ctx.arcTo(x + width, y, x + width, y + height, radius);
-      ctx.arcTo(x + width, y + height, x, y + height, radius);
-      ctx.arcTo(x, y + height, x, y, radius);
-      ctx.arcTo(x, y, x + width, y, radius);
-      ctx.closePath();
+console.log("--- main.js: Starting execution ---");
+
+// --- Client Configuration & Core Constants ---
+const WEBSOCKET_URL = 'wss://such-is-life.glitch.me/ws';
+const SHOOT_COOLDOWN = 750;
+const RAPID_FIRE_COOLDOWN_MULTIPLIER = 0.4;
+const INPUT_SEND_INTERVAL = 33;
+const RECONNECT_DELAY = 3000;
+const TEMP_FREEZING_CLIENT = 0.0;
+const TEMP_COLD_CLIENT = 10.0;
+const TEMP_TEMPERATE_CLIENT = 25.0;
+const TEMP_HOT_CLIENT = 35.0;
+const TEMP_SCORCHING_CLIENT = 40.0;
+const MAX_TINT_ALPHA = 0.25;
+const PLAYER_DEFAULTS = { width: 25, height: 48, max_health: 100, base_speed: 150 };
+const ENEMY_DEFAULTS = { width: 20, height: 40, max_health: 50 };
+const BULLET_DEFAULTS = { radius: 4 };
+const POWERUP_DEFAULTS = { size: 20 };
+const PLAYER_STATUS_ALIVE = 'alive';
+const PLAYER_STATUS_DOWN = 'down';
+const PLAYER_STATUS_DEAD = 'dead';
+const ENEMY_TYPE_CHASER = 'chaser';
+const ENEMY_TYPE_SHOOTER = 'shooter';
+const SNAKE_BITE_DURATION = 8.0; 
+
+// --- Utility Functions ---
+function getCssVar(varName) { return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || ''; }
+function lerp(start, end, amount) { return start + (end - start) * amount; }
+function distance(x1, y1, x2, y2) { const dx = x1 - x2; const dy = y1 - y2; return Math.sqrt(dx * dx + dy * dy); }
+
+// --- DOM Element References ---
+const DOM = {
+    gameContainer: document.getElementById('game-container'), gameStatus: document.getElementById('game-status'),
+    mainMenuSection: document.getElementById('main-menu-section'), multiplayerMenuSection: document.getElementById('multiplayer-menu-section'),
+    hostWaitSection: document.getElementById('host-wait-section'), joinCodeSection: document.getElementById('join-code-section'),
+    gameArea: document.getElementById('game-area'), gameOverScreen: document.getElementById('game-over-screen'),
+    gameCodeDisplay: document.getElementById('game-code-display'), waitingMessage: document.getElementById('waiting-message'),
+    gameIdInput: document.getElementById('gameIdInput'), canvas: document.getElementById('gameCanvas'),
+    ctx: null,
+    dayNightIndicator: document.getElementById('day-night-indicator'),
+    countdownDiv: document.getElementById('countdown'), finalStatsDiv: document.getElementById('final-stats'),
+    chatInput: document.getElementById('chatInput'), chatLog: document.getElementById('chat-log'),
+    singlePlayerBtn: document.getElementById('singlePlayerBtn'), multiplayerBtn: document.getElementById('multiplayerBtn'),
+    hostGameBtn2: document.getElementById('hostGameBtn2'), hostGameBtn3: document.getElementById('hostGameBtn3'),
+    hostGameBtn4: document.getElementById('hostGameBtn4'), showJoinUIBtn: document.getElementById('showJoinUIBtn'),
+    cancelHostBtn: document.getElementById('cancelHostBtn'), joinGameSubmitBtn: document.getElementById('joinGameSubmitBtn'),
+    sendChatBtn: document.getElementById('sendChatBtn'), leaveGameBtn: document.getElementById('leaveGameBtn'),
+    gameOverBackBtn: document.getElementById('gameOverBackBtn'),
+};
+if (DOM.canvas) {
+    DOM.ctx = DOM.canvas.getContext('2d');
+    if (!DOM.ctx) { console.error("Failed to get 2D context from canvas!"); }
+} else { console.error("Canvas element not found!"); }
+
+
+// --- Global Client State ---
+let appState = {
+    mode: 'menu', localPlayerId: null, maxPlayersInGame: null, currentGameId: null,
+    serverState: null, animationFrameId: null, isConnected: false,
+    renderedPlayerPos: { x: 0, y: 0 },  // Initial position can be 0,0 now
+    predictedPlayerPos: { x: 0, y: 0 }, // Initial position can be 0,0 now
+    lastServerState: null, previousServerState: null, lastLoopTime: null,
+    lastStateReceiveTime: performance.now(), currentTemp: 18.0, isRaining: false,
+    isDustStorm: false, targetTint: null, targetTintAlpha: 0.0,
+    canvasWidth: 1600,  // Add to appState, with default values
+    canvasHeight: 900, // Add to appState, with default values
+};
+
+// --- Local Effects State ---
+let localPlayerMuzzleFlash = { active: false, endTime: 0, aimDx: 0, aimDy: 0 };
+// --- NEW: Pushback Animation State ---
+let localPlayerPushbackAnim = {
+    active: false,
+    endTime: 0,
+    duration: 250 // Animation duration in ms (adjust for desired speed)
+};
+// -------------------------------------
+let hitPauseFrames = 0;
+let activeSpeechBubbles = {};
+let activeEnemyBubbles = {};
+let socket = null;
+let activeAmmoCasings = [];
+let activeBloodSparkEffects = {}; // Stores { enemyId: effectEndTime }
+
+// --- Snake Effect State ---
+let snake = {
+    segmentLength: 6.0, segments: [], maxSegments: 12, frequency: 0.03, amplitude: 15.0,
+    lineWidth: 3, serverHeadX: 0, serverHeadY: 0, serverBaseY: 0, isActiveFromServer: false,
+    update: function(currentTime) {
+        if (!this.isActiveFromServer) { this.segments = []; return; }
+        const lerpFn = lerp;
+        if (this.segments.length === 0) { this.segments.push({ x: this.serverHeadX, y: this.serverHeadY, time: currentTime }); }
+        else { this.segments[0].x = this.serverHeadX; this.segments[0].y = this.serverHeadY; this.segments[0].time = currentTime; }
+        const waveTime = currentTime * 0.005; const phaseOffsetPerSegment = 1.2; const followLerp = 0.4;
+        for (let i = 1; i < this.segments.length; i++) {
+            const seg = this.segments[i]; const prevSeg = this.segments[i - 1]; if (!seg || !prevSeg) continue;
+            const dx = prevSeg.x - seg.x; const dy = prevSeg.y - seg.y; const dist = Math.sqrt(dx*dx + dy*dy);
+            const dirX = dist > 0.01 ? dx / dist : 0; const dirY = dist > 0.01 ? dy / dist : 0;
+            const targetFollowX = prevSeg.x - dirX * this.segmentLength; const wavePhase = waveTime - (i * phaseOffsetPerSegment);
+            const midPoint = (this.segments.length - 1) / 2.0; const distanceFromMid = Math.abs(i - midPoint);
+            const normDist = midPoint > 0 ? distanceFromMid / midPoint : 0; const amplitudeFactor = Math.cos(normDist * (Math.PI / 2));
+            const targetWaveY = this.serverBaseY + Math.sin(wavePhase) * this.amplitude * amplitudeFactor;
+            seg.x = lerpFn(seg.x, targetFollowX, followLerp); seg.y = lerpFn(seg.y, targetWaveY, followLerp * 1.2);
+        }
+        if (this.segments.length > 0 && this.segments.length < this.maxSegments) {
+            const head = this.segments[0]; const neck = this.segments[1];
+            if (neck) { const headNeckDistSq = (head.x - neck.x)**2 + (head.y - neck.y)**2; if (headNeckDistSq > (this.segmentLength * 1.1)**2) { this.segments.splice(1, 0, { x: lerpFn(neck.x, head.x, 0.5), y: lerpFn(neck.y, head.y, 0.5), time: currentTime }); } }
+            else { this.segments.push({ x: head.x - (this.segmentLength*0.5), y: head.y, time: currentTime }); }
+        }
+        while (this.segments.length > this.maxSegments) { this.segments.pop(); }
     }
-  
-    function generateBackground(ctx, targetIsNight, width, height) {
-        ctx.clearRect(0, 0, width, height);
-        if (!targetIsNight) {
-          const dayBaseColor = "#949A80";
-          const dirtColor1 = "rgba(76, 103, 41, 0.2)";
-          const dirtColor2 = "rgba(143, 121, 55, 0.2)";
-          const textureStrokeDark = "rgba(59, 112, 67, 0.3)";
-          const textureStrokeLight = "rgba(135, 150, 110, 0.25)";
-          const textureStrokeEmerald = "rgba(19, 226, 112, 0.15)";
-          const numDirtPatches = 40;
-          const numTextureStrokes = 2500;
-          ctx.fillStyle = dayBaseColor;
-          ctx.fillRect(0, 0, width, height);
-          for (let i = 0; i < numDirtPatches; i++) {
-            const x = Math.random() * width;
-            const y = Math.random() * height;
-            const avgRadius = Math.random() * 100 + 50;
-            const points = 5 + Math.floor(Math.random() * 4);
-            const color = Math.random() < 0.5 ? dirtColor1 : dirtColor2;
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.moveTo(x + avgRadius * Math.cos(0), y + avgRadius * Math.sin(0));
-            for (let j = 1; j <= points; j++) {
-              const angle = (j / points) * Math.PI * 2;
-              const radius = avgRadius * (0.7 + Math.random() * 0.6);
-              ctx.lineTo(
-                x + radius * Math.cos(angle),
-                y + radius * Math.sin(angle)
-              );
-            }
-            ctx.closePath();
-            ctx.fill();
-          }
-          ctx.lineWidth = 1.5;
-          ctx.lineCap = "round";
-          for (let i = 0; i < numTextureStrokes; i++) {
-            const x = Math.random() * width;
-            const y = Math.random() * height;
-            const length = Math.random() * 5 + 2;
-            const angle = Math.random() * Math.PI * 2;
-            let strokeColor;
-            const randColor = Math.random();
-            if (randColor < 0.1) {
-              strokeColor = textureStrokeEmerald;
-            } else if (randColor < 0.55) {
-              strokeColor = textureStrokeLight;
+};
+
+// --- Logging Wrappers ---
+function log(...args) { console.log("[Client]", ...args); }
+function error(...args) { console.error("[Client]", ...args); }
+
+// --- UI Management Module ---
+const UI = (() => {
+    const allSections = [ DOM.mainMenuSection, DOM.multiplayerMenuSection, DOM.hostWaitSection, DOM.joinCodeSection, DOM.gameArea, DOM.gameOverScreen ];
+    const gameSections = ['game-area'];
+    function showSection(sectionId) { allSections.forEach(s => { if(s) s.style.display = 'none'; }); const sectionToShow = DOM[sectionId] || document.getElementById(sectionId); if (sectionToShow) { sectionToShow.style.display = (sectionId === 'game-area' || sectionId === 'game-over-screen') ? 'flex' : 'block'; log(`UI: Showing section: ${sectionId}`); DOM.gameContainer.classList.toggle('in-game', gameSections.includes(sectionId)); } else { error(`UI: Section not found: ${sectionId}`); } }
+    function updateStatus(message, isError = false) { if (!DOM.gameStatus) return; DOM.gameStatus.textContent = message; DOM.gameStatus.style.color = isError ? (getCssVar('--player-color') || 'red') : (getCssVar('--accent-color') || 'yellow'); (isError ? error : log)("Status Update:", message); }
+    function updateHUD(serverState) {
+        const gridContainer = document.getElementById('player-stats-grid'); if (!gridContainer) return;
+        const players = serverState?.players; const localPlayerId = appState.localPlayerId; gridContainer.innerHTML = '';
+        if (!players || Object.keys(players).length === 0) { gridContainer.innerHTML = '<span>Waiting for players...</span>'; return; }
+        const sortedPlayerIds = Object.keys(players).sort((a, b) => { if (a === localPlayerId) return -1; if (b === localPlayerId) return 1; return a.localeCompare(b); });
+        sortedPlayerIds.forEach(playerId => {
+            const pData = players[playerId]; if (!pData) return; const isSelf = (playerId === localPlayerId); const header = isSelf ? "YOU" : `P:${playerId.substring(0, 4)}`;
+            const status = pData.player_status || PLAYER_STATUS_ALIVE; const health = pData.health ?? 0; const armor = pData.armor ?? 0;
+            let healthDisplay; if (status === PLAYER_STATUS_DOWN) healthDisplay = `<span style='color: var(--health-bar-medium);'>DOWN</span>`; else if (status === PLAYER_STATUS_DEAD || health <= 0) healthDisplay = `<span style='color: var(--health-bar-low);'>DEAD</span>`; else healthDisplay = `${health.toFixed(1)}`;
+            gridContainer.innerHTML += `<div class="player-stats-box"><div class="stats-header">${header}</div><div class="stats-content"><span>HP:</span> ${healthDisplay}<br><span>Armor:</span> ${Math.round(armor)}<br><span>Gun:</span> ${pData.gun ?? 1}<br><span>Speed:</span> ${pData.speed ?? PLAYER_DEFAULTS.base_speed}<br><span>Kills:</span> ${pData.kills ?? 0}<br><span>Score:</span> ${pData.score ?? 0}</div></div>`;
+        });
+    }
+    function addChatMessage(sender, message, isSelf, isSystem = false) { if (!DOM.chatLog) return; const div = document.createElement('div'); if (isSystem) { div.className = 'system-message'; div.textContent = message; } else { div.className = isSelf ? 'my-message' : 'other-message'; div.textContent = `${sender ? `P:${sender.substring(0,4)}` : '???'}: ${message}`; } DOM.chatLog.appendChild(div); DOM.chatLog.scrollTop = DOM.chatLog.scrollHeight; }
+    function updateCountdown(serverState) { if (!DOM.countdownDiv || !DOM.dayNightIndicator) return; const isCountdown = serverState?.status === 'countdown' && serverState?.countdown >= 0; DOM.countdownDiv.textContent = isCountdown ? Math.ceil(serverState.countdown) : ''; DOM.countdownDiv.style.display = isCountdown ? 'block' : 'none'; DOM.dayNightIndicator.style.display = (serverState?.status === 'active') ? 'block' : 'none'; }
+    // Inside the UI Module in main.js
+    function updateDayNight(serverState) {
+        if (!DOM.dayNightIndicator || !DOM.canvas || !DOM.gameContainer) return;
+        if (serverState?.status === 'active') {
+            const isNight = serverState.is_night;
+            DOM.dayNightIndicator.textContent = isNight ? 'Night' : 'Day';
+            DOM.dayNightIndicator.style.display = 'block';
+            if (typeof Renderer !== 'undefined') {
+                // --- CORRECTED LINE ---
+                // Use the canvas dimensions stored in appState
+                Renderer.updateGeneratedBackground(isNight, appState.canvasWidth, appState.canvasHeight);
+                // --- END CORRECTION ---
             } else {
-              strokeColor = textureStrokeDark;
+                error("Renderer not defined when calling updateGeneratedBackground from UI!");
             }
-            ctx.strokeStyle = strokeColor;
-            ctx.beginPath();
-            ctx.moveTo(x, y);
-            ctx.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
-            ctx.stroke();
-          }
-          ctx.lineCap = "butt";
+            DOM.gameContainer.classList.toggle('night-mode', isNight);
         } else {
-          const baseNightColor = "#080808";
-          const nebulaeColors = [
-            [180, 180, 190, 0.05],
-            [200, 80, 80, 0.04],
-            [160, 160, 160, 0.06],
-            [210, 100, 100, 0.035],
-          ];
-          const darkCloudColor = "rgba(8, 8, 8, 0.18)";
-          const numNebulae = 10;
-          const numDarkClouds = 20;
-          const numDustStars = 2000;
-          const numMidStars = 500;
-          const numHeroStars = 70;
-          ctx.fillStyle = baseNightColor;
-          ctx.fillRect(0, 0, width, height);
-          for (let i = 0; i < numNebulae; i++) {
-            const x = Math.random() * width;
-            const y = Math.random() * height;
-            const radius = Math.random() * (width * 0.4) + width * 0.15;
-            const colorData =
-              nebulaeColors[Math.floor(Math.random() * nebulaeColors.length)];
-            const [r, g, b, baseAlpha] = colorData;
-            try {
-              const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-              gradient.addColorStop(
-                0,
-                `rgba(${r}, ${g}, ${b}, ${Math.min(0.1, baseAlpha * 1.5).toFixed(
-                  2
-                )})`
-              );
-              gradient.addColorStop(
-                0.5,
-                `rgba(${r}, ${g}, ${b}, ${baseAlpha.toFixed(2)})`
-              );
-              gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
-              ctx.fillStyle = gradient;
-              ctx.beginPath();
-              ctx.arc(x, y, radius, 0, Math.PI * 2);
-              ctx.fill();
-            } catch (e) {
-              console.error("Failed to create nebula gradient:", e);
+            DOM.dayNightIndicator.style.display = 'none';
+            DOM.gameContainer.classList.remove('night-mode');
+        }
+   }
+    function showGameOver(finalState) { if (!DOM.finalStatsDiv || !DOM.gameOverScreen) return; const player = finalState?.players?.[appState.localPlayerId]; let statsHtml = "Stats Unavailable"; if (player) { statsHtml = `<div class="final-stat-item"><strong>Score:</strong> ${player.score ?? 0}</div><div class="final-stat-item"><strong>Kills:</strong> ${player.kills ?? 0}</div>`; } DOM.finalStatsDiv.innerHTML = statsHtml; log("UI: Showing game over screen."); showSection('game-over-screen'); }
+    function updateEnvironmentDisplay() { const tempIndicator = document.getElementById('temperature-indicator'); if (!tempIndicator) return; if ((appState.currentTemp === null && appState.serverState?.status !== 'active') || appState.serverState?.status === 'menu') { tempIndicator.style.display = 'none'; return; } tempIndicator.style.display = 'block'; const temp = appState.currentTemp; tempIndicator.innerHTML = `${temp.toFixed(0)}°C`; }
+    return { showSection, updateStatus, updateHUD, addChatMessage, updateCountdown, updateDayNight, showGameOver, updateEnvironmentDisplay };
+})();
+
+// --- Network Module ---
+const Network = (() => {
+    let reconnectTimer = null;
+    function connect(onOpenCallback) {
+        if (socket && socket.readyState !== WebSocket.CLOSED) { if (socket.readyState === WebSocket.OPEN && onOpenCallback) onOpenCallback(); return; }
+        clearTimeout(reconnectTimer); UI.updateStatus('Connecting...'); log("Attempting WebSocket connection to:", WEBSOCKET_URL);
+        try { socket = new WebSocket(WEBSOCKET_URL); } catch (err) { error("WebSocket creation failed:", err); UI.updateStatus('Connection failed. Please refresh.', true); return; }
+        socket.onopen = () => { log('WebSocket connection established.'); appState.isConnected = true; const loadingScreen = document.getElementById('loading-screen'); const gameContainer = DOM.gameContainer; if (loadingScreen) { loadingScreen.style.opacity = '0'; loadingScreen.style.pointerEvents = 'none'; } if (gameContainer) { gameContainer.style.visibility = 'visible'; gameContainer.style.opacity = '1'; } UI.updateStatus('Connected. Select Mode.'); UI.showSection('main-menu-section'); if (onOpenCallback) onOpenCallback(); };
+        socket.onmessage = handleServerMessage; socket.onerror = (event) => { error('WebSocket Error Event:', event); };
+        socket.onclose = (event) => { error(`WebSocket Closed: Code=${event.code}, Reason='${event.reason || 'N/A'}'`); const wasConnected = appState.isConnected; appState.isConnected = false; socket = null; Game.resetClientState(false); if (event.code === 1000) { UI.updateStatus('Disconnected.'); UI.showSection('main-menu-section'); } else if (wasConnected) { UI.updateStatus('Connection lost. Reconnecting...', true); scheduleReconnect(); } else { UI.updateStatus('Connection failed. Please refresh.', true); } if (appState.animationFrameId) { cancelAnimationFrame(appState.animationFrameId); appState.animationFrameId = null; Input.cleanup(); log("Game loop stopped due to connection close."); } };
+    }
+    function scheduleReconnect() { clearTimeout(reconnectTimer); log(`Scheduling reconnect in ${RECONNECT_DELAY}ms`); reconnectTimer = setTimeout(() => { log("Attempting reconnect..."); connect(() => { UI.updateStatus('Reconnected.'); UI.showSection('main-menu-section'); }); }, RECONNECT_DELAY); }
+    function sendMessage(payload) { if (socket && socket.readyState === WebSocket.OPEN) { try { socket.send(JSON.stringify(payload)); } catch (err) { error("Error sending message:", err, payload); } } else { error('Cannot send message, WebSocket not open or null.', payload); } }
+    function closeConnection(code = 1000, reason = "User action") { clearTimeout(reconnectTimer); if (socket && socket.readyState === WebSocket.OPEN) { log(`Closing WebSocket explicitly: ${reason} (Code: ${code})`); socket.close(code, reason); } socket = null; appState.isConnected = false; }
+    return { connect, sendMessage, closeConnection };
+})();
+
+// --- Input Handling Module ---
+const Input = (() => {
+    let keys = {}; let lastShotTime = 0; let movementInterval = null; let mouseCanvasPos = { x: 0, y: 0 }; let isMouseDown = false;
+
+    // Named function for context menu prevention
+    function preventContextMenu(event) {
+        console.log("Canvas contextmenu event triggered! Preventing default...");
+        event.preventDefault();
+    }
+
+    function setup() {
+        cleanup(); // Calls cleanup first
+        document.addEventListener('keydown', handleKeyDown);
+        document.addEventListener('keyup', handleKeyUp);
+        DOM.chatInput.addEventListener('keydown', handleChatEnter);
+        if (DOM.canvas) {
+            DOM.canvas.addEventListener('mousemove', handleMouseMove);
+            DOM.canvas.addEventListener('mousedown', handleMouseDown);
+            DOM.canvas.addEventListener('contextmenu', preventContextMenu); // Add listener
+        } else {
+            error("Input setup failed: Canvas element not found.");
+        }
+        document.addEventListener('mouseup', handleMouseUp);
+        movementInterval = setInterval(sendMovementInput, INPUT_SEND_INTERVAL);
+        log("Input listeners setup.");
+    }
+
+    function cleanup() {
+        document.removeEventListener('keydown', handleKeyDown);
+        document.removeEventListener('keyup', handleKeyUp);
+        DOM.chatInput.removeEventListener('keydown', handleChatEnter);
+        if (DOM.canvas) {
+            DOM.canvas.removeEventListener('mousemove', handleMouseMove);
+            DOM.canvas.removeEventListener('mousedown', handleMouseDown);
+            DOM.canvas.removeEventListener('contextmenu', preventContextMenu); // Remove listener
+        }
+        document.removeEventListener('mouseup', handleMouseUp);
+        clearInterval(movementInterval);
+        movementInterval = null;
+        keys = {};
+        isMouseDown = false;
+        mouseCanvasPos = { x: 0, y: 0 };
+        log("Input listeners cleaned up.");
+    }
+
+    function handleMouseMove(event) {
+        if (!DOM.canvas) return;
+        const rect = DOM.canvas.getBoundingClientRect();
+        const rawMouseX = event.clientX - rect.left;
+        const rawMouseY = event.clientY - rect.top;
+        const visualWidth = rect.width;
+        const visualHeight = rect.height;
+        const internalWidth = DOM.canvas.width;
+        const internalHeight = DOM.canvas.height;
+        const scaleX = (visualWidth > 0) ? internalWidth / visualWidth : 1;
+        const scaleY = (visualHeight > 0) ? internalHeight / visualHeight : 1;
+        mouseCanvasPos.x = rawMouseX * scaleX;
+        mouseCanvasPos.y = rawMouseY * scaleY;
+    }
+
+    // --- MODIFIED: handleMouseDown ---
+    function handleMouseDown(event) {
+        if (document.activeElement === DOM.chatInput) return; // Ignore if typing in chat
+
+        // Button mapping: 0 = Left, 1 = Middle, 2 = Right
+        if (event.button === 0) { // Left Click - Shoot
+            isMouseDown = true;
+            event.preventDefault(); // Prevent text selection, etc.
+            // Shooting logic is handled by isShootHeld() check in game loop
+        } else if (event.button === 2) { // Right Click - Pushback
+            event.preventDefault(); // Prevent context menu (extra safety)
+
+            // Check game state before sending
+            if (appState.serverState?.status === 'active' && appState.isConnected) {
+                log("Sending player_pushback message (triggered by RMB).");
+                Network.sendMessage({ type: 'player_pushback' });
+
+                // Trigger the visual animation
+                localPlayerPushbackAnim.active = true;
+                localPlayerPushbackAnim.endTime = performance.now() + localPlayerPushbackAnim.duration;
+                log("Pushback animation triggered.");
+
+            } else {
+                log("Pushback (RMB) ignored: Game not active or not connected.");
             }
-          }
-          const drawStars = (
-            count,
-            minSize,
-            maxSize,
-            minAlpha,
-            maxAlpha,
-            colorVariance = 0
-          ) => {
-            for (let i = 0; i < count; i++) {
-              const sx = Math.random() * width;
-              const sy = Math.random() * height;
-              const size = Math.random() * (maxSize - minSize) + minSize;
-              const alpha = Math.random() * (maxAlpha - minAlpha) + minAlpha;
-              let r = 255,
-                g = 255,
-                b = 255;
-              if (colorVariance > 0 && Math.random() < 0.3) {
-                const variance = Math.random() * colorVariance;
-                if (Math.random() < 0.7) {
-                  b -= variance;
-                  r = Math.max(0, Math.min(255, r));
-                  g = Math.max(0, Math.min(255, g));
-                  b = Math.max(0, Math.min(255, b));
+        }
+        // Ignore middle mouse button (event.button === 1) for now
+    }
+    // -----------------------------
+
+    function handleMouseUp(event) {
+        if (event.button === 0) { // Left Click Release
+            isMouseDown = false;
+        }
+        // No action needed for right-click release
+    }
+
+    function handleKeyDown(e) {
+        if (document.activeElement === DOM.chatInput) return;
+        const key = e.key.toLowerCase();
+        if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) {
+            if (!keys[key]) { keys[key] = true; }
+            e.preventDefault();
+            return;
+        }
+        if (key === 'e') { // Keep 'E' key functional too
+            if (appState.serverState?.status === 'active' && appState.isConnected) {
+                log("Sending player_pushback message (triggered by E key).");
+                Network.sendMessage({ type: 'player_pushback' });
+
+                 // Trigger the visual animation (same as RMB)
+                localPlayerPushbackAnim.active = true;
+                localPlayerPushbackAnim.endTime = performance.now() + localPlayerPushbackAnim.duration;
+                 log("Pushback animation triggered.");
+
+                e.preventDefault();
+            } else {
+                log("Pushback ('e') ignored: Game not active or not connected.");
+            }
+            return;
+        }
+    }
+
+    function handleKeyUp(e) {
+        const key = e.key.toLowerCase();
+        if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) {
+            if (keys[key]) { keys[key] = false; }
+        }
+    }
+
+    function handleChatEnter(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            log("Enter key detected in chat input.");
+            Game.sendChatMessage();
+        }
+    }
+
+    function getMovementInputVector() {
+        let dx = 0, dy = 0;
+        if (keys['w'] || keys['arrowup']) dy -= 1;
+        if (keys['s'] || keys['arrowdown']) dy += 1;
+        if (keys['a'] || keys['arrowleft']) dx -= 1;
+        if (keys['d'] || keys['arrowright']) dx += 1;
+        if (dx !== 0 && dy !== 0) {
+            const factor = 1 / Math.sqrt(2);
+            dx *= factor;
+            dy *= factor;
+        }
+        return { dx, dy };
+    }
+
+    function sendMovementInput() {
+        if (appState.mode !== 'menu' && appState.serverState?.status === 'active' && appState.isConnected) {
+            Network.sendMessage({ type: 'player_move', direction: getMovementInputVector() });
+        }
+    }
+
+    function handleShooting() {
+        if (appState.serverState?.status !== 'active') return;
+        const playerState = appState.serverState?.players?.[appState.localPlayerId];
+        const currentAmmo = playerState?.active_ammo_type || 'standard';
+        let actualCooldown = SHOOT_COOLDOWN * (currentAmmo === 'ammo_rapid_fire' ? RAPID_FIRE_COOLDOWN_MULTIPLIER : 1);
+        const now = Date.now();
+        if (now - lastShotTime < actualCooldown) return;
+        lastShotTime = now;
+        const playerRenderX = appState.renderedPlayerPos.x;
+        const playerRenderY = appState.renderedPlayerPos.y;
+        let flashDx = mouseCanvasPos.x - playerRenderX;
+        let flashDy = mouseCanvasPos.y - playerRenderY;
+        const flashMag = Math.sqrt(flashDx * flashDx + flashDy * flashDy);
+        if (flashMag > 0.01) {
+            flashDx /= flashMag;
+            flashDy /= flashMag;
+        } else {
+            flashDx = 0;
+            flashDy = -1;
+        }
+        localPlayerMuzzleFlash.active = true;
+        localPlayerMuzzleFlash.endTime = performance.now() + 75; // Keep muzzle flash short
+        localPlayerMuzzleFlash.aimDx = flashDx;
+        localPlayerMuzzleFlash.aimDy = flashDy;
+        log("Sending shoot message with Target Coords:", mouseCanvasPos);
+        Network.sendMessage({ type: 'player_shoot', target: { x: mouseCanvasPos.x, y: mouseCanvasPos.y } });
+
+        // Spawn Ammo Casing Particle
+        const casingLifetime = 500 + Math.random() * 300;
+        const ejectAngleOffset = Math.PI / 2 + (Math.random() - 0.5) * 0.4;
+        const ejectAngle = Math.atan2(flashDy, flashDx) + ejectAngleOffset;
+        const ejectSpeed = 80 + Math.random() * 40;
+        const gravity = 150;
+        const casing = {
+            id: `casing_${performance.now()}_${Math.random()}`,
+            x: appState.renderedPlayerPos.x + Math.cos(ejectAngle) * 15, // Use rendered position
+            y: appState.renderedPlayerPos.y + Math.sin(ejectAngle) * 15 - 10,
+            vx: Math.cos(ejectAngle) * ejectSpeed,
+            vy: Math.sin(ejectAngle) * ejectSpeed - 40,
+            rotation: Math.random() * Math.PI * 2,
+            rotationSpeed: (Math.random() - 0.5) * 10,
+            spawnTime: performance.now(),
+            lifetime: casingLifetime,
+            gravity: gravity,
+            width: 6, height: 3,
+            color: "rgba(218, 165, 32, 0.9)"
+        };
+        activeAmmoCasings.push(casing);
+        if (activeAmmoCasings.length > 30) { activeAmmoCasings.shift(); } // Limit max casings
+
+    }
+
+    function isShootHeld() {
+        // Shoot is triggered by holding Space or Left Mouse Button
+        return keys[' '] || isMouseDown;
+    }
+
+    return { setup, cleanup, getMovementInputVector, handleShooting, isShootHeld };
+})();
+
+// --- Game Logic & Flow Module ---
+const Game = (() => {
+    function startSinglePlayer() { log("Requesting Single Player game..."); resetClientState(false); appState.mode = 'singleplayer'; UI.updateStatus("Starting Single Player..."); Network.sendMessage({ type: 'start_single_player' }); }
+    function joinMultiplayer() { const gameId = DOM.gameIdInput.value.trim().toUpperCase(); if (!gameId || gameId.length !== 6) { UI.updateStatus('Invalid Game ID format.', true); return; } log(`Attempting to join game: ${gameId}`); resetClientState(false); appState.mode = 'multiplayer-client'; UI.updateStatus(`Joining game ${gameId}...`); Network.sendMessage({ type: 'join_game', game_id: gameId }); }
+    function hostMultiplayer(maxPlayers) { log(`Requesting to Host MP game for ${maxPlayers} players...`); if (![2, 3, 4].includes(maxPlayers)) { error("Invalid max player count requested:", maxPlayers); UI.updateStatus("Invalid player count.", true); return; } resetClientState(false); appState.mode = 'multiplayer-host'; UI.updateStatus(`Creating ${maxPlayers}-player game...`); Network.sendMessage({ type: 'create_game', max_players: maxPlayers }); }
+    function leaveGame() { log("Leaving current game..."); if (appState.isConnected && appState.currentGameId && appState.localPlayerId) { Network.sendMessage({ type: 'leave_game' }); } resetClientState(true); }
+    function sendChatMessage() { const message = DOM.chatInput.value.trim(); if (message && appState.isConnected && appState.currentGameId && appState.localPlayerId) { Network.sendMessage({ type: 'player_chat', message: message }); DOM.chatInput.value = ''; } }
+    function resetClientState(showMenu = true) {
+        log(`Resetting client state. Show Menu: ${showMenu}`); cleanupLoop();
+        appState.localPlayerId = null; appState.currentGameId = null; appState.serverState = null; appState.lastServerState = null; appState.previousServerState = null; appState.maxPlayersInGame = null;
+        appState.predictedPlayerPos = { x: appState.canvasWidth / 2, y: appState.canvasHeight / 2 }; // USE appState.canvasWidth and appState.canvasHeight
+        appState.renderedPlayerPos = { x: appState.canvasWidth / 2, y: appState.canvasHeight / 2 }; // USE appState.canvasWidth and appState.canvasHeight
+        appState.lastLoopTime = null;
+        localPlayerMuzzleFlash = { active: false, endTime: 0, aimDx: 0, aimDy: 0 };
+        localPlayerPushbackAnim = { active: false, endTime: 0, duration: 250 };
+        hitPauseFrames = 0; activeSpeechBubbles = {}; activeEnemyBubbles = {}; if(typeof snake !== 'undefined'){ snake.isActiveFromServer = false; snake.segments = []; }
+        DOM.chatLog.innerHTML = ''; DOM.gameCodeDisplay.textContent = '------'; DOM.gameIdInput.value = ''; if(DOM.countdownDiv) DOM.countdownDiv.style.display = 'none'; if(DOM.dayNightIndicator) DOM.dayNightIndicator.style.display = 'none'; if(DOM.gameOverScreen) DOM.gameOverScreen.style.display = 'none';
+        const gridContainer = document.getElementById('player-stats-grid'); if (gridContainer) gridContainer.innerHTML = 'Loading Stats...';
+        if (showMenu) { appState.mode = 'menu'; UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected."); UI.showSection('main-menu-section'); }
+    }
+    function gameLoop(currentTime) {
+        // --- Animation State Reset ---
+        // Check and reset expired animations at the start of the loop
+        const now = performance.now();
+        if (localPlayerPushbackAnim.active && now >= localPlayerPushbackAnim.endTime) {
+            localPlayerPushbackAnim.active = false;
+        }
+        // (Muzzle flash reset is implicitly handled in Renderer when drawing)
+        // ---------------------------
+
+        if (hitPauseFrames > 0) { hitPauseFrames--; if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) { appState.animationFrameId = requestAnimationFrame(gameLoop); } return; }
+        if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) { if (appState.serverState?.game_over) { UI.updateStatus("Game Over!"); UI.showGameOver(appState.serverState); } else if (appState.mode === 'menu') { UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected."); } cleanupLoop(); return; }
+        if (!appState.serverState && appState.mode !== 'singleplayer') { appState.animationFrameId = requestAnimationFrame(gameLoop); return; }
+        if (appState.lastLoopTime === null) { appState.lastLoopTime = currentTime; } const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000); appState.lastLoopTime = currentTime;
+        if (typeof snake !== 'undefined' && typeof snake.update === 'function') { snake.update(currentTime); }
+        if (appState.serverState?.status === 'active' && Input.isShootHeld()) { Input.handleShooting(); }
+
+        // Client-side prediction / reconciliation
+        if (appState.serverState?.status === 'active' && Input.isShootHeld()) { Input.handleShooting(); }
+
+        if (appState.serverState?.status === 'active') {
+            if (appState.mode === 'singleplayer') {
+                const playerState = appState.serverState?.players?.[appState.localPlayerId];
+                if (playerState && typeof playerState.x === 'number' && typeof playerState.y === 'number') {
+                    appState.renderedPlayerPos.x = playerState.x;
+                    appState.renderedPlayerPos.y = playerState.y;
                 }
-              }
-              ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(
-                g
-              )}, ${Math.round(b)}, ${alpha.toFixed(2)})`;
-              ctx.fillRect(sx - size / 2, sy - size / 2, size, size);
-            }
-          };
-          drawStars(numDustStars, 0.4, 0.9, 0.06, 0.3);
-          drawStars(numMidStars, 0.7, 1.6, 0.2, 0.7, 25);
-          drawStars(numHeroStars, 1.4, 2.6, 0.5, 1.0, 40);
-          for (let i = 0; i < numDarkClouds; i++) {
-            const x = Math.random() * width;
-            const y = Math.random() * height;
-            const radiusX = Math.random() * (width * 0.3) + width * 0.12;
-            const radiusY = Math.random() * (height * 0.25) + height * 0.1;
-            const rotation = Math.random() * Math.PI;
-            ctx.fillStyle = darkCloudColor;
-            ctx.beginPath();
-            ctx.ellipse(x, y, radiusX, radiusY, rotation, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-        ctx.canvas.dataset.isNight = String(targetIsNight);
-        return targetIsNight;
-      }
-      
-      function updateGeneratedBackground(targetIsNight) {
-        if (
-          offscreenCanvas.width !== appState.canvasWidth ||
-          offscreenCanvas.height !== appState.canvasHeight
-        ) {
-          offscreenCanvas.width = appState.canvasWidth;
-          offscreenCanvas.height = appState.canvasHeight;
-          oldOffscreenCanvas.width = appState.canvasWidth;
-          oldOffscreenCanvas.height = appState.canvasHeight;
-          hazeCanvas.width = appState.canvasWidth;
-          hazeCanvas.height = appState.canvasHeight;
-          isBackgroundReady = false;
-          currentBackgroundIsNight = null;
-          isTransitioningBackground = false;
-        }
-        if (targetIsNight === currentBackgroundIsNight && isBackgroundReady) {
-          return;
-        }
-        if (
-          isTransitioningBackground &&
-          targetIsNight === (offscreenCanvas.dataset.isNight === "true")
-        ) {
-          return;
-        }
-        if (isBackgroundReady) {
-          oldOffscreenCtx.clearRect(0, 0, appState.canvasWidth, appState.canvasHeight);
-          oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0);
-          isTransitioningBackground = true;
-          transitionStartTime = performance.now();
-          generateBackground(
-            offscreenCtx,
-            targetIsNight,
-            appState.canvasWidth,
-            appState.canvasHeight
-          );
-          currentBackgroundIsNight = targetIsNight;
-        } else {
-          generateBackground(
-            offscreenCtx,
-            targetIsNight,
-            appState.canvasWidth,
-            appState.canvasHeight
-          );
-          currentBackgroundIsNight = targetIsNight;
-          isBackgroundReady = true;
-          isTransitioningBackground = false;
-        }
-     }
-
-     
-    // Triggers or extends a screen shake effect
-    function triggerShake(magnitude, durationMs) {
-        const now = performance.now();
-        const newEndTime = now + durationMs;
-        // Apply if new shake is stronger or lasts longer than current one
-        if (magnitude >= currentShakeMagnitude || newEndTime >= shakeEndTime) {
-                currentShakeMagnitude = Math.max(magnitude, currentShakeMagnitude);
-                shakeEndTime = Math.max(newEndTime, shakeEndTime);
-        }
-    }
-
-
-    // Draws floating damage numbers, handling crits and pulsing
-    function drawDamageTexts(ctx, damageTexts) {
-        if (!damageTexts) return;
-        const now = performance.now();
-        const pulseDuration = 250; const pulseMaxSizeIncrease = 4; // Crit pulse effect params
-        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-
-        Object.values(damageTexts).forEach(dmgText => {
-            if (!dmgText) return;
-            const x = dmgText.x ?? 0; const y = dmgText.y ?? 0;
-            const text = dmgText.text ?? '?'; const isCrit = dmgText.is_crit ?? false;
-            const spawnTime = dmgText.spawn_time ? dmgText.spawn_time * 1000 : now; // Server sends seconds
-            const timeSinceSpawn = now - spawnTime;
-            let currentFontSize = isCrit ? damageTextCritFontSize : damageTextFontSize;
-            let currentFillColor = isCrit ? damageTextCritColor : damageTextColor;
-
-            // Apply crit pulse effect
-            if (isCrit && timeSinceSpawn < pulseDuration) {
-                const pulseProgress = Math.sin((timeSinceSpawn / pulseDuration) * Math.PI); // 0 -> 1 -> 0 wave
-                currentFontSize += pulseProgress * pulseMaxSizeIncrease;
-            }
-            ctx.font = `bold ${Math.round(currentFontSize)}px ${fontFamily}`;
-            ctx.fillStyle = currentFillColor;
-            ctx.fillText(text, x, y);
-        });
-    }
-
-    function drawCampfire(ctx, campfireData, width, height) {
-      if (!campfireData || !campfireData.active) return;
-      const now = performance.now();
-      const x = campfireData.x ?? width / 2;
-      const y = campfireData.y ?? height / 2;
-      const baseRadius = campfireData.radius ?? 0;
-      if (baseRadius <= 0) return;
-      const stickWidth = 35;
-      const stickHeight = 8;
-      const stickColor = "#5a3a1e";
-      const stickYOffset = 6;
-      const logBaseY = y + stickYOffset;
-      const flameBaseWidth = stickWidth * 0.8;
-      const numFlames = 4;
-      const timeSlow = now * 0.0015;
-      const heightMagnitude = 0.6;
-      const widthMagnitude = 0.3;
-      const curveMagnitude = 5;
-      ctx.save();
-      const glowRadius = baseRadius * 1.1;
-      const glowPulse = Math.sin(now * 0.001) * 0.05;
-      const currentGlowRadius = glowRadius * (1 + glowPulse);
-      try {
-        const gradient = ctx.createRadialGradient(
-          x,
-          logBaseY,
-          0,
-          x,
-          logBaseY,
-          currentGlowRadius
-        );
-        gradient.addColorStop(0, `rgba(255, 165, 0, ${0.35 + glowPulse * 2})`);
-        gradient.addColorStop(0.6, "rgba(255, 165, 0, 0.1)");
-        gradient.addColorStop(1, "rgba(255, 165, 0, 0)");
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(x, logBaseY, currentGlowRadius, 0, Math.PI * 2);
-        ctx.fill();
-      } catch (e) {
-        console.error("Failed to create campfire gradient:", e);
-      }
-      ctx.fillStyle = stickColor;
-      ctx.translate(x, logBaseY);
-      ctx.rotate(Math.PI / 6);
-      ctx.fillRect(-stickWidth / 2, -stickHeight / 2, stickWidth, stickHeight);
-      ctx.strokeStyle = "rgba(0,0,0,0.4)";
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      ctx.moveTo(-stickWidth / 2 + 2, 0);
-      ctx.lineTo(stickWidth / 2 - 2, 0);
-      ctx.stroke();
-      ctx.rotate(-Math.PI / 6);
-      ctx.rotate(-Math.PI / 5);
-      ctx.fillRect(-stickWidth / 2, -stickHeight / 2, stickWidth, stickHeight);
-      ctx.beginPath();
-      ctx.moveTo(-stickWidth / 2 + 2, 0);
-      ctx.lineTo(stickWidth / 2 - 2, 0);
-      ctx.stroke();
-      ctx.rotate(Math.PI / 5);
-      ctx.translate(-x, -logBaseY);
-      const flameColors = [
-        {
-          color: `rgba(255, 100, 0, ${0.5 + Math.sin(timeSlow * 1.1 + 1) * 0.1})`,
-          baseHeight: 45,
-          widthFactor: 1.0,
-        },
-        {
-          color: `rgba(255, 165, 0, ${
-            0.6 + Math.sin(timeSlow * 0.9 + 2) * 0.15
-          })`,
-          baseHeight: 35,
-          widthFactor: 0.7,
-        },
-        {
-          color: `rgba(255, 255, 180, ${
-            0.7 + Math.sin(timeSlow * 1.3 + 3) * 0.2
-          })`,
-          baseHeight: 25,
-          widthFactor: 0.4,
-        },
-      ];
-      for (let layer = 0; layer < flameColors.length; layer++) {
-        const layerData = flameColors[layer];
-        ctx.fillStyle = layerData.color;
-        for (let i = 0; i < numFlames; i++) {
-          const flameOffsetX =
-            (i - (numFlames - 1) / 2) * (flameBaseWidth / numFlames) * 0.8;
-          const uniqueTimeOffset = i * 1.57;
-          const flickerHeight =
-            Math.sin(timeSlow * (1.0 + i * 0.1) + uniqueTimeOffset) *
-              heightMagnitude +
-            1.0;
-          const flickerWidth =
-            Math.sin(timeSlow * (0.8 + i * 0.15) - uniqueTimeOffset) *
-              widthMagnitude +
-            1.0;
-          const currentHeight =
-            layerData.baseHeight * flickerHeight * (1.0 - layer * 0.1);
-          const currentWidth =
-            (flameBaseWidth * layerData.widthFactor * flickerWidth) / numFlames;
-          const swayX1 =
-            Math.sin(timeSlow * 1.2 + uniqueTimeOffset + i) * curveMagnitude;
-          const swayY1 =
-            Math.sin(timeSlow * 1.4 + uniqueTimeOffset + i + 1) *
-            curveMagnitude *
-            0.5;
-          const swayX2 =
-            Math.sin(timeSlow * 1.3 - uniqueTimeOffset + i + 2) * curveMagnitude;
-          const swayY2 =
-            Math.sin(timeSlow * 1.5 - uniqueTimeOffset + i + 3) *
-            curveMagnitude *
-            0.5;
-          const startX = x + flameOffsetX;
-          const startY = logBaseY - stickHeight / 2;
-          const tipY = startY - currentHeight;
-          const midY1 = startY - currentHeight * 0.33;
-          const midY2 = startY - currentHeight * 0.66;
-          ctx.beginPath();
-          ctx.moveTo(startX - currentWidth / 2, startY);
-          ctx.bezierCurveTo(
-            startX - currentWidth / 2 + swayX1,
-            midY2 + swayY1,
-            startX + swayX2,
-            midY1 + swayY2,
-            startX,
-            tipY
-          );
-          ctx.bezierCurveTo(
-            startX - swayX2,
-            midY1 + swayY2,
-            startX + currentWidth / 2 - swayX1,
-            midY2 + swayY1,
-            startX + currentWidth / 2,
-            startY
-          );
-          ctx.closePath();
-          ctx.fill();
-        }
-      }
-      ctx.restore();
-    }
-  
-    function drawDamageVignette(ctx, intensity, width, height) { // Added width, height params
-        if (intensity <= 0) return; // No vignette if intensity is zero or negative
-    
-        ctx.save(); // Save current context state
-    
-        // Calculate the radius for the gradient based on canvas diagonal
-        // Use the passed width and height parameters
-        const outerRadius = Math.sqrt(width ** 2 + height ** 2) / 2;
-    
-        // Create a radial gradient centered on the canvas
-        // Use the passed width and height parameters
-        const gradient = ctx.createRadialGradient(
-            width / 2, height / 2, 0,           // Inner circle (center, radius 0)
-            width / 2, height / 2, outerRadius  // Outer circle (center, calculated radius)
-        );
-    
-        // Clamp the calculated alpha based on intensity
-        // Ensure alpha is between 0.0 and 0.4 (or adjust max as needed)
-        const vignetteAlpha = Math.min(0.4, Math.max(0.0, 0.4 * intensity));
-    
-        // Define gradient color stops
-        gradient.addColorStop(0, "rgba(255,0,0,0)");     // Center is fully transparent red
-        gradient.addColorStop(0.75, "rgba(255,0,0,0)");  // Stays transparent until 75% of the radius
-        gradient.addColorStop(1, `rgba(255,0,0,${vignetteAlpha.toFixed(2)})`); // Fades to red at the edges
-    
-        // Apply the gradient fill
-        ctx.fillStyle = gradient;
-        // Use the passed width and height parameters to fill the entire canvas
-        ctx.fillRect(0, 0, width, height);
-    
-        ctx.restore(); // Restore context state
-    }
-  
-    function drawTemperatureTint(ctx, temperature, width, height) { // Added width, height params
-        let tcs = null, a = 0.0;
-        const tfc = TEMP_FREEZING_CLIENT, tcc = TEMP_COLD_CLIENT,
-              thc = TEMP_HOT_CLIENT, tsc = TEMP_SCORCHING_CLIENT,
-              mta = MAX_TINT_ALPHA;
-    
-        if (temperature === null || typeof temperature === 'undefined') {
-            return; // Exit if temperature is invalid
-        }
-    
-        // Determine tint color and base alpha based on temperature ranges
-        if (temperature <= tfc) {
-            tcs = "rgba(100,150,255,A)"; // Freezing blue
-            a = mta * Math.min(1.0, (tfc - temperature + 5) / 5.0);
-        } else if (temperature <= tcc) {
-            tcs = "rgba(150,180,255,A)"; // Cold blue
-            a = mta * ((tcc - temperature) / (tcc - tfc));
-        } else if (temperature >= tsc) {
-            tcs = "rgba(255,100,0,A)";   // Scorching orange
-            a = mta * Math.min(1.0, (temperature - tsc + 5) / 5.0);
-        } else if (temperature >= thc) {
-            tcs = "rgba(255,150,50,A)";   // Hot orange
-            a = mta * ((temperature - thc) / (tsc - thc));
-        }
-    
-        // Clamp alpha and apply fill if needed
-        a = Math.max(0, Math.min(mta, a)); // Ensure alpha is between 0 and MAX_TINT_ALPHA
-        if (tcs && a > 0.01) { // Only draw if there's a noticeable tint
-            ctx.fillStyle = tcs.replace("A", a.toFixed(2));
-            // Use the passed width and height parameters to fill the entire canvas
-            ctx.fillRect(0, 0, width, height);
-        }
-    }
-  
-    function drawEnemySpeechBubbles(ctx, enemiesToRender, activeEnemyBubbles) { // <-- Parameter name is now `activeEnemyBubbles`
-        if (!activeEnemyBubbles) return; // <-- Use `activeEnemyBubbles` here as well
-        const now = performance.now();
-        const bubbleFont = "italic 13px " + fontFamily;
-        const cornerRadius = 5;
-        const textPadding = 5;
-        const bubbleOffsetY = 25;
-        const bubbleBg = enemySpeechBubbleBg;
-        const bubbleColor = enemySpeechBubbleColor;
-        const shadowColor = "rgba(0, 0, 0, 0.5)";
-        const shadowOffsetX = 2;
-        const shadowOffsetY = 2;
-        const shadowBlur = 4;
-        ctx.font = bubbleFont;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "bottom";
-        const expiredBubbleIds = [];
-        for (const enemyId in activeEnemyBubbles) { // <-- Use `activeEnemyBubbles` here
-            const bubbleData = activeEnemyBubbles[enemyId]; // <-- Use `activeEnemyBubbles` here
-            if (now >= bubbleData.endTime) {
-            expiredBubbleIds.push(enemyId);
-            continue;
-            }
-            const enemy = enemiesToRender?.[enemyId];
-            if (enemy && enemy.health > 0 && !enemy.death_timestamp) {
-            const enemyX = enemy.x;
-            const enemyY = enemy.y;
-            const enemyHeight = enemy.height ?? 40;
-            const bubbleTargetY = enemyY - enemyHeight / 2 - bubbleOffsetY;
-            const textMetrics = ctx.measureText(bubbleData.text);
-            const textWidth = textMetrics.width;
-            const bubbleHeight = 13 + textPadding * 2;
-            const bubbleWidth = textWidth + textPadding * 2;
-            const bubbleX = enemyX - bubbleWidth / 2;
-            const bubbleDrawY = bubbleTargetY - bubbleHeight;
-            ctx.save();
-            ctx.shadowColor = shadowColor;
-            ctx.shadowBlur = shadowBlur;
-            ctx.shadowOffsetX = shadowOffsetX;
-            ctx.shadowOffsetY = shadowOffsetY;
-            ctx.fillStyle = bubbleBg;
-            if (typeof drawRoundedRect === "function") {
-                drawRoundedRect(
-                ctx,
-                bubbleX,
-                bubbleDrawY,
-                bubbleWidth,
-                bubbleHeight,
-                cornerRadius
-                );
-                ctx.fill();
             } else {
-                ctx.fillRect(bubbleX, bubbleDrawY, bubbleWidth, bubbleHeight);
-            }
-            ctx.restore();
-            ctx.fillStyle = bubbleColor;
-            ctx.fillText(bubbleData.text, enemyX, bubbleTargetY - textPadding);
-            } else {
-            expiredBubbleIds.push(enemyId);
+                updatePredictedPosition(deltaTime);
+                reconcileWithServer();
             }
         }
-        expiredBubbleIds.forEach((id) => {
-            if (activeEnemyBubbles) delete activeEnemyBubbles[id]; // <-- Use `activeEnemyBubbles` here
-        });
-    }
-    function drawSpeechBubbles(
-        ctx,
-        playersToRender,
-        activeSpeechBubbles, // OK
-        appState             // Corrected to match variable passed from drawGame
-      ) {
-        if (!activeSpeechBubbles || !appState) return; // <-- Changed from 
-        const now = performance.now();
-        const bubbleFont = "bold 14px " + fontFamily;
-        const cornerRadius = 6;
-        const textPadding = 6;
-        const bubbleOffsetY = 35;
-        const bubbleBg = playerSpeechBubbleBg;
-        const bubbleColor = playerSpeechBubbleColor;
-        const shadowColor = "rgba(0, 0, 0, 0.6)";
-        const shadowOffsetX = 2;
-        const shadowOffsetY = 2;
-        const shadowBlur = 5;
-        ctx.font = bubbleFont;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "bottom";
-        const expiredBubbleIds = [];
-        for (const playerId in activeSpeechBubbles) { // <-- Changed from 
-          const bubbleData = activeSpeechBubbles[playerId]; // <-- Changed from 
-          if (now >= bubbleData.endTime) {
-            expiredBubbleIds.push(playerId);
-            continue;
-          }
-          const player = playersToRender?.[playerId];
-          if (player && player.player_status !== "dead" && player.health > 0) {
-            const playerX =
-              playerId === appState.localPlayerId
-                ? appState.renderedPlayerPos.x
-                : player.x;
-            const playerY =
-              playerId === appState.localPlayerId
-                ? appState.renderedPlayerPos.y
-                : player.y;
-            const playerHeight = player.height ?? 48;
-            const bubbleTargetY = playerY - playerHeight / 2 - bubbleOffsetY;
-            const textMetrics = ctx.measureText(bubbleData.text);
-            const textWidth = textMetrics.width;
-            const bubbleHeight = 14 + textPadding * 2;
-            const bubbleWidth = textWidth + textPadding * 2;
-            const bubbleX = playerX - bubbleWidth / 2;
-            const bubbleDrawY = bubbleTargetY - bubbleHeight;
-            ctx.save();
-            ctx.shadowColor = shadowColor;
-            ctx.shadowBlur = shadowBlur;
-            ctx.shadowOffsetX = shadowOffsetX;
-            ctx.shadowOffsetY = shadowOffsetY;
-            ctx.fillStyle = bubbleBg;
-            if (typeof drawRoundedRect === "function") {
-              drawRoundedRect(
-                ctx,
-                bubbleX,
-                bubbleDrawY,
-                bubbleWidth,
-                bubbleHeight,
-                cornerRadius
-              );
-              ctx.fill();
-            } else {
-              ctx.fillRect(bubbleX, bubbleDrawY, bubbleWidth, bubbleHeight);
+
+        const stateToRender = Game.getInterpolatedState(currentTime);
+        if (stateToRender && typeof Renderer !== 'undefined' && DOM.ctx) {
+             // Draw the main game scene
+             Renderer.drawGame(
+                 DOM.ctx,                        // ctx
+                 appState,                       // appState
+                 stateToRender,                  // stateToRender
+                 localPlayerMuzzleFlash,         //
+                 localPlayerPushbackAnim,        // localPlayerPushbackAnimState
+                 activeBloodSparkEffects, 
+                 activeEnemyBubbles,      
+             );
+
+            // --- DRAW CASINGS *AFTER* main game render ---
+            const now = performance.now(); // Need 'now' again if not declared earlier in this scope after move
+            // Filter expired (redundant if already filtered before drawGame, but safe)
+            activeAmmoCasings = activeAmmoCasings.filter(casing => (now - casing.spawnTime) < casing.lifetime);
+            if (activeAmmoCasings.length > 0) {
+                 DOM.ctx.save();
+                 activeAmmoCasings.forEach(casing => {
+                     // Update physics (using deltaTime from start of loop)
+                     const tickDeltaTime = deltaTime; // Use loop's deltaTime
+                     casing.vy += casing.gravity * tickDeltaTime;
+                     casing.x += casing.vx * tickDeltaTime;
+                     casing.y += casing.vy * tickDeltaTime;
+                     casing.rotation += casing.rotationSpeed * tickDeltaTime;
+
+                     // Calculate fade alpha
+                     const lifeLeft = casing.lifetime - (now - casing.spawnTime);
+                     const fadeDuration = 200;
+                     const alpha = (lifeLeft < fadeDuration) ? Math.max(0, lifeLeft / fadeDuration) * 0.9 : 0.9;
+
+                     // Draw rotated rectangle
+                     DOM.ctx.fillStyle = casing.color.replace(/[\d\.]+\)$/g, `${alpha.toFixed(2)})`);
+                     DOM.ctx.translate(casing.x, casing.y);
+                     DOM.ctx.rotate(casing.rotation);
+                     DOM.ctx.fillRect(-casing.width / 2, -casing.height / 2, casing.width, casing.height);
+                     DOM.ctx.rotate(-casing.rotation);
+                     DOM.ctx.translate(-casing.x, -casing.y);
+                 });
+                 DOM.ctx.restore();
             }
-            ctx.restore();
-            ctx.fillStyle = bubbleColor;
-            ctx.fillText(bubbleData.text, playerX, bubbleTargetY - textPadding);
-          } else {
-            expiredBubbleIds.push(playerId);
-          }
-        }
-        expiredBubbleIds.forEach((id) => {
-          if (activeSpeechBubbles) delete activeSpeechBubbles[id]; // <-- Changed from 
-        });
-      }
-  
-    function drawSnake(ctx, snake) {
-      if (
-        !snake ||
-        !snake.isActiveFromServer ||
-        !snake.segments ||
-        snake.segments.length < 2
-      )
-        return;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.strokeStyle = snakeLineColor;
-      ctx.lineWidth = snake.lineWidth ?? 3; // Add default width
-      ctx.beginPath();
-      ctx.moveTo(
-        snake.segments[snake.segments.length - 1].x,
-        snake.segments[snake.segments.length - 1].y
-      );
-      for (let i = snake.segments.length - 2; i >= 1; i--) {
-        const s = snake.segments[i],
-          ns = snake.segments[i - 1];
-        if (!s || !ns) continue;
-        const xc = (s.x + ns.x) / 2,
-          yc = (s.y + ns.y) / 2;
-        ctx.quadraticCurveTo(s.x, s.y, xc, yc);
-      }
-      if (snake.segments.length > 0) {
-        const h = snake.segments[0];
-        if (snake.segments.length > 1) {
-          const n = snake.segments[1],
-            xc = (n.x + h.x) / 2,
-            yc = (n.y + h.y) / 2;
-          ctx.quadraticCurveTo(n.x, n.y, xc, yc);
-        }
-        ctx.lineTo(h.x, h.y);
-      }
-      ctx.stroke();
-    }
-  
-    function drawHealthBar(ctx, x, y, width, currentHealth, maxHealth) {
-      if (maxHealth <= 0) return;
-      const bh = 5,
-        yo = -(width / 2 + 27),
-        bw = Math.max(20, width * 0.8);
-      const cw = Math.max(0, (currentHealth / maxHealth) * bw),
-        hp = currentHealth / maxHealth,
-        bx = x - bw / 2,
-        by = y + yo;
-      ctx.fillStyle = healthBarBg;
-      ctx.fillRect(bx, by, bw, bh);
-      let bc = healthBarLow;
-      if (hp > 0.66) bc = healthBarHigh;
-      else if (hp > 0.33) bc = healthBarMedium;
-      ctx.fillStyle = bc;
-      ctx.fillRect(bx, by, cw, bh);
-    }
-  
-    function drawArmorBar(ctx, x, y, width, currentArmor) {
-      const ma = 100;
-      if (currentArmor <= 0) return;
-      const abh = 4,
-        hbh = 5,
-        bs = 1,
-        hbyo = -(width / 2 + 27);
-      const hbty = y + hbyo,
-        abty = hbty + hbh + bs,
-        bw = Math.max(20, width * 0.8),
-        cw = Math.max(0, (currentArmor / ma) * bw),
-        bx = x - bw / 2,
-        by = abty;
-      ctx.fillStyle = healthBarBg;
-      ctx.fillRect(bx, by, bw, abh);
-      ctx.fillStyle = armorBarColor;
-      ctx.fillRect(bx, by, cw, abh);
-    }
-  
-    // --- REVISED V7: drawEnemyRect (Uses Client Spark State) ---
-    function drawEnemyRect(
-      ctx,
-      x,
-      y,
-      w,
-      h,
-      type,
-      enemyState,
-      activeBloodSparkEffects,
-      clientNowTime
-    ) {
-      const currentW = w;
-      const currentH = h;
-      const t = clientNowTime; // Use passed client time
-      const bobOffset =
-        type !== "giant"
-          ? Math.sin(t / IDLE_BOB_SPEED_DIVISOR) * IDLE_BOB_AMPLITUDE
-          : 0;
-      const nowSeconds = t / 1000.0;
-      const snakeEffect = enemyState?.effects?.snake_bite_slow;
-      const isSnakeBitten =
-        snakeEffect &&
-        typeof snakeEffect.expires_at === "number" &&
-        nowSeconds < snakeEffect.expires_at;
-      const attackState =
-        type === "giant" && enemyState?.attack_state
-          ? enemyState.attack_state
-          : "idle";
-      const enemyId = enemyState?.id;
-      const showBloodSparks =
-        enemyId &&
-        activeBloodSparkEffects?.[enemyId] &&
-        t < activeBloodSparkEffects[enemyId];
-  
-      ctx.save();
-  
-      // --- Giant Drawing ---
-      if (type === "giant") {
-        const bodyWidth = currentW * 0.85;
-        const bodyHeight = currentH * 0.7;
-        const bodyTopY = y - currentH * 0.4;
-        const bodyBottomY = bodyTopY + bodyHeight;
-        const legHeight = currentH * 0.25;
-        const legWidth = currentW * 0.2;
-        const legSpacing = currentW * 0.2;
-        const legTopY = bodyBottomY;
-        const bootHeight = currentH * 0.1;
-        const bootWidth = legWidth * 1.2;
-        const bootTopY = legTopY + legHeight;
-        const headRadius = currentW * 0.2;
-        const headCenterY = bodyTopY - headRadius * 0.5;
-        const shakoHeight = headRadius * 1.5;
-        const shakoWidth = headRadius * 1.8;
-        const shakoBaseY = headCenterY - headRadius * 0.8;
-        const shakoPeakHeight = shakoHeight * 0.2;
-        const shakoPeakWidth = shakoWidth * 1.1;
-        const armShoulderWidth = currentW * 0.18;
-        const armWristWidth = currentW * 0.14;
-        const armLength = currentH * 0.55;
-        const shoulderY = bodyTopY + bodyHeight * 0.15;
-        const shoulderXOffset = bodyWidth / 2;
-  
-        // Legs & Boots
-        ctx.fillStyle = enemyBootColor;
-        ctx.fillRect(x - legSpacing - legWidth / 2, legTopY, legWidth, legHeight);
-        ctx.fillRect(x + legSpacing - legWidth / 2, legTopY, legWidth, legHeight);
-        ctx.fillStyle = enemyBootColor;
-        ctx.fillRect(
-          x - legSpacing - bootWidth / 2,
-          bootTopY,
-          bootWidth,
-          bootHeight
-        );
-        ctx.fillRect(
-          x + legSpacing - bootWidth / 2,
-          bootTopY,
-          bootWidth,
-          bootHeight
-        );
-        // Body
-        ctx.fillStyle = enemyGiantRed;
-        ctx.fillRect(x - bodyWidth / 2, bodyTopY, bodyWidth, bodyHeight);
-        if (attackState === "winding_up") {
-          ctx.fillStyle = "rgba(255, 255, 100, 0.15)";
-          ctx.fillRect(x - bodyWidth / 2, bodyTopY, bodyWidth, bodyHeight);
-        }
-        // Belt
-        ctx.fillStyle = beltColor;
-        ctx.fillRect(
-          x - bodyWidth / 2,
-          bodyTopY + bodyHeight * 0.7,
-          bodyWidth,
-          bodyHeight * 0.08
-        );
-        // Arms
-        ctx.fillStyle = enemyGiantRed;
-        if (attackState === "winding_up" || attackState === "attacking") {
-          const windUpAngle = -Math.PI / 6;
-          const raisedOffsetY = -armLength * 0.1;
-          ctx.save();
-          ctx.translate(x - shoulderXOffset, shoulderY + raisedOffsetY);
-          ctx.rotate(windUpAngle);
-          ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.lineTo(armShoulderWidth, 0);
-          ctx.lineTo(armShoulderWidth * 0.7, armLength);
-          ctx.lineTo(armWristWidth * 0.3, armLength);
-          ctx.closePath();
-          ctx.fill();
-          ctx.restore();
-          ctx.save();
-          ctx.translate(x + shoulderXOffset, shoulderY + raisedOffsetY);
-          ctx.rotate(-windUpAngle);
-          ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.lineTo(-armShoulderWidth, 0);
-          ctx.lineTo(-armShoulderWidth * 0.7, armLength);
-          ctx.lineTo(-armWristWidth * 0.3, armLength);
-          ctx.closePath();
-          ctx.fill();
-          ctx.restore();
+            // --- END CASING DRAWING ---
+
         } else {
-          const armBottomY = shoulderY + armLength;
-          ctx.beginPath();
-          ctx.moveTo(x - shoulderXOffset, shoulderY);
-          ctx.lineTo(x - shoulderXOffset - armShoulderWidth, shoulderY);
-          ctx.lineTo(x - shoulderXOffset - armWristWidth, armBottomY);
-          ctx.lineTo(x - shoulderXOffset - armWristWidth * 0.5, armBottomY);
-          ctx.closePath();
-          ctx.fill();
-          ctx.beginPath();
-          ctx.moveTo(x + shoulderXOffset, shoulderY);
-          ctx.lineTo(x + shoulderXOffset + armShoulderWidth, shoulderY);
-          ctx.lineTo(x + shoulderXOffset + armWristWidth, armBottomY);
-          ctx.lineTo(x + shoulderXOffset + armWristWidth * 0.5, armBottomY);
-          ctx.closePath();
-          ctx.fill();
+             log("Skipping render: Missing state, Renderer, or context.");
         }
-        // Head & Face
-        ctx.fillStyle = enemySkinColor;
-        ctx.beginPath();
-        ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2);
-        ctx.fill();
-        const beardWidth = headRadius * 1.6;
-        const beardHeight = headRadius * 1.0;
-        const beardTopY = headCenterY + headRadius * 0.2;
-        ctx.fillStyle = enemyCapColor;
-        ctx.fillRect(x - beardWidth / 2, beardTopY, beardWidth, beardHeight);
-        ctx.strokeStyle = "#000000";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        const giantBrowLength = headRadius * 0.7;
-        const giantBrowY = headCenterY - headRadius * 0.4;
-        const giantBrowXOffset = headRadius * 0.4;
-        ctx.moveTo(
-          x - giantBrowXOffset - giantBrowLength / 2,
-          giantBrowY + giantBrowLength / 4
-        );
-        ctx.lineTo(
-          x - giantBrowXOffset + giantBrowLength / 2,
-          giantBrowY - giantBrowLength / 4
-        );
-        ctx.moveTo(
-          x + giantBrowXOffset - giantBrowLength / 2,
-          giantBrowY - giantBrowLength / 4
-        );
-        ctx.lineTo(
-          x + giantBrowXOffset + giantBrowLength / 2,
-          giantBrowY + giantBrowLength / 4
-        );
-        ctx.stroke();
-        // Shako Hat
-        ctx.fillStyle = enemyCapColor;
-        ctx.fillRect(
-          x - shakoWidth / 2,
-          shakoBaseY - shakoHeight,
-          shakoWidth,
-          shakoHeight
-        );
-        ctx.beginPath();
-        ctx.moveTo(x - shakoPeakWidth / 2, shakoBaseY);
-        ctx.lineTo(x + shakoPeakWidth / 2, shakoBaseY);
-        ctx.lineTo(x + shakoWidth / 2, shakoBaseY - shakoPeakHeight);
-        ctx.lineTo(x - shakoWidth / 2, shakoBaseY - shakoPeakHeight);
-        ctx.closePath();
-        ctx.fill();
-      }
-      // --- Standard Enemy ---
-      else {
-        const headRadius = currentH * 0.16;
-        const coatShoulderWidth = currentW * 1.1;
-        const coatHemWidth = currentW * 0.9;
-        const torsoShoulderWidth = currentW * 0.9;
-        const torsoHemWidth = currentW * 0.7;
-        const coatTopY = y - currentH * 0.35 + bobOffset;
-        const coatBottomY = y + currentH * 0.25 + bobOffset;
-        const coatHeight = coatBottomY - coatTopY;
-        const headCenterY = coatTopY - headRadius * 0.6;
-        const armWidth = currentW * 0.2;
-        const armHeight = currentH * 0.45;
-        const armOffsetY = coatTopY + coatHeight * 0.1;
-        const trouserHeight = currentH * 0.2;
-        const trouserWidth = currentW * 0.25;
-        const trouserTopY = coatBottomY;
-        const legSpacing = currentW * 0.15;
-        const bootHeight = currentH * 0.12;
-        const bootWidth = currentW * 0.3;
-        const bootTopY = trouserTopY + trouserHeight;
-        const hatBrimWidth = headRadius * 3.5;
-        const hatBrimHeight = headRadius * 0.6;
-        const hatCrownRadiusH = headRadius * 1.5;
-        const hatCrownRadiusV = headRadius * 1.1;
-        const hatCenterY = headCenterY - headRadius * 1.0;
-        const stepCycle = 400;
-        const stepPhase = Math.floor(t / stepCycle) % 2;
-        // Trousers & Boots
-        ctx.fillStyle = enemyBootColor;
-        const leftLegX = x - legSpacing;
-        ctx.fillRect(
-          leftLegX - trouserWidth / 2,
-          trouserTopY,
-          trouserWidth,
-          trouserHeight
-        );
-        const rightLegX = x + legSpacing;
-        ctx.fillRect(
-          rightLegX - trouserWidth / 2,
-          trouserTopY,
-          trouserWidth,
-          trouserHeight
-        );
-        ctx.fillStyle = enemyBootColor;
-        if (stepPhase === 0) {
-          ctx.fillRect(
-            leftLegX - bootWidth / 2,
-            bootTopY - 2,
-            bootWidth,
-            bootHeight
-          );
-          ctx.fillRect(
-            rightLegX - bootWidth / 2,
-            bootTopY,
-            bootWidth,
-            bootHeight
-          );
-        } else {
-          ctx.fillRect(leftLegX - bootWidth / 2, bootTopY, bootWidth, bootHeight);
-          ctx.fillRect(
-            rightLegX - bootWidth / 2,
-            bootTopY - 2,
-            bootWidth,
-            bootHeight
-          );
-        }
-        // Coats/Arms/Torso
-        ctx.fillStyle = enemyCoatColor;
-        ctx.beginPath();
-        ctx.moveTo(x - coatShoulderWidth / 2, coatTopY);
-        ctx.lineTo(x + coatShoulderWidth / 2, coatTopY);
-        ctx.lineTo(x + coatHemWidth / 2, coatBottomY);
-        ctx.lineTo(x - coatHemWidth / 2, coatBottomY);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = enemyCoatColor;
-        ctx.fillRect(
-          x - coatShoulderWidth * 0.45 - armWidth / 2,
-          armOffsetY,
-          armWidth,
-          armHeight
-        );
-        ctx.fillRect(
-          x + coatShoulderWidth * 0.45 - armWidth / 2,
-          armOffsetY,
-          armWidth,
-          armHeight
-        );
-        ctx.fillStyle = enemyUniformBlue;
-        ctx.beginPath();
-        ctx.moveTo(x - torsoShoulderWidth / 2, coatTopY);
-        ctx.lineTo(x + torsoShoulderWidth / 2, coatTopY);
-        ctx.lineTo(x + torsoHemWidth / 2, coatBottomY);
-        ctx.lineTo(x - torsoHemWidth / 2, coatBottomY);
-        ctx.closePath();
-        ctx.fill();
-        // Head & Face
-        ctx.fillStyle = enemySkinColor;
-        ctx.beginPath();
-        ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "#000000";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        const browLength = headRadius * 0.5;
-        const browY = headCenterY - headRadius * 0.3;
-        const browXOffset = headRadius * 0.3;
-        ctx.moveTo(x - browXOffset - browLength / 2, browY - browLength / 3);
-        ctx.lineTo(x - browXOffset + browLength / 2, browY + browLength / 3);
-        ctx.moveTo(x + browXOffset - browLength / 2, browY + browLength / 3);
-        ctx.lineTo(x + browXOffset + browLength / 2, browY - browLength / 3);
-        ctx.stroke();
-        // Hat
-        ctx.fillStyle = enemyCapColor;
-        ctx.beginPath();
-        ctx.ellipse(
-          x,
-          hatCenterY + hatCrownRadiusV * 0.7,
-          hatBrimWidth / 2,
-          hatBrimHeight / 2,
-          0,
-          0,
-          Math.PI * 2
-        );
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(
-          x,
-          hatCenterY,
-          hatCrownRadiusH / 2,
-          hatCrownRadiusV,
-          0,
-          0,
-          Math.PI * 2
-        );
-        ctx.fill();
-        // Shooter Gun
-        if (type === "shooter") {
-          const gunBarrelLength = w * 1.2;
-          const gunBarrelThickness = 3;
-          const gunStockLength = w * 0.5;
-          const gunStockThickness = 5;
-          const gunColorBarrel = "#555555";
-          const gunColorStock = "#7a4a2a";
-          ctx.save();
-          const gunAngle = Math.PI / 10;
-          const gunCenterY = y + bobOffset;
-          const gunCenterX = x;
-          ctx.translate(gunCenterX, gunCenterY);
-          ctx.rotate(gunAngle);
-          ctx.fillStyle = gunColorStock;
-          ctx.fillRect(
-            -gunStockLength * 0.8,
-            -gunStockThickness / 2,
-            gunStockLength,
-            gunStockThickness
-          );
-          ctx.fillStyle = gunColorBarrel;
-          ctx.fillRect(
-            -gunStockLength * 0.2,
-            -gunBarrelThickness / 2,
-            gunBarrelLength,
-            gunBarrelThickness
-          );
-          ctx.restore();
-        }
-      }
-  
-      // --- Common Effects ---
-      // Snake Bite
-      if (isSnakeBitten) {
-        let footY;
-        if (type === "giant") {
-          const bodyHeight = currentH * 0.7;
-          const legHeight = currentH * 0.25;
-          const bootHeight = currentH * 0.1;
-          const bodyTopY = y - currentH * 0.4;
-          footY = bodyTopY + bodyHeight + legHeight + bootHeight;
-        } else {
-          const coatBottomY = y + currentH * 0.25 + bobOffset;
-          const trouserHeight = currentH * 0.2;
-          const bootHeight = currentH * 0.12;
-          footY = coatBottomY + trouserHeight + bootHeight;
-        }
-        const numParticles = 6;
-        const particleBaseSize = 3;
-        const particleSpeedY = -50;
-        const particleLifetimeMs = 550;
-        ctx.save();
-        for (let i = 0; i < numParticles; i++) {
-          const effectStartTime =
-            snakeEffect.expires_at * 1000 - SNAKE_BITE_DURATION * 1000;
-          const timeSinceEffectStart = Math.max(0, t - effectStartTime);
-          const particleSimulatedAge =
-            (timeSinceEffectStart + (particleLifetimeMs / numParticles) * i) %
-            particleLifetimeMs;
-          const particleProgress = particleSimulatedAge / particleLifetimeMs;
-          if (particleProgress < 0 || particleProgress >= 1) continue;
-          const particleX = x + (Math.random() - 0.5) * currentW * 0.6;
-          const particleY =
-            footY + particleSpeedY * (particleSimulatedAge / 1000);
-          const particleSize =
-            particleBaseSize *
-            (1.0 - particleProgress * 0.5) *
-            (0.8 + Math.random() * 0.4);
-          const alpha =
-            0.7 * (1.0 - particleProgress) * (0.7 + Math.random() * 0.3);
-          const green = 180 + Math.floor(75 * particleProgress);
-          const yellow = 180 * (1.0 - particleProgress);
-          ctx.fillStyle = `rgba(${Math.floor(
-            yellow
-          )}, ${green}, 50, ${alpha.toFixed(2)})`;
-          ctx.fillRect(
-            particleX - particleSize / 2,
-            particleY - particleSize / 2,
-            particleSize,
-            particleSize
-          );
-        }
-        ctx.restore();
-      }
-      // Blood Sparks
-      if (showBloodSparks) {
-        ctx.save();
-        const numSparks = 2 + Math.floor(Math.random() * 5);
-        const sparkColors = [
-          "rgba(180, 0, 0, 0.8)",
-          "rgba(220, 20, 20, 0.7)",
-          "rgba(150, 0, 0, 0.6)",
-        ];
-        const sparkCenterY = y + (type !== "giant" ? bobOffset : 0);
-        for (let i = 0; i < numSparks; i++) {
-          const sparkAngle = Math.random() * Math.PI * 2;
-          const sparkRadius = Math.random() * currentW * 0.3;
-          const sparkX = x + Math.cos(sparkAngle) * sparkRadius;
-          const sparkY =
-            sparkCenterY +
-            Math.sin(sparkAngle) * sparkRadius * 0.5 -
-            currentH * 0.1;
-          const sparkSize = 2 + Math.random() * 3;
-          ctx.fillStyle =
-            sparkColors[Math.floor(Math.random() * sparkColors.length)];
-          ctx.beginPath();
-          ctx.arc(sparkX, sparkY, sparkSize / 2, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.restore();
-      }
-      ctx.restore(); // Restore context from start of function
+
+
+        // Request next frame or clean up loop
+        if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) { appState.animationFrameId = requestAnimationFrame(gameLoop); } else { if(appState.animationFrameId) cleanupLoop(); }
     }
-  
-    function drawPlayerCharacter(
-      ctx,
-      x,
-      y,
-      w,
-      h,
-      isSelf,
-      playerState,
-      aimDx,
-      aimDy,
-      pushbackAnimState
-    ) {
-      const t = performance.now();
-      const now = t;
-      const ii =
-        (playerState?.input_vector?.dx ?? 0) === 0 &&
-        (playerState?.input_vector?.dy ?? 0) === 0;
-      const bo = ii
-        ? Math.sin(t / IDLE_BOB_SPEED_DIVISOR) * IDLE_BOB_AMPLITUDE
-        : 0;
-      const playerSnakeEffect = playerState?.effects?.snake_bite_slow;
-      const isPlayerBitten =
-        playerSnakeEffect &&
-        typeof playerSnakeEffect === "object" &&
-        typeof playerSnakeEffect.expires_at === "number" &&
-        now < playerSnakeEffect.expires_at * 1000;
-      // Dimensions
-      const headHeight = h * 0.28;
-      const headWidth = w * 0.9;
-      const neckHeight = h * 0.05;
-      const torsoHeight = h * 0.35;
-      const torsoUpperWidth = w * 0.95;
-      const torsoLowerWidth = w * 0.8;
-      const beltHeight = h * 0.06;
-      const legHeight = h * 0.32;
-      const legUpperWidth = w * 0.4;
-      const legLowerWidth = w * 0.3;
-      const bootShaftHeight = h * 0.1;
-      const bootSoleHeight = h * 0.04;
-      const bootWidth = w * 0.35;
-      const armWidth = w * 0.22;
-      const armLength = h * 0.42;
-      const shoulderPadRadius = w * 0.3;
-      // Y Positions
-      const headTopY = y - h * 0.5 + bo;
-      const headBottomY = headTopY + headHeight;
-      const neckTopY = headBottomY;
-      const neckBottomY = neckTopY + neckHeight;
-      const torsoTopY = neckBottomY;
-      const torsoBottomY = torsoTopY + torsoHeight;
-      const beltTopY = torsoBottomY - beltHeight * 0.3;
-      const beltBottomY = beltTopY + beltHeight;
-      const legTopY = beltBottomY - beltHeight * 0.2;
-      const legBottomY = legTopY + legHeight;
-      const bootTopY = legBottomY - bootShaftHeight * 0.1;
-      const bootShaftBottomY = bootTopY + bootShaftHeight;
-      const bootSoleTopY = bootShaftBottomY;
-      const bootBottomY = bootSoleTopY + bootSoleHeight;
-      // Arm/Shoulder Positions
-      const shoulderCenterY = torsoTopY + torsoHeight * 0.15;
-      const shoulderOffsetX = torsoUpperWidth * 0.5;
-      const armTopY = shoulderCenterY + shoulderPadRadius * 0.3;
-      // Colors
-      const playerBodyColor = isSelf
-        ? dustyPlayerSelfColor
-        : dustyPlayerOtherColor;
-      const helmetColor = ironHelmetColor;
-      const armorColor = simpleChestPlateColor;
-      const armorHighlight = chestPlateHighlight;
-      const armorShadow = ironHelmetShadow;
-      const slitColor = "#000000";
-      const beltColor = "#412a19";
-      const beltBuckleColor = "#b0a080";
-      const bootColor = "#241c1c";
-      const bootSoleColor = "#1a1a1a";
-      ctx.save();
-      // Shadow
-      ctx.beginPath();
-      ctx.ellipse(x, bootBottomY + 2, w * 0.5, h * 0.06, 0, 0, Math.PI * 2);
-      ctx.fillStyle = backgroundShadowColor;
-      ctx.fill();
-      // Boot Helper
-      const drawBoot = (bootX, bootTopYCoord, isKick = false, kickAngle = 0) => {
-        ctx.save();
-        if (isKick) {
-          ctx.translate(bootX, bootTopYCoord);
-          ctx.rotate(kickAngle);
-          bootTopYCoord = 0;
-        }
-        const shaftTopY = bootTopYCoord;
-        const shaftBottomY = shaftTopY + bootShaftHeight;
-        const soleTopY = shaftBottomY;
-        const soleBottomY = soleTopY + bootSoleHeight;
-        ctx.fillStyle = bootColor;
-        ctx.fillRect(
-          bootX - bootWidth / 2,
-          shaftTopY,
-          bootWidth,
-          bootShaftHeight
-        );
-        ctx.fillStyle = bootSoleColor;
-        const soleWidth = bootWidth * 1.05;
-        ctx.fillRect(bootX - soleWidth / 2, soleTopY, soleWidth, bootSoleHeight);
-        ctx.fillStyle = bootSoleColor;
-        const heelWidth = bootWidth * 0.6;
-        const heelHeight = bootSoleHeight * 0.8;
-        ctx.fillRect(
-          bootX - heelWidth * 0.1,
-          soleBottomY - heelHeight,
-          heelWidth,
-          heelHeight
-        );
-        if (isKick) {
-          ctx.restore();
-        }
-      };
-      // Legs & Boots
-      const isPushbackAnimating =
-        pushbackAnimState?.active && now < pushbackAnimState?.endTime;
-      ctx.fillStyle = playerBodyColor;
-      if (isPushbackAnimating) {
-        const kickAngle = -Math.PI / 4.5;
-        const supportLegX = x + w * 0.15;
-        const kickLegX = x - w * 0.15;
-        const kickLegVisualLength = legHeight * 1.05;
-        ctx.beginPath();
-        ctx.moveTo(supportLegX - legUpperWidth / 2, legTopY);
-        ctx.lineTo(supportLegX + legUpperWidth / 2, legTopY);
-        ctx.lineTo(supportLegX + legLowerWidth / 2, legBottomY);
-        ctx.lineTo(supportLegX - legLowerWidth / 2, legBottomY);
-        ctx.closePath();
-        ctx.fill();
-        drawBoot(supportLegX, bootTopY);
-        ctx.save();
-        ctx.translate(kickLegX, legTopY + legHeight * 0.1);
-        ctx.rotate(kickAngle);
-        ctx.fillStyle = playerBodyColor;
-        ctx.beginPath();
-        ctx.moveTo(-legUpperWidth / 2, 0);
-        ctx.lineTo(legUpperWidth / 2, 0);
-        ctx.lineTo(legLowerWidth / 2, kickLegVisualLength);
-        ctx.lineTo(-legLowerWidth / 2, kickLegVisualLength);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-        const kickEndX = kickLegX + Math.sin(kickAngle) * kickLegVisualLength;
-        const kickEndY =
-          legTopY + legHeight * 0.1 + Math.cos(kickAngle) * kickLegVisualLength;
-        drawBoot(kickEndX, kickEndY - bootShaftHeight, false);
-      } else {
-        const leftLegX = x - w * 0.2;
-        const rightLegX = x + w * 0.2;
-        let leftBootYOffset = 0;
-        let rightBootYOffset = 0;
-        if (!ii) {
-          const walkCycleTime = 400;
-          const phase = (t % walkCycleTime) / walkCycleTime;
-          const liftAmount = -2;
-          if (phase < 0.5) {
-            leftBootYOffset = Math.sin(phase * 2 * Math.PI) * liftAmount;
-          } else {
-            rightBootYOffset = Math.sin((phase - 0.5) * 2 * Math.PI) * liftAmount;
-          }
-        }
-        ctx.beginPath();
-        ctx.moveTo(leftLegX - legUpperWidth / 2, legTopY);
-        ctx.lineTo(leftLegX + legUpperWidth / 2, legTopY);
-        ctx.lineTo(leftLegX + legLowerWidth / 2, legBottomY);
-        ctx.lineTo(leftLegX - legLowerWidth / 2, legBottomY);
-        ctx.closePath();
-        ctx.fill();
-        drawBoot(leftLegX, bootTopY + leftBootYOffset);
-        ctx.beginPath();
-        ctx.moveTo(rightLegX - legUpperWidth / 2, legTopY);
-        ctx.lineTo(rightLegX + legUpperWidth / 2, legTopY);
-        ctx.lineTo(rightLegX + legLowerWidth / 2, legBottomY);
-        ctx.lineTo(rightLegX - legLowerWidth / 2, legBottomY);
-        ctx.closePath();
-        ctx.fill();
-        drawBoot(rightLegX, bootTopY + rightBootYOffset);
-      }
-      // Torso
-      ctx.fillStyle = playerBodyColor;
-      ctx.beginPath();
-      ctx.moveTo(x - torsoUpperWidth / 2, torsoTopY);
-      ctx.lineTo(x + torsoUpperWidth / 2, torsoTopY);
-      ctx.lineTo(x + torsoLowerWidth / 2, torsoBottomY);
-      ctx.lineTo(x - torsoLowerWidth / 2, torsoBottomY);
-      ctx.closePath();
-      ctx.fill();
-      // Arms
-      const armPitXLeft = x - torsoUpperWidth * 0.45;
-      const armPitXRight = x + torsoUpperWidth * 0.45;
-      const wristXLeft = x - (torsoUpperWidth * 0.45 + armWidth * 0.3);
-      const wristXRight = x + (torsoUpperWidth * 0.45 + armWidth * 0.3);
-      const armBottomY = armTopY + armLength;
-      ctx.beginPath();
-      ctx.moveTo(armPitXLeft, armTopY);
-      ctx.lineTo(armPitXLeft + armWidth, armTopY);
-      ctx.lineTo(wristXRight - armWidth, armBottomY);
-      ctx.lineTo(wristXLeft, armBottomY);
-      ctx.closePath();
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(armPitXRight - armWidth, armTopY);
-      ctx.lineTo(armPitXRight, armTopY);
-      ctx.lineTo(wristXRight, armBottomY);
-      ctx.lineTo(wristXRight - armWidth * 0.7, armBottomY);
-      ctx.closePath();
-      ctx.fill();
-      // Belt
-      ctx.fillStyle = beltColor;
-      ctx.fillRect(
-        x - torsoLowerWidth * 0.55,
-        beltTopY,
-        torsoLowerWidth * 1.1,
-        beltHeight
-      );
-      ctx.fillStyle = beltBuckleColor;
-      const buckleWidth = w * 0.25;
-      const buckleHeight = beltHeight * 0.8;
-      ctx.fillRect(
-        x - buckleWidth / 2,
-        beltTopY + (beltHeight - buckleHeight) / 2,
-        buckleWidth,
-        buckleHeight
-      );
-      ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
-      ctx.fillRect(
-        x - buckleWidth / 2 + 2,
-        beltTopY + (beltHeight - buckleHeight) / 2 + 2,
-        buckleWidth - 4,
-        2
-      );
-      // Chest Plate
-      const plateWidth = torsoUpperWidth * 0.9;
-      const plateHeight = torsoHeight * 0.9;
-      const plateTopY = torsoTopY + torsoHeight * 0.05;
-      const plateBottomY = plateTopY + plateHeight;
-      ctx.fillStyle = armorColor;
-      ctx.beginPath();
-      ctx.moveTo(x - plateWidth / 2, plateTopY);
-      ctx.lineTo(x + plateWidth / 2, plateTopY);
-      ctx.lineTo(x + plateWidth * 0.4, plateBottomY);
-      ctx.lineTo(x - plateWidth * 0.4, plateBottomY);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = armorHighlight;
-      ctx.fillRect(x - plateWidth / 2 + 4, plateTopY + 4, plateWidth - 8, 3);
-      ctx.fillStyle = armorShadow;
-      ctx.fillRect(x - plateWidth / 2 + 5, plateTopY + 7, plateWidth - 10, 2);
-      // Shoulders
-      ctx.fillStyle = armorColor;
-      ctx.beginPath();
-      ctx.arc(
-        x - shoulderOffsetX,
-        shoulderCenterY,
-        shoulderPadRadius,
-        Math.PI * 1.1,
-        Math.PI * 1.9
-      );
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = armorHighlight;
-      ctx.beginPath();
-      ctx.arc(
-        x - shoulderOffsetX,
-        shoulderCenterY - 2,
-        shoulderPadRadius * 0.8,
-        Math.PI * 1.2,
-        Math.PI * 1.8
-      );
-      ctx.arc(
-        x - shoulderOffsetX,
-        shoulderCenterY,
-        shoulderPadRadius * 0.9,
-        Math.PI * 1.8,
-        Math.PI * 1.2,
-        true
-      );
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = armorColor;
-      ctx.beginPath();
-      ctx.arc(
-        x + shoulderOffsetX,
-        shoulderCenterY,
-        shoulderPadRadius,
-        Math.PI * 0.1,
-        Math.PI * 0.9,
-        true
-      );
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = armorHighlight;
-      ctx.beginPath();
-      ctx.arc(
-        x + shoulderOffsetX,
-        shoulderCenterY - 2,
-        shoulderPadRadius * 0.8,
-        Math.PI * 0.2,
-        Math.PI * 0.8,
-        true
-      );
-      ctx.arc(
-        x + shoulderOffsetX,
-        shoulderCenterY,
-        shoulderPadRadius * 0.9,
-        Math.PI * 0.8,
-        Math.PI * 0.2,
-        false
-      );
-      ctx.closePath();
-      ctx.fill();
-      // Helmet
-      ctx.fillStyle = helmetColor;
-      ctx.fillRect(x - headWidth / 2, headTopY, headWidth, headHeight);
-      const curveRadius = headWidth * 0.1;
-      ctx.beginPath();
-      ctx.moveTo(x - headWidth / 2, headTopY + curveRadius);
-      ctx.lineTo(x - headWidth / 2, headTopY);
-      ctx.lineTo(x + headWidth / 2, headTopY);
-      ctx.lineTo(x + headWidth / 2, headTopY + curveRadius);
-      ctx.arcTo(
-        x + headWidth / 2,
-        headTopY,
-        x + headWidth / 2 - curveRadius,
-        headTopY,
-        curveRadius
-      );
-      ctx.arcTo(
-        x - headWidth / 2,
-        headTopY,
-        x - headWidth / 2,
-        headTopY + curveRadius,
-        curveRadius
-      );
-      ctx.fill();
-      ctx.fillStyle = helmetColor;
-      ctx.fillRect(
-        x - headWidth * 0.4,
-        headBottomY - neckHeight * 0.5,
-        headWidth * 0.8,
-        neckHeight * 1.2
-      );
-      ctx.fillStyle = armorHighlight;
-      ctx.fillRect(x - headWidth / 2 + 3, headTopY + 3, headWidth - 6, 2);
-      const rivetRadius = 1.5;
-      ctx.beginPath();
-      ctx.arc(
-        x - headWidth * 0.4,
-        headBottomY - neckHeight * 0.2,
-        rivetRadius,
-        0,
-        Math.PI * 2
-      );
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(
-        x + headWidth * 0.4,
-        headBottomY - neckHeight * 0.2,
-        rivetRadius,
-        0,
-        Math.PI * 2
-      );
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(x, headTopY + headHeight * 0.85, rivetRadius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = slitColor;
-      const slitHeight = headHeight * 0.12;
-      const slitWidth = headWidth * 0.8;
-      const slitY = headTopY + headHeight * 0.45;
-      ctx.fillRect(x - slitWidth / 2, slitY, slitWidth, slitHeight);
-      // Gun
-      let shouldDrawGun = false;
-      let gunDrawAngle = 0;
-      let gunDrawMode = "aiming";
-      if (isPushbackAnimating) {
-        shouldDrawGun = true;
-        gunDrawMode = "pushback";
-        gunDrawAngle = -Math.PI / 2;
-      } else if (isSelf && (aimDx !== 0 || aimDy !== 0)) {
-        shouldDrawGun = true;
-        gunDrawMode = "aiming";
-        gunDrawAngle = Math.atan2(aimDy, aimDx);
-      }
-      if (shouldDrawGun) {
-        const gunLevel = playerState?.gun ?? 1;
-        const baseBarrelLength = 18;
-        const barrelLengthIncrease = 2;
-        const barrelLength =
-          baseBarrelLength + (gunLevel - 1) * barrelLengthIncrease;
-        const barrelThickness = 3 + (gunLevel - 1) * 0.2;
-        const stockLength = 8 + (gunLevel - 1) * 0.5;
-        const stockThickness = 5 + (gunLevel - 1) * 0.3;
-        const stockColor = "#8B4513";
-        const barrelColor = "#444444";
-        const gunOriginYOffset = armTopY + armLength * 0.4;
-        const gunOriginXOffset = gunDrawMode === "pushback" ? w * 0.05 : w * 0.1;
-        ctx.save();
-        ctx.translate(x + gunOriginXOffset, gunOriginYOffset);
-        ctx.rotate(gunDrawAngle);
-        ctx.fillStyle = stockColor;
-        ctx.fillRect(
-          -stockLength - 2,
-          -stockThickness / 2,
-          stockLength,
-          stockThickness
-        );
-        ctx.fillStyle = barrelColor;
-        ctx.fillRect(0, -barrelThickness / 2, barrelLength, barrelThickness);
-        ctx.restore();
-      }
-      // Effects
-      if (isPlayerBitten) {
-        const footY = bootBottomY;
-        const numParticles = 8;
-        const particleBaseSize = 4;
-        const particleSpeedY = -60;
-        const particleLifetimeMs = 600;
-        ctx.save();
-        for (let i = 0; i < numParticles; i++) {
-          const effectStartTime =
-            playerSnakeEffect.expires_at * 1000 - SNAKE_BITE_DURATION * 1000;
-          const timeSinceEffectStart = Math.max(0, now - effectStartTime);
-          const particleSimulatedAge =
-            (timeSinceEffectStart + (particleLifetimeMs / numParticles) * i) %
-            particleLifetimeMs;
-          const particleProgress = particleSimulatedAge / particleLifetimeMs;
-          if (particleProgress < 0 || particleProgress >= 1) continue;
-          const particleX = x + (Math.random() - 0.5) * w * 0.7;
-          const particleY =
-            footY + particleSpeedY * (particleSimulatedAge / 1000);
-          const particleSize =
-            particleBaseSize *
-            (1.0 - particleProgress * 0.5) *
-            (0.8 + Math.random() * 0.4);
-          const alpha =
-            0.8 * (1.0 - particleProgress) * (0.7 + Math.random() * 0.3);
-          const green = 180 + Math.floor(75 * particleProgress);
-          const yellow = 200 * (1.0 - particleProgress);
-          ctx.fillStyle = `rgba(${Math.floor(
-            yellow
-          )}, ${green}, 50, ${alpha.toFixed(2)})`;
-          ctx.fillRect(
-            particleX - particleSize / 2,
-            particleY - particleSize / 2,
-            particleSize,
-            particleSize
-          );
-        }
-        ctx.restore();
-      }
-      ctx.restore(); // Restore context state from the very start of the function
+    function startGameLoop() { if (appState.mode === 'menu') return; if (appState.animationFrameId) return; if (!appState.serverState && appState.mode !== 'singleplayer') return; Input.setup(); log("Starting game loop..."); appState.lastLoopTime = null; appState.animationFrameId = requestAnimationFrame(gameLoop); }
+    function getInterpolatedState(renderTime) {
+        const INTERPOLATION_BUFFER_MS = 100; const serverTime = appState.serverState?.timestamp * 1000; const lastServerTime = appState.lastServerState?.timestamp * 1000;
+        if (!appState.serverState || !appState.lastServerState || !serverTime || !lastServerTime || serverTime <= lastServerTime) { return appState.serverState; }
+        const renderTargetTime = renderTime - INTERPOLATION_BUFFER_MS; const timeBetweenStates = serverTime - lastServerTime;
+        const timeSinceLastState = renderTargetTime - lastServerTime; let t = Math.max(0, Math.min(1, timeSinceLastState / timeBetweenStates));
+        let interpolatedState = { ...appState.serverState }; interpolatedState.players = {}; interpolatedState.enemies = {}; interpolatedState.bullets = {};
+        if (appState.serverState.players) { for (const pId in appState.serverState.players) { const currentP = appState.serverState.players[pId]; const lastP = appState.lastServerState.players?.[pId]; if (pId === appState.localPlayerId) { interpolatedState.players[pId] = { ...currentP, x: appState.renderedPlayerPos.x, y: appState.renderedPlayerPos.y }; } else if (lastP && typeof currentP.x === 'number' && typeof lastP.x === 'number') { interpolatedState.players[pId] = { ...currentP, x: lerp(lastP.x, currentP.x, t), y: lerp(lastP.y, currentP.y, t) }; } else { interpolatedState.players[pId] = { ...currentP }; } } }
+        if (appState.serverState.enemies) { for (const eId in appState.serverState.enemies) { const currentE = appState.serverState.enemies[eId]; const lastE = appState.lastServerState.enemies?.[eId]; if (lastE && typeof currentE.x === 'number' && typeof lastE.x === 'number' && currentE.health > 0) { interpolatedState.enemies[eId] = { ...currentE, x: lerp(lastE.x, currentE.x, t), y: lerp(lastE.y, currentE.y, t) }; } else { interpolatedState.enemies[eId] = { ...currentE }; } } }
+        if (appState.serverState.bullets) { for (const bId in appState.serverState.bullets) { const currentB = appState.serverState.bullets[bId]; const lastB = appState.lastServerState.bullets?.[bId]; if (lastB && typeof currentB.x === 'number' && typeof lastB.x === 'number') { interpolatedState.bullets[bId] = { ...currentB, x: lerp(lastB.x, currentB.x, t), y: lerp(lastB.y, currentB.y, t) }; } else { interpolatedState.bullets[bId] = { ...currentB }; } } }
+        interpolatedState.powerups = appState.serverState.powerups; interpolatedState.damage_texts = appState.serverState.damage_texts;
+        return interpolatedState;
     }
-    function drawPlayers(ctx, players, appState, localPlayerMuzzleFlash, localPlayerPushbackAnimState) {
-        if(!players || !appState) return;
-        Object.values(players).forEach(p=>{
-            if(!p||p.player_status==='dead') return;
-            const is=p.id===appState.localPlayerId;
-            const ps=p.player_status||'alive';
-            const dx=is?appState.renderedPlayerPos.x:p.x;
-            const dy=is?appState.renderedPlayerPos.y:p.y;
-            const w=p.width??20; // Use player default width from server/constants
-            const h=p.height??48;// Use player default height from server/constants
-            const mh=p.max_health??100;
-            const ca=p.armor??0;
-            const id=(ps==='down'); // isDown flag
-    
-            // Set alpha based on player status (down or alive)
-            const a=id?0.4:1.0;
-            ctx.save(); // Save before applying alpha
-            ctx.globalAlpha=a; // Apply alpha for drawing the player character
-    
-            // Get aim direction and pushback state ONLY for the local player
-            const adx=is?localPlayerMuzzleFlash?.aimDx:0;
-            const ady=is?localPlayerMuzzleFlash?.aimDy:0;
-            const pushbackState = is ? localPlayerPushbackAnimState : null;
-    
-            // Call the function to draw the actual character (V2)
-            // This function now draws its own shadow internally
-            drawPlayerCharacter(ctx, dx, dy, w, h, is, p, adx, ady, pushbackState);
-    
-            ctx.restore(); // Restore alpha setting
-    
-            // Draw UI elements (health/armor) on top, unaffected by the alpha change
-            if(ps==='alive'){
-                drawHealthBar(ctx, dx, dy, w, p.health, mh);
-                if(ca > 0) drawArmorBar(ctx, dx, dy, w, ca);
-            }
-        });
+    function cleanupLoop() { if (appState.animationFrameId) { cancelAnimationFrame(appState.animationFrameId); appState.animationFrameId = null; log("Game loop stopped and cleaned up."); } Input.cleanup(); appState.lastLoopTime = null; }
+    function updatePredictedPosition(deltaTime) {
+        if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return;
+        const moveVector = Input.getMovementInputVector(); const playerState = appState.serverState.players[appState.localPlayerId];
+        const playerSpeed = playerState?.speed ?? PLAYER_DEFAULTS.base_speed;
+        if (moveVector.dx !== 0 || moveVector.dy !== 0) { appState.predictedPlayerPos.x += moveVector.dx * playerSpeed * deltaTime; appState.predictedPlayerPos.y += moveVector.dy * playerSpeed * deltaTime; }
+        const w_half = (playerState?.width ?? PLAYER_DEFAULTS.width) / 2; const h_half = (playerState?.height ?? PLAYER_DEFAULTS.height) / 2;
+        appState.predictedPlayerPos.x = Math.max(w_half, Math.min(appState.canvasWidth - w_half, appState.predictedPlayerPos.x)); // CORRECTED LINE: Use appState.canvasWidth
+        appState.predictedPlayerPos.y = Math.max(h_half, Math.min(appState.canvasHeight - h_half, appState.predictedPlayerPos.y)); // CORRECTED LINE: Use appState.canvasHeight
     }
-    // --- V2: Added activeBloodSparkEffects parameter ---
-    function drawEnemies(
-      ctx,
-      enemies,
-      activeBloodSparkEffects
-    ) {
-      if (!enemies) return;
-      const now = performance.now() / 1000; // Server time for fade check
-      const clientNow = performance.now(); // Client time for effects
-      const fd = 0.3; // Fade duration
-  
-      Object.values(enemies).forEach((e) => {
-        if (!e) return;
-        const w = e.width ?? 20,
-          h = e.height ?? 40,
-          mh = e.max_health ?? 50;
-        let a = 1.0,
-          sd = true,
-          id = false;
-        if (e.health <= 0 && e.death_timestamp) {
-          id = true;
-          const el = now - e.death_timestamp;
-          if (el < fd) a = Math.max(0.1, 1.0 - (el / fd) * 0.9);
-          // Smoother fade
-          else sd = false; // Don't draw if faded
-        }
-        if (sd) {
-          ctx.save();
-          ctx.globalAlpha = a;
-          drawEnemyRect(
-            ctx,
-            e.x,
-            e.y,
-            w,
-            h,
-            e.type,
-            e,
-            activeBloodSparkEffects,
-            clientNow
-          ); // Pass client time & spark map
-          ctx.restore();
-        }
-        if (!id && e.health > 0 && sd) {
-          drawHealthBar(ctx, e.x, e.y, w, e.health, mh);
-        }
-      });
+    function reconcileWithServer() {
+        if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return;
+        const serverPos = appState.serverState.players[appState.localPlayerId]; if (typeof serverPos.x !== 'number' || typeof serverPos.y !== 'number') return;
+        const predictedPos = appState.predictedPlayerPos; const renderedPos = appState.renderedPlayerPos; const dist = distance(predictedPos.x, predictedPos.y, serverPos.x, serverPos.y);
+        const snapThreshold = (parseFloat(getCssVar('--reconciliation-threshold')) || 35); const renderLerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.15;
+        if (dist > snapThreshold) { predictedPos.x = serverPos.x; predictedPos.y = serverPos.y; renderedPos.x = serverPos.x; renderedPos.y = serverPos.y; }
+        else { renderedPos.x = lerp(renderedPos.x, predictedPos.x, renderLerpFactor); renderedPos.y = lerp(renderedPos.y, predictedPos.y, renderLerpFactor); }
     }
-  
-    function drawMuzzleFlash(ctx, playerX, playerY, aimDx, aimDy) {
-      const numPoints = 5;
-      const outerRadiusBase = 9;
-      const outerRadiusVariance = 3;
-      const innerRadiusBase = 4;
-      const innerRadiusVariance = 1.5;
-      const glowRadius = 25;
-      const glowColor = "rgba(255, 200, 50, 0.25)";
-      const flashColor = "rgba(255, 230, 100, 0.95)";
-      const offsetDistance = 30;
-      const flashX = playerX + aimDx * offsetDistance;
-      const flashY = playerY + aimDy * offsetDistance;
-      const angle = Math.atan2(aimDy, aimDx);
-      ctx.save();
-      ctx.translate(flashX, flashY);
-      ctx.rotate(angle);
-      const glowGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, glowRadius);
-      glowGradient.addColorStop(0, glowColor);
-      glowGradient.addColorStop(1, "rgba(255, 200, 50, 0)");
-      ctx.fillStyle = glowGradient;
-      ctx.beginPath();
-      ctx.arc(0, 0, glowRadius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = flashColor;
-      ctx.beginPath();
-      for (let i = 0; i < numPoints * 2; i++) {
-        const radius =
-          i % 2 === 0
-            ? outerRadiusBase + Math.random() * outerRadiusVariance
-            : innerRadiusBase + Math.random() * innerRadiusVariance;
-        const pointAngle = (i / (numPoints * 2)) * (Math.PI * 2) - Math.PI / 2;
-        const px = Math.cos(pointAngle) * radius;
-        const py = Math.sin(pointAngle) * radius;
-        if (i === 0) {
-          ctx.moveTo(px, py);
-        } else {
-          ctx.lineTo(px, py);
-        }
-      }
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
+    function initListeners() {
+        log("Initializing button listeners..."); DOM.singlePlayerBtn.onclick = startSinglePlayer; DOM.multiplayerBtn.onclick = () => UI.showSection('multiplayer-menu-section');
+        DOM.hostGameBtn2.onclick = () => hostMultiplayer(2); DOM.hostGameBtn3.onclick = () => hostMultiplayer(3); DOM.hostGameBtn4.onclick = () => hostMultiplayer(4);
+        DOM.showJoinUIBtn.onclick = () => UI.showSection('join-code-section'); DOM.cancelHostBtn.onclick = leaveGame; DOM.joinGameSubmitBtn.onclick = joinMultiplayer;
+        DOM.sendChatBtn.onclick = sendChatMessage; DOM.leaveGameBtn.onclick = leaveGame; DOM.gameOverBackBtn.onclick = () => resetClientState(true);
+        DOM.gameContainer.querySelectorAll('.back-button').forEach(btn => { const targetMatch = btn.getAttribute('onclick')?.match(/'([^']+)'/); if (targetMatch && targetMatch[1]) { const targetId = targetMatch[1]; if (DOM[targetId] || document.getElementById(targetId)) { btn.onclick = (e) => { e.preventDefault(); UI.showSection(targetId); }; } else { log(`Warning: Back button target section invalid: ${targetId}`); } } else { log("Warning: Back button found without valid target in onclick:", btn); } });
     }
-  
-    function drawBulletCircle(
-      ctx,
-      bullet,
-      trailLengthFactor = 0.8,
-      trailBaseAlpha = 0.6
-    ) {
-      const { x, y, vx = 0, vy = 0, radius: r = 4, owner_type } = bullet;
-      const isPlayerBullet = owner_type === "player";
-      const color = isPlayerBullet ? bulletPlayerColor : bulletEnemyColor;
-      const speed = Math.sqrt(vx * vx + vy * vy);
-      const trailLength = r * 2 * trailLengthFactor * Math.min(1, speed / 100);
-      let startX = x,
-        startY = y;
-      if (speed > 1) {
-        startX = x - (vx / speed) * trailLength;
-        startY = y - (vy / speed) * trailLength;
-      }
-      if (trailLength > 1 && speed > 1) {
-        try {
-          const gradient = ctx.createLinearGradient(startX, startY, x, y);
-          let trailStartColor = color;
-          if (color.startsWith("#")) {
-            let alphaHex = Math.round(trailBaseAlpha * 255)
-              .toString(16)
-              .padStart(2, "0");
-            trailStartColor = color + alphaHex;
-          } else if (color.startsWith("rgb")) {
-            trailStartColor = color
-              .replace(/rgb/i, "rgba")
-              .replace(")", `, ${trailBaseAlpha})`);
-          }
-          gradient.addColorStop(0, trailStartColor);
-          gradient.addColorStop(1, color);
-          ctx.strokeStyle = gradient;
-          ctx.lineWidth = r * 0.8;
-          ctx.lineCap = "round";
-          ctx.beginPath();
-          ctx.moveTo(startX, startY);
-          ctx.lineTo(x, y);
-          ctx.stroke();
-        } catch (e) {
-          ctx.strokeStyle = color;
-          ctx.lineWidth = r * 0.8;
-          ctx.beginPath();
-          ctx.moveTo(startX, startY);
-          ctx.lineTo(x, y);
-          ctx.stroke();
+    return { resetClientState, startGameLoop, cleanupLoop, sendChatMessage, initListeners, getInterpolatedState };
+})();
+
+// --- Global Server Message Handler ---
+
+// --- Global Server Message Handler ---
+// Processes all messages received via the WebSocket
+function handleServerMessage(event) {
+    let data;
+    try { data = JSON.parse(event.data); }
+    catch (err) { error("Failed to parse server message:", err, event.data); UI.updateStatus("Received invalid data from server.", true); return; }
+
+    try {
+        // Prevent critical errors if Renderer isn't ready yet for drawing-related messages
+        if (typeof Renderer === 'undefined' && ['sp_game_started', 'game_joined', 'game_state', 'game_created'].includes(data.type)) {
+             error(`Received critical message type '${data.type}' before Renderer was ready! Check loading order.`);
+             return; // Don't process further if Renderer isn't loaded
         }
-      }
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.lineCap = "butt";
-    }
-  
-    function drawShapedBullet(
-      ctx,
-      bullet,
-      trailLengthFactor = 1.0,
-      trailBaseAlpha = 0.7
-    ) {
-      const { x, y, vx = 0, vy = 0, radius: r = 4, owner_type } = bullet;
-      const isPlayerBullet = owner_type === "player";
-      const color = isPlayerBullet ? bulletPlayerColor : bulletEnemyColor;
-      const speed = Math.sqrt(vx * vx + vy * vy);
-      const baseLength = 8,
-        baseWidth = 4;
-      const scaleFactor = r / 4;
-      const shapeLength = baseLength * scaleFactor;
-      const shapeWidth = baseWidth * scaleFactor;
-      const trailLength =
-        shapeLength * trailLengthFactor * Math.min(1, speed / 150);
-      let startX = x,
-        startY = y;
-      if (speed > 1) {
-        startX = x - (vx / speed) * trailLength;
-        startY = y - (vy / speed) * trailLength;
-      }
-      if (trailLength > 1 && speed > 1) {
-        try {
-          const gradient = ctx.createLinearGradient(startX, startY, x, y);
-          let trailStartColor = color;
-          if (color.startsWith("#")) {
-            let alphaHex = Math.round(trailBaseAlpha * 255)
-              .toString(16)
-              .padStart(2, "0");
-            trailStartColor = color + alphaHex;
-          } else if (color.startsWith("rgb")) {
-            trailStartColor = color
-              .replace(/rgb/i, "rgba")
-              .replace(")", `, ${trailBaseAlpha})`);
-          }
-          gradient.addColorStop(0, trailStartColor);
-          gradient.addColorStop(1, color);
-          ctx.strokeStyle = gradient;
-          ctx.lineWidth = shapeWidth * 0.6;
-          ctx.lineCap = "round";
-          ctx.beginPath();
-          ctx.moveTo(startX, startY);
-          ctx.lineTo(x, y);
-          ctx.stroke();
-        } catch (e) {
-          ctx.strokeStyle = color;
-          ctx.lineWidth = shapeWidth * 0.6;
-          ctx.beginPath();
-          ctx.moveTo(startX, startY);
-          ctx.lineTo(x, y);
-          ctx.stroke();
-        }
-      }
-      const angle = Math.atan2(vy, vx);
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(angle);
-      ctx.fillStyle = color;
-      ctx.fillRect(-shapeLength / 2, -shapeWidth / 2, shapeLength, shapeWidth);
-      const noseLength = shapeLength * 0.4;
-      ctx.beginPath();
-      ctx.moveTo(shapeLength / 2, 0);
-      ctx.lineTo(shapeLength / 2 - noseLength, -shapeWidth / 2);
-      ctx.lineTo(shapeLength / 2 - noseLength, shapeWidth / 2);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-      ctx.lineCap = "butt";
-    }
-  
-    function drawBullets(ctx, bullets) {
-      if (!bullets) return;
-      Object.values(bullets).forEach((b) => {
-        if (!b) return;
-        const bt = b.bullet_type || "standard";
-        const hv = Math.abs(b.vx ?? 0) > 0.01 || Math.abs(b.vy ?? 0) > 0.01;
-        if (bt === "ammo_heavy_slug") {
-          if (hv) {
-            drawShapedBullet(ctx, b, 0.6, 0.8);
-          } else {
-            drawBulletCircle(ctx, b, 0.4, 0.8);
-          }
-        } else if (bt === "ammo_shotgun") {
-          drawBulletCircle(ctx, b, 0.5, 0.5);
-        } else if (
-          bt === "ammo_rapid_fire" ||
-          bt === "standard" ||
-          bt === "standard_enemy"
-        ) {
-          if (hv) {
-            drawShapedBullet(ctx, b, 1.0, 0.7);
-          } else {
-            drawBulletCircle(ctx, b, 0, 0);
-          }
-        } else {
-          drawBulletCircle(ctx, b, 0.8, 0.6);
-        }
-      });
-    }
-  
-    function drawPowerupSquare(ctx, x, y, size, type) {
-      let baseColor = powerupDefaultColor;
-      let symbol = "?";
-      let symbolColor = "#FFFFFF";
-      let symbolSizeFactor = 0.7;
-      if (type === "health") {
-        symbol = "+";
-        baseColor = powerupHealthColor;
-        symbolColor = "#FFFFFF";
-      } else if (type === "gun_upgrade") {
-        symbol = "▲";
-        baseColor = powerupGunColor;
-        symbolColor = "#FFFF00";
-        symbolSizeFactor = 0.6;
-      } else if (type === "speed_boost") {
-        symbol = "»";
-        baseColor = powerupSpeedColor;
-        symbolColor = "#FFFFFF";
-        symbolSizeFactor = 0.8;
-      } else if (type === "armor") {
-        symbol = "■";
-        baseColor = powerupArmorColor;
-        symbolColor = "#DDDDDD";
-        symbolSizeFactor = 0.5;
-      } else if (type === "ammo_shotgun") {
-        symbol = "::";
-        baseColor = powerupShotgunColor;
-        symbolColor = "#FFFFFF";
-        symbolSizeFactor = 0.6;
-      } else if (type === "ammo_heavy_slug") {
-        symbol = "●";
-        baseColor = powerupSlugColor;
-        symbolColor = "#FFEBCD";
-        symbolSizeFactor = 0.5;
-      } else if (type === "ammo_rapid_fire") {
-        symbol = ">";
-        baseColor = powerupRapidColor;
-        symbolColor = "#333333";
-        symbolSizeFactor = 0.6;
-      } else if (type === "bonus_score") {
-        symbol = "$";
-        baseColor = powerupScoreColor;
-        symbolColor = "#FFFFFF";
-      }
-      const t = performance.now();
-      const pulseSpeed = 0.002;
-      const pulseSizeAmount = 0.08;
-      const pulseAlphaAmount = 0.15;
-      const pulseFactor = Math.sin(t * pulseSpeed);
-      const currentSize = size * (1 + pulseFactor * pulseSizeAmount);
-      const currentAlpha = 0.85 + pulseFactor * pulseAlphaAmount;
-      ctx.save();
-      ctx.globalAlpha = currentAlpha;
-      const glowRadius = currentSize * 0.7;
-      const glowColor = baseColor.replace("rgb", "rgba").replace(")", `, 0.3)`);
-      try {
-        const gradient = ctx.createRadialGradient(
-          x,
-          y,
-          currentSize * 0.3,
-          x,
-          y,
-          glowRadius
-        );
-        gradient.addColorStop(0, glowColor);
-        gradient.addColorStop(
-          1,
-          baseColor.replace("rgb", "rgba").replace(")", `, 0.0)`)
-        );
-        ctx.fillStyle = gradient;
-        ctx.fillRect(
-          x - glowRadius,
-          y - glowRadius,
-          glowRadius * 2,
-          glowRadius * 2
-        );
-      } catch (e) {}
-      ctx.fillStyle = baseColor;
-      ctx.beginPath();
-      if (typeof drawRoundedRect === "function") {
-        drawRoundedRect(
-          ctx,
-          x - currentSize / 2,
-          y - currentSize / 2,
-          currentSize,
-          currentSize,
-          currentSize * 0.15
-        );
-      } else {
-        ctx.rect(
-          x - currentSize / 2,
-          y - currentSize / 2,
-          currentSize,
-          currentSize
-        );
-      }
-      ctx.fill();
-      ctx.fillStyle = symbolColor;
-      let fs = Math.round(currentSize * symbolSizeFactor);
-      fs = Math.max(8, fs);
-      ctx.font = `bold ${fs}px ${fontFamily}`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.shadowColor = "rgba(0,0,0,0.5)";
-      ctx.shadowBlur = 2;
-      ctx.shadowOffsetX = 1;
-      ctx.shadowOffsetY = 1;
-      ctx.fillText(symbol, x, y + currentSize * 0.03);
-      ctx.restore();
-    }
-  
-    function drawPowerups(ctx, powerups) {
-      if (!powerups) return;
-      Object.values(powerups).forEach((p) => {
-        if (!p) return;
-        const s = p.size ?? 20;
-        drawPowerupSquare(ctx, p.x, p.y, s, p.type);
-      });
-    }
-  
-  
-        // --- Main Render Function --- V3 --- Correct Signature ---
-    function drawGame(
-            ctx,
-            appState,
-            stateToRender,
-            localPlayerMuzzleFlash,      // Corrected to match main.js variable
-            localPlayerPushbackAnim,     // Corrected to match main.js variable
-            activeBloodSparkEffects,     // Corrected to match main.js variable
-            activeEnemyBubbles           // This one already matched
-        ) {
-        if (!mainCtx) mainCtx = ctx;
-        if (!ctx || !appState) {
-          console.error("drawGame missing context or appState!");
-          return;
-        }
-        const now = performance.now();
-      
-        let shakeApplied = false,
-          shakeOffsetX = 0,
-          shakeOffsetY = 0;
-        if (currentShakeMagnitude > 0 && now < shakeEndTime) {
-          shakeApplied = true;
-          const timeRemaining = shakeEndTime - now;
-          const initialDuration = Math.max(1, shakeEndTime - (now - timeRemaining));
-          let currentMag =
-            currentShakeMagnitude * (timeRemaining / initialDuration);
-          currentMag = Math.max(0, currentMag);
-          if (currentMag > 0.5) {
-            const shakeAngle = Math.random() * Math.PI * 2;
-            shakeOffsetX = Math.cos(shakeAngle) * currentMag;
-            shakeOffsetY = Math.sin(shakeAngle) * currentMag;
-          } else {
-            currentShakeMagnitude = 0;
-            shakeEndTime = 0;
-            shakeApplied = false;
-          }
-        } else if (currentShakeMagnitude > 0) {
-          currentShakeMagnitude = 0;
-          shakeEndTime = 0;
-        }
-      
-        ctx.globalAlpha = 1.0;
-        if (!isBackgroundReady) {
-          ctx.fillStyle = dayBaseColor;
-          ctx.fillRect(0, 0, appState.canvasWidth, appState.canvasHeight);
-          if (appState?.serverState && currentBackgroundIsNight === null) {
-            updateGeneratedBackground(
-              appState.serverState.is_night
-            );
-          }
-        } else if (isTransitioningBackground) {
-          const elapsed = now - transitionStartTime;
-          const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS);
-          ctx.globalAlpha = 1.0;
-          ctx.drawImage(oldOffscreenCanvas, 0, 0);
-          ctx.globalAlpha = progress;
-          ctx.drawImage(offscreenCanvas, 0, 0);
-          ctx.globalAlpha = 1.0;
-          if (progress >= 1.0) {
-            isTransitioningBackground = false;
-          }
-        } else {
-          ctx.drawImage(offscreenCanvas, 0, 0);
-        }
-      
-        const currentTempFofect = appState?.currentTemp;
-        if (
-          currentTempFofect !== null &&
-          typeof currentTempFofect !== "undefined" &&
-          currentTempFofect >= HEAT_HAZE_START_TEMP
-        ) {
-          const hazeIntensity = Math.max(
-            0,
-            Math.min(
-              1,
-              (currentTempFofect - HEAT_HAZE_START_TEMP) /
-                (HEAT_HAZE_MAX_TEMP - HEAT_HAZE_START_TEMP)
-            )
-          );
-          if (hazeIntensity > 0.01) {
-            if (
-                typeof hazeCanvas !== 'undefined' &&
-                typeof hazeCtx !== 'undefined' &&
-                isFinite(appState.canvasWidth) && appState.canvasWidth > 0 &&
-                isFinite(appState.canvasHeight) && appState.canvasHeight > 0
-               )
-            {
-                if (
-                  hazeCanvas.width !== appState.canvasWidth ||
-                  hazeCanvas.height !== appState.canvasHeight
-                ) {
-                  hazeCanvas.width = appState.canvasWidth;
-                  hazeCanvas.height = appState.canvasHeight;
-                }
-                hazeCtx.clearRect(0, 0, appState.canvasWidth, appState.canvasHeight);
-                if (ctx.canvas) {
-                    hazeCtx.drawImage(ctx.canvas, 0, 0);
+
+        switch (data.type) {
+            // --- Association Cases (Now include canvas dimension setting) ---
+            case 'game_created':
+                log("Received 'game_created'");
+                appState.localPlayerId = data.player_id;
+                appState.currentGameId = data.game_id;
+                appState.serverState = data.initial_state; // Initial state received
+                appState.maxPlayersInGame = data.max_players;
+
+                // --- NEW: SET CANVAS DIMENSIONS IMMEDIATELY ---
+                if (data.initial_state && typeof data.initial_state.canvas_width === 'number' && typeof data.initial_state.canvas_height === 'number') {
+                    appState.canvasWidth = data.initial_state.canvas_width;
+                    appState.canvasHeight = data.initial_state.canvas_height;
+                    if (DOM.canvas) {
+                        DOM.canvas.width = appState.canvasWidth;
+                        DOM.canvas.height = appState.canvasHeight;
+                        log(`Canvas dimensions set to: ${DOM.canvas.width}x${DOM.canvas.height}`);
+                        // Force initial background generation *after* setting dimensions
+                        if (typeof Renderer !== 'undefined' && appState.serverState) {
+                             Renderer.updateGeneratedBackground(appState.serverState.is_night);
+                        }
+                    } else {
+                        error("DOM.canvas not found when trying to set dimensions!");
+                    }
                 } else {
-                    console.error("Heat Haze: Main context canvas missing.");
-                    return;
+                    error("Initial state ('game_created') missing canvas dimensions!", data.initial_state);
+                    // Fallback - dimensions might be set later via game_state if server includes them
+                    appState.canvasWidth = 1600; // Default fallback
+                    appState.canvasHeight = 900; // Default fallback
+                    if (DOM.canvas) {
+                        DOM.canvas.width = appState.canvasWidth;
+                        DOM.canvas.height = appState.canvasHeight;
+                    }
                 }
-      
-                const numLayers =
-                  1 + Math.floor(hazeIntensity * (HEAT_HAZE_LAYERS_MAX - 1));
-                const baseAlpha = HEAT_HAZE_BASE_ALPHA * hazeIntensity;
-                for (let i = 0; i < numLayers; i++) {
-                  const timeFactor = now * HEAT_HAZE_SPEED;
-                  const layerOffsetFactor = i * 0.8;
-                  const verticalOffset =
-                    Math.sin(timeFactor + layerOffsetFactor) *
-                      HEAT_HAZE_MAX_OFFSET *
-                      hazeIntensity -
-                    i * 0.3 * hazeIntensity;
-                  const layerAlpha = baseAlpha * (1 - i / (numLayers * 1.5));
-                  ctx.globalAlpha = Math.max(0, Math.min(1, layerAlpha));
-                  ctx.drawImage(
-                    hazeCanvas,
-                    0,
-                    0,
-                    appState.canvasWidth,
-                    appState.canvasHeight,
-                    0,
-                    verticalOffset,
-                    appState.canvasWidth,
-                    appState.canvasHeight
-                  );
+                // -------------------------------------------
+
+                const hostP = appState.serverState?.players[appState.localPlayerId];
+                if (hostP) { appState.predictedPlayerPos = { x: hostP.x, y: hostP.y }; appState.renderedPlayerPos = { x: hostP.x, y: hostP.y }; }
+                if (!appState.maxPlayersInGame) { error("'game_created' missing 'max_players'!"); appState.maxPlayersInGame = '?'; }
+
+                DOM.gameCodeDisplay.textContent = appState.currentGameId || 'ERROR';
+                const currentP = Object.keys(appState.serverState?.players || {}).length;
+                DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentP}/${appState.maxPlayersInGame})`;
+                UI.updateStatus(`Game hosted. Code: ${appState.currentGameId}`);
+                UI.showSection('host-wait-section');
+                // Host loop starts when game status changes from 'waiting' via game_state update
+                break;
+
+            case 'game_joined':
+                log("Received 'game_joined'");
+                appState.localPlayerId = data.player_id;
+                appState.currentGameId = data.game_id;
+                appState.serverState = data.initial_state; // Initial state received
+                appState.maxPlayersInGame = appState.serverState?.max_players;
+
+                // --- NEW: SET CANVAS DIMENSIONS IMMEDIATELY ---
+                if (data.initial_state && typeof data.initial_state.canvas_width === 'number' && typeof data.initial_state.canvas_height === 'number') {
+                    appState.canvasWidth = data.initial_state.canvas_width;
+                    appState.canvasHeight = data.initial_state.canvas_height;
+                    if (DOM.canvas) {
+                        DOM.canvas.width = appState.canvasWidth;
+                        DOM.canvas.height = appState.canvasHeight;
+                        log(`Canvas dimensions set to: ${DOM.canvas.width}x${DOM.canvas.height}`);
+                        // Force initial background generation *after* setting dimensions
+                        if (typeof Renderer !== 'undefined' && appState.serverState) {
+                             Renderer.updateGeneratedBackground(appState.serverState.is_night);
+                        }
+                    } else {
+                        error("DOM.canvas not found when trying to set dimensions!");
+                    }
+                } else {
+                    error("Initial state ('game_joined') missing canvas dimensions!", data.initial_state);
+                    appState.canvasWidth = 1600; // Fallback
+                    appState.canvasHeight = 900; // Fallback
+                    if (DOM.canvas) {
+                        DOM.canvas.width = appState.canvasWidth;
+                        DOM.canvas.height = appState.canvasHeight;
+                    }
                 }
-                ctx.globalAlpha = 1.0;
-            } else {
-                 console.error("Heat Haze: Skipping due to invalid canvas/dimensions.");
-            }
-          }
+                // -------------------------------------------
+
+                if (!appState.maxPlayersInGame) { error("'game_joined' initial_state missing 'max_players'!"); appState.maxPlayersInGame = '?'; }
+                const joinedP = appState.serverState?.players[appState.localPlayerId];
+                if (joinedP) { appState.predictedPlayerPos = { x: joinedP.x, y: joinedP.y }; appState.renderedPlayerPos = { x: joinedP.x, y: joinedP.y }; }
+
+                UI.updateStatus(`Joined game ${appState.currentGameId}. Get ready!`);
+                UI.showSection('game-area');
+                // Initial UI updates (HUD, Countdown) - Background already triggered above
+                if (appState.serverState) {
+                    UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState);
+                }
+                Game.startGameLoop(); // Joining client starts loop immediately
+                break;
+
+            case 'sp_game_started':
+                log("Received 'sp_game_started'");
+                appState.localPlayerId = data.player_id;
+                appState.currentGameId = data.game_id;
+                appState.serverState = data.initial_state; // Initial state received
+                appState.maxPlayersInGame = 1;
+
+                // --- NEW: SET CANVAS DIMENSIONS IMMEDIATELY ---
+                if (data.initial_state && typeof data.initial_state.canvas_width === 'number' && typeof data.initial_state.canvas_height === 'number') {
+                    appState.canvasWidth = data.initial_state.canvas_width;
+                    appState.canvasHeight = data.initial_state.canvas_height;
+                    if (DOM.canvas) {
+                        DOM.canvas.width = appState.canvasWidth;
+                        DOM.canvas.height = appState.canvasHeight;
+                        log(`Canvas dimensions set to: ${DOM.canvas.width}x${DOM.canvas.height}`);
+                        // Force initial background generation *after* setting dimensions
+                        if (typeof Renderer !== 'undefined' && appState.serverState) {
+                            Renderer.updateGeneratedBackground(appState.serverState.is_night);
+                        }
+                    } else {
+                        error("DOM.canvas not found when trying to set dimensions!");
+                    }
+                } else {
+                    error("Initial state ('sp_game_started') missing canvas dimensions!", data.initial_state);
+                    appState.canvasWidth = 1600; // Fallback
+                    appState.canvasHeight = 900; // Fallback
+                    if (DOM.canvas) {
+                        DOM.canvas.width = appState.canvasWidth;
+                        DOM.canvas.height = appState.canvasHeight;
+                    }
+                }
+                // -------------------------------------------
+
+                const spP = appState.serverState?.players[appState.localPlayerId];
+                if (spP) { appState.predictedPlayerPos = { x: spP.x, y: spP.y }; appState.renderedPlayerPos = { x: spP.x, y: spP.y }; }
+
+                UI.updateStatus("Single Player Game Started!"); UI.showSection('game-area');
+                // Initial UI updates (HUD, Countdown) - Background already triggered above
+                if (appState.serverState) {
+                    UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState);
+                }
+                Game.startGameLoop(); // SP client starts loop immediately
+                break;
+
+                // --- Game State Update ---
+            case 'game_state':
+                // If client is in menu mode, ignore state updates entirely.
+                if (appState.mode === 'menu') {
+                    // log("Ignoring game_state message while in menu mode.");
+                    return; // Stop processing this message
+                }
+
+                // --- Proceed with processing state if not in menu ---
+                const previousStatus = appState.serverState?.status;
+                const previousPlayerState = appState.serverState?.players?.[appState.localPlayerId];
+
+                // Update state history for interpolation
+                appState.previousServerState = appState.lastServerState;
+                appState.lastServerState = appState.serverState;
+                appState.serverState = data.state; // Store the new state
+                const newState = appState.serverState; // Alias for clarity
+                const currentPlayerState = newState?.players?.[appState.localPlayerId];
+
+                // --- CRITICAL: Ensure canvas dimensions are set if missed initially ---
+                // This is a safety net. The primary setting should happen in the association cases.
+                if ((DOM.canvas.width <= 0 || DOM.canvas.height <= 0 || DOM.canvas.width !== newState.canvas_width) &&
+                    newState && typeof newState.canvas_width === 'number' && typeof newState.canvas_height === 'number') {
+                    error(`Correcting canvas dimensions via game_state: ${newState.canvas_width}x${newState.canvas_height}`);
+                    appState.canvasWidth = newState.canvas_width;
+                    appState.canvasHeight = newState.canvas_height;
+                    if (DOM.canvas) {
+                        DOM.canvas.width = appState.canvasWidth;
+                        DOM.canvas.height = appState.canvasHeight;
+                        // Force background update if dimensions changed significantly
+                        if (typeof Renderer !== 'undefined' && newState) {
+                            Renderer.updateGeneratedBackground(newState.is_night);
+                        }
+                    }
+                }
+                // -----------------------------------------------------------------
+
+
+                // Update local client variables mirrored from server state
+                appState.currentTemp = newState.current_temperature ?? 18.0; // Use a default if missing
+                appState.isRaining = newState.is_raining ?? false;
+                appState.isDustStorm = newState.is_dust_storm ?? false;
+                UI.updateEnvironmentDisplay(); // Update temp display
+
+
+                // --- Update Visual Snake State ---
+                const serverSnakeState = newState.snake_state;
+                if (serverSnakeState && typeof snake !== 'undefined') { // Check if snake object exists
+                    snake.isActiveFromServer = serverSnakeState.active;
+                    snake.serverHeadX = serverSnakeState.head_x;
+                    snake.serverHeadY = serverSnakeState.head_y;
+                    snake.serverBaseY = serverSnakeState.base_y;
+                    // If snake just became active visually, ensure segment array starts correctly
+                    if (snake.isActiveFromServer && snake.segments.length === 0) {
+                        snake.segments = [{ x: snake.serverHeadX, y: snake.serverHeadY, time: performance.now() }];
+                    } else if (!snake.isActiveFromServer) {
+                        snake.segments = []; // Clear if inactive
+                    }
+                } else if (typeof snake !== 'undefined') {
+                     snake.isActiveFromServer = false; // Ensure inactive if state missing
+                     snake.segments = [];
+                }
+                // --- End Snake Update ---
+
+
+                // --- Trigger Screen Shake on Snake Bite (Check Local Player) ---
+                if (currentPlayerState?.trigger_snake_bite_shake_this_tick) {
+                    // Use constants defined in your JS (ensure they match backend if needed)
+                    const shakeMag = snake?.shakeMagnitude ?? 15.0; // Access magnitude from snake object or default
+                    const shakeDur = snake?.shakeDurationMs ?? 400.0; // Access duration from snake object or default
+                    if(typeof Renderer !== 'undefined') {
+                         Renderer.triggerShake(shakeMag, shakeDur);
+                    }
+                }
+                // --- End Shake Trigger ---
+
+
+                 // Trigger screen shake if local player took damage
+                if (previousPlayerState && currentPlayerState &&
+                    typeof currentPlayerState.health === 'number' &&
+                    typeof previousPlayerState.health === 'number' &&
+                    currentPlayerState.health < previousPlayerState.health)
+                {
+                    const damageTaken = previousPlayerState.health - currentPlayerState.health;
+                    const baseMag = 5; const dmgScale = 0.18; const maxMag = 18; // Shake params
+                    const shakeMagnitude = Math.min(maxMag, baseMag + damageTaken * dmgScale);
+                     if(typeof Renderer !== 'undefined') {
+                         Renderer.triggerShake(shakeMagnitude, 250); // Trigger shake effect
+                    }
+                }
+
+                 // Trigger hit pause if local player was hit this tick
+                 // Check currentPlayerState exists before accessing properties
+                 if (currentPlayerState?.hit_flash_this_tick && hitPauseFrames <= 0) {
+                     hitPauseFrames = 3; // Pause rendering for 3 frames
+                 }
+
+                // --- V3: Update Blood Spark Effects ---
+                if (newState.enemies) {
+                    const now = performance.now();
+                    const sparkDuration = 300; // How long sparks stay visible (ms)
+
+                    // Add/refresh sparks for enemies hit *this* tick according to server state
+                    for (const enemyId in newState.enemies) {
+                        const enemy = newState.enemies[enemyId];
+                        // Check if enemy has a *new* last_damage_time compared to previous state
+                        const previousEnemy = appState.lastServerState?.enemies?.[enemyId];
+                        if (enemy && enemy.last_damage_time &&
+                            (!previousEnemy || enemy.last_damage_time > (previousEnemy.last_damage_time || 0)))
+                        {
+                            // Server uses seconds, performance.now() is ms
+                            const serverHitTimeMs = enemy.last_damage_time * 1000;
+                            // Only trigger if the hit happened very recently to avoid re-triggering on late packets
+                            if (now - serverHitTimeMs < 200) {
+                                activeBloodSparkEffects[enemyId] = now + sparkDuration;
+                            }
+                        }
+                    }
+
+                    // Clean up expired sparks (optional, could also be done in renderer)
+                    for (const enemyId in activeBloodSparkEffects) {
+                        if (now >= activeBloodSparkEffects[enemyId]) {
+                            delete activeBloodSparkEffects[enemyId];
+                        }
+                    }
+                }
+                // --- End V3 Blood Spark Update ---
+
+
+                // Store max_players if received in state update (e.g., if missed initial message)
+                if (!appState.maxPlayersInGame && newState.max_players) {
+                     appState.maxPlayersInGame = newState.max_players;
+                }
+
+                // --- Handle transitions between game statuses ---
+                if (newState.status !== previousStatus) {
+                    log(`[Client State Change] From ${previousStatus || 'null'} to ${newState.status}`);
+
+                    // Logic for STARTING the game (Countdown or Active)
+                    if ((newState.status === 'countdown' || newState.status === 'active') && previousStatus !== 'active' && previousStatus !== 'countdown') {
+                        UI.updateStatus(newState.status === 'countdown' ? "Countdown starting..." : "Game active!");
+                        UI.showSection('game-area'); // Ensure game area is visible
+                        if (!appState.animationFrameId) { // Start loop if not already running
+                            log(`--> Starting game loop NOW (triggered by ${newState.status} state update).`);
+                            if (typeof Renderer !== 'undefined' && newState) { Renderer.updateGeneratedBackground(newState.is_night); }
+                            Game.startGameLoop();
+                        }
+                    }
+                    // Logic for HOST potentially returning to WAITING state
+                    else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host' && previousStatus !== 'waiting') {
+                        UI.updateStatus("Game reverted to waiting lobby.", true); // Inform host
+                        UI.showSection('host-wait-section');
+                        const currentPWaiting = Object.keys(newState.players || {}).length;
+                        DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentPWaiting}/${appState.maxPlayersInGame || '?'})`;
+                        Game.cleanupLoop(); // Stop loop if returning to wait
+                    }
+                    // If status becomes 'finished', ensure loop cleanup and show game over
+                    // This is a *fallback* to the 'game_over_notification'
+                    else if (newState.status === 'finished' && previousStatus !== 'finished') {
+                         log("-> Game Over sequence initiated by 'finished' status in game_state.");
+                         Game.cleanupLoop();
+                         UI.showGameOver(newState); // Show game over based on this final state
+                    }
+
+                } // End status change handling
+
+                // --- Update UI elements based on current state ---
+                // Only update HUD/Timers if game is actually running client-side
+                if (appState.animationFrameId && (newState.status === 'countdown' || newState.status === 'active')) {
+                    UI.updateHUD(newState);
+                    UI.updateCountdown(newState);
+                    UI.updateDayNight(newState);
+                }
+                // Update waiting message specifically for hosts in waiting state
+                else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') {
+                    const pCount = Object.keys(newState.players || {}).length;
+                    DOM.waitingMessage.textContent = `Waiting for Team Mate... (${pCount}/${appState.maxPlayersInGame || '?'})`;
+                }
+
+                // Update enemy speech bubbles based on state
+                const speakerId = newState.enemy_speaker_id; const speechText = newState.enemy_speech_text;
+                if (speakerId && speechText) {
+                    activeEnemyBubbles[speakerId] = { text: speechText.substring(0, 50), endTime: performance.now() + 3000 };
+                }
+                break; // End game_state
+
+            // --- Explicit Game Over Notification (Primary Trigger) ---
+            case 'game_over_notification':
+                log("Received 'game_over_notification'");
+                if (data.final_state) {
+                    appState.serverState = data.final_state; // Store final state
+                    UI.updateStatus("Game Over!");
+                    Game.cleanupLoop(); // --- Stop the game loop FIRST
+                    UI.showGameOver(data.final_state); // --- THEN show the game over screen
+                    log("-> Game Over sequence initiated by notification.");
+                } else {
+                    error("Received 'game_over_notification' without final_state data.");
+                    Game.resetClientState(true); // Fallback to menu
+                }
+                break;
+
+             // --- Chat Message ---
+             case 'chat_message':
+                 const senderId = data.sender_id; const msgText = data.message;
+                 if (!senderId || !msgText) { // Basic validation
+                      log("Received incomplete chat message", data);
+                      break;
+                 }
+                 const isSelf = senderId === appState.localPlayerId;
+                 UI.addChatMessage(senderId, msgText, isSelf); // Add to chat log
+                 // Display as speech bubble only if the player is currently in the game state
+                 if (appState.serverState?.players?.[senderId]) {
+                      activeSpeechBubbles[senderId] = { text: msgText.substring(0, 50), endTime: performance.now() + 4000 };
+                 }
+                 break;
+
+             // --- Error Message ---
+             case 'error':
+                 error("[Client] Server Error Message:", data.message);
+                 UI.updateStatus(`Server Error: ${data.message}`, true);
+                 // Handle specific errors causing UI state changes
+                 if (appState.mode === 'multiplayer-client' && (data.message.includes('not found') || data.message.includes('not waiting') || data.message.includes('full') || data.message.includes('finished'))) {
+                     UI.showSection('join-code-section'); appState.mode = 'menu'; // Back to join input
+                 } else if (appState.mode === 'multiplayer-host' && data.message.includes('Creation Error')) {
+                     Game.resetClientState(true); // Back to main menu
+                 } else if (data.message === 'Please create or join a game first.') {
+                      Game.resetClientState(true); // Back to main menu if disconnected/out of sync
+                 }
+                 break;
+
+            // Unknown message type
+            default:
+                log(`Unknown message type received: ${data.type}`);
+        } // End switch
+    } catch (handlerError) {
+        error("Error inside handleServerMessage logic:", handlerError, "Data:", data); // Log data too
+        UI.updateStatus("Client error processing message.", true);
+    }
+} // End handleServerMessage
+
+// --- Global Initialization ---
+function showSection(sectionId) { UI.showSection(sectionId); }
+
+// Initialize after the DOM is fully loaded
+document.addEventListener('DOMContentLoaded', () => {
+    log("DOM fully loaded and parsed.");
+
+    if (typeof Renderer === 'undefined') {
+        error("CRITICAL: Renderer is not defined after DOM load! Check renderer.js loading and errors.");
+        UI.updateStatus("Initialization Error: Renderer failed. Refresh.", true);
+        return;
+    }
+    if (DOM.canvas) {
+        DOM.ctx = DOM.canvas.getContext('2d');
+        if (!DOM.ctx) {
+            error("Failed to get 2D context from canvas!");
+            UI.updateStatus("Error: Cannot get canvas context. Refresh.", true);
+            return;
         }
-      
-        if (shakeApplied) {
-          ctx.save();
-          ctx.translate(shakeOffsetX, shakeOffsetY);
-        }
-      
-        if (!stateToRender) {
-          if (shakeApplied) ctx.restore();
-          return;
-        }
-        drawCampfire(ctx, stateToRender.campfire, appState.canvasWidth, appState.canvasHeight);
-        if (typeof snake !== "undefined") drawSnake(ctx, snake);
-        drawPowerups(ctx, stateToRender.powerups);
-        drawBullets(ctx, stateToRender.bullets);
-      
-        drawEnemies(
-            ctx,                          // Correct 1st argument
-            stateToRender.enemies,        // Correct 2nd argument
-            activeBloodSparkEffects    // Correct 3rd argument (was the 4th)
-          );
-          if (typeof activeSpeechBubbles !== "undefined" && appState)
-            drawPlayers(
-              ctx,
-              stateToRender.players,
-              appState,
-              localPlayerMuzzleFlash,
-              localPlayerPushbackAnim
-            );
-          if (typeof activeSpeechBubbles !== "undefined" && appState)
-            drawSpeechBubbles(
-              ctx,
-              stateToRender.players,
-              activeSpeechBubbles,
-              appState
-            );
-          drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles);
-          drawDamageTexts(ctx, stateToRender.damage_texts);
-          let shouldDrawMuzzleFlash =
-            localPlayerMuzzleFlash?.active &&
-            now < localPlayerMuzzleFlash?.endTime;
-          if (shouldDrawMuzzleFlash) {
-            drawMuzzleFlash(
-              ctx,
-              appState.renderedPlayerPos.x,
-              appState.renderedPlayerPos.y,
-              localPlayerMuzzleFlash.aimDx,
-              localPlayerMuzzleFlash.aimDy
-            );
-          } else if (localPlayerMuzzleFlash?.active) {
-            localPlayerMuzzleFlash.active = false;
-          }
-      
-        if (shakeApplied) {
-          ctx.restore();
-        }
-      
-        ctx.globalAlpha = 1.0;
-        if (appState?.isRaining) {
-          const RAIN_SPEED_Y = 12;
-          const RAIN_SPEED_X = 1;
-          ctx.strokeStyle = RAIN_COLOR;
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          for (let i = 0; i < RAIN_DROPS; i++) {
-            const rainX = ((i * 137 + now * 0.05) % (appState.canvasWidth + 100)) - 50;
-            const rainY = (i * 271 + now * 0.3) % appState.canvasHeight;
-            const endX = rainX + RAIN_SPEED_X;
-            const endY = rainY + RAIN_SPEED_Y;
-            ctx.moveTo(rainX, rainY);
-            ctx.lineTo(endX, endY);
-          }
-          ctx.stroke();
-        } else if (appState?.isDustStorm) {
-          ctx.fillStyle = "rgba(229, 169, 96, 0.2)";
-          ctx.fillRect(0, 0, appState.canvasWidth, appState.canvasHeight);
-        }
-        if (appState)
-          drawTemperatureTint(ctx, appState.currentTemp, appState.canvasWidth, appState.canvasHeight);
-        const localPlayerState = stateToRender.players?.[appState?.localPlayerId];
-        if (
-          localPlayerState &&
-          localPlayerState.health < DAMAGE_VIGNETTE_HEALTH_THRESHOLD
-        ) {
-          const vi =
-            1.0 - localPlayerState.health / DAMAGE_VIGNETTE_HEALTH_THRESHOLD;
-          drawDamageVignette(ctx, vi, appState.canvasWidth, appState.canvasHeight);
-        }
-      
-        ctx.globalAlpha = 1.0;
-      }
-  
-    return { drawGame, triggerShake, updateGeneratedBackground };
-  })(); // End Renderer module IIFE
-  
-  console.log(
-    "--- Renderer.js: Executed. Renderer object defined?",
-    typeof Renderer
-  );
-  
+    } else {
+        error("Canvas element not found!");
+        UI.updateStatus("Error: Canvas element missing. Refresh.", true);
+        return;
+    }
+
+    UI.updateStatus("Initializing Connection...");
+    try {
+        Game.initListeners();
+        Network.connect(() => { /* Connection success handled within Network.connect */ });
+    } catch (initError) {
+        error("Initialization failed:", initError);
+        UI.updateStatus("Error initializing game. Please refresh.", true);
+    }
+});
+
+// --- End main.js ---
