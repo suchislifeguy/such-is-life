@@ -433,8 +433,11 @@ const Renderer = (() => {
         const nowSeconds = t / 1000.0;
         const snakeEffect = enemyState?.effects?.snake_bite_slow;
         const isSnakeBitten = snakeEffect && typeof snakeEffect.expires_at === 'number' && nowSeconds < snakeEffect.expires_at;
-        // Use the hit_flash_this_tick flag sent from server to trigger blood sparks
-        const isHitTriggered = enemyState?.hit_flash_this_tick ?? false;
+        // Use last_damage_time for blood sparks
+        const showBloodSparks = enemyState?.last_damage_time && (t - (enemyState.last_damage_time * 1000)) < 150;
+
+        // --- Get Attack State for Visuals ---
+        const attackState = enemyState?.attack_state || 'idle'; // idle, winding_up, attacking
 
         ctx.save();
 
@@ -448,41 +451,95 @@ const Renderer = (() => {
             const shakoHeight = headRadius * 1.5; const shakoWidth = headRadius * 1.8; const shakoBaseY = headCenterY - headRadius * 0.8;
             const shakoPeakHeight = shakoHeight * 0.2; const shakoPeakWidth = shakoWidth * 1.1;
 
-            // Legs & Boots
+            // Legs & Boots (Unchanged)
             ctx.fillStyle = enemyBootColor;
             ctx.fillRect(x - legSpacing - legWidth / 2, legTopY, legWidth, legHeight);
             ctx.fillRect(x + legSpacing - legWidth / 2, legTopY, legWidth, legHeight);
             ctx.fillStyle = enemyBootColor;
             ctx.fillRect(x - legSpacing - bootWidth / 2, bootTopY, bootWidth, bootHeight);
             ctx.fillRect(x + legSpacing - bootWidth / 2, bootTopY, bootWidth, bootHeight);
-            // Body
+
+            // Body (Add Wind-up Tint)
             ctx.fillStyle = enemyGiantRed;
             ctx.fillRect(x - bodyWidth / 2, bodyTopY, bodyWidth, bodyHeight);
-            // Belt
+            if (attackState === 'winding_up') {
+                ctx.fillStyle = 'rgba(255, 255, 100, 0.15)'; // Subtle yellow glow/tint
+                ctx.fillRect(x - bodyWidth / 2, bodyTopY, bodyWidth, bodyHeight);
+            }
+
+            // Belt (Unchanged)
             ctx.fillStyle = beltColor;
             ctx.fillRect(x - bodyWidth / 2, bodyTopY + bodyHeight * 0.7, bodyWidth, bodyHeight * 0.08);
-            // Arms
-            ctx.fillStyle = enemyGiantRed;
-            const armWidth = currentW * 0.18; const armHeight = currentH * 0.5; const armOffsetY = bodyTopY + bodyHeight * 0.1;
-            ctx.fillRect(x - bodyWidth / 2 - armWidth, armOffsetY, armWidth, armHeight);
-            ctx.fillRect(x + bodyWidth / 2, armOffsetY, armWidth, armHeight);
-            // Head
+
+            // --- MODIFIED Arms (Tapered + Wind-up Pose) ---
+            const armShoulderWidth = currentW * 0.18;
+            const armWristWidth = currentW * 0.14; // Narrower wrist
+            const armLength = currentH * 0.55; // Slightly longer
+            const shoulderY = bodyTopY + bodyHeight * 0.15;
+            const shoulderXOffset = bodyWidth / 2;
+
+            ctx.fillStyle = enemyGiantRed; // Arm color
+
+            if (attackState === 'winding_up' || attackState === 'attacking') {
+                // Draw arms raised/pulled back slightly
+                const windUpAngle = -Math.PI / 6; // Angle arms back
+                const raisedOffsetY = -armLength * 0.1; // Raise shoulder pivot slightly
+
+                // Left Arm (Rotated)
+                ctx.save();
+                ctx.translate(x - shoulderXOffset, shoulderY + raisedOffsetY);
+                ctx.rotate(windUpAngle);
+                ctx.beginPath();
+                ctx.moveTo(0, 0); // Shoulder pivot inner
+                ctx.lineTo(armShoulderWidth, 0); // Shoulder pivot outer
+                ctx.lineTo(armShoulderWidth * 0.7, armLength); // Wrist outer
+                ctx.lineTo(armWristWidth * 0.3, armLength); // Wrist inner
+                ctx.closePath(); ctx.fill();
+                ctx.restore();
+
+                // Right Arm (Rotated)
+                ctx.save();
+                ctx.translate(x + shoulderXOffset, shoulderY + raisedOffsetY);
+                ctx.rotate(-windUpAngle); // Rotate opposite direction
+                ctx.beginPath();
+                ctx.moveTo(0, 0); // Shoulder pivot inner
+                ctx.lineTo(-armShoulderWidth, 0); // Shoulder pivot outer
+                ctx.lineTo(-armShoulderWidth * 0.7, armLength); // Wrist outer
+                ctx.lineTo(-armWristWidth * 0.3, armLength); // Wrist inner
+                ctx.closePath(); ctx.fill();
+                ctx.restore();
+
+            } else { // Idle pose
+                const armBottomY = shoulderY + armLength;
+                // Left Arm (Tapered)
+                ctx.beginPath();
+                ctx.moveTo(x - shoulderXOffset, shoulderY); // Inner shoulder
+                ctx.lineTo(x - shoulderXOffset - armShoulderWidth, shoulderY); // Outer shoulder
+                ctx.lineTo(x - shoulderXOffset - armWristWidth, armBottomY); // Outer wrist
+                ctx.lineTo(x - shoulderXOffset - (armWristWidth*0.5), armBottomY); // Inner wrist
+                ctx.closePath(); ctx.fill();
+                // Right Arm (Tapered)
+                ctx.beginPath();
+                ctx.moveTo(x + shoulderXOffset, shoulderY); // Inner shoulder
+                ctx.lineTo(x + shoulderXOffset + armShoulderWidth, shoulderY); // Outer shoulder
+                ctx.lineTo(x + shoulderXOffset + armWristWidth, armBottomY); // Outer wrist
+                ctx.lineTo(x + shoulderXOffset + (armWristWidth*0.5), armBottomY); // Inner wrist
+                ctx.closePath(); ctx.fill();
+            }
+            // --- End MODIFIED Arms ---
+
+            // Head & Face (Unchanged)
             ctx.fillStyle = enemySkinColor; ctx.beginPath(); ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2); ctx.fill();
-            // Giant Facial Features
             const beardWidth = headRadius * 1.6; const beardHeight = headRadius * 1.0; const beardTopY = headCenterY + headRadius * 0.2;
             ctx.fillStyle = enemyCapColor; ctx.fillRect(x - beardWidth / 2, beardTopY, beardWidth, beardHeight);
             ctx.strokeStyle = '#000000'; ctx.lineWidth = 3; ctx.beginPath();
             const giantBrowLength = headRadius * 0.7; const giantBrowY = headCenterY - headRadius * 0.4; const giantBrowXOffset = headRadius * 0.4;
-            ctx.moveTo(x - giantBrowXOffset - giantBrowLength / 2, giantBrowY + giantBrowLength / 4);
-            ctx.lineTo(x - giantBrowXOffset + giantBrowLength / 2, giantBrowY - giantBrowLength / 4);
-            ctx.moveTo(x + giantBrowXOffset - giantBrowLength / 2, giantBrowY - giantBrowLength / 4);
-            ctx.lineTo(x + giantBrowXOffset + giantBrowLength / 2, giantBrowY + giantBrowLength / 4); ctx.stroke();
-            // Shako Hat
-            ctx.fillStyle = enemyCapColor;
-            ctx.fillRect(x - shakoWidth / 2, shakoBaseY - shakoHeight, shakoWidth, shakoHeight);
+            ctx.moveTo(x - giantBrowXOffset - giantBrowLength / 2, giantBrowY + giantBrowLength / 4); ctx.lineTo(x - giantBrowXOffset + giantBrowLength / 2, giantBrowY - giantBrowLength / 4);
+            ctx.moveTo(x + giantBrowXOffset - giantBrowLength / 2, giantBrowY - giantBrowLength / 4); ctx.lineTo(x + giantBrowXOffset + giantBrowLength / 2, giantBrowY + giantBrowLength / 4); ctx.stroke();
+            // Shako Hat (Unchanged)
+            ctx.fillStyle = enemyCapColor; ctx.fillRect(x - shakoWidth / 2, shakoBaseY - shakoHeight, shakoWidth, shakoHeight);
             ctx.beginPath(); ctx.moveTo(x - shakoPeakWidth / 2, shakoBaseY); ctx.lineTo(x + shakoPeakWidth / 2, shakoBaseY);
-            ctx.lineTo(x + shakoWidth / 2, shakoBaseY - shakoPeakHeight); ctx.lineTo(x - shakoWidth / 2, shakoBaseY - shakoPeakHeight);
-            ctx.closePath(); ctx.fill();
+            ctx.lineTo(x + shakoWidth / 2, shakoBaseY - shakoPeakHeight); ctx.lineTo(x - shakoWidth / 2, shakoBaseY - shakoPeakHeight); ctx.closePath(); ctx.fill();
         }
         // --- Standard Enemy Drawing ---
         else {
