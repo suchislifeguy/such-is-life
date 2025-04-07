@@ -1221,9 +1221,9 @@ function drawEnemyRect(
 
     // --- LEG DRAWING ---
     if (isPushbackAnimating) {
-        const kickAngle = Math.PI / 8; 
+        const kickAngle = Math.PI / 5; 
         const supportLegX = x + w * -0.15; // Supporting leg slightly offset
-        const kickLegX = x - w * 0.9; // Kicking leg starts slightly offset
+        const kickLegX = x - w * 0.1; // Kicking leg starts slightly offset
         const kickLegVisualLength = legHeight * 1.2; // Slightly extend kicking leg visually
 
         // Draw Supporting Leg (Standing firm)
