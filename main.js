@@ -453,16 +453,23 @@ const Game = (() => {
 
         const stateToRender = Game.getInterpolatedState(currentTime);
         if (stateToRender && typeof Renderer !== 'undefined' && DOM.ctx) {
-             // Draw the main game scene
-             Renderer.drawGame(
-                 DOM.ctx,                        // ctx
-                 appState,                       // appState
-                 stateToRender,                  // stateToRender
-                 localPlayerMuzzleFlash,         //
-                 localPlayerPushbackAnim,        // localPlayerPushbackAnimState
-                 activeBloodSparkEffects, 
-                 activeEnemyBubbles,      
-             );
+
+            // Get current mouse position (ensure Input module is accessible)
+            const currentMousePos = (typeof Input !== 'undefined' && Input.mouseCanvasPos)
+                                     ? Input.mouseCanvasPos
+                                     : { x: appState.canvasWidth / 2, y: 0 }; // Fallback if Input isn't ready
+
+            // --- MODIFIED CALL TO Renderer.drawGame ---
+            Renderer.drawGame(
+                DOM.ctx,                        // ctx
+                appState,                       // appState
+                stateToRender,                  // stateToRender
+                localPlayerMuzzleFlash,         // localPlayerMuzzleFlash
+                localPlayerPushbackAnim,        // localPlayerPushbackAnimState
+                activeBloodSparkEffects,
+                activeEnemyBubbles,
+                currentMousePos                 // *** Pass mouse position ***
+            );
 
             // --- DRAW CASINGS *AFTER* main game render ---
             const now = performance.now(); // Need 'now' again if not declared earlier in this scope after move
