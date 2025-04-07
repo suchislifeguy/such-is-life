@@ -64,10 +64,10 @@ const Renderer = (() => {
   const simpleChestPlateColor = "#777777";
   const chestPlateHighlight = "#999999";
   const slitColor = "#000000";
-  const ironArmorColor = "#4a4a4a"; // Dark grey for armor plates
+  const ironArmorColor = "#4a4a4a"; 
   const ironArmorHighlight = "#777777";
   const ironArmorShadow = "#2a2a2a";
-  const darkClothingColor = "#3a2d27"; // Dark brown/grey for clothing underneath
+  const darkClothingColor = "#3a2d27"; 
 
 
   const IDLE_BOB_SPEED_DIVISOR = 600;
@@ -75,16 +75,17 @@ const Renderer = (() => {
   const DAMAGE_VIGNETTE_HEALTH_THRESHOLD = 30;
   const TEMP_FREEZING_CLIENT = 0.0;
   const TEMP_COLD_CLIENT = 10.0;
-  const TEMP_HOT_CLIENT = 35.0;
-  const TEMP_SCORCHING_CLIENT = 40.0;
+  const TEMP_HOT_CLIENT = 33.0;
+  const TEMP_SCORCHING_CLIENT = 36.0;
   const MAX_TINT_ALPHA = 0.25;
   const RAIN_COLOR = "rgba(170, 190, 230, 0.6)";
   const RAIN_DROPS = 150;
+
   // --- Heat Haze Constants (EXTREME TEST VALUES) ---
-  const HEAT_HAZE_START_TEMP = 22.0;      // Haze starts almost immediately
-  const HEAT_HAZE_MAX_TEMP = 28.0;        // Haze reaches max intensity very quickly
+  const HEAT_HAZE_START_TEMP = 25.0;      // Haze starts almost immediately
+  const HEAT_HAZE_MAX_TEMP = 31.0;        // Haze reaches max intensity very quickly
   const HEAT_HAZE_MAX_INTENSITY = 1.0;    // Keep max intensity at 1
-  const HEAT_HAZE_VERTICAL_EXTENT = 1.0;  // Affect almost the entire screen height
+  const HEAT_HAZE_VERTICAL_EXTENT = .6;  // Affect almost the entire screen height
   const HEAT_HAZE_NUM_STRIPS = 10;        // FEWER strips (potentially less lag, chunkier effect)
   const HEAT_HAZE_WAVE_SPEED_X = 0.002;  // Faster horizontal movement
   const HEAT_HAZE_WAVE_FREQ_X1 = 0.01;    // LOWER frequency = LARGER waves horizontally
