@@ -1236,7 +1236,9 @@ const Renderer = (() => {
     const ii = (playerState?.input_vector?.dx ?? 0) === 0 && (playerState?.input_vector?.dy ?? 0) === 0;
     const bo = ii ? Math.sin(t / IDLE_BOB_SPEED_DIVISOR) * IDLE_BOB_AMPLITUDE : 0;
     const isPushbackAnimating = pushbackAnimState?.active && now < pushbackAnimState?.endTime;
+    const playerSnakeEffect = playerState?.effects?.snake_bite_slow;
     const isPlayerBitten = playerState?.effects?.snake_bite_slow && now < (playerState.effects.snake_bite_slow.expires_at * 1000);
+
 
     // --- Visual Constants & Dimensions ---
     const ironArmorColor = "#4a4a4a"; const ironArmorHighlight = "#777777"; const ironArmorShadow = "#2a2a2a";
