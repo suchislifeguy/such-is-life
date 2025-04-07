@@ -1221,7 +1221,7 @@ function drawEnemyRect(
 
     // --- LEG DRAWING ---
     if (isPushbackAnimating) {
-        const kickAngle = Math.PI; 
+        const kickAngle = Math.PI / 8; 
         const supportLegX = x + w * -0.15; // Supporting leg slightly offset
         const kickLegX = x - w * 0.9; // Kicking leg starts slightly offset
         const kickLegVisualLength = legHeight * 1.2; // Slightly extend kicking leg visually
@@ -1305,7 +1305,7 @@ function drawEnemyRect(
     if (isPushbackAnimating) {
         shouldDrawGun = true;
         gunDrawMode = "pushback";
-        gunDrawAngle = -Math.PI / 2; // Point gun down/forward during pushback
+        gunDrawAngle = -Math.PI / 3; // Point gun down/forward during pushback
     } else if (isSelf && (aimDx !== 0 || aimDy !== 0)) {
         // Use the stored aim direction passed in
         shouldDrawGun = true;
