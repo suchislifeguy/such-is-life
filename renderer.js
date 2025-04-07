@@ -1208,9 +1208,9 @@ const Renderer = (() => {
         const sparkX = x + Math.cos(sparkAngle) * sparkRadius;
         const sparkY =
           sparkCenterY +
-          Math.sin(sparkAngle) * sparkRadius * 0.5 -
-          currentH * 0.1;
-        const sparkSize = 2 + Math.random() * 3;
+          Math.sin(sparkAngle) * sparkRadius * 0.9 -
+          currentH * 0.2;
+        const sparkSize = 3 + Math.random() * 4;
         ctx.fillStyle =
           sparkColors[Math.floor(Math.random() * sparkColors.length)];
         ctx.beginPath();
@@ -1265,10 +1265,10 @@ const Renderer = (() => {
 
     // --- RE-ADDED PUSHBACK LEG DRAWING ---
     if (isPushbackAnimating) {
-        const kickAngle = -Math.PI / 4.5; // Angle for the kicking leg
+        const kickAngle = Math.PI / 6; // Angle for the kicking leg
         const supportLegX = x + w * 0.15; // Supporting leg slightly offset
         const kickLegX = x - w * 0.15; // Kicking leg starts slightly offset
-        const kickLegVisualLength = legHeight * 1.05; // Slightly extend kicking leg visually
+        const kickLegVisualLength = legHeight * 1.2; // Slightly extend kicking leg visually
 
         // Draw Supporting Leg (Standing firm)
         ctx.fillRect(supportLegX - legWidth / 2, legTopY, legWidth, legHeight);
@@ -1293,12 +1293,12 @@ const Renderer = (() => {
         ctx.restore(); // Restore after drawing kicking leg
 
     } else { // --- REGULAR WALKING / IDLE LEGS ---
-        const leftLegX = x - w * 0.2;
-        const rightLegX = x + w * 0.2;
+        const leftLegX = x - w * 0.3;
+        const rightLegX = x + w * 0.3;
         let leftYOffset = 0;
         let rightYOffset = 0;
         if (!ii) { // Simple walk bob if not idle
-            const walkCycleTime = 500;
+            const walkCycleTime = 300;
             const phase = (t % walkCycleTime) / walkCycleTime;
             const liftAmount = -3;
             leftYOffset = Math.max(0, Math.sin(phase * Math.PI * 2)) * liftAmount;
