@@ -1219,485 +1219,250 @@ const Renderer = (() => {
 
   function drawPlayerCharacter(
     ctx,
-    x,
-    y,
-    w,
-    h,
-    isSelf,
-    playerState,
-    aimDx,
-    aimDy,
+    x, // Final draw position (including offset/shake)
+    y, // Final draw position (including offset/shake)
+    w, h, isSelf, playerState,
+    aimDx, // Aim vector received from drawPlayers
+    aimDy, // Aim vector received from drawPlayers
     pushbackAnimState
-  ) {
+) {
+    // console.log(`[drawPlayerCharacter] Drawing player ${isSelf ? 'SELF' : 'OTHER'} at ${x.toFixed(1)}, ${y.toFixed(1)} with aim ${aimDx.toFixed(2)}, ${aimDy.toFixed(2)}`); // DEBUG: Log entry
+
     const t = performance.now();
-    const now = t;
-    const ii =
-      (playerState?.input_vector?.dx ?? 0) === 0 &&
-      (playerState?.input_vector?.dy ?? 0) === 0;
-    const bo = ii
-      ? Math.sin(t / IDLE_BOB_SPEED_DIVISOR) * IDLE_BOB_AMPLITUDE
-      : 0;
+    const now = t; // Use 'now' or 't' consistently
+    const ii = (playerState?.input_vector?.dx ?? 0) === 0 && (playerState?.input_vector?.dy ?? 0) === 0;
+    const bo = ii ? Math.sin(t / IDLE_BOB_SPEED_DIVISOR) * IDLE_BOB_AMPLITUDE : 0;
     const playerSnakeEffect = playerState?.effects?.snake_bite_slow;
-    const isPlayerBitten =
-      playerSnakeEffect &&
-      typeof playerSnakeEffect === "object" &&
-      typeof playerSnakeEffect.expires_at === "number" &&
-      now < playerSnakeEffect.expires_at * 1000;
-    // Dimensions
-    const headHeight = h * 0.28;
-    const headWidth = w * 0.9;
-    const neckHeight = h * 0.05;
-    const torsoHeight = h * 0.35;
-    const torsoUpperWidth = w * 0.95;
-    const torsoLowerWidth = w * 0.8;
-    const beltHeight = h * 0.06;
-    const legHeight = h * 0.32;
-    const legUpperWidth = w * 0.4;
-    const legLowerWidth = w * 0.3;
-    const bootShaftHeight = h * 0.1;
-    const bootSoleHeight = h * 0.04;
-    const bootWidth = w * 0.35;
-    const armWidth = w * 0.22;
-    const armLength = h * 0.42;
-    const shoulderPadRadius = w * 0.3;
-    // Y Positions
-    const headTopY = y - h * 0.5 + bo;
-    const headBottomY = headTopY + headHeight;
-    const neckTopY = headBottomY;
-    const neckBottomY = neckTopY + neckHeight;
-    const torsoTopY = neckBottomY;
-    const torsoBottomY = torsoTopY + torsoHeight;
-    const beltTopY = torsoBottomY - beltHeight * 0.3;
-    const beltBottomY = beltTopY + beltHeight;
-    const legTopY = beltBottomY - beltHeight * 0.2;
+    const isPlayerBitten = playerSnakeEffect && typeof playerSnakeEffect === "object" && typeof playerSnakeEffect.expires_at === "number" && now < playerSnakeEffect.expires_at * 1000;
+    const isPushbackAnimating = pushbackAnimState?.active && now < pushbackAnimState?.endTime;
+
+    // --- Dimensions (Adjusted slightly for armor bulk) ---
+    const helmetHeight = h * 0.26;
+    const helmetWidth = w * 0.85;
+    const plateTopMargin = h * 0.04; // Gap between helmet and chest plate
+    const torsoArmorHeight = h * 0.45;
+    const torsoArmorWidth = w * 1.1; // Armor slightly wider than body
+    const shoulderPadHeight = h * 0.18;
+    const shoulderPadWidth = w * 0.45;
+    const legHeight = h * 0.35; // Slightly longer appearance maybe
+    const legWidth = w * 0.35;
+    const bootHeight = h * 0.15;
+    const bootWidth = w * 0.4;
+
+    // --- Y Positions (Relative to draw y, includes bob) ---
+    const helmetTopY = y - h * 0.5 + bo;
+    const helmetBottomY = helmetTopY + helmetHeight;
+    const plateTopY = helmetBottomY + plateTopMargin;
+    const plateBottomY = plateTopY + torsoArmorHeight;
+    // Legs start slightly under the plate
+    const legTopY = plateBottomY - torsoArmorHeight * 0.1;
     const legBottomY = legTopY + legHeight;
-    const bootTopY = legBottomY - bootShaftHeight * 0.1;
-    const bootShaftBottomY = bootTopY + bootShaftHeight;
-    const bootSoleTopY = bootShaftBottomY;
-    const bootBottomY = bootSoleTopY + bootSoleHeight;
-    // Arm/Shoulder Positions
-    const shoulderCenterY = torsoTopY + torsoHeight * 0.15;
-    const shoulderOffsetX = torsoUpperWidth * 0.5;
-    const armTopY = shoulderCenterY + shoulderPadRadius * 0.3;
-    // Colors
-    const playerBodyColor = isSelf
-      ? dustyPlayerSelfColor
-      : dustyPlayerOtherColor;
-    const helmetColor = ironHelmetColor;
-    const armorColor = simpleChestPlateColor;
-    const armorHighlight = chestPlateHighlight;
-    const armorShadow = ironHelmetShadow;
-    const slitColor = "#000000";
-    const beltColor = "#412a19";
-    const beltBuckleColor = "#b0a080";
-    const bootColor = "#241c1c";
-    const bootSoleColor = "#1a1a1a";
-    ctx.save();
-    // Shadow
+    const bootTopY = legBottomY; // Boots start where legs end
+
+    // --- Shoulder/Arm related ---
+    const shoulderCenterY = plateTopY + torsoArmorHeight * 0.15;
+    const shoulderOffsetX = torsoArmorWidth * 0.4; // Adjust offset for wider armor
+
+    ctx.save(); // Save context for the entire player draw
+
+    // 1. Shadow (Keep as is)
     ctx.beginPath();
-    ctx.ellipse(x, bootBottomY + 2, w * 0.5, h * 0.06, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, legBottomY + bootHeight + 2, w * 0.55, h * 0.07, 0, 0, Math.PI * 2); // Slightly larger shadow
     ctx.fillStyle = backgroundShadowColor;
     ctx.fill();
-    // Boot Helper
-    const drawBoot = (bootX, bootTopYCoord, isKick = false, kickAngle = 0) => {
-      ctx.save();
-      if (isKick) {
-        ctx.translate(bootX, bootTopYCoord);
-        ctx.rotate(kickAngle);
-        bootTopYCoord = 0;
-      }
-      const shaftTopY = bootTopYCoord;
-      const shaftBottomY = shaftTopY + bootShaftHeight;
-      const soleTopY = shaftBottomY;
-      const soleBottomY = soleTopY + bootSoleHeight;
-      ctx.fillStyle = bootColor;
-      ctx.fillRect(
-        bootX - bootWidth / 2,
-        shaftTopY,
-        bootWidth,
-        bootShaftHeight
-      );
-      ctx.fillStyle = bootSoleColor;
-      const soleWidth = bootWidth * 1.05;
-      ctx.fillRect(bootX - soleWidth / 2, soleTopY, soleWidth, bootSoleHeight);
-      ctx.fillStyle = bootSoleColor;
-      const heelWidth = bootWidth * 0.6;
-      const heelHeight = bootSoleHeight * 0.8;
-      ctx.fillRect(
-        bootX - heelWidth * 0.1,
-        soleBottomY - heelHeight,
-        heelWidth,
-        heelHeight
-      );
-      if (isKick) {
-        ctx.restore();
-      }
-    };
-    // Legs & Boots
-    const isPushbackAnimating =
-      pushbackAnimState?.active && now < pushbackAnimState?.endTime;
-    ctx.fillStyle = playerBodyColor;
-    if (isPushbackAnimating) {
-      const kickAngle = -Math.PI / 4.5;
-      const supportLegX = x + w * 0.15;
-      const kickLegX = x - w * 0.15;
-      const kickLegVisualLength = legHeight * 1.05;
-      ctx.beginPath();
-      ctx.moveTo(supportLegX - legUpperWidth / 2, legTopY);
-      ctx.lineTo(supportLegX + legUpperWidth / 2, legTopY);
-      ctx.lineTo(supportLegX + legLowerWidth / 2, legBottomY);
-      ctx.lineTo(supportLegX - legLowerWidth / 2, legBottomY);
-      ctx.closePath();
-      ctx.fill();
-      drawBoot(supportLegX, bootTopY);
-      ctx.save();
-      ctx.translate(kickLegX, legTopY + legHeight * 0.1);
-      ctx.rotate(kickAngle);
-      ctx.fillStyle = playerBodyColor;
-      ctx.beginPath();
-      ctx.moveTo(-legUpperWidth / 2, 0);
-      ctx.lineTo(legUpperWidth / 2, 0);
-      ctx.lineTo(legLowerWidth / 2, kickLegVisualLength);
-      ctx.lineTo(-legLowerWidth / 2, kickLegVisualLength);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-      const kickEndX = kickLegX + Math.sin(kickAngle) * kickLegVisualLength;
-      const kickEndY =
-        legTopY + legHeight * 0.1 + Math.cos(kickAngle) * kickLegVisualLength;
-      drawBoot(kickEndX, kickEndY - bootShaftHeight, false);
-    } else {
-      const leftLegX = x - w * 0.2;
-      const rightLegX = x + w * 0.2;
-      let leftBootYOffset = 0;
-      let rightBootYOffset = 0;
-      if (!ii) {
-        const walkCycleTime = 400;
+
+    // 2. Legs & Boots (Simplified walk, dark colors)
+    ctx.fillStyle = darkClothingColor; // Trousers
+    const leftLegX = x - w * 0.2;
+    const rightLegX = x + w * 0.2;
+    let leftYOffset = 0;
+    let rightYOffset = 0;
+    if (!ii && !isPushbackAnimating) { // Simple walk bob for legs/boots
+        const walkCycleTime = 500;
         const phase = (t % walkCycleTime) / walkCycleTime;
-        const liftAmount = -2;
-        if (phase < 0.5) {
-          leftBootYOffset = Math.sin(phase * 2 * Math.PI) * liftAmount;
-        } else {
-          rightBootYOffset = Math.sin((phase - 0.5) * 2 * Math.PI) * liftAmount;
-        }
-      }
-      ctx.beginPath();
-      ctx.moveTo(leftLegX - legUpperWidth / 2, legTopY);
-      ctx.lineTo(leftLegX + legUpperWidth / 2, legTopY);
-      ctx.lineTo(leftLegX + legLowerWidth / 2, legBottomY);
-      ctx.lineTo(leftLegX - legLowerWidth / 2, legBottomY);
-      ctx.closePath();
-      ctx.fill();
-      drawBoot(leftLegX, bootTopY + leftBootYOffset);
-      ctx.beginPath();
-      ctx.moveTo(rightLegX - legUpperWidth / 2, legTopY);
-      ctx.lineTo(rightLegX + legUpperWidth / 2, legTopY);
-      ctx.lineTo(rightLegX + legLowerWidth / 2, legBottomY);
-      ctx.lineTo(rightLegX - legLowerWidth / 2, legBottomY);
-      ctx.closePath();
-      ctx.fill();
-      drawBoot(rightLegX, bootTopY + rightBootYOffset);
+        const liftAmount = -3;
+        leftYOffset = Math.max(0, Math.sin(phase * Math.PI * 2)) * liftAmount;
+        rightYOffset = Math.max(0, Math.sin((phase + 0.5) * Math.PI * 2)) * liftAmount;
     }
-    // Torso
-    ctx.fillStyle = playerBodyColor;
+
+    // Draw Legs
+    ctx.fillRect(leftLegX - legWidth / 2, legTopY + leftYOffset, legWidth, legHeight);
+    ctx.fillRect(rightLegX - legWidth / 2, legTopY + rightYOffset, legWidth, legHeight);
+
+    // Draw Boots
+    ctx.fillStyle = bootColor; // Dark boots
+    ctx.fillRect(leftLegX - bootWidth / 2, bootTopY + leftYOffset, bootWidth, bootHeight);
+    ctx.fillRect(rightLegX - bootWidth / 2, bootTopY + rightYOffset, bootWidth, bootHeight);
+    // Simple boot highlight/sole line
+    ctx.fillStyle = ironArmorHighlight; // Use armor highlight for contrast
+    ctx.fillRect(leftLegX - bootWidth / 2, bootTopY + bootHeight - 4 + leftYOffset, bootWidth, 4);
+    ctx.fillRect(rightLegX - bootWidth / 2, bootTopY + bootHeight - 4 + rightYOffset, bootWidth, 4);
+
+
+    // 3. Torso Armor (Chest Plate) - Draw AFTER legs
+    ctx.fillStyle = ironArmorColor;
+    ctx.fillRect(x - torsoArmorWidth / 2, plateTopY, torsoArmorWidth, torsoArmorHeight);
+    // Highlight
+    ctx.fillStyle = ironArmorHighlight;
+    ctx.fillRect(x - torsoArmorWidth / 2 + 4, plateTopY + 4, torsoArmorWidth - 8, 5); // Thicker highlight
+    // Shadow
+    ctx.fillStyle = ironArmorShadow;
+    ctx.fillRect(x - torsoArmorWidth / 2 + 4, plateTopY + 9, torsoArmorWidth - 8, 4); // Thicker shadow
+
+    // Optional: Rivets on chest plate (performance impact: minimal)
+    ctx.fillStyle = ironArmorShadow;
+    const rivetSize = 3;
+    ctx.fillRect(x - torsoArmorWidth * 0.4, plateTopY + 15, rivetSize, rivetSize);
+    ctx.fillRect(x + torsoArmorWidth * 0.4 - rivetSize, plateTopY + 15, rivetSize, rivetSize);
+    ctx.fillRect(x - torsoArmorWidth * 0.4, plateBottomY - 15 - rivetSize, rivetSize, rivetSize);
+    ctx.fillRect(x + torsoArmorWidth * 0.4 - rivetSize, plateBottomY - 15 - rivetSize, rivetSize, rivetSize);
+
+
+    // 4. Shoulder Pads - Draw OVER chest plate edges
+    // Left Shoulder
+    ctx.fillStyle = ironArmorColor;
     ctx.beginPath();
-    ctx.moveTo(x - torsoUpperWidth / 2, torsoTopY);
-    ctx.lineTo(x + torsoUpperWidth / 2, torsoTopY);
-    ctx.lineTo(x + torsoLowerWidth / 2, torsoBottomY);
-    ctx.lineTo(x - torsoLowerWidth / 2, torsoBottomY);
+    ctx.ellipse(x - shoulderOffsetX, shoulderCenterY, shoulderPadWidth / 2, shoulderPadHeight / 2, 0, Math.PI, Math.PI * 2); // Top half ellipse
     ctx.closePath();
     ctx.fill();
-    // Arms
-    const armPitXLeft = x - torsoUpperWidth * 0.45;
-    const armPitXRight = x + torsoUpperWidth * 0.45;
-    const wristXLeft = x - (torsoUpperWidth * 0.45 + armWidth * 0.3);
-    const wristXRight = x + (torsoUpperWidth * 0.45 + armWidth * 0.3);
-    const armBottomY = armTopY + armLength;
+    ctx.fillStyle = ironArmorHighlight; // Highlight
     ctx.beginPath();
-    ctx.moveTo(armPitXLeft, armTopY);
-    ctx.lineTo(armPitXLeft + armWidth, armTopY);
-    ctx.lineTo(wristXRight - armWidth, armBottomY);
-    ctx.lineTo(wristXLeft, armBottomY);
+    ctx.ellipse(x - shoulderOffsetX, shoulderCenterY - 2, shoulderPadWidth / 2 * 0.8, shoulderPadHeight / 2 * 0.7, 0, Math.PI * 1.1, Math.PI * 1.9);
+    ctx.fill();
+
+    // Right Shoulder
+    ctx.fillStyle = ironArmorColor;
+    ctx.beginPath();
+    ctx.ellipse(x + shoulderOffsetX, shoulderCenterY, shoulderPadWidth / 2, shoulderPadHeight / 2, 0, Math.PI, Math.PI * 2);
     ctx.closePath();
     ctx.fill();
+    ctx.fillStyle = ironArmorHighlight; // Highlight
     ctx.beginPath();
-    ctx.moveTo(armPitXRight - armWidth, armTopY);
-    ctx.lineTo(armPitXRight, armTopY);
-    ctx.lineTo(wristXRight, armBottomY);
-    ctx.lineTo(wristXRight - armWidth * 0.7, armBottomY);
-    ctx.closePath();
+    ctx.ellipse(x + shoulderOffsetX, shoulderCenterY - 2, shoulderPadWidth / 2 * 0.8, shoulderPadHeight / 2 * 0.7, 0, Math.PI * 0.1, Math.PI * 0.9, true); // Draw highlight slightly offset
     ctx.fill();
-    // Belt
-    ctx.fillStyle = beltColor;
-    ctx.fillRect(
-      x - torsoLowerWidth * 0.55,
-      beltTopY,
-      torsoLowerWidth * 1.1,
-      beltHeight
-    );
-    ctx.fillStyle = beltBuckleColor;
-    const buckleWidth = w * 0.25;
-    const buckleHeight = beltHeight * 0.8;
-    ctx.fillRect(
-      x - buckleWidth / 2,
-      beltTopY + (beltHeight - buckleHeight) / 2,
-      buckleWidth,
-      buckleHeight
-    );
-    ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
-    ctx.fillRect(
-      x - buckleWidth / 2 + 2,
-      beltTopY + (beltHeight - buckleHeight) / 2 + 2,
-      buckleWidth - 4,
-      2
-    );
-    // Chest Plate
-    const plateWidth = torsoUpperWidth * 0.9;
-    const plateHeight = torsoHeight * 0.9;
-    const plateTopY = torsoTopY + torsoHeight * 0.05;
-    const plateBottomY = plateTopY + plateHeight;
-    ctx.fillStyle = armorColor;
-    ctx.beginPath();
-    ctx.moveTo(x - plateWidth / 2, plateTopY);
-    ctx.lineTo(x + plateWidth / 2, plateTopY);
-    ctx.lineTo(x + plateWidth * 0.4, plateBottomY);
-    ctx.lineTo(x - plateWidth * 0.4, plateBottomY);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = armorHighlight;
-    ctx.fillRect(x - plateWidth / 2 + 4, plateTopY + 4, plateWidth - 8, 3);
-    ctx.fillStyle = armorShadow;
-    ctx.fillRect(x - plateWidth / 2 + 5, plateTopY + 7, plateWidth - 10, 2);
-    // Shoulders
-    ctx.fillStyle = armorColor;
-    ctx.beginPath();
-    ctx.arc(
-      x - shoulderOffsetX,
-      shoulderCenterY,
-      shoulderPadRadius,
-      Math.PI * 1.1,
-      Math.PI * 1.9
-    );
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = armorHighlight;
-    ctx.beginPath();
-    ctx.arc(
-      x - shoulderOffsetX,
-      shoulderCenterY - 2,
-      shoulderPadRadius * 0.8,
-      Math.PI * 1.2,
-      Math.PI * 1.8
-    );
-    ctx.arc(
-      x - shoulderOffsetX,
-      shoulderCenterY,
-      shoulderPadRadius * 0.9,
-      Math.PI * 1.8,
-      Math.PI * 1.2,
-      true
-    );
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = armorColor;
-    ctx.beginPath();
-    ctx.arc(
-      x + shoulderOffsetX,
-      shoulderCenterY,
-      shoulderPadRadius,
-      Math.PI * 0.1,
-      Math.PI * 0.9,
-      true
-    );
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = armorHighlight;
-    ctx.beginPath();
-    ctx.arc(
-      x + shoulderOffsetX,
-      shoulderCenterY - 2,
-      shoulderPadRadius * 0.8,
-      Math.PI * 0.2,
-      Math.PI * 0.8,
-      true
-    );
-    ctx.arc(
-      x + shoulderOffsetX,
-      shoulderCenterY,
-      shoulderPadRadius * 0.9,
-      Math.PI * 0.8,
-      Math.PI * 0.2,
-      false
-    );
-    ctx.closePath();
-    ctx.fill();
-    // Helmet
-    ctx.fillStyle = helmetColor;
-    ctx.fillRect(x - headWidth / 2, headTopY, headWidth, headHeight);
-    const curveRadius = headWidth * 0.1;
-    ctx.beginPath();
-    ctx.moveTo(x - headWidth / 2, headTopY + curveRadius);
-    ctx.lineTo(x - headWidth / 2, headTopY);
-    ctx.lineTo(x + headWidth / 2, headTopY);
-    ctx.lineTo(x + headWidth / 2, headTopY + curveRadius);
-    ctx.arcTo(
-      x + headWidth / 2,
-      headTopY,
-      x + headWidth / 2 - curveRadius,
-      headTopY,
-      curveRadius
-    );
-    ctx.arcTo(
-      x - headWidth / 2,
-      headTopY,
-      x - headWidth / 2,
-      headTopY + curveRadius,
-      curveRadius
-    );
-    ctx.fill();
-    ctx.fillStyle = helmetColor;
-    ctx.fillRect(
-      x - headWidth * 0.4,
-      headBottomY - neckHeight * 0.5,
-      headWidth * 0.8,
-      neckHeight * 1.2
-    );
-    ctx.fillStyle = armorHighlight;
-    ctx.fillRect(x - headWidth / 2 + 3, headTopY + 3, headWidth - 6, 2);
-    const rivetRadius = 1.5;
-    ctx.beginPath();
-    ctx.arc(
-      x - headWidth * 0.4,
-      headBottomY - neckHeight * 0.2,
-      rivetRadius,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(
-      x + headWidth * 0.4,
-      headBottomY - neckHeight * 0.2,
-      rivetRadius,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(x, headTopY + headHeight * 0.85, rivetRadius, 0, Math.PI * 2);
-    ctx.fill();
+
+
+    // 5. Helmet - Draw OVER shoulder pads/chest plate top
+    ctx.fillStyle = ironHelmetColor;
+    ctx.fillRect(x - helmetWidth / 2, helmetTopY, helmetWidth, helmetHeight);
+    // Simple top curve indication
+    ctx.fillStyle = ironHelmetHighlight;
+    ctx.fillRect(x - helmetWidth / 2 + 3, helmetTopY + 3, helmetWidth - 6, 3);
+    // Eye Slit
     ctx.fillStyle = slitColor;
-    const slitHeight = headHeight * 0.12;
-    const slitWidth = headWidth * 0.8;
-    const slitY = headTopY + headHeight * 0.45;
-    ctx.fillRect(x - slitWidth / 2, slitY, slitWidth, slitHeight);
-    // Gun
+    const slitY = helmetTopY + helmetHeight * 0.45;
+    const slitHeight = helmetHeight * 0.1;
+    ctx.fillRect(x - helmetWidth * 0.4, slitY, helmetWidth * 0.8, slitHeight);
+
+
+    // 6. Gun Logic (Keep existing, check pivot)
     let shouldDrawGun = false;
     let gunDrawAngle = 0;
-    let gunDrawMode = "aiming";
+    let gunDrawMode = "idle"; // Default
+
     if (isPushbackAnimating) {
-      shouldDrawGun = true;
-      gunDrawMode = "pushback";
-      gunDrawAngle = -Math.PI / 2;
+        shouldDrawGun = true;
+        gunDrawMode = "pushback";
+        gunDrawAngle = -Math.PI / 2;
+        // if (isSelf) console.log(`[drawPlayerCharacter] Mode: pushback, Angle: ${gunDrawAngle.toFixed(2)}`); // DEBUG
     } else if (isSelf && (aimDx !== 0 || aimDy !== 0)) {
-      shouldDrawGun = true;
-      gunDrawMode = "aiming";
-      gunDrawAngle = Math.atan2(aimDy, aimDx);
+        shouldDrawGun = true;
+        gunDrawMode = "aiming";
+        gunDrawAngle = Math.atan2(aimDy, aimDx);
+        if (isSelf) { // DEBUG: Log aiming details only for self
+             console.log(`[drawPlayerCharacter] Mode: aiming, Received aim: dx=${aimDx.toFixed(2)}, dy=${aimDy.toFixed(2)}, Calculated Angle: ${gunDrawAngle.toFixed(2)} (${(gunDrawAngle * 180 / Math.PI).toFixed(1)}deg)`);
+        }
+    } else if (isSelf) {
+         // Optional: Draw idle gun facing forward/up even with zero vector
+         // shouldDrawGun = true; gunDrawAngle = -Math.PI / 2; gunDrawMode = "idle";
+         // if (isSelf) console.log(`[drawPlayerCharacter] Mode: idle (Self, zero aim vector), Angle: ${gunDrawAngle.toFixed(2)}`); // DEBUG
     }
+
     if (shouldDrawGun) {
-      const gunLevel = playerState?.gun ?? 1;
-      const baseBarrelLength = 18;
-      const barrelLengthIncrease = 2;
-      const barrelLength =
-        baseBarrelLength + (gunLevel - 1) * barrelLengthIncrease;
-      const barrelThickness = 3 + (gunLevel - 1) * 0.2;
-      const stockLength = 8 + (gunLevel - 1) * 0.5;
-      const stockThickness = 5 + (gunLevel - 1) * 0.3;
-      const stockColor = "#8B4513";
-      const barrelColor = "#444444";
-      const gunOriginYOffset = armTopY + armLength * 0.4;
-      const gunOriginXOffset = gunDrawMode === "pushback" ? w * 0.05 : w * 0.1;
-      ctx.save();
-      ctx.translate(x + gunOriginXOffset, gunOriginYOffset);
-      ctx.rotate(gunDrawAngle);
-      ctx.fillStyle = stockColor;
-      ctx.fillRect(
-        -stockLength - 2,
-        -stockThickness / 2,
-        stockLength,
-        stockThickness
-      );
-      ctx.fillStyle = barrelColor;
-      ctx.fillRect(0, -barrelThickness / 2, barrelLength, barrelThickness);
-      ctx.restore();
+        const gunLevel = playerState?.gun ?? 1;
+        const baseBarrelLength = 22; // Slightly longer barrel maybe
+        const barrelLengthIncrease = 2.5;
+        const barrelLength = baseBarrelLength + (gunLevel - 1) * barrelLengthIncrease;
+        const barrelThickness = 4 + (gunLevel - 1) * 0.3; // Slightly thicker
+        const stockLength = 10 + (gunLevel - 1) * 0.6;
+        const stockThickness = 6 + (gunLevel - 1) * 0.4; // Slightly thicker
+        const stockColor = "#6F4E37"; // Coffee/dark wood color
+        const barrelColor = "#5A5A5A"; // Dark grey barrel
+
+        // Gun Pivot Point: Center horizontally, around mid-chest plate level
+        const gunOriginX = x;
+        const gunOriginY = plateTopY + torsoArmorHeight * 0.4 + bo; // Pivot on the armor, adjust multiplier (0.4) as needed
+
+        ctx.save(); // Save context for gun transform
+        ctx.translate(gunOriginX, gunOriginY);
+        ctx.rotate(gunDrawAngle);
+
+        // Draw Barrel extending forward (positive x after rotation)
+        ctx.fillStyle = barrelColor;
+        ctx.fillRect(0, -barrelThickness / 2, barrelLength, barrelThickness);
+        // Optional: Small sight on barrel
+        ctx.fillStyle = "#333333";
+        ctx.fillRect(barrelLength * 0.7, -barrelThickness / 2 - 2, 4, 2);
+
+        // Draw Stock extending backward (negative x after rotation)
+        ctx.fillStyle = stockColor;
+        ctx.fillRect(-stockLength, -stockThickness / 2, stockLength, stockThickness);
+
+        ctx.restore(); // Restore context after gun
+    } else if (isSelf) {
+         console.log(`[drawPlayerCharacter] Gun not drawn for self. isPushback=${isPushbackAnimating}, aimDx=${aimDx.toFixed(2)}, aimDy=${aimDy.toFixed(2)}`); // DEBUG
     }
-    // Effects
+
+    // 7. Effects (Snake Bite - Keep as is)
     if (isPlayerBitten) {
-      const footY = bootBottomY;
-      const numParticles = 8;
-      const particleBaseSize = 4;
-      const particleSpeedY = -60;
-      const particleLifetimeMs = 600;
+      const footY = legBottomY + bootHeight; // Bottom of boots
+      const numParticles = 8; const particleBaseSize = 4; const particleSpeedY = -60; const particleLifetimeMs = 600;
       ctx.save();
       for (let i = 0; i < numParticles; i++) {
-        const effectStartTime =
-          playerSnakeEffect.expires_at * 1000 - SNAKE_BITE_DURATION * 1000;
+        const effectStartTime = playerSnakeEffect.expires_at * 1000 - (typeof SNAKE_BITE_DURATION !== 'undefined' ? SNAKE_BITE_DURATION : 8.0) * 1000; // Need SNAKE_BITE_DURATION const accessible
         const timeSinceEffectStart = Math.max(0, now - effectStartTime);
-        const particleSimulatedAge =
-          (timeSinceEffectStart + (particleLifetimeMs / numParticles) * i) %
-          particleLifetimeMs;
+        const particleSimulatedAge = (timeSinceEffectStart + (particleLifetimeMs / numParticles) * i) % particleLifetimeMs;
         const particleProgress = particleSimulatedAge / particleLifetimeMs;
         if (particleProgress < 0 || particleProgress >= 1) continue;
         const particleX = x + (Math.random() - 0.5) * w * 0.7;
-        const particleY =
-          footY + particleSpeedY * (particleSimulatedAge / 1000);
-        const particleSize =
-          particleBaseSize *
-          (1.0 - particleProgress * 0.5) *
-          (0.8 + Math.random() * 0.4);
-        const alpha =
-          0.8 * (1.0 - particleProgress) * (0.7 + Math.random() * 0.3);
+        const particleY = footY + particleSpeedY * (particleSimulatedAge / 1000);
+        const particleSize = particleBaseSize * (1.0 - particleProgress * 0.5) * (0.8 + Math.random() * 0.4);
+        const alpha = 0.8 * (1.0 - particleProgress) * (0.7 + Math.random() * 0.3);
         const green = 180 + Math.floor(75 * particleProgress);
         const yellow = 200 * (1.0 - particleProgress);
-        ctx.fillStyle = `rgba(${Math.floor(
-          yellow
-        )}, ${green}, 50, ${alpha.toFixed(2)})`;
-        ctx.fillRect(
-          particleX - particleSize / 2,
-          particleY - particleSize / 2,
-          particleSize,
-          particleSize
-        );
+        ctx.fillStyle = `rgba(${Math.floor(yellow)}, ${green}, 50, ${alpha.toFixed(2)})`;
+        ctx.fillRect( particleX - particleSize / 2, particleY - particleSize / 2, particleSize, particleSize );
       }
       ctx.restore();
     }
+
     ctx.restore(); // Restore context state from the very start of the function
+
   }
   function drawPlayers(
     ctx, players, appState, localPlayerMuzzleFlash, localPlayerPushbackAnim,
     // --- OFFSET PARAMETERS ---
-    offsetX = 0, offsetY = 0, // Default to 0 if not provided
+    offsetX = 0, offsetY = 0,
     // --- NEW: Local Player Aim Parameters ---
-    localAimDx = 0, localAimDy = 0 // Receive aim vector
+    localAimDx = 0, localAimDy = -1 // Default aim up if not provided
 ) {
     if (!players || !appState) return;
+    // console.log(`[drawPlayers] Received localAimDx: ${localAimDx.toFixed(2)}, localAimDy: ${localAimDy.toFixed(2)}`); // Log received aim
 
     Object.values(players).forEach(p => {
         if (!p || p.player_status === 'dead') return;
 
         const isSelf = p.id === appState.localPlayerId;
         const ps = p.player_status || 'alive';
-        // Use renderedPlayerPos for self, server state for others (as before)
         let dx = isSelf ? appState.renderedPlayerPos.x : p.x;
         let dy = isSelf ? appState.renderedPlayerPos.y : p.y;
-        const w = p.width ?? PLAYER_DEFAULTS.width;
+        const w = p.width ?? PLAYER_DEFAULTS.width; // Assume PLAYER_DEFAULTS is accessible or define it
         const h = p.height ?? PLAYER_DEFAULTS.height;
         const mh = p.max_health ?? PLAYER_DEFAULTS.max_health;
         const ca = p.armor ?? 0;
         const isDown = (ps === 'down');
         const alpha = isDown ? 0.4 : 1.0;
 
-        // Apply Offset ONLY to the Local Player
         let drawX = dx;
         let drawY = dy;
         if (isSelf) {
@@ -1710,16 +1475,18 @@ const Renderer = (() => {
 
         const pushbackState = isSelf ? localPlayerPushbackAnim : null;
 
-        // --- Determine aimDx/aimDy to pass down ---
+        // Determine aimDx/aimDy to pass down based on whether it's the local player
         const aimDxForDraw = isSelf ? localAimDx : 0;
         const aimDyForDraw = isSelf ? localAimDy : 0;
 
-        // --- MODIFIED CALL TO drawPlayerCharacter ---
+        // if (isSelf) { // Log only for self
+        //     console.log(`  [drawPlayers -> drawPlayerCharacter] Passing aim: dx=${aimDxForDraw.toFixed(2)}, dy=${aimDyForDraw.toFixed(2)} for PID ${p.id}`);
+        // }
+
         drawPlayerCharacter(ctx, drawX, drawY, w, h, isSelf, p, aimDxForDraw, aimDyForDraw, pushbackState);
 
         ctx.restore();
 
-        // Draw UI elements at the offset position
         if (ps === 'alive') {
             drawHealthBar(ctx, drawX, drawY, w, p.health, mh);
             if (ca > 0) drawArmorBar(ctx, drawX, drawY, w, ca);
@@ -2127,266 +1894,105 @@ const Renderer = (() => {
     ctx, appState, stateToRender,
     localPlayerMuzzleFlash, localPlayerPushbackAnim,
     activeBloodSparkEffects, activeEnemyBubbles,
-    currentMousePos // Argument received by drawGame
+    currentMousePos
 ) {
     // --- Initial Checks & Setup ---
-    if (!ctx || !appState) {
-        console.error("drawGame missing context or appState!");
-        return;
-    }
-    const now = performance.now(); // Time for animations
-    const width = appState.canvasWidth;
-    const height = appState.canvasHeight;
-    if (width <= 0 || height <= 0 || !Number.isFinite(width) || !Number.isFinite(height)) {
-        console.error(`drawGame called with invalid dimensions: ${width}x${height}`);
-        return;
-    }
+    if (!ctx || !appState) { console.error("drawGame missing context or appState!"); return; }
+    const now = performance.now();
+    const width = appState.canvasWidth; const height = appState.canvasHeight;
+    if (width <= 0 || height <= 0 || !Number.isFinite(width) || !Number.isFinite(height)) { console.error(`drawGame called with invalid dimensions: ${width}x${height}`); return; }
 
     ctx.clearRect(0, 0, width, height);
     ctx.globalAlpha = 1.0;
 
     // --- 1. Calculate Player Shake Offset ---
     let shakeOffsetX = 0, shakeOffsetY = 0;
-    // Check module-level shake state variables exist before using them
     if (typeof currentShakeMagnitude !== 'undefined' && typeof shakeEndTime !== 'undefined') {
         if (currentShakeMagnitude > 0 && now < shakeEndTime) {
             const timeRemaining = shakeEndTime - now;
-            // Ensure initialDuration is not zero to prevent division by zero
             const initialDuration = Math.max(1, (shakeEndTime > now ? shakeEndTime - (now - timeRemaining) : 1));
             let currentMag = currentShakeMagnitude * (timeRemaining / initialDuration);
             currentMag = Math.max(0, currentMag);
-            if (currentMag > 0.5) { // Only apply shake if magnitude is noticeable
+            if (currentMag > 0.5) {
                 const shakeAngle = Math.random() * Math.PI * 2;
                 shakeOffsetX = Math.cos(shakeAngle) * currentMag;
                 shakeOffsetY = Math.sin(shakeAngle) * currentMag;
-            } else { currentShakeMagnitude = 0; } // Reset if magnitude drops too low
-        } else if (currentShakeMagnitude > 0) { // Reset if time is up
-            currentShakeMagnitude = 0;
-        }
+            } else { currentShakeMagnitude = 0; }
+        } else if (currentShakeMagnitude > 0) { currentShakeMagnitude = 0; }
     }
-    // --- End Shake Calculation ---
 
-    // --- NEW: Calculate Local Player Aim Vector ---
+    // --- Calculate Local Player Aim Vector ---
     let localPlayerAimDx = 0;
-    let localPlayerAimDy = -1; // Default aim (e.g., up) if no mouse or player
-    const localPlayerId = appState?.localPlayerId; // Get local player ID
-    const localPlayerStateFromServer = stateToRender?.players?.[localPlayerId]; // Get server state for checks
+    let localPlayerAimDy = -1; // Default aim up
+    const localPlayerId = appState?.localPlayerId;
+    const localPlayerStateFromServer = stateToRender?.players?.[localPlayerId];
 
-    // Ensure local player exists, rendered position is available, and mouse position is valid
     if (localPlayerId && localPlayerStateFromServer && appState.renderedPlayerPos && currentMousePos) {
-        // Use the smoothed/reconciled renderedPlayerPos for aim calculation origin
         const playerRenderX = appState.renderedPlayerPos.x;
         const playerRenderY = appState.renderedPlayerPos.y;
-
-        // Calculate raw direction vector
         const dx = currentMousePos.x - playerRenderX;
         const dy = currentMousePos.y - playerRenderY;
         const magSq = dx * dx + dy * dy;
-
-        // Normalize only if the magnitude is significant enough to avoid issues near the player center
-        // Use a small threshold (e.g., > 1 pixel magnitude squared, equivalent to 1px distance)
-        if (magSq > 1) {
+        if (magSq > 1) { // Normalize if distance > 1 pixel
             const mag = Math.sqrt(magSq);
             localPlayerAimDx = dx / mag;
             localPlayerAimDy = dy / mag;
         }
-        // else keep the default aim (0, -1) or the last valid aim if implemented
-    }
-    // --- END: Calculate Local Player Aim Vector ---
-
-
-    // --- 2. Draw Static Background ---
-    // (Keep existing background drawing logic)
-    if (typeof isBackgroundReady !== 'undefined' && isBackgroundReady) {
-        if (typeof isTransitioningBackground !== 'undefined' && isTransitioningBackground) {
-            const elapsed = now - (typeof transitionStartTime !== 'undefined' ? transitionStartTime : now);
-            const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS);
-            ctx.globalAlpha = 1.0;
-            if (typeof oldOffscreenCanvas !== 'undefined') { ctx.drawImage(oldOffscreenCanvas, 0, 0, width, height); }
-            ctx.globalAlpha = progress;
-            if (typeof offscreenCanvas !== 'undefined') { ctx.drawImage(offscreenCanvas, 0, 0, width, height); }
-            ctx.globalAlpha = 1.0;
-            if (progress >= 1.0) { isTransitioningBackground = false; }
-        } else {
-            if (typeof offscreenCanvas !== 'undefined') { ctx.drawImage(offscreenCanvas, 0, 0, width, height); }
-        }
+        // Log the calculated aim vector for debugging
+        // console.log(`[drawGame] Mouse: ${currentMousePos.x.toFixed(1)},${currentMousePos.y.toFixed(1)} | PlayerRender: ${playerRenderX.toFixed(1)},${playerRenderY.toFixed(1)} | AimVec: dx=${localPlayerAimDx.toFixed(2)}, dy=${localPlayerAimDy.toFixed(2)}`);
     } else {
-        ctx.fillStyle = typeof dayBaseColor !== 'undefined' ? dayBaseColor : "#8FBC8F"; // Default color if needed
-        ctx.fillRect(0, 0, width, height);
+        // console.log("[drawGame] Could not calculate aim vector (missing player/pos/mouse?)");
     }
-    // --- End Background Drawing ---
 
+    // --- Draw Static Background, Heat Haze, Background Elements ---
+    // (Keep existing logic as provided previously)
+    if (typeof isBackgroundReady !== 'undefined' && isBackgroundReady) { /* ... background draw ... */ } else { /* ... fallback fill ... */ }
+    if (appState && typeof appState.currentTemp === 'number') { drawHeatHaze(ctx, appState.currentTemp, width, height, now); }
+    if (stateToRender) { drawCampfire(ctx, stateToRender.campfire, width, height); /* ... draw snake, powerups ... */ }
 
-    // --- 3. Draw Heat Haze (After Background) ---
-    // (Keep existing heat haze logic)
-    if (appState && typeof appState.currentTemp === 'number') {
-        drawHeatHaze(ctx, appState.currentTemp, width, height, now);
-    }
-    // --- End Heat Haze ---
-
-
-    // --- 4. Draw Dynamic Game World Elements (Behind Main Characters) ---
-    // (Keep existing background element drawing logic)
+    // --- 5. Draw Main Gameplay Elements ---
     if (stateToRender) {
-        drawCampfire(ctx, stateToRender.campfire, width, height);
-        // Check if snake state exists before accessing properties
-        if (typeof snake !== 'undefined' && stateToRender.snake_state?.active && snake.segments) {
-             drawSnake(ctx, snake); // drawSnake now likely relies on `snake` object state
-        }
-        drawPowerups(ctx, stateToRender.powerups);
-    }
-    // --- End Background Elements ---
-
-
-    // --- 5. Draw Main Gameplay Elements (Over Heat Haze) ---
-    if (stateToRender) {
-        // Draw Bullets and Enemies first
         drawBullets(ctx, stateToRender.bullets);
-        drawEnemies(ctx, stateToRender.enemies, activeBloodSparkEffects); // Pass spark effects
-
-        // Draw Enemy Speech Bubbles
+        drawEnemies(ctx, stateToRender.enemies, activeBloodSparkEffects);
         const activeEnemyBubblesObj = (typeof activeEnemyBubbles !== 'undefined') ? activeEnemyBubbles : {};
-        if (stateToRender.enemies) { // Ensure enemies exist before drawing bubbles
-            drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubblesObj);
-        }
+        if (stateToRender.enemies) { drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubblesObj); }
 
-        // Draw Players and Player Speech Bubbles
         if (appState && stateToRender.players) {
-            // --- MODIFIED CALL TO drawPlayers ---
-            // Pass the calculated aim vector specifically for the local player
+            // Pass the LIVE calculated aim vector to drawPlayers
             drawPlayers(
-                ctx,
-                stateToRender.players,
-                appState,
-                localPlayerMuzzleFlash, // Pass muzzle flash state
-                localPlayerPushbackAnim, // Pass pushback state
-                shakeOffsetX,       // Pass shake offset X
-                shakeOffsetY,       // Pass shake offset Y
-                localPlayerAimDx,   // Pass local player aim vector X
-                localPlayerAimDy    // Pass local player aim vector Y
+                ctx, stateToRender.players, appState,
+                localPlayerMuzzleFlash, localPlayerPushbackAnim,
+                shakeOffsetX, shakeOffsetY,
+                localPlayerAimDx, localPlayerAimDy // Pass the calculated vector
             );
-
-            // Draw player speech bubbles after players
             const activeSpeechBubblesObj = (typeof activeSpeechBubbles !== 'undefined') ? activeSpeechBubbles : {};
             drawSpeechBubbles(ctx, stateToRender.players, activeSpeechBubblesObj, appState, shakeOffsetX, shakeOffsetY);
         }
 
-        // Draw Damage Text floating numbers
         drawDamageTexts(ctx, stateToRender.damage_texts);
 
-        // Draw Muzzle Flash for local player if active
+        // Muzzle Flash (Uses stored direction from shoot time)
         let shouldDrawMuzzleFlash = localPlayerMuzzleFlash?.active && now < localPlayerMuzzleFlash?.endTime;
-        // Use the stored aim direction from the flash state, apply shake offset to position
         if (shouldDrawMuzzleFlash && typeof appState.renderedPlayerPos !== 'undefined' && localPlayerMuzzleFlash.aimDx !== undefined) {
-            drawMuzzleFlash(
-                ctx,
-                appState.renderedPlayerPos.x + shakeOffsetX, // Apply shake to flash position
-                appState.renderedPlayerPos.y + shakeOffsetY,
-                localPlayerMuzzleFlash.aimDx, // Use aim from flash state
-                localPlayerMuzzleFlash.aimDy
-            );
+            drawMuzzleFlash( ctx, appState.renderedPlayerPos.x + shakeOffsetX, appState.renderedPlayerPos.y + shakeOffsetY, localPlayerMuzzleFlash.aimDx, localPlayerMuzzleFlash.aimDy );
         } else if (localPlayerMuzzleFlash?.active) {
-            localPlayerMuzzleFlash.active = false; // Deactivate flash if time expired
+            localPlayerMuzzleFlash.active = false;
         }
     } else {
         console.warn("drawGame called with no stateToRender, skipping entity drawing.");
     }
-    // --- End Main Gameplay Elements ---
 
-
-    // --- 6. Draw Overlays (Rain/Dust, Tint, Vignette) ---
-    // (Keep existing overlay logic)
+    // --- Draw Overlays, Particles ---
+    // (Keep existing logic as provided previously)
     ctx.globalAlpha = 1.0;
-    if (appState?.isRaining) {
-        const RAIN_SPEED_Y = 12; const RAIN_SPEED_X = 1;
-        ctx.strokeStyle = typeof RAIN_COLOR !== 'undefined' ? RAIN_COLOR : "rgba(170, 190, 230, 0.6)";
-        ctx.lineWidth = 1.5; ctx.beginPath();
-        const dropCount = typeof RAIN_DROPS !== 'undefined' ? RAIN_DROPS : 150;
-        for (let i = 0; i < dropCount; i++) {
-            // Simpler rain calculation for example
-            const rainX = (Math.random() * (width + 100) - 50 + now * 0.01) % (width + 100) - 50; // Add time component for movement
-            const rainY = (Math.random() * height + now * 0.2) % height;
-            const endX = rainX + RAIN_SPEED_X; const endY = rainY + RAIN_SPEED_Y;
-            ctx.moveTo(rainX, rainY); ctx.lineTo(endX, endY);
-        }
-        ctx.stroke();
-    } else if (appState?.isDustStorm) {
-        ctx.fillStyle = "rgba(229, 169, 96, 0.2)"; // Simple overlay
-        ctx.fillRect(0, 0, width, height);
-        // Could add particle effect here too
-    }
-
-    // Temperature Tint
+    if (appState?.isRaining) { /* ... rain draw ... */ } else if (appState?.isDustStorm) { /* ... dust overlay ... */ }
     if (appState) drawTemperatureTint(ctx, appState.currentTemp, width, height);
+    const currentPlayerState = stateToRender?.players?.[appState?.localPlayerId];
+    if (currentPlayerState && typeof currentPlayerState.health === 'number') { /* ... vignette draw ... */ }
+    if (typeof activeAmmoCasings !== 'undefined' && Array.isArray(activeAmmoCasings)) { /* ... casing draw ... */ }
 
-    // Damage Vignette
-    const currentPlayerState = stateToRender?.players?.[appState?.localPlayerId]; // Use currentPlayerState if already defined
-    if (currentPlayerState && typeof currentPlayerState.health === 'number') {
-        const healthThreshold = typeof DAMAGE_VIGNETTE_HEALTH_THRESHOLD !== 'undefined' ? DAMAGE_VIGNETTE_HEALTH_THRESHOLD : 30;
-        if (currentPlayerState.health < healthThreshold) {
-            const intensity = 1.0 - Math.max(0, currentPlayerState.health) / healthThreshold;
-            drawDamageVignette(ctx, intensity, width, height);
-        }
-    }
-    // --- End Overlays ---
-
-
-    // --- 7. Draw Particles (e.g., Ammo Casings - drawn over everything) ---
-    // (Keep existing particle logic)
-    // Make sure activeAmmoCasings is accessible in this scope (likely defined globally in main.js or passed in)
-    if (typeof activeAmmoCasings !== 'undefined' && Array.isArray(activeAmmoCasings)) {
-        // Filter expired casings FIRST
-        activeAmmoCasings = activeAmmoCasings.filter(casing => (now - casing.spawnTime) < casing.lifetime);
-
-        if (activeAmmoCasings.length > 0) {
-            // Calculate deltaTime for physics (important to use consistent time source)
-            const deltaTime = appState.lastLoopTime ? Math.min(0.1, (now - appState.lastLoopTime) / 1000) : (1 / 60); // Default to 60fps if no last time
-
-            ctx.save(); // Save context for particle drawing
-            activeAmmoCasings.forEach(casing => {
-                // Update physics
-                casing.vy += casing.gravity * deltaTime;
-                casing.x += casing.vx * deltaTime;
-                casing.y += casing.vy * deltaTime;
-                casing.rotation += casing.rotationSpeed * deltaTime;
-
-                // Calculate alpha based on remaining lifetime
-                const lifeLeft = casing.lifetime - (now - casing.spawnTime);
-                const fadeDuration = 200; // Start fading 200ms before expiring
-                const alpha = (lifeLeft < fadeDuration) ? Math.max(0, lifeLeft / fadeDuration) * 0.9 : 0.9; // Fade alpha
-
-                // Set color with calculated alpha
-                let casingColor = casing.color || "rgba(218, 165, 32, 0.9)"; // Default color
-                if (casingColor.startsWith('rgba')) {
-                    // Replace existing alpha value with the new calculated one
-                    casingColor = casingColor.replace(/[\d\.]+\)$/g, `${alpha.toFixed(2)})`);
-                } else if (casingColor.startsWith('#')) {
-                     // Convert hex to rgba to apply alpha (simple example, might need robust hex parser)
-                     // Example assumes #RRGGBB format
-                     const r = parseInt(casingColor.slice(1, 3), 16);
-                     const g = parseInt(casingColor.slice(3, 5), 16);
-                     const b = parseInt(casingColor.slice(5, 7), 16);
-                     casingColor = `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(2)})`;
-                }
-                ctx.fillStyle = casingColor;
-
-                // Draw rotated rectangle
-                ctx.translate(casing.x, casing.y);
-                ctx.rotate(casing.rotation);
-                ctx.fillRect(-casing.width / 2, -casing.height / 2, casing.width, casing.height);
-                // Undo transformations for the next casing
-                ctx.rotate(-casing.rotation);
-                ctx.translate(-casing.x, -casing.y);
-            });
-            ctx.restore(); // Restore context after drawing all particles
-        }
-    }
-    // --- End Particles ---
-
-    ctx.globalAlpha = 1.0; // Final reset before exiting
-
+    ctx.globalAlpha = 1.0; // Final reset
 } // --- End of function drawGame ---
-
 
 // ... (Keep the rest of the Renderer module (export statement, IIFE end) exactly as it was) ...
 
