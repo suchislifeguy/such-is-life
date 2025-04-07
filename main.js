@@ -608,13 +608,59 @@ const Game = (() => {
         else { renderedPos.x = lerp(renderedPos.x, predictedPos.x, renderLerpFactor); renderedPos.y = lerp(renderedPos.y, predictedPos.y, renderLerpFactor); }
     }
     function initListeners() {
-        log("Initializing button listeners..."); DOM.singlePlayerBtn.onclick = startSinglePlayer; DOM.multiplayerBtn.onclick = () => UI.showSection('multiplayer-menu-section');
-        DOM.hostGameBtn2.onclick = () => hostMultiplayer(2); DOM.hostGameBtn3.onclick = () => hostMultiplayer(3); DOM.hostGameBtn4.onclick = () => hostMultiplayer(4);
-        DOM.showJoinUIBtn.onclick = () => UI.showSection('join-code-section'); DOM.cancelHostBtn.onclick = leaveGame; DOM.joinGameSubmitBtn.onclick = joinMultiplayer;
-        DOM.sendChatBtn.onclick = sendChatMessage; DOM.leaveGameBtn.onclick = leaveGame; DOM.gameOverBackBtn.onclick = () => resetClientState(true);
-        DOM.gameContainer.querySelectorAll('.back-button').forEach(btn => { const targetMatch = btn.getAttribute('onclick')?.match(/'([^']+)'/); if (targetMatch && targetMatch[1]) { const targetId = targetMatch[1]; if (DOM[targetId] || document.getElementById(targetId)) { btn.onclick = (e) => { e.preventDefault(); UI.showSection(targetId); }; } else { log(`Warning: Back button target section invalid: ${targetId}`); } } else { log("Warning: Back button found without valid target in onclick:", btn); } });
+        log("Initializing button listeners...");
+
+        DOM.singlePlayerBtn.onclick = () => {
+            SoundManager.init();
+            startSinglePlayer();
+        };
+
+        const hostHandler = (maxPlayers) => {
+            SoundManager.init();
+            hostMultiplayer(maxPlayers);
+        };
+        DOM.hostGameBtn2.onclick = () => hostHandler(2);
+        DOM.hostGameBtn3.onclick = () => hostHandler(3);
+        DOM.hostGameBtn4.onclick = () => hostHandler(4);
+
+        DOM.joinGameSubmitBtn.onclick = () => {
+            SoundManager.init();
+            joinMultiplayer();
+        };
+
+        DOM.multiplayerBtn.onclick = () => UI.showSection('multiplayer-menu-section');
+        DOM.showJoinUIBtn.onclick = () => UI.showSection('join-code-section');
+        DOM.cancelHostBtn.onclick = leaveGame;
+        DOM.sendChatBtn.onclick = sendChatMessage;
+        DOM.leaveGameBtn.onclick = leaveGame;
+        DOM.gameOverBackBtn.onclick = () => resetClientState(true);
+
+        DOM.gameContainer.querySelectorAll('.back-button').forEach(btn => {
+            const targetMatch = btn.getAttribute('onclick')?.match(/'([^']+)'/);
+            if (targetMatch && targetMatch[1]) {
+                const targetId = targetMatch[1];
+                if (DOM[targetId] || document.getElementById(targetId)) {
+                    btn.onclick = (e) => { e.preventDefault(); UI.showSection(targetId); };
+                } else {
+                    log(`Warning: Back button target section invalid: ${targetId}`);
+                }
+            } else {
+                log("Warning: Back button found without valid target in onclick:", btn);
+            }
+        });
     }
-    return { resetClientState, startGameLoop, cleanupLoop, sendChatMessage, initListeners, getInterpolatedState };
+    // --- END CORRECTED initListeners ---
+
+    return {
+        resetClientState,
+        startGameLoop,
+        cleanupLoop,
+        sendChatMessage,
+        initListeners,
+        getInterpolatedState,
+        // Expose leaveGame only if needed by cancelHostBtn/leaveGameBtn directly
+        // leaveGame
+    };
 })();
 
 // --- Global Server Message Handler ---
