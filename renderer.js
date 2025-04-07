@@ -1673,47 +1673,68 @@ const Renderer = (() => {
       }
       ctx.restore(); // Restore context state from the very start of the function
     }
+
     function drawPlayers(
-        ctx, players, appState, localPlayerMuzzleFlash, localPlayerPushbackAnim,
-        // --- OFFSET PARAMETERS ---
-        offsetX = 0, offsetY = 0 // Default to 0 if not provided
-    ) {
-         if (!players || !appState) return;
-         Object.values(players).forEach(p => {
-             if (!p || p.player_status === 'dead') return;
-             const isSelf = p.id === appState.localPlayerId;
-             const ps = p.player_status || 'alive';
-             let dx = isSelf ? appState.renderedPlayerPos.x : p.x;
-             let dy = isSelf ? appState.renderedPlayerPos.y : p.y;
-             const w = p.width ?? PLAYER_DEFAULTS.width; // Needs PLAYER_DEFAULTS accessible
-             const h = p.height ?? PLAYER_DEFAULTS.height;
-             const mh = p.max_health ?? PLAYER_DEFAULTS.max_health;
-             const ca = p.armor ?? 0;
-             const isDown = (ps === 'down');
-             const alpha = isDown ? 0.4 : 1.0;
+      ctx, players, appState, localPlayerMuzzleFlash, localPlayerPushbackAnim,
+      offsetX = 0, offsetY = 0, // Keep shake offsets
+      mousePos = { x: 0, y: 0 } // *** ADD mousePos parameter ***
+  ) {
+      if (!players || !appState) return;
 
-             // --- Apply Offset ONLY to the Local Player ---
-             let drawX = dx;
-             let drawY = dy;
-             if (isSelf) {
-                 drawX += offsetX;
-                 drawY += offsetY;
-             }
+      Object.values(players).forEach(p => {
+          if (!p || p.player_status === 'dead') return;
 
-             ctx.save();
-             ctx.globalAlpha = alpha;
-             const pushbackState = isSelf ? localPlayerPushbackAnim : null;
-             // Aim params 0,0 as handled within drawPlayerCharacter
-             drawPlayerCharacter(ctx, drawX, drawY, w, h, isSelf, p, 0, 0, pushbackState);
-             ctx.restore();
+          const isSelf = p.id === appState.localPlayerId;
+          const ps = p.player_status || 'alive';
+          // Use rendered position for drawing location calculation
+          const playerRenderX = isSelf ? appState.renderedPlayerPos.x : p.x;
+          const playerRenderY = isSelf ? appState.renderedPlayerPos.y : p.y;
+          const w = p.width ?? PLAYER_DEFAULTS.width;
+          const h = p.height ?? PLAYER_DEFAULTS.height;
+          const mh = p.max_health ?? PLAYER_DEFAULTS.max_health;
+          const ca = p.armor ?? 0;
+          const isDown = (ps === 'down');
+          const alpha = isDown ? 0.4 : 1.0;
 
-             // Draw UI elements at the offset position
-             if (ps === 'alive') {
-                 drawHealthBar(ctx, drawX, drawY, w, p.health, mh);
-                 if (ca > 0) drawArmorBar(ctx, drawX, drawY, w, ca);
-             }
-         });
-    }
+          // Apply shake offset ONLY to the Local Player for drawing position
+          let drawX = playerRenderX + (isSelf ? offsetX : 0);
+          let drawY = playerRenderY + (isSelf ? offsetY : 0);
+
+          // *** Calculate Aim Direction for Local Player ***
+          let aimDx = 0;
+          let aimDy = 0;
+          if (isSelf) {
+              // Use the passed mousePos and the *rendered* player position
+              let dx = mousePos.x - (appState.renderedPlayerPos.x + offsetX); // Aim relative to potentially shaken position
+              let dy = mousePos.y - (appState.renderedPlayerPos.y + offsetY);
+              const magSq = dx * dx + dy * dy;
+              if (magSq > 0.01) { // Normalize
+                  const mag = Math.sqrt(magSq);
+                  aimDx = dx / mag;
+                  aimDy = dy / mag;
+              } else {
+                  aimDx = 0; // Default aim (e.g., up or based on last known) - adjust if needed
+                  aimDy = -1;
+              }
+          }
+          // *** End Aim Calculation ***
+
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          const pushbackState = isSelf ? localPlayerPushbackAnim : null;
+
+          // *** Pass calculated aimDx, aimDy to drawPlayerCharacter ***
+          drawPlayerCharacter(ctx, drawX, drawY, w, h, isSelf, p, aimDx, aimDy, pushbackState);
+
+          ctx.restore();
+
+          // Draw UI elements at the potentially shaken position
+          if (ps === 'alive') {
+              drawHealthBar(ctx, drawX, drawY, w, p.health, mh);
+              if (ca > 0) drawArmorBar(ctx, drawX, drawY, w, ca);
+          }
+      });
+  }
 
     function drawEnemies(
       ctx,
