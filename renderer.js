@@ -1592,45 +1592,77 @@ const Renderer = (() => {
       const slitY = headTopY + headHeight * 0.45;
       ctx.fillRect(x - slitWidth / 2, slitY, slitWidth, slitHeight);
       // Gun
+      // Gun (Corrected Rotation Logic)
       let shouldDrawGun = false;
       let gunDrawAngle = 0;
       let gunDrawMode = "aiming";
+
+      // Determine if gun should be shown and its base angle
       if (isPushbackAnimating) {
         shouldDrawGun = true;
         gunDrawMode = "pushback";
-        gunDrawAngle = -Math.PI / 2;
+        gunDrawAngle = -Math.PI / 2; // Points straight up during pushback animation
       } else if (isSelf && (aimDx !== 0 || aimDy !== 0)) {
         shouldDrawGun = true;
         gunDrawMode = "aiming";
-        gunDrawAngle = Math.atan2(aimDy, aimDx);
+        gunDrawAngle = Math.atan2(aimDy, aimDx); // Calculate angle from aim vector
       }
+
       if (shouldDrawGun) {
         const gunLevel = playerState?.gun ?? 1;
         const baseBarrelLength = 18;
         const barrelLengthIncrease = 2;
-        const barrelLength =
-          baseBarrelLength + (gunLevel - 1) * barrelLengthIncrease;
+        const barrelLength = baseBarrelLength + (gunLevel - 1) * barrelLengthIncrease;
         const barrelThickness = 3 + (gunLevel - 1) * 0.2;
         const stockLength = 8 + (gunLevel - 1) * 0.5;
         const stockThickness = 5 + (gunLevel - 1) * 0.3;
-        const stockColor = "#8B4513";
-        const barrelColor = "#444444";
-        const gunOriginYOffset = armTopY + armLength * 0.4;
-        const gunOriginXOffset = gunDrawMode === "pushback" ? w * 0.05 : w * 0.1;
-        ctx.save();
-        ctx.translate(x + gunOriginXOffset, gunOriginYOffset);
+        const stockColor = "#8B4513"; // Brownish stock
+        const barrelColor = "#444444"; // Dark grey barrel
+
+        // --- Define the rotation pivot point ---
+        // Let's pivot around the player's center horizontally (x)
+        // and vertically around the calculated shoulder level (shoulderCenterY).
+        const pivotX = x;
+        const pivotY = shoulderCenterY; // Use the previously calculated shoulder Y
+
+        // --- Define offsets for VISUAL positioning relative to the pivot AFTER rotation ---
+        // How far "out" from the pivot the base of the gun sits. Adjust as needed.
+        const gunHoldRadius = w * 0.15; // Distance from pivot (sideways)
+        // How far "forward" from the pivot the stock starts. Adjust as needed.
+        const gunForwardOffset = 5;
+
+        ctx.save(); // Save context state before transform
+
+        // 1. Translate to the pivot point
+        ctx.translate(pivotX, pivotY);
+
+        // 2. Rotate the entire canvas context around the pivot point
         ctx.rotate(gunDrawAngle);
+
+        // 3. Draw the gun parts relative to the NOW ROTATED pivot (which is currently 0,0)
+        //    Apply the visual offsets here.
+
+        // Draw Barrel (starts slightly forward and to the side of the pivot)
+        ctx.fillStyle = barrelColor;
+        ctx.fillRect(
+          gunForwardOffset,                 // X: Start slightly forward of pivot
+          gunHoldRadius - (barrelThickness / 2), // Y: Offset sideways from pivot
+          barrelLength,                     // Width (length along rotated axis)
+          barrelThickness                   // Height (thickness perpendicular to rotation)
+        );
+
+        // Draw Stock (attached behind the barrel's start)
         ctx.fillStyle = stockColor;
         ctx.fillRect(
-          -stockLength - 2,
-          -stockThickness / 2,
+          gunForwardOffset - stockLength,   // X: Starts behind barrel start
+          gunHoldRadius - (stockThickness / 2), // Y: Align with barrel sideways offset
           stockLength,
           stockThickness
         );
-        ctx.fillStyle = barrelColor;
-        ctx.fillRect(0, -barrelThickness / 2, barrelLength, barrelThickness);
-        ctx.restore();
+
+        ctx.restore(); // Restore original context state (translation, rotation)
       }
+      // --- End Gun Drawing ---
       // Effects
       if (isPlayerBitten) {
         const footY = bootBottomY;
