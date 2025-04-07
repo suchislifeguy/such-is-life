@@ -1218,6 +1218,7 @@ const Renderer = (() => {
       ctx.restore(); // Restore context from start of function
     }
   
+  
     function drawPlayerCharacter(
       ctx,
       x,
@@ -1593,68 +1594,45 @@ const Renderer = (() => {
       const slitY = headTopY + headHeight * 0.45;
       ctx.fillRect(x - slitWidth / 2, slitY, slitWidth, slitHeight);
       // Gun
-
-      // Gun (RESTORED to Original Transform Logic)
       let shouldDrawGun = false;
       let gunDrawAngle = 0;
       let gunDrawMode = "aiming";
-
-      // Determine if gun should be shown and its base angle
-      // (This part remains the same, relying on passed aimDx/Dy)
       if (isPushbackAnimating) {
         shouldDrawGun = true;
         gunDrawMode = "pushback";
-        gunDrawAngle = -Math.PI / 2; // Points straight up during pushback animation
+        gunDrawAngle = -Math.PI / 2;
       } else if (isSelf && (aimDx !== 0 || aimDy !== 0)) {
         shouldDrawGun = true;
         gunDrawMode = "aiming";
-        gunDrawAngle = Math.atan2(aimDy, aimDx); // Calculate angle from aim vector
+        gunDrawAngle = Math.atan2(aimDy, aimDx);
       }
-
       if (shouldDrawGun) {
-        // Calculate dimensions (scope corrected in previous attempts, keep that fix)
         const gunLevel = playerState?.gun ?? 1;
         const baseBarrelLength = 18;
         const barrelLengthIncrease = 2;
-        const barrelLength = baseBarrelLength + (gunLevel - 1) * barrelLengthIncrease;
+        const barrelLength =
+          baseBarrelLength + (gunLevel - 1) * barrelLengthIncrease;
         const barrelThickness = 3 + (gunLevel - 1) * 0.2;
         const stockLength = 8 + (gunLevel - 1) * 0.5;
         const stockThickness = 5 + (gunLevel - 1) * 0.3;
         const stockColor = "#8B4513";
         const barrelColor = "#444444";
-
-        // *** RESTORED: Original offset calculation and transform order ***
-        const gunOriginYOffset = armTopY + armLength * 0.4; // Y offset based on arm
-        const gunOriginXOffset = gunDrawMode === "pushback" ? w * 0.05 : w * 0.1; // Simple X offset
-
+        const gunOriginYOffset = armTopY + armLength * 0.4;
+        const gunOriginXOffset = gunDrawMode === "pushback" ? w * 0.05 : w * 0.1;
         ctx.save();
-        // 1. Translate BY the offset first
         ctx.translate(x + gunOriginXOffset, gunOriginYOffset);
-        // 2. Rotate AFTER translation (around the new, offset origin)
         ctx.rotate(gunDrawAngle);
-
-        // 3. Draw parts relative to the offset+rotated origin (0,0)
-        // Draw Stock (relative to the new origin)
         ctx.fillStyle = stockColor;
         ctx.fillRect(
-          -stockLength - 2,              // X position relative to offset origin
-          -stockThickness / 2,           // Y position relative to offset origin
+          -stockLength - 2,
+          -stockThickness / 2,
           stockLength,
           stockThickness
         );
-        // Draw Barrel (relative to the new origin)
         ctx.fillStyle = barrelColor;
-        ctx.fillRect(
-          0,                             // X position relative to offset origin
-          barrelThickness / 2,          // Y position relative to offset origin
-          barrelLength,
-          barrelThickness
-        );
-        // *** END RESTORED Transform Logic ***
-
-        ctx.restore(); // Restore context state
+        ctx.fillRect(0, -barrelThickness / 2, barrelLength, barrelThickness);
+        ctx.restore();
       }
-      // --- End Gun Drawing ---
       // Effects
       if (isPlayerBitten) {
         const footY = bootBottomY;
@@ -1697,68 +1675,47 @@ const Renderer = (() => {
       }
       ctx.restore(); // Restore context state from the very start of the function
     }
-
     function drawPlayers(
-      ctx, players, appState, localPlayerMuzzleFlash, localPlayerPushbackAnim,
-      offsetX = 0, offsetY = 0, // Keep shake offsets
-      mousePos = { x: 0, y: 0 } // *** ADD mousePos parameter ***
-  ) {
-      if (!players || !appState) return;
+        ctx, players, appState, localPlayerMuzzleFlash, localPlayerPushbackAnim,
+        // --- OFFSET PARAMETERS ---
+        offsetX = 0, offsetY = 0 // Default to 0 if not provided
+    ) {
+         if (!players || !appState) return;
+         Object.values(players).forEach(p => {
+             if (!p || p.player_status === 'dead') return;
+             const isSelf = p.id === appState.localPlayerId;
+             const ps = p.player_status || 'alive';
+             let dx = isSelf ? appState.renderedPlayerPos.x : p.x;
+             let dy = isSelf ? appState.renderedPlayerPos.y : p.y;
+             const w = p.width ?? PLAYER_DEFAULTS.width; // Needs PLAYER_DEFAULTS accessible
+             const h = p.height ?? PLAYER_DEFAULTS.height;
+             const mh = p.max_health ?? PLAYER_DEFAULTS.max_health;
+             const ca = p.armor ?? 0;
+             const isDown = (ps === 'down');
+             const alpha = isDown ? 0.4 : 1.0;
 
-      Object.values(players).forEach(p => {
-          if (!p || p.player_status === 'dead') return;
+             // --- Apply Offset ONLY to the Local Player ---
+             let drawX = dx;
+             let drawY = dy;
+             if (isSelf) {
+                 drawX += offsetX;
+                 drawY += offsetY;
+             }
 
-          const isSelf = p.id === appState.localPlayerId;
-          const ps = p.player_status || 'alive';
-          // Use rendered position for drawing location calculation
-          const playerRenderX = isSelf ? appState.renderedPlayerPos.x : p.x;
-          const playerRenderY = isSelf ? appState.renderedPlayerPos.y : p.y;
-          const w = p.width ?? PLAYER_DEFAULTS.width;
-          const h = p.height ?? PLAYER_DEFAULTS.height;
-          const mh = p.max_health ?? PLAYER_DEFAULTS.max_health;
-          const ca = p.armor ?? 0;
-          const isDown = (ps === 'down');
-          const alpha = isDown ? 0.4 : 1.0;
+             ctx.save();
+             ctx.globalAlpha = alpha;
+             const pushbackState = isSelf ? localPlayerPushbackAnim : null;
+             // Aim params 0,0 as handled within drawPlayerCharacter
+             drawPlayerCharacter(ctx, drawX, drawY, w, h, isSelf, p, 0, 0, pushbackState);
+             ctx.restore();
 
-          // Apply shake offset ONLY to the Local Player for drawing position
-          let drawX = playerRenderX + (isSelf ? offsetX : 0);
-          let drawY = playerRenderY + (isSelf ? offsetY : 0);
-
-          // *** Calculate Aim Direction for Local Player ***
-          let aimDx = 0;
-          let aimDy = 0;
-          if (isSelf) {
-              // Use the passed mousePos and the *rendered* player position
-              let dx = mousePos.x - (appState.renderedPlayerPos.x + offsetX); // Aim relative to potentially shaken position
-              let dy = mousePos.y - (appState.renderedPlayerPos.y + offsetY);
-              const magSq = dx * dx + dy * dy;
-              if (magSq > 0.01) { // Normalize
-                  const mag = Math.sqrt(magSq);
-                  aimDx = dx / mag;
-                  aimDy = dy / mag;
-              } else {
-                  aimDx = 0; // Default aim (e.g., up or based on last known) - adjust if needed
-                  aimDy = -1;
-              }
-          }
-          // *** End Aim Calculation ***
-
-          ctx.save();
-          ctx.globalAlpha = alpha;
-          const pushbackState = isSelf ? localPlayerPushbackAnim : null;
-
-          // *** Pass calculated aimDx, aimDy to drawPlayerCharacter ***
-          drawPlayerCharacter(ctx, drawX, drawY, w, h, isSelf, p, aimDx, aimDy, pushbackState);
-
-          ctx.restore();
-
-          // Draw UI elements at the potentially shaken position
-          if (ps === 'alive') {
-              drawHealthBar(ctx, drawX, drawY, w, p.health, mh);
-              if (ca > 0) drawArmorBar(ctx, drawX, drawY, w, ca);
-          }
-      });
-  }
+             // Draw UI elements at the offset position
+             if (ps === 'alive') {
+                 drawHealthBar(ctx, drawX, drawY, w, p.health, mh);
+                 if (ca > 0) drawArmorBar(ctx, drawX, drawY, w, ca);
+             }
+         });
+    }
 
     function drawEnemies(
       ctx,
