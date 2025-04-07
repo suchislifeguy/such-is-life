@@ -341,27 +341,55 @@ const Input = (() => {
     function handleShooting() {
         if (appState.serverState?.status !== 'active') return;
         const playerState = appState.serverState?.players?.[appState.localPlayerId];
+        if (!playerState) return; // Need player state
+    
         const currentAmmo = playerState?.active_ammo_type || 'standard';
         let actualCooldown = SHOOT_COOLDOWN * (currentAmmo === 'ammo_rapid_fire' ? RAPID_FIRE_COOLDOWN_MULTIPLIER : 1);
-        const now = Date.now();
-        if (now - lastShotTime < actualCooldown) return;
-        lastShotTime = now;
+        const nowMs = performance.now(); // Use performance.now for consistency with other effects
+        const nowDate = Date.now(); // Keep for cooldown check if needed
+    
+        if (nowDate - lastShotTime < actualCooldown) return;
+        lastShotTime = nowDate;
+    
+        // --- CRITICAL: Calculate aim relative to PLAYER RENDERED POSITION ---
+        // Ensure renderedPlayerPos is up-to-date before this call
         const playerRenderX = appState.renderedPlayerPos.x;
         const playerRenderY = appState.renderedPlayerPos.y;
-        let flashDx = mouseCanvasPos.x - playerRenderX;
-        let flashDy = mouseCanvasPos.y - playerRenderY;
-        const flashMag = Math.sqrt(flashDx * flashDx + flashDy * flashDy);
-        if (flashMag > 0.01) {
-            flashDx /= flashMag;
-            flashDy /= flashMag;
-        } else {
-            flashDx = 0;
-            flashDy = -1;
+    
+        if (typeof playerRenderX !== 'number' || typeof playerRenderY !== 'number') {
+            console.error("Cannot handle shooting: Invalid renderedPlayerPos", appState.renderedPlayerPos);
+            return; // Exit if player position isn't valid
         }
+    
+        // Vector from player's rendered position to mouse canvas position
+        let aimDx = mouseCanvasPos.x - playerRenderX;
+        let aimDy = mouseCanvasPos.y - playerRenderY;
+        const aimMagSq = aimDx * aimDx + aimDy * aimDy;
+    
+        if (aimMagSq > 1) { // Normalize if magnitude > 1 pixel
+            const aimMag = Math.sqrt(aimMagSq);
+            aimDx /= aimMag;
+            aimDy /= aimMag;
+        } else { // Default aim if mouse is too close
+            aimDx = 0;
+            aimDy = -1; // Default up
+        }
+        // --- End Player-Relative Aim Calculation ---
+    
+        // Update muzzle flash state using this calculated direction
         localPlayerMuzzleFlash.active = true;
-        localPlayerMuzzleFlash.endTime = performance.now() + 75; // Keep muzzle flash short
-        localPlayerMuzzleFlash.aimDx = flashDx;
-        localPlayerMuzzleFlash.aimDy = flashDy;
+        localPlayerMuzzleFlash.endTime = nowMs + 75; // Use performance.now
+        localPlayerMuzzleFlash.aimDx = aimDx; // Store player-relative aim
+        localPlayerMuzzleFlash.aimDy = aimDy; // Store player-relative aim
+    
+        // --- Store this same direction for the gun visual ---
+        if (!appState.localPlayerAimState) { appState.localPlayerAimState = {}; } // Initialize if needed
+        appState.localPlayerAimState.lastAimDx = aimDx; // Store player-relative aim
+        appState.localPlayerAimState.lastAimDy = aimDy; // Store player-relative aim
+        console.log(`[Input.handleShooting] Stored Gun Aim: dx=${aimDx.toFixed(2)}, dy=${aimDy.toFixed(2)}`); // DEBUG LOG
+        // ----------------------------------------------------
+    
+        // Send shoot message to server (Target coords still based on mouseCanvasPos)
         log("Sending shoot message with Target Coords:", mouseCanvasPos);
         Network.sendMessage({ type: 'player_shoot', target: { x: mouseCanvasPos.x, y: mouseCanvasPos.y } });
 
