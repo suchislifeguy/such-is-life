@@ -74,21 +74,22 @@ const Renderer = (() => {
     const MAX_TINT_ALPHA = 0.25;
     const RAIN_COLOR = "rgba(170, 190, 230, 0.6)";
     const RAIN_DROPS = 150;
-    // --- Heat Haze Constants ---
-    const HEAT_HAZE_START_TEMP = 2.0;      // Temperature (°C) at which haze starts appearing
-    const HEAT_HAZE_MAX_TEMP = 45.0;        // Temperature (°C) at which haze reaches full intensity
-    const HEAT_HAZE_MAX_INTENSITY = 1.0;    // Controls overall strength (0 to 1)
-    const HEAT_HAZE_VERTICAL_EXTENT = 0.9;  // What fraction of the screen height (from bottom) is affected
-    const HEAT_HAZE_NUM_STRIPS = 25;        // How many horizontal strips to redraw (performance impact)
-    const HEAT_HAZE_WAVE_SPEED_X = 0.0008;  // How fast the horizontal waves move
-    const HEAT_HAZE_WAVE_FREQ_X1 = 0.03;    // Frequency of the first horizontal sine wave
-    const HEAT_HAZE_WAVE_FREQ_X2 = 0.07;    // Frequency of the second horizontal sine wave
-    const HEAT_HAZE_WAVE_AMP_X = 4.0;       // Max horizontal pixel offset at full intensity
-    const HEAT_HAZE_WAVE_SPEED_Y = 0.0006;  // How fast the vertical waves move (usually slower)
-    const HEAT_HAZE_WAVE_FREQ_Y1 = 0.025;   // Frequency of the first vertical sine wave
-    const HEAT_HAZE_WAVE_FREQ_Y2 = 0.06;    // Frequency of the second vertical sine wave
-    const HEAT_HAZE_WAVE_AMP_Y = 2.5;       // Max vertical pixel offset at full intensity
-    const HEAT_HAZE_STRIP_ALPHA = 0.06;     // Base transparency of the redrawn strips (keep low!)
+    // --- Heat Haze Constants (EXTREME TEST VALUES) ---
+    const HEAT_HAZE_START_TEMP = 2.0;      // Haze starts almost immediately
+    const HEAT_HAZE_MAX_TEMP = 5.0;        // Haze reaches max intensity very quickly
+    const HEAT_HAZE_MAX_INTENSITY = 1.0;    // Keep max intensity at 1
+    const HEAT_HAZE_VERTICAL_EXTENT = 0.9;  // Affect almost the entire screen height
+    const HEAT_HAZE_NUM_STRIPS = 10;        // FEWER strips (potentially less lag, chunkier effect)
+    const HEAT_HAZE_WAVE_SPEED_X = 0.002;  // Faster horizontal movement
+    const HEAT_HAZE_WAVE_FREQ_X1 = 0.01;    // LOWER frequency = LARGER waves horizontally
+    const HEAT_HAZE_WAVE_FREQ_X2 = 0.03;    // LOWER frequency = LARGER waves horizontally
+    const HEAT_HAZE_WAVE_AMP_X = 50.0;      // *** EXTREME horizontal offset ***
+    const HEAT_HAZE_WAVE_SPEED_Y = 0.0015;  // Faster vertical movement
+    const HEAT_HAZE_WAVE_FREQ_Y1 = 0.01;    // LOWER frequency = LARGER waves vertically
+    const HEAT_HAZE_WAVE_FREQ_Y2 = 0.025;   // LOWER frequency = LARGER waves vertically
+    const HEAT_HAZE_WAVE_AMP_Y = 35.0;      // *** EXTREME vertical offset ***
+    const HEAT_HAZE_STRIP_ALPHA = 0.75;     // *** MUCH higher alpha (will look bad, but visible) ***
+    // --- End Heat Haze Constants ---
 
     let currentShakeMagnitude = 0;
     let shakeEndTime = 0;
