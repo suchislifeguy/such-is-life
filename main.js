@@ -424,6 +424,9 @@ const Input = (() => {
         // Send the raw mouse coordinates; server calculates world target or uses direction
         log("Sending shoot message with Target Coords:", mouseCanvasPos);
         Network.sendMessage({ type: 'player_shoot', target: { x: mouseCanvasPos.x, y: mouseCanvasPos.y } });
+
+        // Play sound
+        SoundManager.playSound('shoot');
     
         // --- Spawn Ammo Casing Particle ---
         const casingLifetime = 500 + Math.random() * 300;
@@ -865,6 +868,11 @@ function handleServerMessage(event) {
                      hitPauseFrames = 3; // Pause rendering for 3 frames
                  }
 
+                 // Play damage sound if damage occurred this tick
+                if (localPlayerDamagedThisTick) {
+                    SoundManager.playSound('damage'); // 
+                }
+
                 // --- V3: Update Blood Spark Effects ---
                 if (newState.enemies) {
                     const now = performance.now();
@@ -1010,6 +1018,163 @@ function handleServerMessage(event) {
 
 // --- Global Initialization ---
 function showSection(sectionId) { UI.showSection(sectionId); }
+
+// --- Sound Manager ---
+const SoundManager = (() => {
+    let audioContext = null;
+    let loadedSounds = {}; // Holds the decoded AudioBuffers
+    let soundFiles = {      // Map sound names to their file paths
+        'shoot': 'assets/sounds/shoot.mp3',
+        'damage': 'assets/sounds/damage.mp3'
+        // Add more sounds here later
+    };
+    let soundsLoading = 0;
+    let soundsLoaded = 0;
+    let isInitialized = false;
+    let canPlaySound = false; // Tracks if AudioContext is ready and usable
+
+    // Function to attempt initialization (MUST be called from user interaction)
+    function init() {
+        if (isInitialized) {
+            // If already initialized, just return the current status
+            // console.log("[SoundManager] Init called again, status:", canPlaySound ? "Ready" : "Failed/Blocked");
+            return canPlaySound;
+        }
+        isInitialized = true; // Mark that initialization has been attempted
+        console.log("[SoundManager] Attempting initialization...");
+
+        try {
+            // Check for Web Audio API support
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) {
+                console.error("[SoundManager] Web Audio API not supported by this browser.");
+                canPlaySound = false;
+                return false;
+            }
+
+            // Create the AudioContext
+            audioContext = new AudioContextClass();
+
+            // Check context state - it might start suspended and need resuming
+            if (audioContext.state === 'suspended') {
+                console.log("[SoundManager] AudioContext is suspended. Needs resume (likely via user gesture).");
+                // Attempt to resume immediately - might work if init() is called *directly* from user interaction
+                audioContext.resume().then(() => {
+                    console.log("[SoundManager] AudioContext resumed successfully.");
+                    canPlaySound = true;
+                    loadSounds(); // Start loading sounds now that context is ready
+                }).catch(err => {
+                    console.error("[SoundManager] Failed to resume AudioContext:", err);
+                    canPlaySound = false; // Stay suspended
+                });
+            } else if (audioContext.state === 'running') {
+                console.log("[SoundManager] AudioContext is running.");
+                canPlaySound = true;
+                loadSounds(); // Start loading sounds now that context is ready
+            } else {
+                 console.warn("[SoundManager] AudioContext in unexpected state:", audioContext.state);
+                 canPlaySound = false; // Assume not ready if state is unknown
+            }
+
+        } catch (e) {
+            console.error("[SoundManager] Error creating AudioContext:", e);
+            audioContext = null;
+            canPlaySound = false;
+            return false;
+        }
+
+        console.log("[SoundManager] Initialization attempt finished. Can play:", canPlaySound);
+        return canPlaySound;
+    }
+
+    // Function to load all defined sounds
+    function loadSounds() {
+        if (!audioContext) {
+             console.error("[SoundManager] Cannot load sounds, AudioContext not available.");
+             return;
+        }
+        console.log("[SoundManager] Starting to load sounds...");
+        soundsLoading = Object.keys(soundFiles).length;
+        soundsLoaded = 0;
+        loadedSounds = {}; // Clear any previous buffers
+
+        Object.entries(soundFiles).forEach(([name, path]) => {
+            console.log(`[SoundManager] Fetching: ${name} from ${path}`);
+            fetch(path)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status} for ${path}`);
+                    }
+                    return response.arrayBuffer();
+                })
+                .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
+                .then(decodedBuffer => {
+                    console.log(`[SoundManager] Decoded: ${name}`);
+                    loadedSounds[name] = decodedBuffer;
+                    soundsLoaded++;
+                    if (soundsLoaded === soundsLoading) {
+                         console.log("[SoundManager] All sounds loaded successfully.");
+                    }
+                })
+                .catch(error => {
+                    console.error(`[SoundManager] Error loading/decoding sound '${name}' from ${path}:`, error);
+                    // You might want to track which sounds failed
+                    soundsLoaded++; // Still increment to prevent getting stuck if one fails
+                     if (soundsLoaded === soundsLoading) {
+                         console.log("[SoundManager] Sound loading finished (with errors).");
+                     }
+                });
+        });
+    }
+
+    // Function to play a loaded sound by name
+    function playSound(name, volume = 1.0) {
+        // Check if initialized and context is running
+        if (!isInitialized || !canPlaySound || !audioContext || audioContext.state !== 'running') {
+            // console.warn(`[SoundManager] Cannot play '${name}', sound system not ready (Initialized: ${isInitialized}, CanPlay: ${canPlaySound}, ContextState: ${audioContext?.state})`);
+            return;
+        }
+
+        const buffer = loadedSounds[name];
+        if (!buffer) {
+            // console.warn(`[SoundManager] Sound not loaded or still decoding: ${name}`);
+            return; // Don't play if buffer isn't ready
+        }
+
+        try {
+            // Create a source node (plays the buffer)
+            const source = audioContext.createBufferSource();
+            source.buffer = buffer;
+
+            // Create a gain node (controls volume)
+            const gainNode = audioContext.createGain();
+            // Clamp volume between 0 and 1 (or higher if you want amplification)
+            const clampedVolume = Math.max(0, Math.min(1, volume));
+            gainNode.gain.setValueAtTime(clampedVolume, audioContext.currentTime);
+
+            // Connect nodes: Source -> Gain -> Output Destination
+            source.connect(gainNode).connect(audioContext.destination);
+
+            // Play the sound now
+            source.start(0);
+
+            // Optional: Clean up the source node after it finishes playing
+            source.onended = () => {
+                source.disconnect();
+                gainNode.disconnect();
+            };
+
+        } catch (e) {
+            console.error(`[SoundManager] Error playing sound '${name}':`, e);
+        }
+    }
+
+    return {
+        init,       // Expose the init function
+        playSound   // Expose the play function
+    };
+})();
+// --- End Sound Manager ---
 
 // Initialize after the DOM is fully loaded
 document.addEventListener('DOMContentLoaded', () => {
