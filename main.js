@@ -339,89 +339,121 @@ const Input = (() => {
     }
 
     function handleShooting() {
-        if (appState.serverState?.status !== 'active') return;
+        // --- Basic Checks ---
+        if (appState.serverState?.status !== 'active') {
+            // console.log("Shoot ignored: Game not active.");
+            return;
+        }
         const playerState = appState.serverState?.players?.[appState.localPlayerId];
-        if (!playerState) return; // Need player state
+        if (!playerState) {
+            // console.log("Shoot ignored: Local player state not found.");
+            return;
+        }
+         if (playerState.player_status !== 'alive') {
+            // console.log("Shoot ignored: Player not alive.");
+            return; // Cannot shoot if down or dead
+        }
     
+        // --- Cooldown Check ---
         const currentAmmo = playerState?.active_ammo_type || 'standard';
-        let actualCooldown = SHOOT_COOLDOWN * (currentAmmo === 'ammo_rapid_fire' ? RAPID_FIRE_COOLDOWN_MULTIPLIER : 1);
-        const nowMs = performance.now(); // Use performance.now for consistency with other effects
-        const nowDate = Date.now(); // Keep for cooldown check if needed
+        const isRapidFire = currentAmmo === 'ammo_rapid_fire';
+        const cooldownMultiplier = isRapidFire ? RAPID_FIRE_COOLDOWN_MULTIPLIER : 1.0;
+        const actualCooldown = SHOOT_COOLDOWN * cooldownMultiplier;
+        const nowTimestamp = Date.now(); // Use Date.now for simple time comparison
     
-        if (nowDate - lastShotTime < actualCooldown) return;
-        lastShotTime = nowDate;
+        if (nowTimestamp - lastShotTime < actualCooldown) {
+            // console.log("Shoot ignored: Cooldown active.");
+            return; // Still on cooldown
+        }
+        lastShotTime = nowTimestamp; // Reset cooldown timer
     
-        // --- CRITICAL: Calculate aim relative to PLAYER RENDERED POSITION ---
-        // Ensure renderedPlayerPos is up-to-date before this call
+        // --- Aim Calculation (Relative to Player's Rendered Position) ---
         const playerRenderX = appState.renderedPlayerPos.x;
         const playerRenderY = appState.renderedPlayerPos.y;
     
+        // Ensure player position is valid before proceeding
         if (typeof playerRenderX !== 'number' || typeof playerRenderY !== 'number') {
-            console.error("Cannot handle shooting: Invalid renderedPlayerPos", appState.renderedPlayerPos);
-            return; // Exit if player position isn't valid
+            console.error("[handleShooting] Cannot shoot: Invalid renderedPlayerPos", appState.renderedPlayerPos);
+            return;
         }
+         // Ensure mouse position is valid
+         if (typeof mouseCanvasPos.x !== 'number' || typeof mouseCanvasPos.y !== 'number') {
+            console.error("[handleShooting] Cannot shoot: Invalid mouseCanvasPos", mouseCanvasPos);
+            return;
+         }
     
-        // Vector from player's rendered position to mouse canvas position
+        // Calculate vector from player's screen position to mouse screen position
         let aimDx = mouseCanvasPos.x - playerRenderX;
         let aimDy = mouseCanvasPos.y - playerRenderY;
         const aimMagSq = aimDx * aimDx + aimDy * aimDy;
     
-        if (aimMagSq > 1) { // Normalize if magnitude > 1 pixel
+        // Normalize the vector
+        if (aimMagSq > 1) { // Avoid division by zero or NaN if magnitude is tiny
             const aimMag = Math.sqrt(aimMagSq);
             aimDx /= aimMag;
             aimDy /= aimMag;
-        } else { // Default aim if mouse is too close
+        } else {
+            // If mouse is too close, default to aiming upwards
             aimDx = 0;
-            aimDy = -1; // Default up
+            aimDy = -1;
         }
-        // --- End Player-Relative Aim Calculation ---
+        // --- End Aim Calculation ---
     
-        // Update muzzle flash state using this calculated direction
+        // --- Update Muzzle Flash State ---
+        // Use performance.now() for smooth animation timing if available
+        const nowPerf = performance.now();
         localPlayerMuzzleFlash.active = true;
-        localPlayerMuzzleFlash.endTime = nowMs + 75; // Use performance.now
-        localPlayerMuzzleFlash.aimDx = aimDx; // Store player-relative aim
-        localPlayerMuzzleFlash.aimDy = aimDy; // Store player-relative aim
+        localPlayerMuzzleFlash.endTime = nowPerf + 75; // Flash duration
+        localPlayerMuzzleFlash.aimDx = aimDx; // Store the calculated player-relative direction
+        localPlayerMuzzleFlash.aimDy = aimDy; // Store the calculated player-relative direction
     
-        // --- Store this same direction for the gun visual ---
-        if (!appState.localPlayerAimState) { appState.localPlayerAimState = {}; } // Initialize if needed
-        appState.localPlayerAimState.lastAimDx = aimDx; // Store player-relative aim
-        appState.localPlayerAimState.lastAimDy = aimDy; // Store player-relative aim
-        console.log(`[Input.handleShooting] Stored Gun Aim: dx=${aimDx.toFixed(2)}, dy=${aimDy.toFixed(2)}`); // DEBUG LOG
-        // ----------------------------------------------------
+        // --- Store Aim Direction for Gun Visual ---
+        // Initialize the state object if it doesn't exist
+        if (!appState.localPlayerAimState) {
+            appState.localPlayerAimState = { lastAimDx: 0, lastAimDy: -1 }; // Start aiming up by default
+        }
+        // Store the *correct* calculated direction
+        appState.localPlayerAimState.lastAimDx = aimDx;
+        appState.localPlayerAimState.lastAimDy = aimDy;
+        // console.log(`[Input.handleShooting] Stored Gun Aim: dx=${aimDx.toFixed(2)}, dy=${aimDy.toFixed(2)}`); // Keep for debug if needed
     
-        // Send shoot message to server (Target coords still based on mouseCanvasPos)
+        // --- Send Message to Server ---
+        // Send the raw mouse coordinates; server calculates world target or uses direction
         log("Sending shoot message with Target Coords:", mouseCanvasPos);
         Network.sendMessage({ type: 'player_shoot', target: { x: mouseCanvasPos.x, y: mouseCanvasPos.y } });
-
-        // Spawn Ammo Casing Particle
+    
+        // --- Spawn Ammo Casing Particle ---
         const casingLifetime = 500 + Math.random() * 300;
-        const ejectAngleOffset = Math.PI / 2 + (Math.random() - 0.5) * 0.4;
-        const ejectAngle = Math.atan2(flashDy, flashDx) + ejectAngleOffset;
+        const ejectAngleOffset = Math.PI / 2 + (Math.random() - 0.5) * 0.4; // Eject sideways-ish
+        const ejectAngle = Math.atan2(aimDy, aimDx) + ejectAngleOffset; // Base angle + offset
         const ejectSpeed = 80 + Math.random() * 40;
-        const gravity = 150;
+        const gravity = 150; // Example gravity value
+    
+        // Ensure activeAmmoCasings array exists (might be better initialized elsewhere)
+        if (typeof activeAmmoCasings === 'undefined' || !Array.isArray(activeAmmoCasings)) {
+            activeAmmoCasings = [];
+        }
+    
         const casing = {
-            id: `casing_${performance.now()}_${Math.random()}`,
-            x: appState.renderedPlayerPos.x + Math.cos(ejectAngle) * 15, // Use rendered position
-            y: appState.renderedPlayerPos.y + Math.sin(ejectAngle) * 15 - 10,
+            id: `casing_${nowPerf}_${Math.random().toString(16).slice(2)}`, // Unique ID
+            x: playerRenderX + Math.cos(ejectAngle) * 15, // Start near player
+            y: playerRenderY + Math.sin(ejectAngle) * 15 - 10, // Offset slightly up
             vx: Math.cos(ejectAngle) * ejectSpeed,
-            vy: Math.sin(ejectAngle) * ejectSpeed - 40,
+            vy: Math.sin(ejectAngle) * ejectSpeed - 40, // Initial upward pop
             rotation: Math.random() * Math.PI * 2,
-            rotationSpeed: (Math.random() - 0.5) * 10,
-            spawnTime: performance.now(),
+            rotationSpeed: (Math.random() - 0.5) * 10, // Random spin
+            spawnTime: nowPerf,
             lifetime: casingLifetime,
             gravity: gravity,
-            width: 6, height: 3,
-            color: "rgba(218, 165, 32, 0.9)"
+            width: 6, height: 3, // Casing dimensions
+            color: "rgba(218, 165, 32, 0.9)" // Brass color
         };
         activeAmmoCasings.push(casing);
-        if (activeAmmoCasings.length > 30) { activeAmmoCasings.shift(); } // Limit max casings
-
-    }
-
-    function isShootHeld() {
-        // Shoot is triggered by holding Space or Left Mouse Button
-        return keys[' '] || isMouseDown;
-    }
+        // Limit total casings to prevent performance issues
+        if (activeAmmoCasings.length > 30) {
+            activeAmmoCasings.shift();
+        }
+    } // --- End of handleShooting ---
 
     return { setup, cleanup, getMovementInputVector, handleShooting, isShootHeld };
 })();
