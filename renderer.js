@@ -56,7 +56,7 @@ const Renderer = (() => {
   const campfireStickColor = "#8B4513";
   const snakeLineColor = "#261a0d";
   const ironHelmetColor = "#3d3d3d";
-  const ironHelmetHighlight = "#666666";
+  const ironHelmetHighlight = "#666666";``
   const ironHelmetShadow = "#1a1a1a";
   const beltColor = "#412a19";
   const bootColor = "#241c1c";
@@ -75,20 +75,20 @@ const Renderer = (() => {
   const RAIN_COLOR = "rgba(170, 190, 230, 0.6)";
   const RAIN_DROPS = 150;
   // --- Heat Haze Constants (EXTREME TEST VALUES) ---
-  const HEAT_HAZE_START_TEMP = 2.0;      // Haze starts almost immediately
-  const HEAT_HAZE_MAX_TEMP = 5.0;        // Haze reaches max intensity very quickly
+  const HEAT_HAZE_START_TEMP = 25.0;      // Haze starts almost immediately
+  const HEAT_HAZE_MAX_TEMP = 36.0;        // Haze reaches max intensity very quickly
   const HEAT_HAZE_MAX_INTENSITY = 1.0;    // Keep max intensity at 1
-  const HEAT_HAZE_VERTICAL_EXTENT = 0.9;  // Affect almost the entire screen height
+  const HEAT_HAZE_VERTICAL_EXTENT = 0.5;  // Affect almost the entire screen height
   const HEAT_HAZE_NUM_STRIPS = 10;        // FEWER strips (potentially less lag, chunkier effect)
   const HEAT_HAZE_WAVE_SPEED_X = 0.002;  // Faster horizontal movement
   const HEAT_HAZE_WAVE_FREQ_X1 = 0.01;    // LOWER frequency = LARGER waves horizontally
   const HEAT_HAZE_WAVE_FREQ_X2 = 0.03;    // LOWER frequency = LARGER waves horizontally
-  const HEAT_HAZE_WAVE_AMP_X = 50.0;      // *** EXTREME horizontal offset ***
+  const HEAT_HAZE_WAVE_AMP_X = 20.0;      // *** EXTREME horizontal offset ***
   const HEAT_HAZE_WAVE_SPEED_Y = 0.0015;  // Faster vertical movement
   const HEAT_HAZE_WAVE_FREQ_Y1 = 0.01;    // LOWER frequency = LARGER waves vertically
   const HEAT_HAZE_WAVE_FREQ_Y2 = 0.025;   // LOWER frequency = LARGER waves vertically
-  const HEAT_HAZE_WAVE_AMP_Y = 35.0;      // *** EXTREME vertical offset ***
-  const HEAT_HAZE_STRIP_ALPHA = 0.75;     // *** MUCH higher alpha (will look bad, but visible) ***
+  const HEAT_HAZE_WAVE_AMP_Y = 15.0;      // *** EXTREME vertical offset ***
+  const HEAT_HAZE_STRIP_ALPHA = 0.50;     // *** MUCH higher alpha (will look bad, but visible) ***
   // --- End Heat Haze Constants ---
 
   let currentShakeMagnitude = 0;
