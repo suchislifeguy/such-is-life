@@ -1219,19 +1219,19 @@ const SoundManager = (() => {
 })();
 // --- End Sound Manager ---
 
-// Initialize after the DOM is fully loaded
 document.addEventListener('DOMContentLoaded', () => {
-    log("DOM fully loaded and parsed.");
+    log("DOM fully loaded and parsed."); // #LOG A
 
+    // --- Critical Checks ---
     if (typeof Renderer === 'undefined') {
-        error("CRITICAL: Renderer is not defined after DOM load! Check renderer.js loading and errors.");
+        error("CRITICAL: Renderer is not defined after DOM load!");
         UI.updateStatus("Initialization Error: Renderer failed. Refresh.", true);
         return;
     }
     if (DOM.canvas) {
         DOM.ctx = DOM.canvas.getContext('2d');
         if (!DOM.ctx) {
-            error("Failed to get 2D context from canvas!");
+            error("Failed to get 2D context!");
             UI.updateStatus("Error: Cannot get canvas context. Refresh.", true);
             return;
         }
@@ -1240,17 +1240,76 @@ document.addEventListener('DOMContentLoaded', () => {
         UI.updateStatus("Error: Canvas element missing. Refresh.", true);
         return;
     }
+    // --- End Critical Checks ---
 
-    UI.updateStatus("Initializing Connection...");
+    UI.updateStatus("Initializing Connection & Listeners...");
     try {
-        // This is where the button listeners (which call SoundManager.init) are attached
-        Game.initListeners();
-        // Connect to the WebSocket server
-        Network.connect(() => { /* Optional callback on successful connection */ });
+        // --- DIRECTLY ATTACH LISTENERS HERE ---
+        log("Directly attaching essential listeners...");
+
+        // Single Player Button
+        if (DOM.singlePlayerBtn) {
+            DOM.singlePlayerBtn.onclick = () => {
+                console.log("--- singlePlayerBtn CLICKED (Direct Attach) ---"); // #LOG D
+                log("Single Player button clicked.");
+                SoundManager.init(); // ! TRY INIT
+                Game.startSinglePlayer(); // Use Game module function
+            };
+            log("Attached listener to singlePlayerBtn.");
+        } else { error("singlePlayerBtn not found in DOM!"); }
+
+        // Host Buttons (Example for one, repeat for others if testing MP)
+        if (DOM.hostGameBtn2) {
+             const hostHandler = (maxPlayers) => {
+                 console.log(`--- hostGameBtn (${maxPlayers}p) CLICKED (Direct Attach) ---`); // #LOG E
+                 log(`Host Game (${maxPlayers}p) button clicked.`);
+                 SoundManager.init(); // ! TRY INIT
+                 Game.hostMultiplayer(maxPlayers); // Use Game module function
+             };
+            DOM.hostGameBtn2.onclick = () => hostHandler(2);
+             // Add similar blocks for hostGameBtn3 and hostGameBtn4 if needed
+            log("Attached listener to hostGameBtn2.");
+        } else { error("hostGameBtn2 not found in DOM!"); }
+
+
+        // Join Button
+        if (DOM.joinGameSubmitBtn) {
+            DOM.joinGameSubmitBtn.onclick = () => {
+                console.log("--- joinGameSubmitBtn CLICKED (Direct Attach) ---"); // #LOG F
+                log("Join Game Submit button clicked.");
+                SoundManager.init(); // ! TRY INIT
+                Game.joinMultiplayer(); // Use Game module function
+            };
+            log("Attached listener to joinGameSubmitBtn.");
+        } else { error("joinGameSubmitBtn not found in DOM!"); }
+
+        // Attach other non-init listeners (can still use Game module methods if exposed)
+        if (DOM.multiplayerBtn) DOM.multiplayerBtn.onclick = () => UI.showSection('multiplayer-menu-section');
+        if (DOM.showJoinUIBtn) DOM.showJoinUIBtn.onclick = () => UI.showSection('join-code-section');
+        if (DOM.cancelHostBtn) DOM.cancelHostBtn.onclick = Game.leaveGame; // Assumes Game.leaveGame exists
+        if (DOM.sendChatBtn) DOM.sendChatBtn.onclick = Game.sendChatMessage; // Assumes Game.sendChatMessage exists
+        if (DOM.leaveGameBtn) DOM.leaveGameBtn.onclick = Game.leaveGame;
+        if (DOM.gameOverBackBtn) DOM.gameOverBackBtn.onclick = () => Game.resetClientState(true); // Assumes Game.resetClientState exists
+
+        // Back buttons (same logic as before)
+        DOM.gameContainer.querySelectorAll('.back-button').forEach(btn => {
+             const targetMatch = btn.getAttribute('onclick')?.match(/'([^']+)'/);
+             if (targetMatch && targetMatch[1]) {
+                 const targetId = targetMatch[1];
+                 if (DOM[targetId] || document.getElementById(targetId)) {
+                     btn.onclick = (e) => { e.preventDefault(); UI.showSection(targetId); };
+                 } else { log(`Warning: Back button target section invalid: ${targetId}`); }
+             } else { log("Warning: Back button found without valid target in onclick:", btn); }
+         });
+
+        log("Finished attaching listeners directly."); // #LOG G
+        // --- END DIRECT ATTACHMENT ---
+
+        // Connect to WebSocket
+        Network.connect(() => { /* Connection success handled within Network.connect */ });
+
     } catch (initError) {
-        error("Initialization failed:", initError);
+        error("Initialization or Listener Attachment failed:", initError);
         UI.updateStatus("Error initializing game. Please refresh.", true);
     }
 });
-
-// --- End main.js code block to include ---
