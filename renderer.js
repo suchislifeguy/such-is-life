@@ -2166,10 +2166,11 @@ const Renderer = (() => {
    * Main rendering function for the game canvas.
    */
   function drawGame(
-      ctx, appState, stateToRender,
-      localPlayerMuzzleFlash, localPlayerPushbackAnim,
-      activeBloodSparkEffects, activeEnemyBubbles // Ensure these args match your call from main.js
-  ) {
+    ctx, appState, stateToRender,
+    localPlayerMuzzleFlash, localPlayerPushbackAnim,
+    activeBloodSparkEffects, activeEnemyBubbles,
+    currentMousePos // Argument received by drawGame
+) {
       // --- Initial Checks & Setup ---
       if (!ctx || !appState) {
           console.error("drawGame missing context or appState!");
