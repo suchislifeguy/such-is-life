@@ -1157,8 +1157,8 @@ const Renderer = (() => {
         footY = coatBottomY + trouserHeight + bootHeight;
       }
       const numParticles = 6;
-      const particleBaseSize = 3;
-      const particleSpeedY = -50;
+      const particleBaseSize = 5;
+      const particleSpeedY = -500;
       const particleLifetimeMs = 550;
       ctx.save();
       for (let i = 0; i < numParticles; i++) {
@@ -1386,26 +1386,28 @@ const Renderer = (() => {
 
     // 7. Effects (Snake Bite - Keep as is)
     if (isPlayerBitten) {
-      const footY = legBottomY + bootHeight; // Bottom of boots
+      // Ensure SNAKE_BITE_DURATION is accessible or provide default
+      const biteDuration = typeof SNAKE_BITE_DURATION !== 'undefined' ? SNAKE_BITE_DURATION : 8.0;
+      const footY = legBottomY + bootHeight;
       const numParticles = 8; const particleBaseSize = 4; const particleSpeedY = -60; const particleLifetimeMs = 600;
       ctx.save();
       for (let i = 0; i < numParticles; i++) {
-        const effectStartTime = playerSnakeEffect.expires_at * 1000 - (typeof SNAKE_BITE_DURATION !== 'undefined' ? SNAKE_BITE_DURATION : 8.0) * 1000; // Need SNAKE_BITE_DURATION const accessible
-        const timeSinceEffectStart = Math.max(0, now - effectStartTime);
-        const particleSimulatedAge = (timeSinceEffectStart + (particleLifetimeMs / numParticles) * i) % particleLifetimeMs;
-        const particleProgress = particleSimulatedAge / particleLifetimeMs;
-        if (particleProgress < 0 || particleProgress >= 1) continue;
-        const particleX = x + (Math.random() - 0.5) * w * 0.7;
-        const particleY = footY + particleSpeedY * (particleSimulatedAge / 1000);
-        const particleSize = particleBaseSize * (1.0 - particleProgress * 0.5) * (0.8 + Math.random() * 0.4);
-        const alpha = 0.8 * (1.0 - particleProgress) * (0.7 + Math.random() * 0.3);
-        const green = 180 + Math.floor(75 * particleProgress);
-        const yellow = 200 * (1.0 - particleProgress);
-        ctx.fillStyle = `rgba(${Math.floor(yellow)}, ${green}, 50, ${alpha.toFixed(2)})`;
-        ctx.fillRect( particleX - particleSize / 2, particleY - particleSize / 2, particleSize, particleSize );
+          const effectStartTime = playerSnakeEffect.expires_at * 1000 - biteDuration * 1000;
+          const timeSinceEffectStart = Math.max(0, now - effectStartTime);
+          const particleSimulatedAge = (timeSinceEffectStart + (particleLifetimeMs / numParticles) * i) % particleLifetimeMs;
+          const particleProgress = particleSimulatedAge / particleLifetimeMs;
+          if (particleProgress < 0 || particleProgress >= 1) continue;
+          const particleX = x + (Math.random() - 0.5) * w * 0.7;
+          const particleY = footY + particleSpeedY * (particleSimulatedAge / 1000);
+          const particleSize = particleBaseSize * (1.0 - particleProgress * 0.5) * (0.8 + Math.random() * 0.4);
+          const alpha = 0.8 * (1.0 - particleProgress) * (0.7 + Math.random() * 0.3);
+          const green = 180 + Math.floor(75 * particleProgress);
+          const yellow = 200 * (1.0 - particleProgress);
+          ctx.fillStyle = `rgba(${Math.floor(yellow)}, ${green}, 50, ${alpha.toFixed(2)})`;
+          ctx.fillRect( particleX - particleSize / 2, particleY - particleSize / 2, particleSize, particleSize );
       }
-      ctx.restore();
-    }
+      ctx.restore(); // Restore after drawing particles
+  }
 
     ctx.restore(); // Restore context state from the very start of the function
 
