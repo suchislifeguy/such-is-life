@@ -1225,198 +1225,162 @@ const Renderer = (() => {
 
   function drawPlayerCharacter(
     ctx,
-    x, // Final draw position (including offset/shake)
-    y, // Final draw position (including offset/shake)
+    x, y, // Final draw position
     w, h, isSelf, playerState,
-    aimDx, // Aim vector received from drawPlayers
-    aimDy, // Aim vector received from drawPlayers
+    aimDx, aimDy, // Received aim vector
     pushbackAnimState
 ) {
-    // console.log(`[drawPlayerCharacter] Drawing player ${isSelf ? 'SELF' : 'OTHER'} at ${x.toFixed(1)}, ${y.toFixed(1)} with aim ${aimDx.toFixed(2)}, ${aimDy.toFixed(2)}`); // DEBUG: Log entry
-
     const t = performance.now();
-    const now = t; // Use 'now' or 't' consistently
+    const now = t;
     const ii = (playerState?.input_vector?.dx ?? 0) === 0 && (playerState?.input_vector?.dy ?? 0) === 0;
     const bo = ii ? Math.sin(t / IDLE_BOB_SPEED_DIVISOR) * IDLE_BOB_AMPLITUDE : 0;
-    const playerSnakeEffect = playerState?.effects?.snake_bite_slow;
-    const isPlayerBitten = playerSnakeEffect && typeof playerSnakeEffect === "object" && typeof playerSnakeEffect.expires_at === "number" && now < playerSnakeEffect.expires_at * 1000;
     const isPushbackAnimating = pushbackAnimState?.active && now < pushbackAnimState?.endTime;
+    const isPlayerBitten = playerState?.effects?.snake_bite_slow && now < (playerState.effects.snake_bite_slow.expires_at * 1000);
 
-    // --- Dimensions (Adjusted slightly for armor bulk) ---
-    const helmetHeight = h * 0.26;
-    const helmetWidth = w * 0.85;
-    const plateTopMargin = h * 0.04; // Gap between helmet and chest plate
-    const torsoArmorHeight = h * 0.45;
-    const torsoArmorWidth = w * 1.1; // Armor slightly wider than body
-    const shoulderPadHeight = h * 0.18;
-    const shoulderPadWidth = w * 0.45;
-    const legHeight = h * 0.35; // Slightly longer appearance maybe
-    const legWidth = w * 0.35;
-    const bootHeight = h * 0.15;
-    const bootWidth = w * 0.4;
+    // --- Visual Constants & Dimensions ---
+    const ironArmorColor = "#4a4a4a"; const ironArmorHighlight = "#777777"; const ironArmorShadow = "#2a2a2a";
+    const ironHelmetColor = "#3d3d3d"; const ironHelmetHighlight = "#666666"; const ironHelmetShadow = "#1a1a1a";
+    const darkClothingColor = "#3a2d27"; const slitColor = "#000000"; const bootColor = "#241c1c";
+    const helmetHeight = h * 0.26; const helmetWidth = w * 0.85; const plateTopMargin = h * 0.04;
+    const torsoArmorHeight = h * 0.45; const torsoArmorWidth = w * 1.1;
+    const shoulderPadHeight = h * 0.18; const shoulderPadWidth = w * 0.45;
+    const legHeight = h * 0.35; const legWidth = w * 0.35;
+    const bootHeight = h * 0.15; const bootWidth = w * 0.4;
+    // Y Positions
+    const helmetTopY = y - h * 0.5 + bo; const helmetBottomY = helmetTopY + helmetHeight;
+    const plateTopY = helmetBottomY + plateTopMargin; const plateBottomY = plateTopY + torsoArmorHeight;
+    const legTopY = plateBottomY - torsoArmorHeight * 0.1; const legBottomY = legTopY + legHeight;
+    const bootTopY = legBottomY;
+    // Shoulder/Arm
+    const shoulderCenterY = plateTopY + torsoArmorHeight * 0.15; const shoulderOffsetX = torsoArmorWidth * 0.4;
 
-    // --- Y Positions (Relative to draw y, includes bob) ---
-    const helmetTopY = y - h * 0.5 + bo;
-    const helmetBottomY = helmetTopY + helmetHeight;
-    const plateTopY = helmetBottomY + plateTopMargin;
-    const plateBottomY = plateTopY + torsoArmorHeight;
-    // Legs start slightly under the plate
-    const legTopY = plateBottomY - torsoArmorHeight * 0.1;
-    const legBottomY = legTopY + legHeight;
-    const bootTopY = legBottomY; // Boots start where legs end
+    ctx.save(); // SAVE 1: Before drawing player
 
-    // --- Shoulder/Arm related ---
-    const shoulderCenterY = plateTopY + torsoArmorHeight * 0.15;
-    const shoulderOffsetX = torsoArmorWidth * 0.4; // Adjust offset for wider armor
+    // 1. Shadow
+    ctx.beginPath(); ctx.ellipse(x, legBottomY + bootHeight + 2, w * 0.55, h * 0.07, 0, 0, Math.PI * 2);
+    ctx.fillStyle = backgroundShadowColor; ctx.fill();
 
-    ctx.save(); // Save context for the entire player draw
+    // 2. Legs & Boots (Added Pushback Logic Back)
+    ctx.fillStyle = darkClothingColor; // Trousers color
 
-    // 1. Shadow (Keep as is)
-    ctx.beginPath();
-    ctx.ellipse(x, legBottomY + bootHeight + 2, w * 0.55, h * 0.07, 0, 0, Math.PI * 2); // Slightly larger shadow
-    ctx.fillStyle = backgroundShadowColor;
-    ctx.fill();
+    // --- RE-ADDED PUSHBACK LEG DRAWING ---
+    if (isPushbackAnimating) {
+        const kickAngle = -Math.PI / 4.5; // Angle for the kicking leg
+        const supportLegX = x + w * 0.15; // Supporting leg slightly offset
+        const kickLegX = x - w * 0.15; // Kicking leg starts slightly offset
+        const kickLegVisualLength = legHeight * 1.05; // Slightly extend kicking leg visually
 
-    // 2. Legs & Boots (Simplified walk, dark colors)
-    ctx.fillStyle = darkClothingColor; // Trousers
-    const leftLegX = x - w * 0.2;
-    const rightLegX = x + w * 0.2;
-    let leftYOffset = 0;
-    let rightYOffset = 0;
-    if (!ii && !isPushbackAnimating) { // Simple walk bob for legs/boots
-        const walkCycleTime = 500;
-        const phase = (t % walkCycleTime) / walkCycleTime;
-        const liftAmount = -3;
-        leftYOffset = Math.max(0, Math.sin(phase * Math.PI * 2)) * liftAmount;
-        rightYOffset = Math.max(0, Math.sin((phase + 0.5) * Math.PI * 2)) * liftAmount;
+        // Draw Supporting Leg (Standing firm)
+        ctx.fillRect(supportLegX - legWidth / 2, legTopY, legWidth, legHeight);
+        // Draw Supporting Boot
+        ctx.fillStyle = bootColor;
+        ctx.fillRect(supportLegX - bootWidth / 2, bootTopY, bootWidth, bootHeight);
+        ctx.fillStyle = ironArmorHighlight; // Boot highlight/sole
+        ctx.fillRect(supportLegX - bootWidth / 2, bootTopY + bootHeight - 4, bootWidth, 4);
+
+        // Draw Kicking Leg (Rotated)
+        ctx.save(); // Save before rotating for kicking leg
+        ctx.translate(kickLegX, legTopY + legHeight * 0.1); // Pivot point for kick rotation
+        ctx.rotate(kickAngle);
+        // Draw the leg itself (relative to pivot)
+        ctx.fillStyle = darkClothingColor;
+        ctx.fillRect(-legWidth / 2, 0, legWidth, kickLegVisualLength); // Draw rotated leg
+        // Draw the boot attached to the rotated leg
+        ctx.fillStyle = bootColor;
+        ctx.fillRect(-bootWidth / 2, kickLegVisualLength, bootWidth, bootHeight); // Boot at end of leg
+        ctx.fillStyle = ironArmorHighlight; // Boot highlight/sole
+        ctx.fillRect(-bootWidth / 2, kickLegVisualLength + bootHeight - 4, bootWidth, 4);
+        ctx.restore(); // Restore after drawing kicking leg
+
+    } else { // --- REGULAR WALKING / IDLE LEGS ---
+        const leftLegX = x - w * 0.2;
+        const rightLegX = x + w * 0.2;
+        let leftYOffset = 0;
+        let rightYOffset = 0;
+        if (!ii) { // Simple walk bob if not idle
+            const walkCycleTime = 500;
+            const phase = (t % walkCycleTime) / walkCycleTime;
+            const liftAmount = -3;
+            leftYOffset = Math.max(0, Math.sin(phase * Math.PI * 2)) * liftAmount;
+            rightYOffset = Math.max(0, Math.sin((phase + 0.5) * Math.PI * 2)) * liftAmount;
+        }
+        // Draw Legs
+        ctx.fillStyle = darkClothingColor;
+        ctx.fillRect(leftLegX - legWidth / 2, legTopY + leftYOffset, legWidth, legHeight);
+        ctx.fillRect(rightLegX - legWidth / 2, legTopY + rightYOffset, legWidth, legHeight);
+        // Draw Boots
+        ctx.fillStyle = bootColor;
+        ctx.fillRect(leftLegX - bootWidth / 2, bootTopY + leftYOffset, bootWidth, bootHeight);
+        ctx.fillRect(rightLegX - bootWidth / 2, bootTopY + rightYOffset, bootWidth, bootHeight);
+        // Boot highlight/sole line
+        ctx.fillStyle = ironArmorHighlight;
+        ctx.fillRect(leftLegX - bootWidth / 2, bootTopY + bootHeight - 4 + leftYOffset, bootWidth, 4);
+        ctx.fillRect(rightLegX - bootWidth / 2, bootTopY + bootHeight - 4 + rightYOffset, bootWidth, 4);
     }
-
-    // Draw Legs
-    ctx.fillRect(leftLegX - legWidth / 2, legTopY + leftYOffset, legWidth, legHeight);
-    ctx.fillRect(rightLegX - legWidth / 2, legTopY + rightYOffset, legWidth, legHeight);
-
-    // Draw Boots
-    ctx.fillStyle = bootColor; // Dark boots
-    ctx.fillRect(leftLegX - bootWidth / 2, bootTopY + leftYOffset, bootWidth, bootHeight);
-    ctx.fillRect(rightLegX - bootWidth / 2, bootTopY + rightYOffset, bootWidth, bootHeight);
-    // Simple boot highlight/sole line
-    ctx.fillStyle = ironArmorHighlight; // Use armor highlight for contrast
-    ctx.fillRect(leftLegX - bootWidth / 2, bootTopY + bootHeight - 4 + leftYOffset, bootWidth, 4);
-    ctx.fillRect(rightLegX - bootWidth / 2, bootTopY + bootHeight - 4 + rightYOffset, bootWidth, 4);
-
+    // --- END Legs & Boots section ---
 
     // 3. Torso Armor (Chest Plate) - Draw AFTER legs
-    ctx.fillStyle = ironArmorColor;
-    ctx.fillRect(x - torsoArmorWidth / 2, plateTopY, torsoArmorWidth, torsoArmorHeight);
-    // Highlight
-    ctx.fillStyle = ironArmorHighlight;
-    ctx.fillRect(x - torsoArmorWidth / 2 + 4, plateTopY + 4, torsoArmorWidth - 8, 5); // Thicker highlight
-    // Shadow
-    ctx.fillStyle = ironArmorShadow;
-    ctx.fillRect(x - torsoArmorWidth / 2 + 4, plateTopY + 9, torsoArmorWidth - 8, 4); // Thicker shadow
-
-    // Optional: Rivets on chest plate (performance impact: minimal)
-    ctx.fillStyle = ironArmorShadow;
-    const rivetSize = 3;
-    ctx.fillRect(x - torsoArmorWidth * 0.4, plateTopY + 15, rivetSize, rivetSize);
-    ctx.fillRect(x + torsoArmorWidth * 0.4 - rivetSize, plateTopY + 15, rivetSize, rivetSize);
-    ctx.fillRect(x - torsoArmorWidth * 0.4, plateBottomY - 15 - rivetSize, rivetSize, rivetSize);
-    ctx.fillRect(x + torsoArmorWidth * 0.4 - rivetSize, plateBottomY - 15 - rivetSize, rivetSize, rivetSize);
-
+    // ... (Keep torso armor drawing logic) ...
+    ctx.fillStyle = ironArmorColor; ctx.fillRect(x - torsoArmorWidth / 2, plateTopY, torsoArmorWidth, torsoArmorHeight);
+    ctx.fillStyle = ironArmorHighlight; ctx.fillRect(x - torsoArmorWidth / 2 + 4, plateTopY + 4, torsoArmorWidth - 8, 5);
+    ctx.fillStyle = ironArmorShadow; ctx.fillRect(x - torsoArmorWidth / 2 + 4, plateTopY + 9, torsoArmorWidth - 8, 4);
+    // Rivets...
 
     // 4. Shoulder Pads - Draw OVER chest plate edges
-    // Left Shoulder
-    ctx.fillStyle = ironArmorColor;
-    ctx.beginPath();
-    ctx.ellipse(x - shoulderOffsetX, shoulderCenterY, shoulderPadWidth / 2, shoulderPadHeight / 2, 0, Math.PI, Math.PI * 2); // Top half ellipse
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = ironArmorHighlight; // Highlight
-    ctx.beginPath();
-    ctx.ellipse(x - shoulderOffsetX, shoulderCenterY - 2, shoulderPadWidth / 2 * 0.8, shoulderPadHeight / 2 * 0.7, 0, Math.PI * 1.1, Math.PI * 1.9);
-    ctx.fill();
-
-    // Right Shoulder
-    ctx.fillStyle = ironArmorColor;
-    ctx.beginPath();
-    ctx.ellipse(x + shoulderOffsetX, shoulderCenterY, shoulderPadWidth / 2, shoulderPadHeight / 2, 0, Math.PI, Math.PI * 2);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = ironArmorHighlight; // Highlight
-    ctx.beginPath();
-    ctx.ellipse(x + shoulderOffsetX, shoulderCenterY - 2, shoulderPadWidth / 2 * 0.8, shoulderPadHeight / 2 * 0.7, 0, Math.PI * 0.1, Math.PI * 0.9, true); // Draw highlight slightly offset
-    ctx.fill();
-
+    // ... (Keep shoulder pad drawing logic) ...
+    ctx.fillStyle = ironArmorColor; ctx.beginPath(); ctx.ellipse(x - shoulderOffsetX, shoulderCenterY, shoulderPadWidth / 2, shoulderPadHeight / 2, 0, Math.PI, Math.PI * 2); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = ironArmorHighlight; ctx.beginPath(); ctx.ellipse(x - shoulderOffsetX, shoulderCenterY - 2, shoulderPadWidth / 2 * 0.8, shoulderPadHeight / 2 * 0.7, 0, Math.PI * 1.1, Math.PI * 1.9); ctx.fill();
+    ctx.fillStyle = ironArmorColor; ctx.beginPath(); ctx.ellipse(x + shoulderOffsetX, shoulderCenterY, shoulderPadWidth / 2, shoulderPadHeight / 2, 0, Math.PI, Math.PI * 2); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = ironArmorHighlight; ctx.beginPath(); ctx.ellipse(x + shoulderOffsetX, shoulderCenterY - 2, shoulderPadWidth / 2 * 0.8, shoulderPadHeight / 2 * 0.7, 0, Math.PI * 0.1, Math.PI * 0.9, true); ctx.fill();
 
     // 5. Helmet - Draw OVER shoulder pads/chest plate top
-    ctx.fillStyle = ironHelmetColor;
-    ctx.fillRect(x - helmetWidth / 2, helmetTopY, helmetWidth, helmetHeight);
-    // Simple top curve indication
-    ctx.fillStyle = ironHelmetHighlight;
-    ctx.fillRect(x - helmetWidth / 2 + 3, helmetTopY + 3, helmetWidth - 6, 3);
-    // Eye Slit
-    ctx.fillStyle = slitColor;
-    const slitY = helmetTopY + helmetHeight * 0.45;
-    const slitHeight = helmetHeight * 0.1;
+    // ... (Keep helmet drawing logic) ...
+    ctx.fillStyle = ironHelmetColor; ctx.fillRect(x - helmetWidth / 2, helmetTopY, helmetWidth, helmetHeight);
+    ctx.fillStyle = ironHelmetHighlight; ctx.fillRect(x - helmetWidth / 2 + 3, helmetTopY + 3, helmetWidth - 6, 3);
+    ctx.fillStyle = slitColor; const slitY = helmetTopY + helmetHeight * 0.45; const slitHeight = helmetHeight * 0.1;
     ctx.fillRect(x - helmetWidth * 0.4, slitY, helmetWidth * 0.8, slitHeight);
 
 
-    // 6. Gun Logic (Keep existing, check pivot)
+    // 6. Gun Logic & Drawing (Using Stored Aim)
     let shouldDrawGun = false;
-    let gunDrawAngle = 0;
-    let gunDrawMode = "idle"; // Default
+    let gunDrawAngle = -Math.PI / 2; // Default idle aim (up)
+    let gunDrawMode = "idle";
 
     if (isPushbackAnimating) {
         shouldDrawGun = true;
         gunDrawMode = "pushback";
-        gunDrawAngle = -Math.PI / 2;
-        // if (isSelf) console.log(`[drawPlayerCharacter] Mode: pushback, Angle: ${gunDrawAngle.toFixed(2)}`); // DEBUG
+        gunDrawAngle = -Math.PI / 2; // Point gun down/forward during pushback
     } else if (isSelf && (aimDx !== 0 || aimDy !== 0)) {
+        // Use the stored aim direction passed in
         shouldDrawGun = true;
         gunDrawMode = "aiming";
         gunDrawAngle = Math.atan2(aimDy, aimDx);
-        if (isSelf) { // DEBUG: Log aiming details only for self
-             console.log(`[drawPlayerCharacter] Mode: aiming, Received aim: dx=${aimDx.toFixed(2)}, dy=${aimDy.toFixed(2)}, Calculated Angle: ${gunDrawAngle.toFixed(2)} (${(gunDrawAngle * 180 / Math.PI).toFixed(1)}deg)`);
-        }
     } else if (isSelf) {
-         // Optional: Draw idle gun facing forward/up even with zero vector
-         // shouldDrawGun = true; gunDrawAngle = -Math.PI / 2; gunDrawMode = "idle";
-         // if (isSelf) console.log(`[drawPlayerCharacter] Mode: idle (Self, zero aim vector), Angle: ${gunDrawAngle.toFixed(2)}`); // DEBUG
+        // Local player, idle state (aimDx/Dy is 0)
+        shouldDrawGun = true; // Draw idle gun
+        gunDrawMode = "idle";
+        gunDrawAngle = -Math.PI / 2; // Keep default idle aim (up)
     }
 
     if (shouldDrawGun) {
+        // ... (Keep gun drawing logic: calculate dimensions, pivot, save, translate, rotate, fillRects, restore) ...
         const gunLevel = playerState?.gun ?? 1;
-        const baseBarrelLength = 22; // Slightly longer barrel maybe
-        const barrelLengthIncrease = 2.5;
-        const barrelLength = baseBarrelLength + (gunLevel - 1) * barrelLengthIncrease;
-        const barrelThickness = 4 + (gunLevel - 1) * 0.3; // Slightly thicker
-        const stockLength = 10 + (gunLevel - 1) * 0.6;
-        const stockThickness = 6 + (gunLevel - 1) * 0.4; // Slightly thicker
-        const stockColor = "#6F4E37"; // Coffee/dark wood color
-        const barrelColor = "#5A5A5A"; // Dark grey barrel
+        const baseBarrelLength = 22; const barrelLengthIncrease = 2.5; const barrelLength = baseBarrelLength + (gunLevel - 1) * barrelLengthIncrease;
+        const barrelThickness = 4 + (gunLevel - 1) * 0.3; const stockLength = 10 + (gunLevel - 1) * 0.6;
+        const stockThickness = 6 + (gunLevel - 1) * 0.4;
+        const stockColor = "#6F4E37"; const barrelColor = "#5A5A5A";
+        const gunPivotX = x; const gunPivotY = plateTopY + torsoArmorHeight * 0.4 + bo;
 
-        // Gun Pivot Point: Center horizontally, around mid-chest plate level
-        const gunOriginX = x;
-        const gunOriginY = plateTopY + torsoArmorHeight * 0.4 + bo; // Pivot on the armor, adjust multiplier (0.4) as needed
-
-        ctx.save(); // Save context for gun transform
-        ctx.translate(gunOriginX, gunOriginY);
+        ctx.save(); // SAVE 2: Gun transform
+        ctx.translate(gunPivotX, gunPivotY);
         ctx.rotate(gunDrawAngle);
-
-        // Draw Barrel extending forward (positive x after rotation)
-        ctx.fillStyle = barrelColor;
-        ctx.fillRect(0, -barrelThickness / 2, barrelLength, barrelThickness);
-        // Optional: Small sight on barrel
-        ctx.fillStyle = "#333333";
-        ctx.fillRect(barrelLength * 0.7, -barrelThickness / 2 - 2, 4, 2);
-
-        // Draw Stock extending backward (negative x after rotation)
-        ctx.fillStyle = stockColor;
-        ctx.fillRect(-stockLength, -stockThickness / 2, stockLength, stockThickness);
-
-        ctx.restore(); // Restore context after gun
-    } else if (isSelf) {
-         console.log(`[drawPlayerCharacter] Gun not drawn for self. isPushback=${isPushbackAnimating}, aimDx=${aimDx.toFixed(2)}, aimDy=${aimDy.toFixed(2)}`); // DEBUG
+        // Barrel
+        ctx.fillStyle = barrelColor; ctx.fillRect(0, -barrelThickness / 2, barrelLength, barrelThickness);
+        // Stock
+        ctx.fillStyle = stockColor; ctx.fillRect(-stockLength, -stockThickness / 2, stockLength, stockThickness);
+        // Sight
+        ctx.fillStyle = "#333333"; ctx.fillRect(barrelLength * 0.7, -barrelThickness / 2 - 2, 4, 2);
+        ctx.restore(); // RESTORE 2: Gun transform
     }
 
     // 7. Effects (Snake Bite - Keep as is)
