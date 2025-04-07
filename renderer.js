@@ -56,7 +56,7 @@ const Renderer = (() => {
   const campfireStickColor = "#8B4513";
   const snakeLineColor = "#261a0d";
   const ironHelmetColor = "#3d3d3d";
-  const ironHelmetHighlight = "#666666";``
+  const ironHelmetHighlight = "#666666";
   const ironHelmetShadow = "#1a1a1a";
   const beltColor = "#412a19";
   const bootColor = "#241c1c";
@@ -1221,59 +1221,74 @@ function drawEnemyRect(
 
     // --- LEG DRAWING ---
     if (isPushbackAnimating) {
-        const kickAngle = Math.PI / 5; 
-        const supportLegX = x + w * -0.15; // Supporting leg slightly offset
-        const kickLegX = x - w * 0.1; // Kicking leg starts slightly offset
-        const kickLegVisualLength = legHeight * 1.2; // Slightly extend kicking leg visually
+      const kickAngle = Math.PI / 6; // Approx 30 degrees forward/outward kick
+      const kickLegForwardOffset = legWidth * 0.5; // How much the kicking leg moves forward from center X
 
-        // Draw Supporting Leg (Standing firm)
-        ctx.fillRect(supportLegX - legWidth / 2, legTopY, legWidth, legHeight);
-        // Draw Supporting Boot
-        ctx.fillStyle = bootColor;
-        ctx.fillRect(supportLegX - bootWidth / 2, bootTopY, bootWidth, bootHeight);
-        ctx.fillStyle = ironArmorHighlight; // Boot highlight/sole
-        ctx.fillRect(supportLegX - bootWidth / 2, bootTopY + bootHeight - 4, bootWidth, 4);
+      // --- Supporting Leg (Slightly back for balance) ---
+      const supportLegX = x + w * 0.2; // Shift supporting leg slightly right
+      const supportLegYOffset = 2; // Plant it slightly lower/firmer
+      // Draw Supporting Leg
+      ctx.fillStyle = darkClothingColor;
+      ctx.fillRect(supportLegX - legWidth / 2, legTopY + supportLegYOffset, legWidth, legHeight);
+      // Draw Supporting Boot
+      ctx.fillStyle = bootColor;
+      ctx.fillRect(supportLegX - bootWidth / 2, bootTopY + supportLegYOffset, bootWidth, bootHeight);
+      // Boot highlight/sole
+      ctx.fillStyle = ironArmorHighlight;
+      ctx.fillRect(supportLegX - bootWidth / 2, bootTopY + bootHeight - 4 + supportLegYOffset, bootWidth, 4);
 
-        // Draw Kicking Leg (Rotated)
-        ctx.save(); // Save before rotating for kicking leg
-        ctx.translate(kickLegX, legTopY + legHeight * 0.8); // Pivot point for kick rotation
-        ctx.rotate(kickAngle);
-        // Draw the leg itself (relative to pivot)
-        ctx.fillStyle = darkClothingColor;
-        ctx.fillRect(-legWidth / 2, 0, legWidth, kickLegVisualLength); // Draw rotated leg
-        // Draw the boot attached to the rotated leg
-        ctx.fillStyle = bootColor;
-        ctx.fillRect(-bootWidth / 2, kickLegVisualLength, bootWidth, bootHeight); // Boot at end of leg
-        ctx.fillStyle = ironArmorHighlight; // Boot highlight/sole
-        ctx.fillRect(-bootWidth / 2, kickLegVisualLength + bootHeight - 4, bootWidth, 4);
-        ctx.restore(); // Restore after drawing kicking leg
 
-    } else { // --- REGULAR WALKING / IDLE LEGS ---
-        const leftLegX = x - w * 0.3;
-        const rightLegX = x + w * 0.3;
-        let leftYOffset = 0;
-        let rightYOffset = 0;
-        if (!ii) { // Simple walk bob if not idle
-            const walkCycleTime = 300;
-            const phase = (t % walkCycleTime) / walkCycleTime;
-            const liftAmount = -3;
-            leftYOffset = Math.max(0, Math.sin(phase * Math.PI * 2)) * liftAmount;
-            rightYOffset = Math.max(0, Math.sin((phase + 0.5) * Math.PI * 2)) * liftAmount;
-        }
-        // Draw Legs
-        ctx.fillStyle = darkClothingColor;
-        ctx.fillRect(leftLegX - legWidth / 2, legTopY + leftYOffset, legWidth, legHeight);
-        ctx.fillRect(rightLegX - legWidth / 2, legTopY + rightYOffset, legWidth, legHeight);
-        // Draw Boots
-        ctx.fillStyle = bootColor;
-        ctx.fillRect(leftLegX - bootWidth / 2, bootTopY + leftYOffset, bootWidth, bootHeight);
-        ctx.fillRect(rightLegX - bootWidth / 2, bootTopY + rightYOffset, bootWidth, bootHeight);
-        // Boot highlight/sole line
-        ctx.fillStyle = ironArmorHighlight;
-        ctx.fillRect(leftLegX - bootWidth / 2, bootTopY + bootHeight - 4 + leftYOffset, bootWidth, 4);
-        ctx.fillRect(rightLegX - bootWidth / 2, bootTopY + bootHeight - 4 + rightYOffset, bootWidth, 4);
-    }
-    // --- END Legs & Boots section ---
+      // --- Kicking Leg (Rotated from hip) ---
+      const kickPivotX = x - w * 0.15; // Pivot point slightly left of center body
+      const kickPivotY = legTopY + legHeight * 0.1; // Pivot near the actual hip joint
+
+      ctx.save(); // Save context state before transforming for kicking leg
+      ctx.translate(kickPivotX, kickPivotY); // Move origin to the hip pivot point
+      ctx.rotate(kickAngle); // Rotate the entire coordinate system
+
+      // Draw the leg extending DOWN and slightly FORWARD from the (now rotated) pivot
+      // The forward offset is applied *before* rotation conceptually
+      // We draw relative to the new (0,0) which is the pivot point
+      ctx.fillStyle = darkClothingColor;
+      ctx.fillRect(-legWidth / 2, 0, legWidth, legHeight); // Leg extends downwards from pivot
+
+      // Draw the boot at the end of the leg (also relative to pivot)
+      ctx.fillStyle = bootColor;
+      ctx.fillRect(-bootWidth / 2, legHeight, bootWidth, bootHeight); // Boot at the bottom of the leg segment
+      // Boot highlight/sole
+      ctx.fillStyle = ironArmorHighlight;
+      ctx.fillRect(-bootWidth / 2, legHeight + bootHeight - 4, bootWidth, 4);
+
+      ctx.restore(); // Restore context state (removes translation and rotation)
+      // --- End Kicking Leg ---
+
+  } else {
+      // --- REGULAR WALKING / IDLE LEGS (Keep original logic) ---
+      const leftLegX = x - w * 0.3;
+      const rightLegX = x + w * 0.3;
+      let leftYOffset = 0;
+      let rightYOffset = 0;
+      if (!ii) { // Simple walk bob if not idle
+          const walkCycleTime = 300;
+          const phase = (t % walkCycleTime) / walkCycleTime;
+          const liftAmount = -3;
+          leftYOffset = Math.max(0, Math.sin(phase * Math.PI * 2)) * liftAmount;
+          rightYOffset = Math.max(0, Math.sin((phase + 0.5) * Math.PI * 2)) * liftAmount;
+      }
+      // Draw Legs
+      ctx.fillStyle = darkClothingColor;
+      ctx.fillRect(leftLegX - legWidth / 2, legTopY + leftYOffset, legWidth, legHeight);
+      ctx.fillRect(rightLegX - legWidth / 2, legTopY + rightYOffset, legWidth, legHeight);
+      // Draw Boots
+      ctx.fillStyle = bootColor;
+      ctx.fillRect(leftLegX - bootWidth / 2, bootTopY + leftYOffset, bootWidth, bootHeight);
+      ctx.fillRect(rightLegX - bootWidth / 2, bootTopY + rightYOffset, bootWidth, bootHeight);
+      // Boot highlight/sole line
+      ctx.fillStyle = ironArmorHighlight;
+      ctx.fillRect(leftLegX - bootWidth / 2, bootTopY + bootHeight - 4 + leftYOffset, bootWidth, 4);
+      ctx.fillRect(rightLegX - bootWidth / 2, bootTopY + bootHeight - 4 + rightYOffset, bootWidth, 4);
+  }
+  // --- END Legs & Boots section ---
 
     // 3. Torso Armor (Chest Plate) - Draw AFTER legs
     // ... (Keep torso armor drawing logic) ...
@@ -1624,7 +1639,7 @@ function drawEnemyRect(
         ctx.stroke();
       }
     }
-    const angle = Math.atan2(vy, vx);
+    const angle = Math.atan2(vy, vx) + Math.PI;
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
