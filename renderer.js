@@ -64,6 +64,12 @@ const Renderer = (() => {
   const simpleChestPlateColor = "#777777";
   const chestPlateHighlight = "#999999";
   const slitColor = "#000000";
+
+  const ironArmorColor = "#4a4a4a"; // Dark grey for armor plates
+  const ironArmorHighlight = "#777777";
+  const ironArmorShadow = "#2a2a2a";
+  const darkClothingColor = "#3a2d27"; // Dark brown/grey for clothing underneath
+
   const IDLE_BOB_SPEED_DIVISOR = 600;
   const IDLE_BOB_AMPLITUDE = 3;
   const DAMAGE_VIGNETTE_HEALTH_THRESHOLD = 30;
@@ -74,6 +80,9 @@ const Renderer = (() => {
   const MAX_TINT_ALPHA = 0.25;
   const RAIN_COLOR = "rgba(170, 190, 230, 0.6)";
   const RAIN_DROPS = 150;
+
+
+
   // --- Heat Haze Constants (EXTREME TEST VALUES) ---
   const HEAT_HAZE_START_TEMP = 25.0;      // Haze starts almost immediately
   const HEAT_HAZE_MAX_TEMP = 36.0;        // Haze reaches max intensity very quickly
