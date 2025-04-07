@@ -1646,7 +1646,7 @@ const Renderer = (() => {
         ctx.fillStyle = barrelColor;
         ctx.fillRect(
           0,                             // X position relative to offset origin
-          -barrelThickness / 2,          // Y position relative to offset origin
+          barrelThickness / 2,          // Y position relative to offset origin
           barrelLength,
           barrelThickness
         );
