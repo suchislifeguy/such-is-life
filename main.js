@@ -268,7 +268,10 @@ const Input = (() => {
         }
         // Ignore middle mouse button (event.button === 1) for now
     }
-    // -----------------------------
+    function isShootHeld() {
+        // Shoot is triggered by holding Space or Left Mouse Button
+        return keys[' '] || isMouseDown;
+    }
 
     function handleMouseUp(event) {
         if (event.button === 0) { // Left Click Release
