@@ -2084,24 +2084,58 @@ const Renderer = (() => {
       });
     }
   
-    function drawGame(
+    /**
+     * Triggers or extends a screen shake effect.
+     * @param {number} magnitude - Strength of the shake.
+     * @param {number} durationMs - How long the shake should last in milliseconds.
+     */
+    function triggerShake(magnitude, durationMs) {
+      // Ensure module-level shake variables exist
+      if (typeof currentShakeMagnitude === 'undefined' || typeof shakeEndTime === 'undefined') {
+          console.error("triggerShake called before shake state variables are initialized.");
+          return;
+      }
+      const now = performance.now();
+      const newEndTime = now + durationMs;
+      // Apply if new shake is stronger or lasts longer than current one
+      if (magnitude >= currentShakeMagnitude || newEndTime >= shakeEndTime) {
+          currentShakeMagnitude = Math.max(magnitude, currentShakeMagnitude); // Use the stronger magnitude
+          shakeEndTime = Math.max(newEndTime, shakeEndTime); // Extend to the later end time
+      }
+  }
+  // --- END triggerShake definition ---
+
+
+  // ========================================================
+  // The Main drawGame Function
+  // ========================================================
+  /**
+   * Main rendering function for the game canvas.
+   */
+  function drawGame(
       ctx, appState, stateToRender,
       localPlayerMuzzleFlash, localPlayerPushbackAnim,
-      activeBloodSparkEffects, activeEnemyBubbles
+      activeBloodSparkEffects, activeEnemyBubbles // Ensure these args match your call from main.js
   ) {
       // --- Initial Checks & Setup ---
-      if (!ctx || !appState) { console.error("drawGame missing context or appState!"); return; }
-      const now = performance.now();
+      if (!ctx || !appState) {
+          console.error("drawGame missing context or appState!");
+          return;
+      }
+      const now = performance.now(); // Time for animations
       const width = appState.canvasWidth;
       const height = appState.canvasHeight;
-      if (width <= 0 || height <= 0 || !Number.isFinite(width) || !Number.isFinite(height)) { console.error(`drawGame called with invalid dimensions: ${width}x${height}`); return; }
+      if (width <= 0 || height <= 0 || !Number.isFinite(width) || !Number.isFinite(height)) {
+          console.error(`drawGame called with invalid dimensions: ${width}x${height}`);
+          return;
+      }
 
       ctx.clearRect(0, 0, width, height);
       ctx.globalAlpha = 1.0;
 
       // --- 1. Calculate Player Shake Offset ---
       let shakeOffsetX = 0, shakeOffsetY = 0;
-      // Check globals exist before using them
+      // Check module-level shake state variables exist before using them
       if (typeof currentShakeMagnitude !== 'undefined' && typeof shakeEndTime !== 'undefined') {
           if (currentShakeMagnitude > 0 && now < shakeEndTime) {
               const timeRemaining = shakeEndTime - now;
@@ -2114,7 +2148,8 @@ const Renderer = (() => {
                   shakeOffsetY = Math.sin(shakeAngle) * currentMag;
               } else { currentShakeMagnitude = 0; }
           } else if (currentShakeMagnitude > 0) { currentShakeMagnitude = 0; }
-      } // End shake calculation
+      }
+      // --- End Shake Calculation ---
 
       // --- 2. Draw Static Background ---
       if (typeof isBackgroundReady !== 'undefined' && isBackgroundReady) {
@@ -2133,22 +2168,29 @@ const Renderer = (() => {
       } else {
           ctx.fillStyle = typeof dayBaseColor !== 'undefined' ? dayBaseColor : "#8FBC8F";
           ctx.fillRect(0, 0, width, height);
-      } // End background drawing
+      }
+      // --- End Background Drawing ---
 
-      // --- 3. Draw Heat Haze (NEW LOGIC CALLED HERE) ---
+      // --- 3. Draw Heat Haze (After Background) ---
       if (appState && typeof appState.currentTemp === 'number') {
-          drawHeatHaze(ctx, appState.currentTemp, width, height, now); // Call the new function
-      } // End Heat Haze
+          // Assumes drawHeatHaze is defined in the same scope
+          drawHeatHaze(ctx, appState.currentTemp, width, height, now);
+      }
+      // --- End Heat Haze ---
 
       // --- 4. Draw Dynamic Game World Elements (Behind Main Characters) ---
       if (stateToRender) {
+          // Assumes these drawing functions are defined in the same scope
           drawCampfire(ctx, stateToRender.campfire, width, height);
           if (typeof snake !== 'undefined' && snake.segments && snake.isActiveFromServer) { drawSnake(ctx, snake); }
           drawPowerups(ctx, stateToRender.powerups);
-      } // End Background Elements
+      }
+      // --- End Background Elements ---
+
 
       // --- 5. Draw Main Gameplay Elements (Over Heat Haze) ---
       if (stateToRender) {
+          // Assumes these drawing functions are defined in the same scope
           drawBullets(ctx, stateToRender.bullets);
           drawEnemies(ctx, stateToRender.enemies, activeBloodSparkEffects);
 
@@ -2165,8 +2207,13 @@ const Renderer = (() => {
           let shouldDrawMuzzleFlash = localPlayerMuzzleFlash?.active && now < localPlayerMuzzleFlash?.endTime;
           if (shouldDrawMuzzleFlash && typeof appState.renderedPlayerPos !== 'undefined') {
               drawMuzzleFlash(ctx, appState.renderedPlayerPos.x + shakeOffsetX, appState.renderedPlayerPos.y + shakeOffsetY, localPlayerMuzzleFlash.aimDx, localPlayerMuzzleFlash.aimDy);
-          } else if (localPlayerMuzzleFlash?.active) { localPlayerMuzzleFlash.active = false; }
-      } else { console.warn("drawGame called with no stateToRender, skipping entity drawing."); } // End Main Gameplay Elements
+          } else if (localPlayerMuzzleFlash?.active) {
+              localPlayerMuzzleFlash.active = false;
+          }
+      } else {
+          console.warn("drawGame called with no stateToRender, skipping entity drawing.");
+      }
+      // --- End Main Gameplay Elements ---
 
 
       // --- 6. Draw Overlays (Rain/Dust, Tint, Vignette) ---
@@ -2184,24 +2231,30 @@ const Renderer = (() => {
           }
           ctx.stroke();
       } else if (appState?.isDustStorm) {
-          // --- TODO: Replace this with the NEW drawDustStorm function call ---
-          ctx.fillStyle = "rgba(229, 169, 96, 0.2)"; ctx.fillRect(0, 0, width, height);
+          // --- Using Original Simple Dust Storm Effect ---
+          ctx.fillStyle = "rgba(229, 169, 96, 0.2)";
+          ctx.fillRect(0, 0, width, height);
+          // --- End Original Dust Storm Effect ---
       }
 
+      // Assumes drawTemperatureTint is defined in the same scope
       if (appState) drawTemperatureTint(ctx, appState.currentTemp, width, height);
 
+      // Damage Vignette
       const localPlayerState = stateToRender?.players?.[appState?.localPlayerId];
       if (localPlayerState && typeof localPlayerState.health === 'number') {
           const healthThreshold = typeof DAMAGE_VIGNETTE_HEALTH_THRESHOLD !== 'undefined' ? DAMAGE_VIGNETTE_HEALTH_THRESHOLD : 30;
           if (localPlayerState.health < healthThreshold) {
               const vi = 1.0 - Math.max(0, localPlayerState.health) / healthThreshold;
+              // Assumes drawDamageVignette is defined in the same scope
               drawDamageVignette(ctx, vi, width, height);
           }
-      } // End Overlays
+      }
+      // --- End Overlays ---
 
       // --- 7. Draw Particles (e.g., Ammo Casings - drawn over everything) ---
+      // Assumes activeAmmoCasings is defined and managed in the higher scope
       if (typeof activeAmmoCasings !== 'undefined' && Array.isArray(activeAmmoCasings)) {
-          // Assuming activeAmmoCasings global exists and is managed elsewhere
           activeAmmoCasings = activeAmmoCasings.filter(casing => (now - casing.spawnTime) < casing.lifetime);
           if (activeAmmoCasings.length > 0) {
               const deltaTime = appState.lastLoopTime ? Math.min(0.1, (now - appState.lastLoopTime) / 1000) : 1 / 60;
@@ -2225,22 +2278,25 @@ const Renderer = (() => {
               });
               ctx.restore();
           }
-      } // End Particles
+      }
+      // --- End Particles ---
 
-      ctx.globalAlpha = 1.0;
+      ctx.globalAlpha = 1.0; // Final reset
 
   } // --- End of function drawGame ---
 
+
   // --- Exported Renderer Module ---
+  // This return statement makes the functions accessible via Renderer.functionName() in main.js
   return {
-      drawGame,
-      triggerShake,
-      updateGeneratedBackground
+      drawGame,                 // Export the main drawing function
+      triggerShake,             // Export the shake function
+      updateGeneratedBackground // Export the background update function
   };
 
 })(); // --- End of Renderer module IIFE ---
 
-// Final log
+// Final log to confirm execution
 console.log(
   "--- Renderer.js: Executed. Renderer object defined?",
   typeof Renderer
