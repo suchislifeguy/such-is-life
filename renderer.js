@@ -1619,7 +1619,7 @@ function drawEnemyRect(
         gradient.addColorStop(0, trailStartColor);
         gradient.addColorStop(1, color);
         ctx.strokeStyle = gradient;
-        ctx.lineWidth = shapeWidth * 2;
+        ctx.lineWidth = shapeWidth * .5;
         ctx.lineCap = "round";
         ctx.beginPath();
         ctx.moveTo(startX, startY);
@@ -1627,7 +1627,7 @@ function drawEnemyRect(
         ctx.stroke();
       } catch (e) {
         ctx.strokeStyle = color;
-        ctx.lineWidth = shapeWidth * 2;
+        ctx.lineWidth = shapeWidth * 1.2;
         ctx.beginPath();
         ctx.moveTo(startX, startY);
         ctx.lineTo(x, y);
