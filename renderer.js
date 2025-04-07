@@ -64,11 +64,11 @@ const Renderer = (() => {
   const simpleChestPlateColor = "#777777";
   const chestPlateHighlight = "#999999";
   const slitColor = "#000000";
-
   const ironArmorColor = "#4a4a4a"; // Dark grey for armor plates
   const ironArmorHighlight = "#777777";
   const ironArmorShadow = "#2a2a2a";
   const darkClothingColor = "#3a2d27"; // Dark brown/grey for clothing underneath
+
 
   const IDLE_BOB_SPEED_DIVISOR = 600;
   const IDLE_BOB_AMPLITUDE = 3;
@@ -80,24 +80,21 @@ const Renderer = (() => {
   const MAX_TINT_ALPHA = 0.25;
   const RAIN_COLOR = "rgba(170, 190, 230, 0.6)";
   const RAIN_DROPS = 150;
-
-
-
   // --- Heat Haze Constants (EXTREME TEST VALUES) ---
-  const HEAT_HAZE_START_TEMP = 25.0;      // Haze starts almost immediately
-  const HEAT_HAZE_MAX_TEMP = 36.0;        // Haze reaches max intensity very quickly
+  const HEAT_HAZE_START_TEMP = 22.0;      // Haze starts almost immediately
+  const HEAT_HAZE_MAX_TEMP = 32.0;        // Haze reaches max intensity very quickly
   const HEAT_HAZE_MAX_INTENSITY = 1.0;    // Keep max intensity at 1
   const HEAT_HAZE_VERTICAL_EXTENT = 0.5;  // Affect almost the entire screen height
   const HEAT_HAZE_NUM_STRIPS = 10;        // FEWER strips (potentially less lag, chunkier effect)
   const HEAT_HAZE_WAVE_SPEED_X = 0.002;  // Faster horizontal movement
   const HEAT_HAZE_WAVE_FREQ_X1 = 0.01;    // LOWER frequency = LARGER waves horizontally
   const HEAT_HAZE_WAVE_FREQ_X2 = 0.03;    // LOWER frequency = LARGER waves horizontally
-  const HEAT_HAZE_WAVE_AMP_X = 20.0;      // *** EXTREME horizontal offset ***
+  const HEAT_HAZE_WAVE_AMP_X = 30.0;      // *** EXTREME horizontal offset ***
   const HEAT_HAZE_WAVE_SPEED_Y = 0.0015;  // Faster vertical movement
   const HEAT_HAZE_WAVE_FREQ_Y1 = 0.01;    // LOWER frequency = LARGER waves vertically
   const HEAT_HAZE_WAVE_FREQ_Y2 = 0.025;   // LOWER frequency = LARGER waves vertically
-  const HEAT_HAZE_WAVE_AMP_Y = 15.0;      // *** EXTREME vertical offset ***
-  const HEAT_HAZE_STRIP_ALPHA = 0.50;     // *** MUCH higher alpha (will look bad, but visible) ***
+  const HEAT_HAZE_WAVE_AMP_Y = 20.0;      // *** EXTREME vertical offset ***
+  const HEAT_HAZE_STRIP_ALPHA = 0.75;     // *** MUCH higher alpha (will look bad, but visible) ***
   // --- End Heat Haze Constants ---
 
   let currentShakeMagnitude = 0;
@@ -1448,6 +1445,7 @@ const Renderer = (() => {
     ctx.restore(); // Restore context state from the very start of the function
 
   }
+
   function drawPlayers(
     ctx, players, appState, localPlayerMuzzleFlash, localPlayerPushbackAnim,
     // --- OFFSET PARAMETERS ---
@@ -1903,105 +1901,266 @@ const Renderer = (() => {
     ctx, appState, stateToRender,
     localPlayerMuzzleFlash, localPlayerPushbackAnim,
     activeBloodSparkEffects, activeEnemyBubbles,
-    currentMousePos
+    currentMousePos // Argument received by drawGame
 ) {
     // --- Initial Checks & Setup ---
-    if (!ctx || !appState) { console.error("drawGame missing context or appState!"); return; }
-    const now = performance.now();
-    const width = appState.canvasWidth; const height = appState.canvasHeight;
-    if (width <= 0 || height <= 0 || !Number.isFinite(width) || !Number.isFinite(height)) { console.error(`drawGame called with invalid dimensions: ${width}x${height}`); return; }
+    if (!ctx || !appState) {
+        console.error("drawGame missing context or appState!");
+        return;
+    }
+    const now = performance.now(); // Time for animations
+    const width = appState.canvasWidth;
+    const height = appState.canvasHeight;
+    if (width <= 0 || height <= 0 || !Number.isFinite(width) || !Number.isFinite(height)) {
+        console.error(`drawGame called with invalid dimensions: ${width}x${height}`);
+        return;
+    }
 
     ctx.clearRect(0, 0, width, height);
     ctx.globalAlpha = 1.0;
 
     // --- 1. Calculate Player Shake Offset ---
     let shakeOffsetX = 0, shakeOffsetY = 0;
+    // Check module-level shake state variables exist before using them
     if (typeof currentShakeMagnitude !== 'undefined' && typeof shakeEndTime !== 'undefined') {
         if (currentShakeMagnitude > 0 && now < shakeEndTime) {
             const timeRemaining = shakeEndTime - now;
+            // Ensure initialDuration is not zero to prevent division by zero
             const initialDuration = Math.max(1, (shakeEndTime > now ? shakeEndTime - (now - timeRemaining) : 1));
             let currentMag = currentShakeMagnitude * (timeRemaining / initialDuration);
             currentMag = Math.max(0, currentMag);
-            if (currentMag > 0.5) {
+            if (currentMag > 0.5) { // Only apply shake if magnitude is noticeable
                 const shakeAngle = Math.random() * Math.PI * 2;
                 shakeOffsetX = Math.cos(shakeAngle) * currentMag;
                 shakeOffsetY = Math.sin(shakeAngle) * currentMag;
-            } else { currentShakeMagnitude = 0; }
-        } else if (currentShakeMagnitude > 0) { currentShakeMagnitude = 0; }
+            } else { currentShakeMagnitude = 0; } // Reset if magnitude drops too low
+        } else if (currentShakeMagnitude > 0) { // Reset if time is up
+            currentShakeMagnitude = 0;
+        }
     }
+    // --- End Shake Calculation ---
 
-    // --- Calculate Local Player Aim Vector ---
+    // --- NEW: Calculate Local Player Aim Vector ---
     let localPlayerAimDx = 0;
-    let localPlayerAimDy = -1; // Default aim up
-    const localPlayerId = appState?.localPlayerId;
-    const localPlayerStateFromServer = stateToRender?.players?.[localPlayerId];
+    let localPlayerAimDy = -1; // Default aim (e.g., up) if no mouse or player
+    const localPlayerId = appState?.localPlayerId; // Get local player ID
+    const localPlayerStateFromServer = stateToRender?.players?.[localPlayerId]; // Get server state for checks
 
+    // Ensure local player exists, rendered position is available, and mouse position is valid
     if (localPlayerId && localPlayerStateFromServer && appState.renderedPlayerPos && currentMousePos) {
+        // Use the smoothed/reconciled renderedPlayerPos for aim calculation origin
         const playerRenderX = appState.renderedPlayerPos.x;
         const playerRenderY = appState.renderedPlayerPos.y;
+
+        // Calculate raw direction vector
         const dx = currentMousePos.x - playerRenderX;
         const dy = currentMousePos.y - playerRenderY;
         const magSq = dx * dx + dy * dy;
-        if (magSq > 1) { // Normalize if distance > 1 pixel
+
+        // Normalize only if the magnitude is significant enough to avoid issues near the player center
+        // Use a small threshold (e.g., > 1 pixel magnitude squared, equivalent to 1px distance)
+        if (magSq > 1) {
             const mag = Math.sqrt(magSq);
             localPlayerAimDx = dx / mag;
             localPlayerAimDy = dy / mag;
         }
-        // Log the calculated aim vector for debugging
-        // console.log(`[drawGame] Mouse: ${currentMousePos.x.toFixed(1)},${currentMousePos.y.toFixed(1)} | PlayerRender: ${playerRenderX.toFixed(1)},${playerRenderY.toFixed(1)} | AimVec: dx=${localPlayerAimDx.toFixed(2)}, dy=${localPlayerAimDy.toFixed(2)}`);
-    } else {
-        // console.log("[drawGame] Could not calculate aim vector (missing player/pos/mouse?)");
+        // else keep the default aim (0, -1) or the last valid aim if implemented
     }
+    // --- END: Calculate Local Player Aim Vector ---
 
-    // --- Draw Static Background, Heat Haze, Background Elements ---
-    // (Keep existing logic as provided previously)
-    if (typeof isBackgroundReady !== 'undefined' && isBackgroundReady) { /* ... background draw ... */ } else { /* ... fallback fill ... */ }
-    if (appState && typeof appState.currentTemp === 'number') { drawHeatHaze(ctx, appState.currentTemp, width, height, now); }
-    if (stateToRender) { drawCampfire(ctx, stateToRender.campfire, width, height); /* ... draw snake, powerups ... */ }
 
-    // --- 5. Draw Main Gameplay Elements ---
+    // --- 2. Draw Static Background ---
+    // (Keep existing background drawing logic)
+    if (typeof isBackgroundReady !== 'undefined' && isBackgroundReady) {
+        if (typeof isTransitioningBackground !== 'undefined' && isTransitioningBackground) {
+            const elapsed = now - (typeof transitionStartTime !== 'undefined' ? transitionStartTime : now);
+            const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS);
+            ctx.globalAlpha = 1.0;
+            if (typeof oldOffscreenCanvas !== 'undefined') { ctx.drawImage(oldOffscreenCanvas, 0, 0, width, height); }
+            ctx.globalAlpha = progress;
+            if (typeof offscreenCanvas !== 'undefined') { ctx.drawImage(offscreenCanvas, 0, 0, width, height); }
+            ctx.globalAlpha = 1.0;
+            if (progress >= 1.0) { isTransitioningBackground = false; }
+        } else {
+            if (typeof offscreenCanvas !== 'undefined') { ctx.drawImage(offscreenCanvas, 0, 0, width, height); }
+        }
+    } else {
+        ctx.fillStyle = typeof dayBaseColor !== 'undefined' ? dayBaseColor : "#8FBC8F"; // Default color if needed
+        ctx.fillRect(0, 0, width, height);
+    }
+    // --- End Background Drawing ---
+
+
+    // --- 3. Draw Heat Haze (After Background) ---
+    // (Keep existing heat haze logic)
+    if (appState && typeof appState.currentTemp === 'number') {
+        drawHeatHaze(ctx, appState.currentTemp, width, height, now);
+    }
+    // --- End Heat Haze ---
+
+
+    // --- 4. Draw Dynamic Game World Elements (Behind Main Characters) ---
+    // (Keep existing background element drawing logic)
     if (stateToRender) {
-        drawBullets(ctx, stateToRender.bullets);
-        drawEnemies(ctx, stateToRender.enemies, activeBloodSparkEffects);
-        const activeEnemyBubblesObj = (typeof activeEnemyBubbles !== 'undefined') ? activeEnemyBubbles : {};
-        if (stateToRender.enemies) { drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubblesObj); }
+        drawCampfire(ctx, stateToRender.campfire, width, height);
+        // Check if snake state exists before accessing properties
+        if (typeof snake !== 'undefined' && stateToRender.snake_state?.active && snake.segments) {
+             drawSnake(ctx, snake); // drawSnake now likely relies on `snake` object state
+        }
+        drawPowerups(ctx, stateToRender.powerups);
+    }
+    // --- End Background Elements ---
 
+
+    // --- 5. Draw Main Gameplay Elements (Over Heat Haze) ---
+    if (stateToRender) {
+        // Draw Bullets and Enemies first
+        drawBullets(ctx, stateToRender.bullets);
+        drawEnemies(ctx, stateToRender.enemies, activeBloodSparkEffects); // Pass spark effects
+
+        // Draw Enemy Speech Bubbles
+        const activeEnemyBubblesObj = (typeof activeEnemyBubbles !== 'undefined') ? activeEnemyBubbles : {};
+        if (stateToRender.enemies) { // Ensure enemies exist before drawing bubbles
+            drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubblesObj);
+        }
+
+        // Draw Players and Player Speech Bubbles
         if (appState && stateToRender.players) {
-            // Pass the LIVE calculated aim vector to drawPlayers
+            // --- MODIFIED CALL TO drawPlayers ---
+            // Pass the calculated aim vector specifically for the local player
             drawPlayers(
-                ctx, stateToRender.players, appState,
-                localPlayerMuzzleFlash, localPlayerPushbackAnim,
-                shakeOffsetX, shakeOffsetY,
-                localPlayerAimDx, localPlayerAimDy // Pass the calculated vector
+                ctx,
+                stateToRender.players,
+                appState,
+                localPlayerMuzzleFlash, // Pass muzzle flash state
+                localPlayerPushbackAnim, // Pass pushback state
+                shakeOffsetX,       // Pass shake offset X
+                shakeOffsetY,       // Pass shake offset Y
+                localPlayerAimDx,   // Pass local player aim vector X
+                localPlayerAimDy    // Pass local player aim vector Y
             );
+
+            // Draw player speech bubbles after players
             const activeSpeechBubblesObj = (typeof activeSpeechBubbles !== 'undefined') ? activeSpeechBubbles : {};
             drawSpeechBubbles(ctx, stateToRender.players, activeSpeechBubblesObj, appState, shakeOffsetX, shakeOffsetY);
         }
 
+        // Draw Damage Text floating numbers
         drawDamageTexts(ctx, stateToRender.damage_texts);
 
-        // Muzzle Flash (Uses stored direction from shoot time)
+        // Draw Muzzle Flash for local player if active
         let shouldDrawMuzzleFlash = localPlayerMuzzleFlash?.active && now < localPlayerMuzzleFlash?.endTime;
+        // Use the stored aim direction from the flash state, apply shake offset to position
         if (shouldDrawMuzzleFlash && typeof appState.renderedPlayerPos !== 'undefined' && localPlayerMuzzleFlash.aimDx !== undefined) {
-            drawMuzzleFlash( ctx, appState.renderedPlayerPos.x + shakeOffsetX, appState.renderedPlayerPos.y + shakeOffsetY, localPlayerMuzzleFlash.aimDx, localPlayerMuzzleFlash.aimDy );
+            drawMuzzleFlash(
+                ctx,
+                appState.renderedPlayerPos.x + shakeOffsetX, // Apply shake to flash position
+                appState.renderedPlayerPos.y + shakeOffsetY,
+                localPlayerMuzzleFlash.aimDx, // Use aim from flash state
+                localPlayerMuzzleFlash.aimDy
+            );
         } else if (localPlayerMuzzleFlash?.active) {
-            localPlayerMuzzleFlash.active = false;
+            localPlayerMuzzleFlash.active = false; // Deactivate flash if time expired
         }
     } else {
         console.warn("drawGame called with no stateToRender, skipping entity drawing.");
     }
+    // --- End Main Gameplay Elements ---
 
-    // --- Draw Overlays, Particles ---
-    // (Keep existing logic as provided previously)
+
+    // --- 6. Draw Overlays (Rain/Dust, Tint, Vignette) ---
+    // (Keep existing overlay logic)
     ctx.globalAlpha = 1.0;
-    if (appState?.isRaining) { /* ... rain draw ... */ } else if (appState?.isDustStorm) { /* ... dust overlay ... */ }
-    if (appState) drawTemperatureTint(ctx, appState.currentTemp, width, height);
-    const currentPlayerState = stateToRender?.players?.[appState?.localPlayerId];
-    if (currentPlayerState && typeof currentPlayerState.health === 'number') { /* ... vignette draw ... */ }
-    if (typeof activeAmmoCasings !== 'undefined' && Array.isArray(activeAmmoCasings)) { /* ... casing draw ... */ }
+    if (appState?.isRaining) {
+        const RAIN_SPEED_Y = 12; const RAIN_SPEED_X = 1;
+        ctx.strokeStyle = typeof RAIN_COLOR !== 'undefined' ? RAIN_COLOR : "rgba(170, 190, 230, 0.6)";
+        ctx.lineWidth = 1.5; ctx.beginPath();
+        const dropCount = typeof RAIN_DROPS !== 'undefined' ? RAIN_DROPS : 150;
+        for (let i = 0; i < dropCount; i++) {
+            // Simpler rain calculation for example
+            const rainX = (Math.random() * (width + 100) - 50 + now * 0.01) % (width + 100) - 50; // Add time component for movement
+            const rainY = (Math.random() * height + now * 0.2) % height;
+            const endX = rainX + RAIN_SPEED_X; const endY = rainY + RAIN_SPEED_Y;
+            ctx.moveTo(rainX, rainY); ctx.lineTo(endX, endY);
+        }
+        ctx.stroke();
+    } else if (appState?.isDustStorm) {
+        ctx.fillStyle = "rgba(229, 169, 96, 0.2)"; // Simple overlay
+        ctx.fillRect(0, 0, width, height);
+        // Could add particle effect here too
+    }
 
-    ctx.globalAlpha = 1.0; // Final reset
+    // Temperature Tint
+    if (appState) drawTemperatureTint(ctx, appState.currentTemp, width, height);
+
+    // Damage Vignette
+    const currentPlayerState = stateToRender?.players?.[appState?.localPlayerId]; // Use currentPlayerState if already defined
+    if (currentPlayerState && typeof currentPlayerState.health === 'number') {
+        const healthThreshold = typeof DAMAGE_VIGNETTE_HEALTH_THRESHOLD !== 'undefined' ? DAMAGE_VIGNETTE_HEALTH_THRESHOLD : 30;
+        if (currentPlayerState.health < healthThreshold) {
+            const intensity = 1.0 - Math.max(0, currentPlayerState.health) / healthThreshold;
+            drawDamageVignette(ctx, intensity, width, height);
+        }
+    }
+    // --- End Overlays ---
+
+
+    // --- 7. Draw Particles (e.g., Ammo Casings - drawn over everything) ---
+    // (Keep existing particle logic)
+    // Make sure activeAmmoCasings is accessible in this scope (likely defined globally in main.js or passed in)
+    if (typeof activeAmmoCasings !== 'undefined' && Array.isArray(activeAmmoCasings)) {
+        // Filter expired casings FIRST
+        activeAmmoCasings = activeAmmoCasings.filter(casing => (now - casing.spawnTime) < casing.lifetime);
+
+        if (activeAmmoCasings.length > 0) {
+            // Calculate deltaTime for physics (important to use consistent time source)
+            const deltaTime = appState.lastLoopTime ? Math.min(0.1, (now - appState.lastLoopTime) / 1000) : (1 / 60); // Default to 60fps if no last time
+
+            ctx.save(); // Save context for particle drawing
+            activeAmmoCasings.forEach(casing => {
+                // Update physics
+                casing.vy += casing.gravity * deltaTime;
+                casing.x += casing.vx * deltaTime;
+                casing.y += casing.vy * deltaTime;
+                casing.rotation += casing.rotationSpeed * deltaTime;
+
+                // Calculate alpha based on remaining lifetime
+                const lifeLeft = casing.lifetime - (now - casing.spawnTime);
+                const fadeDuration = 200; // Start fading 200ms before expiring
+                const alpha = (lifeLeft < fadeDuration) ? Math.max(0, lifeLeft / fadeDuration) * 0.9 : 0.9; // Fade alpha
+
+                // Set color with calculated alpha
+                let casingColor = casing.color || "rgba(218, 165, 32, 0.9)"; // Default color
+                if (casingColor.startsWith('rgba')) {
+                    // Replace existing alpha value with the new calculated one
+                    casingColor = casingColor.replace(/[\d\.]+\)$/g, `${alpha.toFixed(2)})`);
+                } else if (casingColor.startsWith('#')) {
+                     // Convert hex to rgba to apply alpha (simple example, might need robust hex parser)
+                     // Example assumes #RRGGBB format
+                     const r = parseInt(casingColor.slice(1, 3), 16);
+                     const g = parseInt(casingColor.slice(3, 5), 16);
+                     const b = parseInt(casingColor.slice(5, 7), 16);
+                     casingColor = `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(2)})`;
+                }
+                ctx.fillStyle = casingColor;
+
+                // Draw rotated rectangle
+                ctx.translate(casing.x, casing.y);
+                ctx.rotate(casing.rotation);
+                ctx.fillRect(-casing.width / 2, -casing.height / 2, casing.width, casing.height);
+                // Undo transformations for the next casing
+                ctx.rotate(-casing.rotation);
+                ctx.translate(-casing.x, -casing.y);
+            });
+            ctx.restore(); // Restore context after drawing all particles
+        }
+    }
+    // --- End Particles ---
+
+    ctx.globalAlpha = 1.0; // Final reset before exiting
+
 } // --- End of function drawGame ---
+
 
 // ... (Keep the rest of the Renderer module (export statement, IIFE end) exactly as it was) ...
 
