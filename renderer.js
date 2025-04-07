@@ -1587,8 +1587,8 @@ function drawEnemyRect(
   function drawShapedBullet(
     ctx,
     bullet,
-    trailLengthFactor = 1.0,
-    trailBaseAlpha = 0.7
+    trailLengthFactor = 3.0,
+    trailBaseAlpha = 0.3
   ) {
     const { x, y, vx = 0, vy = 0, radius: r = 4, owner_type } = bullet;
     const isPlayerBullet = owner_type === "player";
@@ -1619,7 +1619,7 @@ function drawEnemyRect(
         gradient.addColorStop(0, trailStartColor);
         gradient.addColorStop(1, color);
         ctx.strokeStyle = gradient;
-        ctx.lineWidth = shapeWidth * 0.6;
+        ctx.lineWidth = shapeWidth * 2;
         ctx.lineCap = "round";
         ctx.beginPath();
         ctx.moveTo(startX, startY);
@@ -1627,7 +1627,7 @@ function drawEnemyRect(
         ctx.stroke();
       } catch (e) {
         ctx.strokeStyle = color;
-        ctx.lineWidth = shapeWidth * 0.6;
+        ctx.lineWidth = shapeWidth * 2;
         ctx.beginPath();
         ctx.moveTo(startX, startY);
         ctx.lineTo(x, y);
