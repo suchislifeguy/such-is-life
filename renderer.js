@@ -82,18 +82,18 @@ const Renderer = (() => {
   const RAIN_DROPS = 150;
   // --- Heat Haze Constants (EXTREME TEST VALUES) ---
   const HEAT_HAZE_START_TEMP = 22.0;      // Haze starts almost immediately
-  const HEAT_HAZE_MAX_TEMP = 32.0;        // Haze reaches max intensity very quickly
+  const HEAT_HAZE_MAX_TEMP = 28.0;        // Haze reaches max intensity very quickly
   const HEAT_HAZE_MAX_INTENSITY = 1.0;    // Keep max intensity at 1
-  const HEAT_HAZE_VERTICAL_EXTENT = 0.5;  // Affect almost the entire screen height
+  const HEAT_HAZE_VERTICAL_EXTENT = 1.0;  // Affect almost the entire screen height
   const HEAT_HAZE_NUM_STRIPS = 10;        // FEWER strips (potentially less lag, chunkier effect)
   const HEAT_HAZE_WAVE_SPEED_X = 0.002;  // Faster horizontal movement
   const HEAT_HAZE_WAVE_FREQ_X1 = 0.01;    // LOWER frequency = LARGER waves horizontally
   const HEAT_HAZE_WAVE_FREQ_X2 = 0.03;    // LOWER frequency = LARGER waves horizontally
-  const HEAT_HAZE_WAVE_AMP_X = 30.0;      // *** EXTREME horizontal offset ***
+  const HEAT_HAZE_WAVE_AMP_X = 50.0;      // *** EXTREME horizontal offset ***
   const HEAT_HAZE_WAVE_SPEED_Y = 0.0015;  // Faster vertical movement
   const HEAT_HAZE_WAVE_FREQ_Y1 = 0.01;    // LOWER frequency = LARGER waves vertically
   const HEAT_HAZE_WAVE_FREQ_Y2 = 0.025;   // LOWER frequency = LARGER waves vertically
-  const HEAT_HAZE_WAVE_AMP_Y = 20.0;      // *** EXTREME vertical offset ***
+  const HEAT_HAZE_WAVE_AMP_Y = 50.0;      // *** EXTREME vertical offset ***
   const HEAT_HAZE_STRIP_ALPHA = 0.75;     // *** MUCH higher alpha (will look bad, but visible) ***
   // --- End Heat Haze Constants ---
 
@@ -1204,7 +1204,7 @@ const Renderer = (() => {
       const sparkCenterY = y + (type !== "giant" ? bobOffset : 0);
       for (let i = 0; i < numSparks; i++) {
         const sparkAngle = Math.random() * Math.PI * 2;
-        const sparkRadius = Math.random() * currentW * 0.3;
+        const sparkRadius = Math.random() * currentW * 2;
         const sparkX = x + Math.cos(sparkAngle) * sparkRadius;
         const sparkY =
           sparkCenterY +
