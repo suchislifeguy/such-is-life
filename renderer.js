@@ -1594,32 +1594,27 @@ function drawEnemyRect(
     const isPlayerBullet = owner_type === "player";
     const color = isPlayerBullet ? bulletPlayerColor : bulletEnemyColor;
     const speed = Math.sqrt(vx * vx + vy * vy);
-    const baseLength = 8,
-      baseWidth = 4;
+    const baseLength = 8, baseWidth = 4;
     const scaleFactor = r / 4;
     const shapeLength = baseLength * scaleFactor;
     const shapeWidth = baseWidth * scaleFactor;
-    const trailLength =
-      shapeLength * trailLengthFactor * Math.min(1, speed / 150);
-    let startX = x,
-      startY = y;
+    const trailLength = shapeLength * trailLengthFactor * Math.min(1, speed / 150);
+    let startX = x, startY = y;
+
     if (speed > 1) {
       startX = x - (vx / speed) * trailLength;
       startY = y - (vy / speed) * trailLength;
     }
+
     if (trailLength > 1 && speed > 1) {
       try {
         const gradient = ctx.createLinearGradient(startX, startY, x, y);
         let trailStartColor = color;
         if (color.startsWith("#")) {
-          let alphaHex = Math.round(trailBaseAlpha * 255)
-            .toString(16)
-            .padStart(2, "0");
+          let alphaHex = Math.round(trailBaseAlpha * 255).toString(16).padStart(2, "0");
           trailStartColor = color + alphaHex;
         } else if (color.startsWith("rgb")) {
-          trailStartColor = color
-            .replace(/rgb/i, "rgba")
-            .replace(")", `, ${trailBaseAlpha})`);
+          trailStartColor = color.replace(/rgb/i, "rgba").replace(")", `, ${trailBaseAlpha})`);
         }
         gradient.addColorStop(0, trailStartColor);
         gradient.addColorStop(1, color);
@@ -1639,19 +1634,30 @@ function drawEnemyRect(
         ctx.stroke();
       }
     }
-    const angle = Math.atan2(vy, vx) + Math.PI;
+
+    const angle = Math.atan2(vy, vx); // Keep original angle for drawing orientation
+
     ctx.save();
     ctx.translate(x, y);
-    ctx.rotate(angle);
+    ctx.rotate(angle); // Rotate to match velocity direction
+
     ctx.fillStyle = color;
-    ctx.fillRect(-shapeLength / 2, -shapeWidth / 2, shapeLength, shapeWidth);
+
+    // Draw body relative to the origin (0,0) before the nose
+    const bodyStartX = -shapeLength * 0.7; // Start body behind origin
+    const bodyEndX = bodyStartX + shapeLength; // End body before nose tip
+
+    ctx.fillRect(bodyStartX, -shapeWidth / 2, shapeLength, shapeWidth);
+
+    // Draw nose cone extending from the front (positive X) of the body
     const noseLength = shapeLength * 0.4;
     ctx.beginPath();
-    ctx.moveTo(shapeLength / 2, 0);
-    ctx.lineTo(shapeLength / 2 - noseLength, -shapeWidth / 2);
-    ctx.lineTo(shapeLength / 2 - noseLength, shapeWidth / 2);
+    ctx.moveTo(bodyEndX, -shapeWidth / 2); // Start at front-top corner of body
+    ctx.lineTo(bodyEndX, shapeWidth / 2);  // Line to front-bottom corner
+    ctx.lineTo(bodyEndX + noseLength, 0);  // Point to the tip
     ctx.closePath();
     ctx.fill();
+
     ctx.restore();
     ctx.lineCap = "butt";
   }
