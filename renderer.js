@@ -1089,19 +1089,19 @@ const Renderer = (() => {
       ctx.beginPath();
       ctx.ellipse(
         x,
-        hatCenterY + hatCrownRadiusV * 0.7,
+        hatCenterY + hatCrownRadiusV * 0.8,
         hatBrimWidth / 2,
         hatBrimHeight / 2,
         0,
         0,
-        Math.PI * 2
+        Math.PI * 1.6
       );
       ctx.fill();
       ctx.beginPath();
       ctx.ellipse(
         x,
         hatCenterY,
-        hatCrownRadiusH / 2,
+        hatCrownRadiusH / 1.5,
         hatCrownRadiusV,
         0,
         0,
@@ -1158,7 +1158,7 @@ const Renderer = (() => {
       }
       const numParticles = 6;
       const particleBaseSize = 5;
-      const particleSpeedY = -500;
+      const particleSpeedY = -10;
       const particleLifetimeMs = 550;
       ctx.save();
       for (let i = 0; i < numParticles; i++) {
@@ -1205,13 +1205,13 @@ const Renderer = (() => {
       const sparkCenterY = y + (type !== "giant" ? bobOffset : 0);
       for (let i = 0; i < numSparks; i++) {
         const sparkAngle = Math.random() * Math.PI * 2;
-        const sparkRadius = Math.random() * currentW * 2;
+        const sparkRadius = Math.random() * currentW * 1.7;
         const sparkX = x + Math.cos(sparkAngle) * sparkRadius;
         const sparkY =
           sparkCenterY +
-          Math.sin(sparkAngle) * sparkRadius * 0.9 -
+          Math.sin(sparkAngle) * sparkRadius * 0.7 -
           currentH * 0.2;
-        const sparkSize = 3 + Math.random() * 4;
+        const sparkSize = 3 + Math.random() * 5;
         ctx.fillStyle =
           sparkColors[Math.floor(Math.random() * sparkColors.length)];
         ctx.beginPath();
@@ -1283,7 +1283,7 @@ const Renderer = (() => {
 
         // Draw Kicking Leg (Rotated)
         ctx.save(); // Save before rotating for kicking leg
-        ctx.translate(kickLegX, legTopY + legHeight * 0.1); // Pivot point for kick rotation
+        ctx.translate(kickLegX, legTopY + legHeight * 0.8); // Pivot point for kick rotation
         ctx.rotate(kickAngle);
         // Draw the leg itself (relative to pivot)
         ctx.fillStyle = darkClothingColor;
