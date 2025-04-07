@@ -1593,75 +1593,55 @@ const Renderer = (() => {
       const slitY = headTopY + headHeight * 0.45;
       ctx.fillRect(x - slitWidth / 2, slitY, slitWidth, slitHeight);
       // Gun
-      // Gun (Corrected Rotation Logic)
+      // Gun (Corrected Rotation Logic - RE-EXAMINING)
       let shouldDrawGun = false;
-      let gunDrawAngle = 0;
+      let gunDrawAngle = 0; // Initialized, but recalculated below
       let gunDrawMode = "aiming";
 
-      // Determine if gun should be shown and its base angle
       if (isPushbackAnimating) {
         shouldDrawGun = true;
         gunDrawMode = "pushback";
-        gunDrawAngle = -Math.PI / 2; // Points straight up during pushback animation
-      } else if (isSelf && (aimDx !== 0 || aimDy !== 0)) {
+        gunDrawAngle = -Math.PI / 2;
+      } else if (isSelf && (aimDx !== 0 || aimDy !== 0)) { // CONDITION: Only calc angle if isSelf AND aiming
         shouldDrawGun = true;
         gunDrawMode = "aiming";
-        gunDrawAngle = Math.atan2(aimDy, aimDx); // Calculate angle from aim vector
+        // *** CALCULATION: This depends ONLY on passed aimDx, aimDy ***
+        gunDrawAngle = Math.atan2(aimDy, aimDx);
       }
+      // If !isSelf OR aimDx/Dy are 0, gunDrawAngle remains 0 (pointing right) unless pushback is active.
 
-      if (shouldDrawGun) {
+      if (shouldDrawGun) { // Gun is only drawn if condition above was met
+        // ... calculate gun dimensions (gunLevel, lengths, thickness) ...
         const gunLevel = playerState?.gun ?? 1;
-        const baseBarrelLength = 18;
-        const barrelLengthIncrease = 2;
-        const barrelLength = baseBarrelLength + (gunLevel - 1) * barrelLengthIncrease;
-        const barrelThickness = 3 + (gunLevel - 1) * 0.2;
-        const stockLength = 8 + (gunLevel - 1) * 0.5;
-        const stockThickness = 5 + (gunLevel - 1) * 0.3;
-        const stockColor = "#8B4513"; // Brownish stock
-        const barrelColor = "#444444"; // Dark grey barrel
+        // ... (lengths, thicknesses calculation) ...
+        const stockColor = "#8B4513";
+        const barrelColor = "#444444";
 
-        // --- Define the rotation pivot point ---
-        // Let's pivot around the player's center horizontally (x)
-        // and vertically around the calculated shoulder level (shoulderCenterY).
-        const pivotX = x;
-        const pivotY = shoulderCenterY; // Use the previously calculated shoulder Y
+        // --- Define the pivot point ---
+        const pivotX = x;           // Player's drawn X center
+        const pivotY = shoulderCenterY; // Player's calculated shoulder Y
 
-        // --- Define offsets for VISUAL positioning relative to the pivot AFTER rotation ---
-        // How far "out" from the pivot the base of the gun sits. Adjust as needed.
-        const gunHoldRadius = w * 0.15; // Distance from pivot (sideways)
-        // How far "forward" from the pivot the stock starts. Adjust as needed.
+        // --- Define offsets for VISUAL positioning relative to pivot ---
+        const gunHoldRadius = w * 0.15;
         const gunForwardOffset = 5;
 
-        ctx.save(); // Save context state before transform
+        ctx.save(); // Save context state
 
-        // 1. Translate to the pivot point
+        // *** TRANSFORMATIONS - Order matters! ***
+        // 1. Translate origin TO the pivot point
         ctx.translate(pivotX, pivotY);
+        // 2. Rotate the context AROUND the new origin (pivot point)
+        ctx.rotate(gunDrawAngle); // <<< USES THE CALCULATED/DEFAULT ANGLE
 
-        // 2. Rotate the entire canvas context around the pivot point
-        ctx.rotate(gunDrawAngle);
-
-        // 3. Draw the gun parts relative to the NOW ROTATED pivot (which is currently 0,0)
-        //    Apply the visual offsets here.
-
-        // Draw Barrel (starts slightly forward and to the side of the pivot)
+        // 3. Draw gun parts relative to the ROTATED PIVOT (now 0,0)
+        // Barrel
         ctx.fillStyle = barrelColor;
-        ctx.fillRect(
-          gunForwardOffset,                 // X: Start slightly forward of pivot
-          gunHoldRadius - (barrelThickness / 2), // Y: Offset sideways from pivot
-          barrelLength,                     // Width (length along rotated axis)
-          barrelThickness                   // Height (thickness perpendicular to rotation)
-        );
-
-        // Draw Stock (attached behind the barrel's start)
+        ctx.fillRect( gunForwardOffset, gunHoldRadius - (barrelThickness / 2), barrelLength, barrelThickness );
+        // Stock
         ctx.fillStyle = stockColor;
-        ctx.fillRect(
-          gunForwardOffset - stockLength,   // X: Starts behind barrel start
-          gunHoldRadius - (stockThickness / 2), // Y: Align with barrel sideways offset
-          stockLength,
-          stockThickness
-        );
+        ctx.fillRect( gunForwardOffset - stockLength, gunHoldRadius - (stockThickness / 2), stockLength, stockThickness );
 
-        ctx.restore(); // Restore original context state (translation, rotation)
+        ctx.restore(); // Restore original context state (undo rotation and translation)
       }
       // --- End Gun Drawing ---
       // Effects
