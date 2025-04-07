@@ -75,10 +75,10 @@ const Renderer = (() => {
     const RAIN_COLOR = "rgba(170, 190, 230, 0.6)";
     const RAIN_DROPS = 150;
     // --- Heat Haze Constants ---
-    const HEAT_HAZE_START_TEMP = 25.0;      // Temperature (°C) at which haze starts appearing
+    const HEAT_HAZE_START_TEMP = 2.0;      // Temperature (°C) at which haze starts appearing
     const HEAT_HAZE_MAX_TEMP = 45.0;        // Temperature (°C) at which haze reaches full intensity
     const HEAT_HAZE_MAX_INTENSITY = 1.0;    // Controls overall strength (0 to 1)
-    const HEAT_HAZE_VERTICAL_EXTENT = 0.5;  // What fraction of the screen height (from bottom) is affected
+    const HEAT_HAZE_VERTICAL_EXTENT = 0.9;  // What fraction of the screen height (from bottom) is affected
     const HEAT_HAZE_NUM_STRIPS = 25;        // How many horizontal strips to redraw (performance impact)
     const HEAT_HAZE_WAVE_SPEED_X = 0.0008;  // How fast the horizontal waves move
     const HEAT_HAZE_WAVE_FREQ_X1 = 0.03;    // Frequency of the first horizontal sine wave
