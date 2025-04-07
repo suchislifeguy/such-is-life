@@ -271,64 +271,78 @@ const Renderer = (() => {
       }
       
       function updateGeneratedBackground(targetIsNight) {
+        if (!appState) return; // Guard against missing appState
+        // Check if canvas dimensions have changed or don't match appState
         if (
-          offscreenCanvas.width !== appState.canvasWidth ||
-          offscreenCanvas.height !== appState.canvasHeight
+            offscreenCanvas.width !== appState.canvasWidth ||
+            offscreenCanvas.height !== appState.canvasHeight
         ) {
-          offscreenCanvas.width = appState.canvasWidth;
-          offscreenCanvas.height = appState.canvasHeight;
-          oldOffscreenCanvas.width = appState.canvasWidth;
-          oldOffscreenCanvas.height = appState.canvasHeight;
-          isBackgroundReady = false;
-          currentBackgroundIsNight = null;
-          isTransitioningBackground = false;
-        }
-        if (targetIsNight === currentBackgroundIsNight && isBackgroundReady) {
-          return;
-        }
-        if (
-          isTransitioningBackground &&
-          targetIsNight === (offscreenCanvas.dataset.isNight === "true")
-        ) {
-          return;
-        }
-        if (isBackgroundReady) {
-          oldOffscreenCtx.clearRect(0, 0, appState.canvasWidth, appState.canvasHeight);
-          oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0);
-          isTransitioningBackground = true;
-          transitionStartTime = performance.now();
-          generateBackground(
-            offscreenCtx,
-            targetIsNight,
-            appState.canvasWidth,
-            appState.canvasHeight
-          );
-          currentBackgroundIsNight = targetIsNight;
-        } else {
-          generateBackground(
-            offscreenCtx,
-            targetIsNight,
-            appState.canvasWidth,
-            appState.canvasHeight
-          );
-          currentBackgroundIsNight = targetIsNight;
-          isBackgroundReady = true;
-          isTransitioningBackground = false;
-        }
-     }
+            offscreenCanvas.width = appState.canvasWidth;
+            offscreenCanvas.height = appState.canvasHeight;
+            oldOffscreenCanvas.width = appState.canvasWidth;
+            oldOffscreenCanvas.height = appState.canvasHeight;
+            // Ensure hazeCanvas lines are GONE from here
 
-     
-    // Triggers or extends a screen shake effect
-    function triggerShake(magnitude, durationMs) {
-        const now = performance.now();
-        const newEndTime = now + durationMs;
-        // Apply if new shake is stronger or lasts longer than current one
-        if (magnitude >= currentShakeMagnitude || newEndTime >= shakeEndTime) {
-                currentShakeMagnitude = Math.max(magnitude, currentShakeMagnitude);
-                shakeEndTime = Math.max(newEndTime, shakeEndTime);
+            isBackgroundReady = false;
+            currentBackgroundIsNight = null;
+            isTransitioningBackground = false;
+        }
+        // ... (rest of the transition logic remains the same) ...
+        if (targetIsNight === currentBackgroundIsNight && isBackgroundReady) return;
+        if (isTransitioningBackground && targetIsNight === (offscreenCanvas.dataset.isNight === "true")) return;
+
+        if (isBackgroundReady) {
+            oldOffscreenCtx.clearRect(0, 0, appState.canvasWidth, appState.canvasHeight);
+            oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0);
+            isTransitioningBackground = true;
+            transitionStartTime = performance.now();
+            generateBackground(offscreenCtx, targetIsNight, appState.canvasWidth, appState.canvasHeight);
+            currentBackgroundIsNight = targetIsNight;
+        } else {
+            generateBackground(offscreenCtx, targetIsNight, appState.canvasWidth, appState.canvasHeight);
+            currentBackgroundIsNight = targetIsNight;
+            isBackgroundReady = true;
+            isTransitioningBackground = false;
         }
     }
 
+    function drawHeatHaze(ctx, temperature, width, height, time) {
+        let intensity = 0.0;
+        if (temperature >= HEAT_HAZE_START_TEMP) {
+            intensity = (temperature - HEAT_HAZE_START_TEMP) / (HEAT_HAZE_MAX_TEMP - HEAT_HAZE_START_TEMP);
+            intensity = Math.max(0.0, Math.min(HEAT_HAZE_MAX_INTENSITY, intensity));
+        }
+        if (intensity <= 0.01 || width <= 0 || height <= 0) return;
+        const stripHeight = Math.ceil(height * HEAT_HAZE_VERTICAL_EXTENT / HEAT_HAZE_NUM_STRIPS);
+        const startY = height * (1.0 - HEAT_HAZE_VERTICAL_EXTENT);
+        if (stripHeight <= 0) return;
+        const originalAlpha = ctx.globalAlpha;
+        for (let i = 0; i < HEAT_HAZE_NUM_STRIPS; i++) {
+            const currentStripY = startY + i * stripHeight;
+            const stripTopY = Math.max(0, currentStripY);
+            const actualStripHeight = Math.min(stripHeight, height - stripTopY);
+            if (actualStripHeight <= 0) continue;
+            const verticalProgress = (currentStripY - startY) / (height * HEAT_HAZE_VERTICAL_EXTENT);
+            const falloffFactor = Math.max(0, Math.min(1.0, 1.0 - verticalProgress));
+            const timeOffsetX = time * HEAT_HAZE_WAVE_SPEED_X;
+            const offsetX1 = Math.sin(stripTopY * HEAT_HAZE_WAVE_FREQ_X1 + timeOffsetX);
+            const offsetX2 = Math.sin(stripTopY * HEAT_HAZE_WAVE_FREQ_X2 - timeOffsetX * 0.7);
+            const totalOffsetX = (offsetX1 + offsetX2) * 0.5 * HEAT_HAZE_WAVE_AMP_X * intensity * falloffFactor;
+            const timeOffsetY = time * HEAT_HAZE_WAVE_SPEED_Y;
+            const offsetY1 = Math.sin(stripTopY * HEAT_HAZE_WAVE_FREQ_Y1 + timeOffsetY);
+            const offsetY2 = Math.sin(stripTopY * HEAT_HAZE_WAVE_FREQ_Y2 - timeOffsetY * 1.3);
+            const totalOffsetY = (offsetY1 + offsetY2) * 0.5 * HEAT_HAZE_WAVE_AMP_Y * intensity * falloffFactor;
+            ctx.globalAlpha = HEAT_HAZE_STRIP_ALPHA * intensity * falloffFactor;
+            try {
+                ctx.drawImage(ctx.canvas, 0, stripTopY, width, actualStripHeight, totalOffsetX, stripTopY + totalOffsetY, width, actualStripHeight);
+            } catch (e) {
+                console.error("Error drawing heat haze strip:", e);
+                ctx.globalAlpha = originalAlpha;
+                return;
+            }
+        }
+        ctx.globalAlpha = originalAlpha;
+    }
 
     // Draws floating damage numbers, handling crits and pulsing
     function drawDamageTexts(ctx, damageTexts) {
@@ -498,68 +512,6 @@ const Renderer = (() => {
       }
       ctx.restore();
     }
-  
-    function drawHeatHaze(ctx, temperature, width, height, time) {
-      let intensity = 0.0;
-      if (temperature >= HEAT_HAZE_START_TEMP) {
-          intensity = (temperature - HEAT_HAZE_START_TEMP) / (HEAT_HAZE_MAX_TEMP - HEAT_HAZE_START_TEMP);
-          intensity = Math.max(0.0, Math.min(HEAT_HAZE_MAX_INTENSITY, intensity));
-      }
-
-      if (intensity <= 0.01 || width <= 0 || height <= 0) {
-          return; // Exit if no haze needed or invalid dimensions
-      }
-
-      const stripHeight = Math.ceil(height * HEAT_HAZE_VERTICAL_EXTENT / HEAT_HAZE_NUM_STRIPS);
-      const startY = height * (1.0 - HEAT_HAZE_VERTICAL_EXTENT);
-
-      if (stripHeight <= 0) return; // Avoid infinite loops or errors
-
-      const originalAlpha = ctx.globalAlpha;
-
-      for (let i = 0; i < HEAT_HAZE_NUM_STRIPS; i++) {
-          const currentStripY = startY + i * stripHeight;
-          const stripTopY = Math.max(0, currentStripY);
-          const actualStripHeight = Math.min(stripHeight, height - stripTopY);
-
-          if (actualStripHeight <= 0) continue;
-
-          // Haze is strongest near the ground (higher startY), fades towards bottom edge
-          const verticalProgress = (currentStripY - startY) / (height * HEAT_HAZE_VERTICAL_EXTENT);
-          const falloffFactor = Math.max(0, Math.min(1.0, 1.0 - verticalProgress));
-
-          // Calculate distortion offset using layered sine waves based on strip position and time
-          const timeOffsetX = time * HEAT_HAZE_WAVE_SPEED_X;
-          const offsetX1 = Math.sin(stripTopY * HEAT_HAZE_WAVE_FREQ_X1 + timeOffsetX);
-          const offsetX2 = Math.sin(stripTopY * HEAT_HAZE_WAVE_FREQ_X2 - timeOffsetX * 0.7);
-          const totalOffsetX = (offsetX1 + offsetX2) * 0.5 * HEAT_HAZE_WAVE_AMP_X * intensity * falloffFactor;
-
-          const timeOffsetY = time * HEAT_HAZE_WAVE_SPEED_Y;
-          const offsetY1 = Math.sin(stripTopY * HEAT_HAZE_WAVE_FREQ_Y1 + timeOffsetY);
-          const offsetY2 = Math.sin(stripTopY * HEAT_HAZE_WAVE_FREQ_Y2 - timeOffsetY * 1.3);
-          const totalOffsetY = (offsetY1 + offsetY2) * 0.5 * HEAT_HAZE_WAVE_AMP_Y * intensity * falloffFactor;
-
-          // Apply subtle alpha based on intensity and vertical falloff
-          ctx.globalAlpha = HEAT_HAZE_STRIP_ALPHA * intensity * falloffFactor;
-
-          try {
-              // Draw the strip from the current canvas content back onto itself with offset
-              ctx.drawImage(
-                  ctx.canvas,         // Source: the canvas itself
-                  0, stripTopY, width, actualStripHeight, // Source Rect
-                  totalOffsetX, stripTopY + totalOffsetY, width, actualStripHeight // Destination Rect (with offset)
-              );
-          } catch (e) {
-              console.error("Error drawing heat haze strip:", e);
-              ctx.globalAlpha = originalAlpha; // Restore alpha before stopping
-              return;
-          }
-      }
-
-      // Restore original alpha
-      ctx.globalAlpha = originalAlpha;
-
-    } // --- End drawHeatHaze ---
 
     function drawDamageVignette(ctx, intensity, width, height) { // Added width, height params
         if (intensity <= 0) return; // No vignette if intensity is zero or negative
@@ -2135,149 +2087,95 @@ const Renderer = (() => {
     function drawGame(
       ctx, appState, stateToRender,
       localPlayerMuzzleFlash, localPlayerPushbackAnim,
-      activeBloodSparkEffects, activeEnemyBubbles // Ensure these are passed correctly from main.js
-    ) {
+      activeBloodSparkEffects, activeEnemyBubbles
+  ) {
       // --- Initial Checks & Setup ---
-      if (!ctx || !appState) {
-          console.error("drawGame missing context or appState!");
-          return;
-      }
-      const now = performance.now(); // Time for animations
+      if (!ctx || !appState) { console.error("drawGame missing context or appState!"); return; }
+      const now = performance.now();
       const width = appState.canvasWidth;
       const height = appState.canvasHeight;
-      if (width <= 0 || height <= 0 || !Number.isFinite(width) || !Number.isFinite(height)) {
-          console.error(`drawGame called with invalid dimensions: ${width}x${height}`);
-          return;
-      }
+      if (width <= 0 || height <= 0 || !Number.isFinite(width) || !Number.isFinite(height)) { console.error(`drawGame called with invalid dimensions: ${width}x${height}`); return; }
 
       ctx.clearRect(0, 0, width, height);
       ctx.globalAlpha = 1.0;
 
       // --- 1. Calculate Player Shake Offset ---
       let shakeOffsetX = 0, shakeOffsetY = 0;
-      if (typeof currentShakeMagnitude !== 'undefined' && typeof shakeEndTime !== 'undefined') { // Check globals exist
+      // Check globals exist before using them
+      if (typeof currentShakeMagnitude !== 'undefined' && typeof shakeEndTime !== 'undefined') {
           if (currentShakeMagnitude > 0 && now < shakeEndTime) {
               const timeRemaining = shakeEndTime - now;
-              // Ensure initialDuration is not zero to avoid division by zero
               const initialDuration = Math.max(1, shakeEndTime > now ? shakeEndTime - (now - timeRemaining) : 1);
               let currentMag = currentShakeMagnitude * (timeRemaining / initialDuration);
-              currentMag = Math.max(0, currentMag); // Ensure non-negative
-
-              if (currentMag > 0.5) { // Only apply shake if magnitude is noticeable
+              currentMag = Math.max(0, currentMag);
+              if (currentMag > 0.5) {
                   const shakeAngle = Math.random() * Math.PI * 2;
                   shakeOffsetX = Math.cos(shakeAngle) * currentMag;
                   shakeOffsetY = Math.sin(shakeAngle) * currentMag;
-              } else {
-                  currentShakeMagnitude = 0; // Stop shake if too small
-              }
-          } else if (currentShakeMagnitude > 0) {
-              currentShakeMagnitude = 0; // Reset if time expired
-          }
-      }
-      // --- End Shake Calculation ---
+              } else { currentShakeMagnitude = 0; }
+          } else if (currentShakeMagnitude > 0) { currentShakeMagnitude = 0; }
+      } // End shake calculation
 
       // --- 2. Draw Static Background ---
-      // Assumes offscreenCanvas, isBackgroundReady, isTransitioningBackground etc. are managed elsewhere
       if (typeof isBackgroundReady !== 'undefined' && isBackgroundReady) {
           if (typeof isTransitioningBackground !== 'undefined' && isTransitioningBackground) {
               const elapsed = now - (typeof transitionStartTime !== 'undefined' ? transitionStartTime : now);
               const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS);
               ctx.globalAlpha = 1.0;
-              // Ensure oldOffscreenCanvas exists before drawing
-              if (typeof oldOffscreenCanvas !== 'undefined') {
-                  ctx.drawImage(oldOffscreenCanvas, 0, 0, width, height);
-              }
+              if (typeof oldOffscreenCanvas !== 'undefined') { ctx.drawImage(oldOffscreenCanvas, 0, 0, width, height); }
               ctx.globalAlpha = progress;
-              // Ensure offscreenCanvas exists before drawing
-              if (typeof offscreenCanvas !== 'undefined') {
-                  ctx.drawImage(offscreenCanvas, 0, 0, width, height);
-              }
+              if (typeof offscreenCanvas !== 'undefined') { ctx.drawImage(offscreenCanvas, 0, 0, width, height); }
               ctx.globalAlpha = 1.0;
-              if (progress >= 1.0) { isTransitioningBackground = false; } // Update global state
+              if (progress >= 1.0) { isTransitioningBackground = false; }
           } else {
-              // Ensure offscreenCanvas exists before drawing
-              if (typeof offscreenCanvas !== 'undefined') {
-                  ctx.drawImage(offscreenCanvas, 0, 0, width, height);
-              }
+              if (typeof offscreenCanvas !== 'undefined') { ctx.drawImage(offscreenCanvas, 0, 0, width, height); }
           }
       } else {
-          // Fallback: Draw simple background if offscreen isn't ready
-          ctx.fillStyle = typeof dayBaseColor !== 'undefined' ? dayBaseColor : "#8FBC8F"; // Use defined constant or default
+          ctx.fillStyle = typeof dayBaseColor !== 'undefined' ? dayBaseColor : "#8FBC8F";
           ctx.fillRect(0, 0, width, height);
-      }
-      // --- End Background Drawing ---
+      } // End background drawing
 
-      // --- 3. Draw Heat Haze (After Background) ---
+      // --- 3. Draw Heat Haze (NEW LOGIC CALLED HERE) ---
       if (appState && typeof appState.currentTemp === 'number') {
-          // Call the new function directly
-          drawHeatHaze(ctx, appState.currentTemp, width, height, now);
-      }
-      // --- End Heat Haze ---
+          drawHeatHaze(ctx, appState.currentTemp, width, height, now); // Call the new function
+      } // End Heat Haze
 
       // --- 4. Draw Dynamic Game World Elements (Behind Main Characters) ---
       if (stateToRender) {
-          drawCampfire(ctx, stateToRender.campfire, width, height); // Assuming drawCampfire exists
-          // Ensure 'snake' global exists and has segments before drawing
-          if (typeof snake !== 'undefined' && snake.segments && snake.isActiveFromServer) {
-              drawSnake(ctx, snake); // Assuming drawSnake exists
-          }
-          drawPowerups(ctx, stateToRender.powerups); // Assuming drawPowerups exists
-      }
-      // --- End Background Elements ---
-
+          drawCampfire(ctx, stateToRender.campfire, width, height);
+          if (typeof snake !== 'undefined' && snake.segments && snake.isActiveFromServer) { drawSnake(ctx, snake); }
+          drawPowerups(ctx, stateToRender.powerups);
+      } // End Background Elements
 
       // --- 5. Draw Main Gameplay Elements (Over Heat Haze) ---
       if (stateToRender) {
-          drawBullets(ctx, stateToRender.bullets); // Assuming drawBullets exists
-          drawEnemies(ctx, stateToRender.enemies, activeBloodSparkEffects); // Assuming drawEnemies exists
+          drawBullets(ctx, stateToRender.bullets);
+          drawEnemies(ctx, stateToRender.enemies, activeBloodSparkEffects);
 
-          const speechBubbles = (typeof activeSpeechBubbles !== 'undefined') ? activeSpeechBubbles : {}; // Player chat
-          if (typeof activeEnemyBubbles !== 'undefined' && stateToRender.enemies) {
-              drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles); // Assuming drawEnemySpeechBubbles exists
-          }
+          const speechBubbles = (typeof activeSpeechBubbles !== 'undefined') ? activeSpeechBubbles : {};
+          if (typeof activeEnemyBubbles !== 'undefined' && stateToRender.enemies) { drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles); }
 
-          // Draw Players (applying shake offset to local player)
           if (appState && stateToRender.players) {
-              drawPlayers(
-                  ctx, stateToRender.players, appState,
-                  localPlayerMuzzleFlash, localPlayerPushbackAnim,
-                  shakeOffsetX, shakeOffsetY // Pass shake offset
-              );
-              // Draw player speech bubbles (applying shake offset if needed)
+              drawPlayers(ctx, stateToRender.players, appState, localPlayerMuzzleFlash, localPlayerPushbackAnim, shakeOffsetX, shakeOffsetY);
               drawSpeechBubbles(ctx, stateToRender.players, speechBubbles, appState, shakeOffsetX, shakeOffsetY);
           }
 
-          drawDamageTexts(ctx, stateToRender.damage_texts); // Assuming drawDamageTexts exists
+          drawDamageTexts(ctx, stateToRender.damage_texts);
 
-          // Muzzle Flash (drawn over player, applying shake offset)
           let shouldDrawMuzzleFlash = localPlayerMuzzleFlash?.active && now < localPlayerMuzzleFlash?.endTime;
           if (shouldDrawMuzzleFlash && typeof appState.renderedPlayerPos !== 'undefined') {
-              // Check renderedPlayerPos exists
-              drawMuzzleFlash(
-                  ctx,
-                  appState.renderedPlayerPos.x + shakeOffsetX,
-                  appState.renderedPlayerPos.y + shakeOffsetY,
-                  localPlayerMuzzleFlash.aimDx,
-                  localPlayerMuzzleFlash.aimDy
-              ); // Assuming drawMuzzleFlash exists
-          } else if (localPlayerMuzzleFlash?.active) {
-              localPlayerMuzzleFlash.active = false; // Reset if time expired
-          }
-      } else {
-          console.warn("drawGame called with no stateToRender, skipping entity drawing.");
-      }
-      // --- End Main Gameplay Elements ---
+              drawMuzzleFlash(ctx, appState.renderedPlayerPos.x + shakeOffsetX, appState.renderedPlayerPos.y + shakeOffsetY, localPlayerMuzzleFlash.aimDx, localPlayerMuzzleFlash.aimDy);
+          } else if (localPlayerMuzzleFlash?.active) { localPlayerMuzzleFlash.active = false; }
+      } else { console.warn("drawGame called with no stateToRender, skipping entity drawing."); } // End Main Gameplay Elements
 
 
       // --- 6. Draw Overlays (Rain/Dust, Tint, Vignette) ---
       ctx.globalAlpha = 1.0;
       if (appState?.isRaining) {
-          // Placeholder: Add your drawRain function call here
-          // drawRain(ctx, width, height, now);
-          const RAIN_SPEED_Y = 12; const RAIN_SPEED_X = 1; // Example constants
+          const RAIN_SPEED_Y = 12; const RAIN_SPEED_X = 1;
           ctx.strokeStyle = typeof RAIN_COLOR !== 'undefined' ? RAIN_COLOR : "rgba(170, 190, 230, 0.6)";
           ctx.lineWidth = 1.5; ctx.beginPath();
-          const dropCount = typeof RAIN_DROPS !== 'undefined' ? RAIN_DROPS : 150; // Use defined constant or default
+          const dropCount = typeof RAIN_DROPS !== 'undefined' ? RAIN_DROPS : 150;
           for (let i = 0; i < dropCount; i++) {
               const rainX = ((i * 137 + now * 0.05) % (width + 100)) - 50;
               const rainY = (i * 271 + now * 0.3) % height;
@@ -2287,78 +2185,63 @@ const Renderer = (() => {
           ctx.stroke();
       } else if (appState?.isDustStorm) {
           // --- TODO: Replace this with the NEW drawDustStorm function call ---
-          // For now, draws the old overlay as placeholder:
           ctx.fillStyle = "rgba(229, 169, 96, 0.2)"; ctx.fillRect(0, 0, width, height);
       }
 
-      if (appState) drawTemperatureTint(ctx, appState.currentTemp, width, height); // Assuming drawTemperatureTint exists
+      if (appState) drawTemperatureTint(ctx, appState.currentTemp, width, height);
 
-      // Damage Vignette
       const localPlayerState = stateToRender?.players?.[appState?.localPlayerId];
-      // Check localPlayerState and health exist and are numbers
       if (localPlayerState && typeof localPlayerState.health === 'number') {
           const healthThreshold = typeof DAMAGE_VIGNETTE_HEALTH_THRESHOLD !== 'undefined' ? DAMAGE_VIGNETTE_HEALTH_THRESHOLD : 30;
           if (localPlayerState.health < healthThreshold) {
-              const vi = 1.0 - Math.max(0, localPlayerState.health) / healthThreshold; // Ensure health >= 0
-              drawDamageVignette(ctx, vi, width, height); // Assuming drawDamageVignette exists
+              const vi = 1.0 - Math.max(0, localPlayerState.health) / healthThreshold;
+              drawDamageVignette(ctx, vi, width, height);
           }
-      }
-      // --- End Overlays ---
+      } // End Overlays
 
       // --- 7. Draw Particles (e.g., Ammo Casings - drawn over everything) ---
       if (typeof activeAmmoCasings !== 'undefined' && Array.isArray(activeAmmoCasings)) {
-          // Filter expired casings first
+          // Assuming activeAmmoCasings global exists and is managed elsewhere
           activeAmmoCasings = activeAmmoCasings.filter(casing => (now - casing.spawnTime) < casing.lifetime);
-
           if (activeAmmoCasings.length > 0) {
-              const deltaTime = appState.lastLoopTime ? Math.min(0.1, (now - appState.lastLoopTime) / 1000) : 1/60; // Estimate delta if needed
+              const deltaTime = appState.lastLoopTime ? Math.min(0.1, (now - appState.lastLoopTime) / 1000) : 1 / 60;
               ctx.save();
               activeAmmoCasings.forEach(casing => {
-                  // Update physics
                   casing.vy += casing.gravity * deltaTime;
                   casing.x += casing.vx * deltaTime;
                   casing.y += casing.vy * deltaTime;
                   casing.rotation += casing.rotationSpeed * deltaTime;
-
-                  // Calculate fade alpha
                   const lifeLeft = casing.lifetime - (now - casing.spawnTime);
-                  const fadeDuration = 200; // Consider making this a constant
+                  const fadeDuration = 200;
                   const alpha = (lifeLeft < fadeDuration) ? Math.max(0, lifeLeft / fadeDuration) * 0.9 : 0.9;
-
-                  // Draw rotated rectangle
-                  // Safely attempt to modify color alpha
                   let casingColor = casing.color || "rgba(218, 165, 32, 0.9)";
-                  if (casingColor.startsWith('rgba')) {
-                      casingColor = casingColor.replace(/[\d\.]+\)$/g, `${alpha.toFixed(2)})`);
-                  } // Add handling for other color formats if necessary
+                  if (casingColor.startsWith('rgba')) { casingColor = casingColor.replace(/[\d\.]+\)$/g, `${alpha.toFixed(2)})`); }
                   ctx.fillStyle = casingColor;
                   ctx.translate(casing.x, casing.y);
                   ctx.rotate(casing.rotation);
                   ctx.fillRect(-casing.width / 2, -casing.height / 2, casing.width, casing.height);
-                  // Reset transform for next casing
                   ctx.rotate(-casing.rotation);
                   ctx.translate(-casing.x, -casing.y);
               });
               ctx.restore();
           }
-      }
-      // --- End Particles ---
+      } // End Particles
 
-      // Final cleanup of context state if needed
       ctx.globalAlpha = 1.0;
 
-    } // --- End of function drawGame ---
-    // --- Exported Renderer Module ---
-    return {
-        drawGame,
-        triggerShake,
-        updateGeneratedBackground
-    };
+  } // --- End of function drawGame ---
+
+  // --- Exported Renderer Module ---
+  return {
+      drawGame,
+      triggerShake,
+      updateGeneratedBackground
+  };
 
 })(); // --- End of Renderer module IIFE ---
 
 // Final log
 console.log(
-    "--- Renderer.js: Executed. Renderer object defined?",
-    typeof Renderer
+  "--- Renderer.js: Executed. Renderer object defined?",
+  typeof Renderer
 );
