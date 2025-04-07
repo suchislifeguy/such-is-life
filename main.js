@@ -760,61 +760,110 @@ const Game = (() => {
         if (dist > snapThreshold) { predictedPos.x = serverPos.x; predictedPos.y = serverPos.y; renderedPos.x = serverPos.x; renderedPos.y = serverPos.y; }
         else { renderedPos.x = lerp(renderedPos.x, predictedPos.x, renderLerpFactor); renderedPos.y = lerp(renderedPos.y, predictedPos.y, renderLerpFactor); }
     }
+    // --- CORRECTED initListeners ---
+    // This function is now intended to be called ONCE during initialization
+    // to set up the event handlers for the buttons.
     function initListeners() {
         log("Initializing button listeners...");
 
-        DOM.singlePlayerBtn.onclick = () => {
-            SoundManager.init();
-            startSinglePlayer();
-        };
+        // --- Game Start/Join Buttons ---
+        // These handlers now call SoundManager.init() THEN the relevant game function
+
+        if (DOM.singlePlayerBtn) {
+            DOM.singlePlayerBtn.onclick = () => {
+                log("Single Player button clicked.");
+                SoundManager.init(); // Initialize sound system on user interaction
+                startSinglePlayer(); // Call the internal function to start the game
+            };
+        } else { error("DOM Element not found: singlePlayerBtn"); }
+
 
         const hostHandler = (maxPlayers) => {
-            SoundManager.init();
-            hostMultiplayer(maxPlayers);
+            log(`Host Game (${maxPlayers}p) button clicked.`);
+            SoundManager.init(); // Initialize sound system on user interaction
+            hostMultiplayer(maxPlayers); // Call the internal function to host
         };
-        DOM.hostGameBtn2.onclick = () => hostHandler(2);
-        DOM.hostGameBtn3.onclick = () => hostHandler(3);
-        DOM.hostGameBtn4.onclick = () => hostHandler(4);
+        if (DOM.hostGameBtn2) DOM.hostGameBtn2.onclick = () => hostHandler(2);
+        else { error("DOM Element not found: hostGameBtn2"); }
 
-        DOM.joinGameSubmitBtn.onclick = () => {
-            SoundManager.init();
-            joinMultiplayer();
-        };
+        if (DOM.hostGameBtn3) DOM.hostGameBtn3.onclick = () => hostHandler(3);
+        else { error("DOM Element not found: hostGameBtn3"); }
 
-        DOM.multiplayerBtn.onclick = () => UI.showSection('multiplayer-menu-section');
-        DOM.showJoinUIBtn.onclick = () => UI.showSection('join-code-section');
-        DOM.cancelHostBtn.onclick = leaveGame;
-        DOM.sendChatBtn.onclick = sendChatMessage;
-        DOM.leaveGameBtn.onclick = leaveGame;
-        DOM.gameOverBackBtn.onclick = () => resetClientState(true);
+        if (DOM.hostGameBtn4) DOM.hostGameBtn4.onclick = () => hostHandler(4);
+        else { error("DOM Element not found: hostGameBtn4"); }
 
+
+        if (DOM.joinGameSubmitBtn) {
+            DOM.joinGameSubmitBtn.onclick = () => {
+                log("Join Game Submit button clicked.");
+                SoundManager.init(); // Initialize sound system on user interaction
+                joinMultiplayer(); // Call the internal function to join
+            };
+        } else { error("DOM Element not found: joinGameSubmitBtn"); }
+
+
+        // --- Other UI/Game Action Buttons ---
+        // These typically don't need to initialize the sound system
+
+        if (DOM.multiplayerBtn) DOM.multiplayerBtn.onclick = () => UI.showSection('multiplayer-menu-section');
+        else { error("DOM Element not found: multiplayerBtn"); }
+
+        if (DOM.showJoinUIBtn) DOM.showJoinUIBtn.onclick = () => UI.showSection('join-code-section');
+        else { error("DOM Element not found: showJoinUIBtn"); }
+
+        if (DOM.cancelHostBtn) DOM.cancelHostBtn.onclick = leaveGame; // Directly assign if leaveGame is simple
+        else { error("DOM Element not found: cancelHostBtn"); }
+
+        if (DOM.sendChatBtn) DOM.sendChatBtn.onclick = sendChatMessage; // Directly assign
+        else { error("DOM Element not found: sendChatBtn"); }
+
+        if (DOM.leaveGameBtn) DOM.leaveGameBtn.onclick = leaveGame; // Directly assign
+        else { error("DOM Element not found: leaveGameBtn"); }
+
+        if (DOM.gameOverBackBtn) DOM.gameOverBackBtn.onclick = () => resetClientState(true); // Use arrow func for clarity or direct assign if simple
+        else { error("DOM Element not found: gameOverBackBtn"); }
+
+
+        // Back buttons
         DOM.gameContainer.querySelectorAll('.back-button').forEach(btn => {
-            const targetMatch = btn.getAttribute('onclick')?.match(/'([^']+)'/);
+            const targetMatch = btn.getAttribute('onclick')?.match(/'([^']+)'/); // Keep original logic for finding target
             if (targetMatch && targetMatch[1]) {
                 const targetId = targetMatch[1];
                 if (DOM[targetId] || document.getElementById(targetId)) {
-                    btn.onclick = (e) => { e.preventDefault(); UI.showSection(targetId); };
+                     // Re-assign using addEventListener or standard onclick
+                     btn.onclick = (e) => { e.preventDefault(); UI.showSection(targetId); };
                 } else {
                     log(`Warning: Back button target section invalid: ${targetId}`);
                 }
             } else {
-                log("Warning: Back button found without valid target in onclick:", btn);
+                // This handles buttons that might not have the expected onclick format
+                 log("Warning: Back button found without standard target in onclick:", btn);
+                 // Optionally add a default handler or leave it unassigned if it has other means of working
             }
         });
     }
-    // --- END CORRECTED initListeners ---
+    // --- END initListeners ---
 
+    // --- CORRECTED Return Statement ---
+    // Expose all functions needed externally, including those called by initListeners
     return {
+        // Functions called by click handlers in initListeners:
+        startSinglePlayer,
+        joinMultiplayer,
+        hostMultiplayer,
+        leaveGame,
+        sendChatMessage,
         resetClientState,
+
+        // Core game loop functions:
         startGameLoop,
         cleanupLoop,
-        sendChatMessage,
-        initListeners,
         getInterpolatedState,
-        // Expose leaveGame only if needed by cancelHostBtn/leaveGameBtn directly
-        // leaveGame
+
+        // Expose initListeners itself so it can be called from DOMContentLoaded
+        initListeners
     };
-})();
+})(); // End of Game IIFE
 
 // --- Global Server Message Handler ---
 
