@@ -279,8 +279,6 @@ const Renderer = (() => {
           offscreenCanvas.height = appState.canvasHeight;
           oldOffscreenCanvas.width = appState.canvasWidth;
           oldOffscreenCanvas.height = appState.canvasHeight;
-          hazeCanvas.width = appState.canvasWidth;
-          hazeCanvas.height = appState.canvasHeight;
           isBackgroundReady = false;
           currentBackgroundIsNight = null;
           isTransitioningBackground = false;
