@@ -1077,21 +1077,20 @@ const SoundManager = (() => {
     };
     let soundsLoading = 0;
     let soundsLoaded = 0;
-    let isInitialized = false;
-    let canPlaySound = false; // Tracks if AudioContext is ready and usable
+    let isInitialized = false; // Tracks if init() has been called at least once
+    let canPlaySound = false;  // Tracks if AudioContext is successfully running
 
-    // Function to attempt initialization (MUST be called from user interaction)
+    // Function to initialize the AudioContext.
+    // IMPORTANT: Must be called directly as a result of a user interaction (e.g., button click)
+    // due to browser autoplay policies.
     function init() {
         if (isInitialized) {
-            // console.log("[SoundManager] Init called again, status:", canPlaySound ? "Ready" : "Failed/Blocked");
-            return canPlaySound;
+            return canPlaySound; // Prevent re-initialization attempts
         }
-        isInitialized = true; // Mark that initialization has been attempted
-        console.log("[SoundManager] Attempting initialization..."); // # DEBUG LOG 1
+        isInitialized = true;
+        console.log("[SoundManager] Attempting initialization...");
 
-        // --- ACTUAL AUDIO ---
         try {
-            // Check for Web Audio API support
             const AudioContextClass = window.AudioContext || window.webkitAudioContext;
             if (!AudioContextClass) {
                 console.error("[SoundManager] Web Audio API not supported by this browser.");
@@ -1099,45 +1098,37 @@ const SoundManager = (() => {
                 return false;
             }
 
-            // Create the AudioContext
             audioContext = new AudioContextClass();
-            console.log("[SoundManager] AudioContext created. Initial state:", audioContext.state); // # DEBUG LOG 2
+            console.log("[SoundManager] AudioContext created. Initial state:", audioContext.state);
 
-            // Check context state - it might start suspended and need resuming
+            // Handle potential suspended state - requires user interaction to resume
             if (audioContext.state === 'suspended') {
-                console.log("[SoundManager] AudioContext is suspended. Attempting resume..."); // # DEBUG LOG 3
-                // NOTE: Resume MUST be tied to a user gesture. Calling it here might fail
-                // if init() wasn't *directly* called by the click event itself.
-                // A more robust solution might require a dedicated "Enable Sound" button
-                // or attempting resume within the playSound function if state is suspended.
+                console.log("[SoundManager] AudioContext is suspended. Waiting for user interaction (or resume call).");
+                // Attempt immediate resume - this might only work if init() IS the direct result of the click
                 audioContext.resume().then(() => {
-                    console.log("[SoundManager] AudioContext resumed successfully."); // # DEBUG LOG 4
+                    console.log("[SoundManager] AudioContext resumed successfully.");
                     canPlaySound = true;
-                    loadSounds(); // Start loading sounds now that context is ready
+                    loadSounds(); // Load sounds once context is ready
                 }).catch(err => {
-                    console.error("[SoundManager] Failed to resume AudioContext:", err); // # DEBUG LOG 5 (Error)
-                    canPlaySound = false; // Stay suspended
+                    // Log error but don't halt; sound might be enabled later manually if needed
+                    console.error("[SoundManager] Failed to auto-resume AudioContext (may need more direct user gesture):", err);
+                    canPlaySound = false;
                 });
             } else if (audioContext.state === 'running') {
-                console.log("[SoundManager] AudioContext is running."); // # DEBUG LOG 6
+                console.log("[SoundManager] AudioContext is running.");
                 canPlaySound = true;
-                loadSounds(); // Start loading sounds now that context is ready
+                loadSounds(); // Load sounds now
             } else {
-                 console.warn("[SoundManager] AudioContext in unexpected state:", audioContext.state); // # DEBUG LOG 7 (Warning)
-                 canPlaySound = false; // Assume not ready if state is unknown
+                 console.warn("[SoundManager] AudioContext in unexpected state:", audioContext.state);
+                 canPlaySound = false;
             }
-
         } catch (e) {
-            console.error("[SoundManager] Error creating AudioContext:", e); // # DEBUG LOG 8 (Error)
+            console.error("[SoundManager] Error creating AudioContext:", e);
             audioContext = null;
             canPlaySound = false;
             return false;
         }
-        // --- END ACTUAL AUDIO ---
-
-        // This log might run before the async resume() finishes
-        // console.log("[SoundManager] Initialization attempt finished sync part. Can play initially:", canPlaySound);
-        return canPlaySound; // Returns initial status, might become true later if resume() succeeds
+        return canPlaySound; // Return status after initial attempt
     }
 
     // Function to load all defined sounds
@@ -1146,111 +1137,87 @@ const SoundManager = (() => {
              console.error("[SoundManager] Cannot load sounds, AudioContext not available.");
              return;
         }
-        console.log("[SoundManager] Starting to load sounds..."); // # DEBUG LOG 9
+        console.log("[SoundManager] Starting to load sounds...");
         soundsLoading = Object.keys(soundFiles).length;
         soundsLoaded = 0;
-        loadedSounds = {}; // Clear any previous buffers
+        loadedSounds = {}; // Clear previous buffers
 
         Object.entries(soundFiles).forEach(([name, path]) => {
-            console.log(`[SoundManager] Fetching: ${name} from ${path}`); // # DEBUG LOG 10
-
-            // --- ACTUAL AUDIO ---
             fetch(path)
                 .then(response => {
                     if (!response.ok) {
-                        // Log specific HTTP error status
-                        console.error(`[SoundManager] HTTP error! status: ${response.status} for ${path}`); // # DEBUG LOG 11 (Error)
+                        console.error(`[SoundManager] HTTP error! status: ${response.status} fetching ${path}`);
                         throw new Error(`HTTP error! status: ${response.status} for ${path}`);
                     }
                     return response.arrayBuffer();
                 })
-                .then(arrayBuffer => {
-                    console.log(`[SoundManager] Received buffer for ${name}, decoding...`); // # DEBUG LOG 12
-                    return audioContext.decodeAudioData(arrayBuffer);
-                 })
+                .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
                 .then(decodedBuffer => {
-                    console.log(`[SoundManager] Decoded: ${name}`); // # DEBUG LOG 13
+                    console.log(`[SoundManager] Decoded: ${name}`);
                     loadedSounds[name] = decodedBuffer;
                     soundsLoaded++;
                     if (soundsLoaded === soundsLoading) {
-                         console.log("[SoundManager] All sounds loaded successfully."); // # DEBUG LOG 14
+                         console.log("[SoundManager] All sounds loaded successfully.");
                     }
                 })
                 .catch(error => {
-                    // Log specific loading/decoding error
-                    console.error(`[SoundManager] Error loading/decoding sound '${name}' from ${path}:`, error); // # DEBUG LOG 15 (Error)
-                    soundsLoaded++; // Still increment to prevent getting stuck if one fails
+                    console.error(`[SoundManager] Error loading/decoding sound '${name}' from ${path}:`, error);
+                    soundsLoaded++; // Still count as "processed" even if failed
                      if (soundsLoaded === soundsLoading) {
-                         console.log("[SoundManager] Sound loading finished (with errors)."); // # DEBUG LOG 16
+                         console.log("[SoundManager] Sound loading finished (with errors).");
                      }
                 });
-            // --- END ACTUAL AUDIO ---
         });
     }
 
     // Function to play a loaded sound by name
     function playSound(name, volume = 1.0) {
-        // Check if initialized and context is running
+        // Essential checks: Init called? Context running? Sound buffer ready?
         if (!isInitialized || !canPlaySound || !audioContext || audioContext.state !== 'running') {
-            // Add more detail to this warning
-            console.warn(`[SoundManager] Playback blocked for '${name}'. Init: ${isInitialized}, CanPlay: ${canPlaySound}, ContextState: ${audioContext?.state}`); // # DEBUG LOG 17 (Warning)
-            // Attempt to resume context again if suspended, might work if playSound is triggered by user action
-            if (audioContext && audioContext.state === 'suspended') {
-                console.log("[SoundManager] Attempting resume from playSound..."); // # DEBUG LOG 18
-                audioContext.resume().then(() => {
-                     console.log("[SoundManager] Resumed from playSound."); // # DEBUG LOG 19
-                     canPlaySound = true;
-                     // Maybe retry playing the sound now? Risky, could loop. Best to just enable for next time.
-                 }).catch(err => console.error("[SoundManager] Resume from playSound failed:", err)); // # DEBUG LOG 20 (Error)
-            }
+            // Log warning if sound cannot play due to system state
+             if (!isInitialized) console.warn(`[SoundManager] Cannot play '${name}': Not initialized.`);
+             else if (!canPlaySound || audioContext?.state !== 'running') console.warn(`[SoundManager] Cannot play '${name}': AudioContext not running (State: ${audioContext?.state}).`);
             return;
         }
 
         const buffer = loadedSounds[name];
         if (!buffer) {
-            console.warn(`[SoundManager] Sound buffer not ready: ${name}`); // # DEBUG LOG 21 (Warning)
-            return; // Don't play if buffer isn't ready
+            // Log warning if the specific sound buffer isn't ready
+            console.warn(`[SoundManager] Sound buffer not ready for: ${name}`);
+            return;
         }
 
-        console.log(`[SoundManager] Playing: '${name}'`); // # DEBUG LOG 22
-
-        // --- ACTUAL AUDIO ---
+        // Proceed with playback
         try {
-            // Create a source node (plays the buffer)
             const source = audioContext.createBufferSource();
             source.buffer = buffer;
 
-            // Create a gain node (controls volume)
             const gainNode = audioContext.createGain();
-            // Clamp volume between 0 and 1 (or higher if you want amplification)
-            const clampedVolume = Math.max(0, Math.min(1, volume));
+            const clampedVolume = Math.max(0, Math.min(1, volume)); // Ensure volume is 0-1
             gainNode.gain.setValueAtTime(clampedVolume, audioContext.currentTime);
 
-            // Connect nodes: Source -> Gain -> Output Destination
             source.connect(gainNode).connect(audioContext.destination);
+            source.start(0); // Play immediately
 
-            // Play the sound now
-            source.start(0);
-
-            // Optional: Clean up the source node after it finishes playing
+            // Disconnect nodes after playback finishes to free resources
             source.onended = () => {
-                source.disconnect();
-                gainNode.disconnect();
+                try {
+                    source.disconnect();
+                    gainNode.disconnect();
+                } catch (e) { /* Ignore errors during cleanup */ }
             };
 
         } catch (e) {
-            console.error(`[SoundManager] Error playing sound '${name}':`, e); // # DEBUG LOG 23 (Error)
+            console.error(`[SoundManager] Error playing sound '${name}':`, e);
         }
-        // --- END ACTUAL AUDIO ---
     }
 
     return {
-        init,       // Expose the init function
-        playSound   // Expose the play function
+        init,
+        playSound
     };
 })();
 // --- End Sound Manager ---
-// --- End Sound Manager --
 
 // Initialize after the DOM is fully loaded
 document.addEventListener('DOMContentLoaded', () => {
@@ -1276,12 +1243,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     UI.updateStatus("Initializing Connection...");
     try {
+        // This is where the button listeners (which call SoundManager.init) are attached
         Game.initListeners();
-        Network.connect(() => { /* Connection success handled within Network.connect */ });
+        // Connect to the WebSocket server
+        Network.connect(() => { /* Optional callback on successful connection */ });
     } catch (initError) {
         error("Initialization failed:", initError);
         UI.updateStatus("Error initializing game. Please refresh.", true);
     }
 });
 
-// --- End main.js ---
+// --- End main.js code block to include ---
