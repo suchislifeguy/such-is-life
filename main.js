@@ -847,6 +847,7 @@ function handleServerMessage(event) {
                 }
                 // --- End Shake Trigger ---
 
+                let localPlayerDamagedThisTick = false;
 
                  // Trigger screen shake if local player took damage
                 if (previousPlayerState && currentPlayerState &&
@@ -861,6 +862,13 @@ function handleServerMessage(event) {
                          Renderer.triggerShake(shakeMagnitude, 250); // Trigger shake effect
                     }
                 }
+                
+
+
+                 // Play damage sound if damage occurred this tick
+                 if (localPlayerDamagedThisTick) {
+                    SoundManager.playSound('damage'); // 
+                }
 
                  // Trigger hit pause if local player was hit this tick
                  // Check currentPlayerState exists before accessing properties
@@ -868,10 +876,6 @@ function handleServerMessage(event) {
                      hitPauseFrames = 3; // Pause rendering for 3 frames
                  }
 
-                 // Play damage sound if damage occurred this tick
-                if (localPlayerDamagedThisTick) {
-                    SoundManager.playSound('damage'); // 
-                }
 
                 // --- V3: Update Blood Spark Effects ---
                 if (newState.enemies) {
@@ -1015,9 +1019,6 @@ function handleServerMessage(event) {
         UI.updateStatus("Client error processing message.", true);
     }
 } // End handleServerMessage
-
-// --- Global Initialization ---
-function showSection(sectionId) { UI.showSection(sectionId); }
 
 // --- Sound Manager ---
 const SoundManager = (() => {
