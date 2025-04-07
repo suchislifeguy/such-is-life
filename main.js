@@ -84,6 +84,159 @@ let socket = null;
 let activeAmmoCasings = [];
 let activeBloodSparkEffects = {}; // Stores { enemyId: effectEndTime }
 
+// --- Sound Manager ---
+const SoundManager = (() => {
+    let audioContext = null;
+    let loadedSounds = {}; // Holds the decoded AudioBuffers
+    let soundFiles = {      // Map sound names to their file paths
+        'shoot': 'assets/sounds/shoot.mp3',
+        'damage': 'assets/sounds/damage.mp3'
+        // Add more sounds here later
+    };
+    let soundsLoading = 0;
+    let soundsLoaded = 0;
+    let isInitialized = false; // Tracks if init() has been called at least once
+    let canPlaySound = false;  // Tracks if AudioContext is successfully running
+
+    // Function to initialize the AudioContext.
+    // IMPORTANT: Must be called directly as a result of a user interaction (e.g., button click)
+    // due to browser autoplay policies.
+    function init() {
+        if (isInitialized) {
+            return canPlaySound; // Prevent re-initialization attempts
+        }
+        isInitialized = true;
+        console.log("[SoundManager] Attempting initialization...");
+
+        try {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) {
+                console.error("[SoundManager] Web Audio API not supported by this browser.");
+                canPlaySound = false;
+                return false;
+            }
+
+            audioContext = new AudioContextClass();
+            console.log("[SoundManager] AudioContext created. Initial state:", audioContext.state);
+
+            // Handle potential suspended state - requires user interaction to resume
+            if (audioContext.state === 'suspended') {
+                console.log("[SoundManager] AudioContext is suspended. Waiting for user interaction (or resume call).");
+                // Attempt immediate resume - this might only work if init() IS the direct result of the click
+                audioContext.resume().then(() => {
+                    console.log("[SoundManager] AudioContext resumed successfully.");
+                    canPlaySound = true;
+                    loadSounds(); // Load sounds once context is ready
+                }).catch(err => {
+                    // Log error but don't halt; sound might be enabled later manually if needed
+                    console.error("[SoundManager] Failed to auto-resume AudioContext (may need more direct user gesture):", err);
+                    canPlaySound = false;
+                });
+            } else if (audioContext.state === 'running') {
+                console.log("[SoundManager] AudioContext is running.");
+                canPlaySound = true;
+                loadSounds(); // Load sounds now
+            } else {
+                 console.warn("[SoundManager] AudioContext in unexpected state:", audioContext.state);
+                 canPlaySound = false;
+            }
+        } catch (e) {
+            console.error("[SoundManager] Error creating AudioContext:", e);
+            audioContext = null;
+            canPlaySound = false;
+            return false;
+        }
+        return canPlaySound; // Return status after initial attempt
+    }
+
+    // Function to load all defined sounds
+    function loadSounds() {
+        if (!audioContext) {
+             console.error("[SoundManager] Cannot load sounds, AudioContext not available.");
+             return;
+        }
+        console.log("[SoundManager] Starting to load sounds...");
+        soundsLoading = Object.keys(soundFiles).length;
+        soundsLoaded = 0;
+        loadedSounds = {}; // Clear previous buffers
+
+        Object.entries(soundFiles).forEach(([name, path]) => {
+            fetch(path)
+                .then(response => {
+                    if (!response.ok) {
+                        console.error(`[SoundManager] HTTP error! status: ${response.status} fetching ${path}`);
+                        throw new Error(`HTTP error! status: ${response.status} for ${path}`);
+                    }
+                    return response.arrayBuffer();
+                })
+                .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
+                .then(decodedBuffer => {
+                    console.log(`[SoundManager] Decoded: ${name}`);
+                    loadedSounds[name] = decodedBuffer;
+                    soundsLoaded++;
+                    if (soundsLoaded === soundsLoading) {
+                         console.log("[SoundManager] All sounds loaded successfully.");
+                    }
+                })
+                .catch(error => {
+                    console.error(`[SoundManager] Error loading/decoding sound '${name}' from ${path}:`, error);
+                    soundsLoaded++; // Still count as "processed" even if failed
+                     if (soundsLoaded === soundsLoading) {
+                         console.log("[SoundManager] Sound loading finished (with errors).");
+                     }
+                });
+        });
+    }
+
+    // Function to play a loaded sound by name
+    function playSound(name, volume = 1.0) {
+        // Essential checks: Init called? Context running? Sound buffer ready?
+        if (!isInitialized || !canPlaySound || !audioContext || audioContext.state !== 'running') {
+            // Log warning if sound cannot play due to system state
+             if (!isInitialized) console.warn(`[SoundManager] Cannot play '${name}': Not initialized.`);
+             else if (!canPlaySound || audioContext?.state !== 'running') console.warn(`[SoundManager] Cannot play '${name}': AudioContext not running (State: ${audioContext?.state}).`);
+            return;
+        }
+
+        const buffer = loadedSounds[name];
+        if (!buffer) {
+            // Log warning if the specific sound buffer isn't ready
+            console.warn(`[SoundManager] Sound buffer not ready for: ${name}`);
+            return;
+        }
+
+        // Proceed with playback
+        try {
+            const source = audioContext.createBufferSource();
+            source.buffer = buffer;
+
+            const gainNode = audioContext.createGain();
+            const clampedVolume = Math.max(0, Math.min(1, volume)); // Ensure volume is 0-1
+            gainNode.gain.setValueAtTime(clampedVolume, audioContext.currentTime);
+
+            source.connect(gainNode).connect(audioContext.destination);
+            source.start(0); // Play immediately
+
+            // Disconnect nodes after playback finishes to free resources
+            source.onended = () => {
+                try {
+                    source.disconnect();
+                    gainNode.disconnect();
+                } catch (e) { /* Ignore errors during cleanup */ }
+            };
+
+        } catch (e) {
+            console.error(`[SoundManager] Error playing sound '${name}':`, e);
+        }
+    }
+
+    return {
+        init,
+        playSound
+    };
+})();
+// --- End Sound Manager ---
+
 // --- Snake Effect State ---
 let snake = {
     segmentLength: 6.0, segments: [], maxSegments: 12, frequency: 0.03, amplitude: 15.0,
@@ -1065,159 +1218,6 @@ function handleServerMessage(event) {
         UI.updateStatus("Client error processing message.", true);
     }
 } // End handleServerMessage
-
-// --- Sound Manager ---
-const SoundManager = (() => {
-    let audioContext = null;
-    let loadedSounds = {}; // Holds the decoded AudioBuffers
-    let soundFiles = {      // Map sound names to their file paths
-        'shoot': 'assets/sounds/shoot.mp3',
-        'damage': 'assets/sounds/damage.mp3'
-        // Add more sounds here later
-    };
-    let soundsLoading = 0;
-    let soundsLoaded = 0;
-    let isInitialized = false; // Tracks if init() has been called at least once
-    let canPlaySound = false;  // Tracks if AudioContext is successfully running
-
-    // Function to initialize the AudioContext.
-    // IMPORTANT: Must be called directly as a result of a user interaction (e.g., button click)
-    // due to browser autoplay policies.
-    function init() {
-        if (isInitialized) {
-            return canPlaySound; // Prevent re-initialization attempts
-        }
-        isInitialized = true;
-        console.log("[SoundManager] Attempting initialization...");
-
-        try {
-            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-            if (!AudioContextClass) {
-                console.error("[SoundManager] Web Audio API not supported by this browser.");
-                canPlaySound = false;
-                return false;
-            }
-
-            audioContext = new AudioContextClass();
-            console.log("[SoundManager] AudioContext created. Initial state:", audioContext.state);
-
-            // Handle potential suspended state - requires user interaction to resume
-            if (audioContext.state === 'suspended') {
-                console.log("[SoundManager] AudioContext is suspended. Waiting for user interaction (or resume call).");
-                // Attempt immediate resume - this might only work if init() IS the direct result of the click
-                audioContext.resume().then(() => {
-                    console.log("[SoundManager] AudioContext resumed successfully.");
-                    canPlaySound = true;
-                    loadSounds(); // Load sounds once context is ready
-                }).catch(err => {
-                    // Log error but don't halt; sound might be enabled later manually if needed
-                    console.error("[SoundManager] Failed to auto-resume AudioContext (may need more direct user gesture):", err);
-                    canPlaySound = false;
-                });
-            } else if (audioContext.state === 'running') {
-                console.log("[SoundManager] AudioContext is running.");
-                canPlaySound = true;
-                loadSounds(); // Load sounds now
-            } else {
-                 console.warn("[SoundManager] AudioContext in unexpected state:", audioContext.state);
-                 canPlaySound = false;
-            }
-        } catch (e) {
-            console.error("[SoundManager] Error creating AudioContext:", e);
-            audioContext = null;
-            canPlaySound = false;
-            return false;
-        }
-        return canPlaySound; // Return status after initial attempt
-    }
-
-    // Function to load all defined sounds
-    function loadSounds() {
-        if (!audioContext) {
-             console.error("[SoundManager] Cannot load sounds, AudioContext not available.");
-             return;
-        }
-        console.log("[SoundManager] Starting to load sounds...");
-        soundsLoading = Object.keys(soundFiles).length;
-        soundsLoaded = 0;
-        loadedSounds = {}; // Clear previous buffers
-
-        Object.entries(soundFiles).forEach(([name, path]) => {
-            fetch(path)
-                .then(response => {
-                    if (!response.ok) {
-                        console.error(`[SoundManager] HTTP error! status: ${response.status} fetching ${path}`);
-                        throw new Error(`HTTP error! status: ${response.status} for ${path}`);
-                    }
-                    return response.arrayBuffer();
-                })
-                .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
-                .then(decodedBuffer => {
-                    console.log(`[SoundManager] Decoded: ${name}`);
-                    loadedSounds[name] = decodedBuffer;
-                    soundsLoaded++;
-                    if (soundsLoaded === soundsLoading) {
-                         console.log("[SoundManager] All sounds loaded successfully.");
-                    }
-                })
-                .catch(error => {
-                    console.error(`[SoundManager] Error loading/decoding sound '${name}' from ${path}:`, error);
-                    soundsLoaded++; // Still count as "processed" even if failed
-                     if (soundsLoaded === soundsLoading) {
-                         console.log("[SoundManager] Sound loading finished (with errors).");
-                     }
-                });
-        });
-    }
-
-    // Function to play a loaded sound by name
-    function playSound(name, volume = 1.0) {
-        // Essential checks: Init called? Context running? Sound buffer ready?
-        if (!isInitialized || !canPlaySound || !audioContext || audioContext.state !== 'running') {
-            // Log warning if sound cannot play due to system state
-             if (!isInitialized) console.warn(`[SoundManager] Cannot play '${name}': Not initialized.`);
-             else if (!canPlaySound || audioContext?.state !== 'running') console.warn(`[SoundManager] Cannot play '${name}': AudioContext not running (State: ${audioContext?.state}).`);
-            return;
-        }
-
-        const buffer = loadedSounds[name];
-        if (!buffer) {
-            // Log warning if the specific sound buffer isn't ready
-            console.warn(`[SoundManager] Sound buffer not ready for: ${name}`);
-            return;
-        }
-
-        // Proceed with playback
-        try {
-            const source = audioContext.createBufferSource();
-            source.buffer = buffer;
-
-            const gainNode = audioContext.createGain();
-            const clampedVolume = Math.max(0, Math.min(1, volume)); // Ensure volume is 0-1
-            gainNode.gain.setValueAtTime(clampedVolume, audioContext.currentTime);
-
-            source.connect(gainNode).connect(audioContext.destination);
-            source.start(0); // Play immediately
-
-            // Disconnect nodes after playback finishes to free resources
-            source.onended = () => {
-                try {
-                    source.disconnect();
-                    gainNode.disconnect();
-                } catch (e) { /* Ignore errors during cleanup */ }
-            };
-
-        } catch (e) {
-            console.error(`[SoundManager] Error playing sound '${name}':`, e);
-        }
-    }
-
-    return {
-        init,
-        playSound
-    };
-})();
-// --- End Sound Manager ---
 
 document.addEventListener('DOMContentLoaded', () => {
     log("DOM fully loaded and parsed."); // #LOG A
