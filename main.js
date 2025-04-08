@@ -1095,28 +1095,38 @@ function handleServerMessage(event) {
                 }
                 // --- End Shake Trigger ---
 
-                let localPlayerDamagedThisTick = false;
+                let localPlayerDamagedThisTick = false; // Initialize flag
 
-                 // Trigger screen shake if local player took damage
+                 // Trigger screen shake AND set flag ONLY if local player took damage THIS tick
                 if (previousPlayerState && currentPlayerState &&
                     typeof currentPlayerState.health === 'number' &&
                     typeof previousPlayerState.health === 'number' &&
                     currentPlayerState.health < previousPlayerState.health)
                 {
+                    // --- Actions INSIDE the damage detection block ---
                     const damageTaken = previousPlayerState.health - currentPlayerState.health;
                     const baseMag = 5; const dmgScale = 0.18; const maxMag = 18; // Shake params
                     const shakeMagnitude = Math.min(maxMag, baseMag + damageTaken * dmgScale);
                      if(typeof Renderer !== 'undefined') {
                          Renderer.triggerShake(shakeMagnitude, 250); // Trigger shake effect
                     }
+
+                    // *** MOVE THIS LINE INSIDE ***
+                    localPlayerDamagedThisTick = true; // Set the flag ONLY when damage is detected
+                    // *****************************
+
+                    console.log('[Main DEBUG] Health decreased, setting damage flag.'); // Optional log
                 }
-                
+                // --- End of damage detection block ---
 
 
-                 // Play damage sound if damage occurred this tick
+                 // Play damage sound if flag was set THIS tick
                  if (localPlayerDamagedThisTick) {
-                    SoundManager.playSound('damage'); // 
+                    console.log('[Main DEBUG] Damage flag is true, attempting to play damage sound.'); // Optional log
+                    SoundManager.playSound('damage');
                 }
+
+                // ... (rest of the game_state case)
 
                  // Trigger hit pause if local player was hit this tick
                  // Check currentPlayerState exists before accessing properties
