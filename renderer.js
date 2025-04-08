@@ -746,42 +746,55 @@ const Renderer = (() => {
     ctx.stroke();
   }
 
-  function drawHealthBar(ctx, x, y, width, currentHealth, maxHealth) {
-    if (maxHealth <= 0) return;
-    const bh = 10,
-      yo = -(width / 2 + 27),
-      bw = Math.max(30, width * 0.8);
-    const cw = Math.max(0, (currentHealth / maxHealth) * bw),
-      hp = currentHealth / maxHealth,
-      bx = x - bw / 2,
-      by = y + yo;
-    ctx.fillStyle = healthBarBg;
-    ctx.fillRect(bx, by, bw, bh);
-    let bc = healthBarLow;
-    if (hp > 0.66) bc = healthBarHigh;
-    else if (hp > 0.33) bc = healthBarMedium;
-    ctx.fillStyle = bc;
-    ctx.fillRect(bx, by, cw, bh);
-  }
+    function drawHealthBar(ctx, x, y, w, h, currentHealth, maxHealth) { // Added 'h' parameter
+        if (maxHealth <= 0) return;
 
-  function drawArmorBar(ctx, x, y, width, currentArmor) {
-    const ma = 100;
-    if (currentArmor <= 0) return;
-    const abh = 4,
-      hbh = 5,
-      bs = 1,
-      hbyo = -(width / 2 + 27);
-    const hbty = y + hbyo,
-      abty = hbty + hbh + bs,
-      bw = Math.max(20, width * 0.8),
-      cw = Math.max(0, (currentArmor / ma) * bw),
-      bx = x - bw / 2,
-      by = abty;
-    ctx.fillStyle = healthBarBg;
-    ctx.fillRect(bx, by, bw, abh);
-    ctx.fillStyle = armorBarColor;
-    ctx.fillRect(bx, by, cw, abh);
-  }
+        const bh = 7; // Reduced height (see next point)
+        // *** Calculate offset based on height 'h' instead of width 'w' ***
+        const yo = -(h / 2 + 15); // Offset above center based on height + padding
+        // *****************************************************************
+        const bw = Math.max(30, w * 0.8); // Bar width still based on entity width 'w'
+        const cw = Math.max(0, (currentHealth / maxHealth) * bw);
+        const hp = currentHealth / maxHealth;
+        const bx = x - bw / 2;
+        const by = y + yo; // Apply the vertical offset
+
+        ctx.fillStyle = healthBarBg;
+        ctx.fillRect(bx, by, bw, bh);
+
+        let bc = healthBarLow;
+        if (hp > 0.66) bc = healthBarHigh;
+        else if (hp > 0.33) bc = healthBarMedium;
+
+        ctx.fillStyle = bc;
+        ctx.fillRect(bx, by, cw, bh);
+    }
+
+    // --- MODIFY drawArmorBar (to align with new health bar height/pos) ---
+    function drawArmorBar(ctx, x, y, w, h, currentArmor) { // Added 'h' parameter
+        const ma = 100;
+        if (currentArmor <= 0) return;
+
+        const bh = 7; // Health bar height (MUST match drawHealthBar)
+        const abh = 4; // Armor bar height
+        const barSpacing = 2; // Space between health and armor bar
+
+        // Calculate vertical offset (same as health bar)
+        const yo = -(h / 2 + 15);
+        const healthBarTopY = y + yo;
+
+        // Position armor bar below health bar
+        const armorBarTopY = healthBarTopY + bh + barSpacing;
+
+        const bw = Math.max(20, w * 0.8); // Bar width based on entity width 'w'
+        const cw = Math.max(0, (currentArmor / ma) * bw);
+        const bx = x - bw / 2; // Center the bar horizontally
+
+        ctx.fillStyle = healthBarBg;
+        ctx.fillRect(bx, armorBarTopY, bw, abh); // Use calculated Y
+        ctx.fillStyle = armorBarColor;
+        ctx.fillRect(bx, armorBarTopY, cw, abh); // Use calculated Y
+    }
 
 // --- REVISED: drawEnemyRect (Handles Giant/Standard, Hit Sparks, Raised Elements) ---
 /**
@@ -1364,11 +1377,19 @@ function drawEnemyRect(
 
         ctx.restore();
 
+        ctx.restore();
+
+        // *** THIS IS WHERE 'h' IS USED ***
         if (ps === 'alive') {
-            drawHealthBar(ctx, drawX, drawY, w, p.health, mh);
-            if (ca > 0) drawArmorBar(ctx, drawX, drawY, w, ca);
+            // Pass 'h' to drawHealthBar
+            drawHealthBar(ctx, drawX, drawY, w, h, p.health, mh); // Using h
+            if (ca > 0) {
+                // Pass 'h' to drawArmorBar
+                drawArmorBar(ctx, drawX, drawY, w, h, ca);       // Using h
+            }
         }
-    });
+    }); // End of forEach loop
+
 }
   function drawEnemies(
     ctx,
@@ -1412,8 +1433,9 @@ function drawEnemyRect(
         ctx.restore();
       }
       if (!id && e.health > 0 && sd) {
-        drawHealthBar(ctx, e.x, e.y, w, e.health, mh);
-      }
+        // Pass 'h' to drawHealthBar
+        drawHealthBar(ctx, e.x, e.y, w, h, e.health, mh);
+    }
     });
   }
 
