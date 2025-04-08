@@ -748,9 +748,9 @@ const Renderer = (() => {
 
   function drawHealthBar(ctx, x, y, width, currentHealth, maxHealth) {
     if (maxHealth <= 0) return;
-    const bh = 5,
+    const bh = 10,
       yo = -(width / 2 + 27),
-      bw = Math.max(20, width * 0.8);
+      bw = Math.max(30, width * 0.8);
     const cw = Math.max(0, (currentHealth / maxHealth) * bw),
       hp = currentHealth / maxHealth,
       bx = x - bw / 2,
@@ -945,15 +945,6 @@ function drawEnemyRect(
     // Right Eyebrow
     ctx.moveTo(x + giantBrowXOffset - giantBrowLength / 2, giantBrowY + browAngleOffset); // Inner end lower
     ctx.lineTo(x + giantBrowXOffset + giantBrowLength / 2, giantBrowY - browAngleOffset); // Outer end higher
-    ctx.stroke();
-
-    // Mouth (Downturned line)
-    const mouthWidth = headRadius * 0.6;
-    const mouthY = headCenterY + headRadius * 0.45; // Position below center
-    const mouthCornerDrop = headRadius * 0.15;
-    ctx.beginPath();
-    ctx.moveTo(x - mouthWidth / 2, mouthY + mouthCornerDrop);
-    ctx.lineTo(x + mouthWidth / 2, mouthY + mouthCornerDrop);
     ctx.stroke();
 
     // Shako Hat (Revised: Lowered)
@@ -1387,7 +1378,7 @@ function drawEnemyRect(
     if (!enemies) return;
     const now = performance.now() / 1000; // Server time for fade check
     const clientNow = performance.now(); // Client time for effects
-    const fd = 0.3; // Fade duration
+    const fd = 0.5; // Fade duration
 
     Object.values(enemies).forEach((e) => {
       if (!e) return;
