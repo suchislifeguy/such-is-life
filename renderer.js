@@ -1,2019 +1,2721 @@
 // renderer.js
 
 const Renderer = (() => {
-  console.log("--- Renderer.js: Initializing ---");
+    console.log("--- Renderer.js: Initializing ---");
 
-  let mainCtx = null;
+    let mainCtx = null;
+    let canvasWidth = 1600;
+    let canvasHeight = 900;
 
-  const offscreenCanvas = document.createElement("canvas");
-  const offscreenCtx = offscreenCanvas.getContext("2d", { alpha: false });
-  let isBackgroundReady = false;
-  let currentBackgroundIsNight = null;
-  let isTransitioningBackground = false;
-  let transitionStartTime = 0;
-  const BACKGROUND_FADE_DURATION_MS = 1000;
-  const oldOffscreenCanvas = document.createElement("canvas");
-  const oldOffscreenCtx = oldOffscreenCanvas.getContext("2d", { alpha: false });
+    const offscreenCanvas = document.createElement("canvas");
+    const offscreenCtx = offscreenCanvas.getContext("2d", { alpha: false });
+    let isBackgroundReady = false;
+    let currentBackgroundIsNight = null;
+    let isTransitioningBackground = false;
+    let transitionStartTime = 0;
+    const BACKGROUND_FADE_DURATION_MS = 1000;
+    const oldOffscreenCanvas = document.createElement("canvas");
+    const oldOffscreenCtx = oldOffscreenCanvas.getContext("2d", { alpha: false });
 
-  // --- Constants ---
-  const playerColor = "#DC143C";
-  const dayBaseColor = "#8FBC8F";
-  const nightBaseColor = "#3E2723";
-  const fontFamily = "'Courier New', monospace";
-  const damageTextColor = "#FFFFFF";
-  const damageTextCritColor = "#FFD700";
-  const damageTextFontSize = 14;
-  const damageTextCritFontSize = 18;
-  const otherPlayerColor = "#4682B4";
-  const dustyPlayerSelfColor = "#8B4513";
-  const dustyPlayerOtherColor = "#556B2F";
-  const enemyUniformBlue = "#18315f";
-  const enemyGiantRed = "#a00000";
-  const enemySkinColor = "#D2B48C";
-  const enemyCoatColor = "#8B4513";
-  const enemyBootColor = "#222222";
-  const enemyCapColor = "#111111";
-  const bulletPlayerColor = "#ffed4a";
-  const bulletEnemyColor = "#ff0000";
-  const healthBarBg = "#444";
-  const healthBarHigh = "#66bb6a";
-  const healthBarMedium = "#FFD700";
-  const healthBarLow = playerColor;
-  const armorBarColor = "#9e9e9e";
-  const powerupHealthColor = "#81c784";
-  const powerupGunColor = "#442848";
-  const powerupSpeedColor = "#3edef3";
-  const powerupArmorColor = armorBarColor;
-  const powerupShotgunColor = "#FFA500";
-  const powerupSlugColor = "#A0522D";
-  const powerupRapidColor = "#FFFF00";
-  const powerupScoreColor = healthBarMedium;
-  const powerupDefaultColor = "#888";
-  const playerSpeechBubbleColor = "#d0d8d7";
-  const playerSpeechBubbleBg = "rgba(0, 0, 0, 0.7)";
-  const enemySpeechBubbleColor = "#FFAAAA";
-  const enemySpeechBubbleBg = "rgba(70, 0, 0, 0.7)";
-  const campfireStickColor = "#8B4513";
-  const snakeLineColor = "#261a0d";
-  const ironHelmetColor = "#3d3d3d";
-  const ironHelmetHighlight = "#666666";
-  const ironHelmetShadow = "#1a1a1a";
-  const beltColor = "#412a19";
-  const bootColor = "#241c1c";
-  const backgroundShadowColor = "rgba(0,0,0,0.3)";
-  const simpleChestPlateColor = "#777777";
-  const chestPlateHighlight = "#999999";
-  const slitColor = "#000000";
-  const ironArmorColor = "#4a4a4a"; 
-  const ironArmorHighlight = "#777777";
-  const ironArmorShadow = "#2a2a2a";
-  const darkClothingColor = "#3a2d27"; 
+    // --- Constants ---
+    const playerColor = "#DC143C";
+    const dayBaseColor = "#8FBC8F";
+    const nightBaseColor = "#3E2723";
+    const fontFamily = "'Courier New', monospace";
+    const damageTextColor = "#FFFFFF";
+    const damageTextCritColor = "#FFD700";
+    const damageTextFontSize = 14;
+    const damageTextCritFontSize = 18;
+    const otherPlayerColor = "#4682B4";
+    const dustyPlayerSelfColor = "#8B4513";
+    const dustyPlayerOtherColor = "#556B2F";
+    const enemyUniformBlue = "#18315f";
+    const enemyGiantRed = "#a00000";
+    const enemySkinColor = "#D2B48C";
+    const enemyCoatColor = "#8B4513";
+    const enemyBootColor = "#222222";
+    const enemyCapColor = "#111111";
+    const bulletPlayerColor = "#ffed4a";
+    const bulletEnemyColor = "#ff0000";
+    const healthBarBg = "#444";
+    const healthBarHigh = "#66bb6a";
+    const healthBarMedium = "#FFD700";
+    const healthBarLow = playerColor;
+    const armorBarColor = "#9e9e9e";
+    const powerupHealthColor = "#81c784";
+    const powerupGunColor = "#442848";
+    const powerupSpeedColor = "#3edef3";
+    const powerupArmorColor = armorBarColor;
+    const powerupShotgunColor = "#FFA500";
+    const powerupSlugColor = "#A0522D";
+    const powerupRapidColor = "#FFFF00";
+    const powerupScoreColor = healthBarMedium;
+    const powerupDefaultColor = "#888";
+    const playerSpeechBubbleColor = "#d0d8d7";
+    const playerSpeechBubbleBg = "rgba(0, 0, 0, 0.7)";
+    const enemySpeechBubbleColor = "#FFAAAA";
+    const enemySpeechBubbleBg = "rgba(70, 0, 0, 0.7)";
+    const campfireStickColor = "#8B4513";
+    const snakeLineColor = "#261a0d";
+    const ironHelmetColor = "#3d3d3d";
+    const ironHelmetHighlight = "#666666";
+    const ironHelmetShadow = "#1a1a1a";
+    const beltColor = "#412a19";
+    const bootColor = "#241c1c";
+    const backgroundShadowColor = "rgba(0,0,0,0.3)";
+    const simpleChestPlateColor = "#777777";
+    const chestPlateHighlight = "#999999";
+    const slitColor = "#000000";
+    const IDLE_BOB_SPEED_DIVISOR = 600;
+    const IDLE_BOB_AMPLITUDE = 3;
+    const DAMAGE_VIGNETTE_HEALTH_THRESHOLD = 30;
+    const TEMP_FREEZING_CLIENT = 0.0;
+    const TEMP_COLD_CLIENT = 10.0;
+    const TEMP_HOT_CLIENT = 35.0;
+    const TEMP_SCORCHING_CLIENT = 40.0;
+    const MAX_TINT_ALPHA = 0.25;
+    const RAIN_COLOR = "rgba(170, 190, 230, 0.6)";
+    const RAIN_DROPS = 150;
+    const HEAT_HAZE_START_TEMP = 28.0;
+    const HEAT_HAZE_MAX_TEMP = 45.0;
+    const SNAKE_BITE_DURATION = 8.0;
 
+    // --- New Heat Haze Constants (from Phase 1) ---
+    const HEAT_HAZE_WAVE_COUNT = 10;
+    const HEAT_HAZE_WAVE_HEIGHT_MAX = 80;
+    const HEAT_HAZE_WAVE_SPEED_BASE = 0.0005;
+    const HEAT_HAZE_WAVE_OFFSET_MAX = 15;
+    const HEAT_HAZE_WAVE_ALPHA_BASE = 0.02;
+    const HEAT_HAZE_COLOR = "rgba(255, 180, 0, A)";
+    // --- End New Heat Haze Constants ---
 
-  const IDLE_BOB_SPEED_DIVISOR = 600;
-  const IDLE_BOB_AMPLITUDE = 3;
-  const DAMAGE_VIGNETTE_HEALTH_THRESHOLD = 30;
-  const TEMP_FREEZING_CLIENT = 0.0;
-  const TEMP_COLD_CLIENT = 10.0;
-  const TEMP_HOT_CLIENT = 33.0;
-  const TEMP_SCORCHING_CLIENT = 36.0;
-  const MAX_TINT_ALPHA = 0.25;
-  const RAIN_COLOR = "rgba(170, 190, 230, 0.6)";
-  const RAIN_DROPS = 150;
-
-  // --- Heat Haze Constants (EXTREME TEST VALUES) ---
-  const HEAT_HAZE_START_TEMP = 25.0;      // Haze starts almost immediately
-  const HEAT_HAZE_MAX_TEMP = 31.0;        // Haze reaches max intensity very quickly
-  const HEAT_HAZE_MAX_INTENSITY = 1.0;    // Keep max intensity at 1
-  const HEAT_HAZE_VERTICAL_EXTENT = .6;  // Affect almost the entire screen height
-  const HEAT_HAZE_NUM_STRIPS = 10;        // FEWER strips (potentially less lag, chunkier effect)
-  const HEAT_HAZE_WAVE_SPEED_X = 0.002;  // Faster horizontal movement
-  const HEAT_HAZE_WAVE_FREQ_X1 = 0.01;    // LOWER frequency = LARGER waves horizontally
-  const HEAT_HAZE_WAVE_FREQ_X2 = 0.03;    // LOWER frequency = LARGER waves horizontally
-  const HEAT_HAZE_WAVE_AMP_X = 50.0;      // *** EXTREME horizontal offset ***
-  const HEAT_HAZE_WAVE_SPEED_Y = 0.0015;  // Faster vertical movement
-  const HEAT_HAZE_WAVE_FREQ_Y1 = 0.01;    // LOWER frequency = LARGER waves vertically
-  const HEAT_HAZE_WAVE_FREQ_Y2 = 0.025;   // LOWER frequency = LARGER waves vertically
-  const HEAT_HAZE_WAVE_AMP_Y = 50.0;      // *** EXTREME vertical offset ***
-  const HEAT_HAZE_STRIP_ALPHA = 0.75;     // *** MUCH higher alpha (will look bad, but visible) ***
-  // --- End Heat Haze Constants ---
-
-  let currentShakeMagnitude = 0;
-  let shakeEndTime = 0;
-  let shakeApplied = false,
-    shakeOffsetX = 0,
-    shakeOffsetY = 0;
+    // --- New Colors for Shading/Detail ---
+    const playerBodyHighlight = "rgba(180, 100, 30, 0.2)";
+    const playerBodyShadow = "rgba(50, 20, 5, 0.2)";
+    const enemySkinHighlight = "rgba(255, 230, 200, 0.3)";
+    const enemySkinShadow = "rgba(100, 80, 60, 0.3)";
+    const enemyCoatHighlight = "rgba(180, 100, 30, 0.2)";
+    const enemyCoatShadow = "rgba(50, 20, 5, 0.2)";
+    const enemyUniformHighlight = "rgba(80, 120, 180, 0.3)";
+    const enemyUniformShadow = "rgba(10, 20, 40, 0.3)";
+    const bulletTrailGlow = "rgba(255, 255, 0, 0.1)";
+    const muzzleFlashGlowCore = "rgba(255, 255, 200, 0.5)";
+    // --- End New Colors ---
 
 
-  /**
-   * Draws a heat haze distortion effect over the lower part of the canvas.
-   * Assumes the background/scene has already been drawn to the context.
-   * @param {CanvasRenderingContext2D} ctx - The rendering context.
-   * @param {number} temperature - Current game temperature in Celsius.
-   * @param {number} width - Canvas width.
-   * @param {number} height - Canvas height.
-   * @param {number} time - Current time (e.g., performance.now()) for animation.
-   */
+    let currentShakeMagnitude = 0;
+    let shakeEndTime = 0;
 
+    function drawRoundedRect(ctx, x, y, width, height, radius) {
+      if (width < 2 * radius) radius = width / 2;
+      if (height < 2 * radius) radius = height / 2;
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.arcTo(x + width, y, x + width, y + height, radius);
+      ctx.arcTo(x + width, y + height, x, y + height, radius);
+      ctx.arcTo(x, y + height, x, y, radius);
+      ctx.arcTo(x, y, x + width, y, radius);
+      ctx.closePath();
+    }
 
-  function drawRoundedRect(ctx, x, y, width, height, radius) {
-    if (width < 2 * radius) radius = width / 2;
-    if (height < 2 * radius) radius = height / 2;
-    ctx.beginPath();
-    ctx.moveTo(x + radius, y);
-    ctx.arcTo(x + width, y, x + width, y + height, radius);
-    ctx.arcTo(x + width, y + height, x, y + height, radius);
-    ctx.arcTo(x, y + height, x, y, radius);
-    ctx.arcTo(x, y, x + width, y, radius);
-    ctx.closePath();
-  }
-
-  function generateBackground(ctx, targetIsNight, width, height) {
-    ctx.clearRect(0, 0, width, height);
-    if (!targetIsNight) {
-      const dayBaseColor = "#949A80";
-      const dirtColor1 = "rgba(76, 103, 41, 0.2)";
-      const dirtColor2 = "rgba(143, 121, 55, 0.2)";
-      const textureStrokeDark = "rgba(59, 112, 67, 0.3)";
-      const textureStrokeLight = "rgba(135, 150, 110, 0.25)";
-      const textureStrokeEmerald = "rgba(19, 226, 112, 0.15)";
-      const numDirtPatches = 40;
-      const numTextureStrokes = 2500;
-      ctx.fillStyle = dayBaseColor;
-      ctx.fillRect(0, 0, width, height);
-      for (let i = 0; i < numDirtPatches; i++) {
-        const x = Math.random() * width;
-        const y = Math.random() * height;
-        const avgRadius = Math.random() * 100 + 50;
-        const points = 5 + Math.floor(Math.random() * 4);
-        const color = Math.random() < 0.5 ? dirtColor1 : dirtColor2;
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(x + avgRadius * Math.cos(0), y + avgRadius * Math.sin(0));
-        for (let j = 1; j <= points; j++) {
-          const angle = (j / points) * Math.PI * 2;
-          const radius = avgRadius * (0.7 + Math.random() * 0.6);
-          ctx.lineTo(
-            x + radius * Math.cos(angle),
-            y + radius * Math.sin(angle)
-          );
-        }
-        ctx.closePath();
-        ctx.fill();
-      }
-      ctx.lineWidth = 1.5;
-      ctx.lineCap = "round";
-      for (let i = 0; i < numTextureStrokes; i++) {
-        const x = Math.random() * width;
-        const y = Math.random() * height;
-        const length = Math.random() * 5 + 2;
-        const angle = Math.random() * Math.PI * 2;
-        let strokeColor;
-        const randColor = Math.random();
-        if (randColor < 0.1) {
-          strokeColor = textureStrokeEmerald;
-        } else if (randColor < 0.55) {
-          strokeColor = textureStrokeLight;
-        } else {
-          strokeColor = textureStrokeDark;
-        }
-        ctx.strokeStyle = strokeColor;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
-        ctx.stroke();
-      }
-      ctx.lineCap = "butt";
-    } else {
-      const baseNightColor = "#080808";
-      const nebulaeColors = [
-        [180, 180, 190, 0.05],
-        [200, 80, 80, 0.04],
-        [160, 160, 160, 0.06],
-        [210, 100, 100, 0.035],
-      ];
-      const darkCloudColor = "rgba(8, 8, 8, 0.18)";
-      const numNebulae = 10;
-      const numDarkClouds = 20;
-      const numDustStars = 2000;
-      const numMidStars = 500;
-      const numHeroStars = 70;
-      ctx.fillStyle = baseNightColor;
-      ctx.fillRect(0, 0, width, height);
-      for (let i = 0; i < numNebulae; i++) {
-        const x = Math.random() * width;
-        const y = Math.random() * height;
-        const radius = Math.random() * (width * 0.4) + width * 0.15;
-        const colorData =
-          nebulaeColors[Math.floor(Math.random() * nebulaeColors.length)];
-        const [r, g, b, baseAlpha] = colorData;
-        try {
-          const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-          gradient.addColorStop(
-            0,
-            `rgba(${r}, ${g}, ${b}, ${Math.min(0.1, baseAlpha * 1.5).toFixed(
-              2
-            )})`
-          );
-          gradient.addColorStop(
-            0.5,
-            `rgba(${r}, ${g}, ${b}, ${baseAlpha.toFixed(2)})`
-          );
-          gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
-          ctx.fillStyle = gradient;
+    function generateBackground(ctx, targetIsNight, width, height) {
+      ctx.clearRect(0, 0, width, height);
+      if (!targetIsNight) {
+        const dayBaseColor = "#949A80";
+        const dirtColor1 = "rgba(76, 103, 41, 0.2)";
+        const dirtColor2 = "rgba(143, 121, 55, 0.2)";
+        const textureStrokeDark = "rgba(59, 112, 67, 0.3)";
+        const textureStrokeLight = "rgba(135, 150, 110, 0.25)";
+        const textureStrokeEmerald = "rgba(19, 226, 112, 0.15)";
+        const numDirtPatches = 40;
+        const numTextureStrokes = 2500;
+        ctx.fillStyle = dayBaseColor;
+        ctx.fillRect(0, 0, width, height);
+        for (let i = 0; i < numDirtPatches; i++) {
+          const x = Math.random() * width;
+          const y = Math.random() * height;
+          const avgRadius = Math.random() * 100 + 50;
+          const points = 5 + Math.floor(Math.random() * 4);
+          const color = Math.random() < 0.5 ? dirtColor1 : dirtColor2;
+          ctx.fillStyle = color;
           ctx.beginPath();
-          ctx.arc(x, y, radius, 0, Math.PI * 2);
-          ctx.fill();
-        } catch (e) {
-          console.error("Failed to create nebula gradient:", e);
-        }
-      }
-      const drawStars = (
-        count,
-        minSize,
-        maxSize,
-        minAlpha,
-        maxAlpha,
-        colorVariance = 0
-      ) => {
-        for (let i = 0; i < count; i++) {
-          const sx = Math.random() * width;
-          const sy = Math.random() * height;
-          const size = Math.random() * (maxSize - minSize) + minSize;
-          const alpha = Math.random() * (maxAlpha - minAlpha) + minAlpha;
-          let r = 255,
-            g = 255,
-            b = 255;
-          if (colorVariance > 0 && Math.random() < 0.3) {
-            const variance = Math.random() * colorVariance;
-            if (Math.random() < 0.7) {
-              b -= variance;
-              r = Math.max(0, Math.min(255, r));
-              g = Math.max(0, Math.min(255, g));
-              b = Math.max(0, Math.min(255, b));
-            }
+          ctx.moveTo(x + avgRadius * Math.cos(0), y + avgRadius * Math.sin(0));
+          for (let j = 1; j <= points; j++) {
+            const angle = (j / points) * Math.PI * 2;
+            const radius = avgRadius * (0.7 + Math.random() * 0.6);
+            ctx.lineTo(
+              x + radius * Math.cos(angle),
+              y + radius * Math.sin(angle)
+            );
           }
-          ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(
-            g
-          )}, ${Math.round(b)}, ${alpha.toFixed(2)})`;
-          ctx.fillRect(sx - size / 2, sy - size / 2, size, size);
+          ctx.closePath();
+          ctx.fill();
         }
-      };
-      drawStars(numDustStars, 0.4, 0.9, 0.06, 0.3);
-      drawStars(numMidStars, 0.7, 1.6, 0.2, 0.7, 25);
-      drawStars(numHeroStars, 1.4, 2.6, 0.5, 1.0, 40);
-      for (let i = 0; i < numDarkClouds; i++) {
-        const x = Math.random() * width;
-        const y = Math.random() * height;
-        const radiusX = Math.random() * (width * 0.3) + width * 0.12;
-        const radiusY = Math.random() * (height * 0.25) + height * 0.1;
-        const rotation = Math.random() * Math.PI;
-        ctx.fillStyle = darkCloudColor;
-        ctx.beginPath();
-        ctx.ellipse(x, y, radiusX, radiusY, rotation, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.lineWidth = 1.5;
+        ctx.lineCap = "round";
+        for (let i = 0; i < numTextureStrokes; i++) {
+          const x = Math.random() * width;
+          const y = Math.random() * height;
+          const length = Math.random() * 5 + 2;
+          const angle = Math.random() * Math.PI * 2;
+          let strokeColor;
+          const randColor = Math.random();
+          if (randColor < 0.1) {
+            strokeColor = textureStrokeEmerald;
+          } else if (randColor < 0.55) {
+            strokeColor = textureStrokeLight;
+          } else {
+            strokeColor = textureStrokeDark;
+          }
+          ctx.strokeStyle = strokeColor;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
+          ctx.stroke();
+        }
+        ctx.lineCap = "butt";
+      } else {
+        const baseNightColor = "#080808";
+        const nebulaeColors = [
+          [180, 180, 190, 0.05],
+          [200, 80, 80, 0.04],
+          [160, 160, 160, 0.06],
+          [210, 100, 100, 0.035],
+        ];
+        const darkCloudColor = "rgba(8, 8, 8, 0.18)";
+        const numNebulae = 10;
+        const numDarkClouds = 20;
+        const numDustStars = 2000;
+        const numMidStars = 500;
+        const numHeroStars = 70;
+        ctx.fillStyle = baseNightColor;
+        ctx.fillRect(0, 0, width, height);
+        for (let i = 0; i < numNebulae; i++) {
+          const x = Math.random() * width;
+          const y = Math.random() * height;
+          const radius = Math.random() * (width * 0.4) + width * 0.15;
+          const colorData =
+            nebulaeColors[Math.floor(Math.random() * nebulaeColors.length)];
+          const [r, g, b, baseAlpha] = colorData;
+          try {
+            const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+            gradient.addColorStop(
+              0,
+              `rgba(${r}, ${g}, ${b}, ${Math.min(0.1, baseAlpha * 1.5).toFixed(
+                2
+              )})`
+            );
+            gradient.addColorStop(
+              0.5,
+              `rgba(${r}, ${g}, ${b}, ${baseAlpha.toFixed(2)})`
+            );
+            gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fill();
+          } catch (e) {
+            console.error("Failed to create nebula gradient:", e);
+          }
+        }
+        const drawStars = (
+          count,
+          minSize,
+          maxSize,
+          minAlpha,
+          maxAlpha,
+          colorVariance = 0
+        ) => {
+          for (let i = 0; i < count; i++) {
+            const sx = Math.random() * width;
+            const sy = Math.random() * height;
+            const size = Math.random() * (maxSize - minSize) + minSize;
+            const alpha = Math.random() * (maxAlpha - minAlpha) + minAlpha;
+            let r = 255,
+              g = 255,
+              b = 255;
+            if (colorVariance > 0 && Math.random() < 0.3) {
+              const variance = Math.random() * colorVariance;
+              if (Math.random() < 0.7) {
+                b -= variance;
+                r = Math.max(0, Math.min(255, r));
+                g = Math.max(0, Math.min(255, g));
+                b = Math.max(0, Math.min(255, b));
+              }
+            }
+            ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(
+              g
+            )}, ${Math.round(b)}, ${alpha.toFixed(2)})`;
+            ctx.fillRect(sx - size / 2, sy - size / 2, size, size);
+          }
+        };
+        drawStars(numDustStars, 0.4, 0.9, 0.06, 0.3);
+        drawStars(numMidStars, 0.7, 1.6, 0.2, 0.7, 25);
+        drawStars(numHeroStars, 1.4, 2.6, 0.5, 1.0, 40);
+        for (let i = 0; i < numDarkClouds; i++) {
+          const x = Math.random() * width;
+          const y = Math.random() * height;
+          const radiusX = Math.random() * (width * 0.3) + width * 0.12;
+          const radiusY = Math.random() * (height * 0.25) + height * 0.1;
+          const rotation = Math.random() * Math.PI;
+          ctx.fillStyle = darkCloudColor;
+          ctx.beginPath();
+          ctx.ellipse(x, y, radiusX, radiusY, rotation, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
+      ctx.canvas.dataset.isNight = String(targetIsNight);
+      return targetIsNight;
     }
-    ctx.canvas.dataset.isNight = String(targetIsNight);
-    return targetIsNight;
-  }
 
-  function updateGeneratedBackground(targetIsNight) {
-    if (!appState) return; // Guard against missing appState
-    // Check if canvas dimensions have changed or don't match appState
-    if (
-      offscreenCanvas.width !== appState.canvasWidth ||
-      offscreenCanvas.height !== appState.canvasHeight
+    function updateGeneratedBackground(
+      targetIsNight,
+      targetCanvasWidth,
+      targetCanvasHeight
     ) {
-      offscreenCanvas.width = appState.canvasWidth;
-      offscreenCanvas.height = appState.canvasHeight;
-      oldOffscreenCanvas.width = appState.canvasWidth;
-      oldOffscreenCanvas.height = appState.canvasHeight;
-      // Ensure hazeCanvas lines are GONE from here
-
-      isBackgroundReady = false;
-      currentBackgroundIsNight = null;
-      isTransitioningBackground = false;
-    }
-    // ... (rest of the transition logic remains the same) ...
-    if (targetIsNight === currentBackgroundIsNight && isBackgroundReady) return;
-    if (isTransitioningBackground && targetIsNight === (offscreenCanvas.dataset.isNight === "true")) return;
-
-    if (isBackgroundReady) {
-      oldOffscreenCtx.clearRect(0, 0, appState.canvasWidth, appState.canvasHeight);
-      oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0);
-      isTransitioningBackground = true;
-      transitionStartTime = performance.now();
-      generateBackground(offscreenCtx, targetIsNight, appState.canvasWidth, appState.canvasHeight);
-      currentBackgroundIsNight = targetIsNight;
-    } else {
-      generateBackground(offscreenCtx, targetIsNight, appState.canvasWidth, appState.canvasHeight);
-      currentBackgroundIsNight = targetIsNight;
-      isBackgroundReady = true;
-      isTransitioningBackground = false;
-    }
-  }
-
-  function drawHeatHaze(ctx, temperature, width, height, time) {
-    let intensity = 0.0;
-    if (temperature >= HEAT_HAZE_START_TEMP) {
-      intensity = (temperature - HEAT_HAZE_START_TEMP) / (HEAT_HAZE_MAX_TEMP - HEAT_HAZE_START_TEMP);
-      intensity = Math.max(0.0, Math.min(HEAT_HAZE_MAX_INTENSITY, intensity));
-    }
-    if (intensity <= 0.01 || width <= 0 || height <= 0) return;
-    const stripHeight = Math.ceil(height * HEAT_HAZE_VERTICAL_EXTENT / HEAT_HAZE_NUM_STRIPS);
-    const startY = height * (1.0 - HEAT_HAZE_VERTICAL_EXTENT);
-    if (stripHeight <= 0) return;
-    const originalAlpha = ctx.globalAlpha;
-    for (let i = 0; i < HEAT_HAZE_NUM_STRIPS; i++) {
-      const currentStripY = startY + i * stripHeight;
-      const stripTopY = Math.max(0, currentStripY);
-      const actualStripHeight = Math.min(stripHeight, height - stripTopY);
-      if (actualStripHeight <= 0) continue;
-      const verticalProgress = (currentStripY - startY) / (height * HEAT_HAZE_VERTICAL_EXTENT);
-      const falloffFactor = Math.max(0, Math.min(1.0, 1.0 - verticalProgress));
-      const timeOffsetX = time * HEAT_HAZE_WAVE_SPEED_X;
-      const offsetX1 = Math.sin(stripTopY * HEAT_HAZE_WAVE_FREQ_X1 + timeOffsetX);
-      const offsetX2 = Math.sin(stripTopY * HEAT_HAZE_WAVE_FREQ_X2 - timeOffsetX * 0.7);
-      const totalOffsetX = (offsetX1 + offsetX2) * 0.5 * HEAT_HAZE_WAVE_AMP_X * intensity * falloffFactor;
-      const timeOffsetY = time * HEAT_HAZE_WAVE_SPEED_Y;
-      const offsetY1 = Math.sin(stripTopY * HEAT_HAZE_WAVE_FREQ_Y1 + timeOffsetY);
-      const offsetY2 = Math.sin(stripTopY * HEAT_HAZE_WAVE_FREQ_Y2 - timeOffsetY * 1.3);
-      const totalOffsetY = (offsetY1 + offsetY2) * 0.5 * HEAT_HAZE_WAVE_AMP_Y * intensity * falloffFactor;
-      ctx.globalAlpha = HEAT_HAZE_STRIP_ALPHA * intensity * falloffFactor;
-      try {
-        ctx.drawImage(ctx.canvas, 0, stripTopY, width, actualStripHeight, totalOffsetX, stripTopY + totalOffsetY, width, actualStripHeight);
-      } catch (e) {
-        console.error("Error drawing heat haze strip:", e);
-        ctx.globalAlpha = originalAlpha;
+      canvasWidth = targetCanvasWidth;
+      canvasHeight = targetCanvasHeight;
+      if (
+        offscreenCanvas.width !== canvasWidth ||
+        offscreenCanvas.height !== canvasHeight
+      ) {
+        offscreenCanvas.width = canvasWidth;
+        offscreenCanvas.height = canvasHeight;
+        oldOffscreenCanvas.width = canvasWidth;
+        oldOffscreenCanvas.height = canvasHeight;
+        isBackgroundReady = false;
+        currentBackgroundIsNight = null;
+        isTransitioningBackground = false;
+      }
+      if (targetIsNight === currentBackgroundIsNight && isBackgroundReady) {
         return;
       }
-    }
-    ctx.globalAlpha = originalAlpha;
-  }
-
-  // Draws floating damage numbers, handling crits and pulsing
-  function drawDamageTexts(ctx, damageTexts) {
-    if (!damageTexts) return;
-    const now = performance.now();
-    const pulseDuration = 250; const pulseMaxSizeIncrease = 4; // Crit pulse effect params
-    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-
-    Object.values(damageTexts).forEach(dmgText => {
-      if (!dmgText) return;
-      const x = dmgText.x ?? 0; const y = dmgText.y ?? 0;
-      const text = dmgText.text ?? '?'; const isCrit = dmgText.is_crit ?? false;
-      const spawnTime = dmgText.spawn_time ? dmgText.spawn_time * 1000 : now; // Server sends seconds
-      const timeSinceSpawn = now - spawnTime;
-      let currentFontSize = isCrit ? damageTextCritFontSize : damageTextFontSize;
-      let currentFillColor = isCrit ? damageTextCritColor : damageTextColor;
-
-      // Apply crit pulse effect
-      if (isCrit && timeSinceSpawn < pulseDuration) {
-        const pulseProgress = Math.sin((timeSinceSpawn / pulseDuration) * Math.PI); // 0 -> 1 -> 0 wave
-        currentFontSize += pulseProgress * pulseMaxSizeIncrease;
+      if (
+        isTransitioningBackground &&
+        targetIsNight === (offscreenCanvas.dataset.isNight === "true")
+      ) {
+        return;
       }
-      ctx.font = `bold ${Math.round(currentFontSize)}px ${fontFamily}`;
-      ctx.fillStyle = currentFillColor;
-      ctx.fillText(text, x, y);
-    });
-  }
-
-  function drawCampfire(ctx, campfireData, width, height) {
-    if (!campfireData || !campfireData.active) return;
-    const now = performance.now();
-    const x = campfireData.x ?? width / 2;
-    const y = campfireData.y ?? height / 2;
-    const baseRadius = campfireData.radius ?? 0;
-    if (baseRadius <= 0) return;
-    const stickWidth = 35;
-    const stickHeight = 8;
-    const stickColor = "#5a3a1e";
-    const stickYOffset = 6;
-    const logBaseY = y + stickYOffset;
-    const flameBaseWidth = stickWidth * 0.8;
-    const numFlames = 4;
-    const timeSlow = now * 0.0015;
-    const heightMagnitude = 0.6;
-    const widthMagnitude = 0.3;
-    const curveMagnitude = 5;
-    ctx.save();
-    const glowRadius = baseRadius * 1.1;
-    const glowPulse = Math.sin(now * 0.001) * 0.05;
-    const currentGlowRadius = glowRadius * (1 + glowPulse);
-    try {
-      const gradient = ctx.createRadialGradient(
-        x,
-        logBaseY,
-        0,
-        x,
-        logBaseY,
-        currentGlowRadius
-      );
-      gradient.addColorStop(0, `rgba(255, 165, 0, ${0.35 + glowPulse * 2})`);
-      gradient.addColorStop(0.6, "rgba(255, 165, 0, 0.1)");
-      gradient.addColorStop(1, "rgba(255, 165, 0, 0)");
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(x, logBaseY, currentGlowRadius, 0, Math.PI * 2);
-      ctx.fill();
-    } catch (e) {
-      console.error("Failed to create campfire gradient:", e);
+      if (isBackgroundReady) {
+        oldOffscreenCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+        oldOffscreenCtx.drawImage(offscreenCanvas, 0, 0);
+        isTransitioningBackground = true;
+        transitionStartTime = performance.now();
+        generateBackground(
+          offscreenCtx,
+          targetIsNight,
+          canvasWidth,
+          canvasHeight
+        );
+        currentBackgroundIsNight = targetIsNight;
+      } else {
+        generateBackground(
+          offscreenCtx,
+          targetIsNight,
+          canvasWidth,
+          canvasHeight
+        );
+        currentBackgroundIsNight = targetIsNight;
+        isBackgroundReady = true;
+        isTransitioningBackground = false;
+      }
     }
-    ctx.fillStyle = stickColor;
-    ctx.translate(x, logBaseY);
-    ctx.rotate(Math.PI / 6);
-    ctx.fillRect(-stickWidth / 2, -stickHeight / 2, stickWidth, stickHeight);
-    ctx.strokeStyle = "rgba(0,0,0,0.4)";
-    ctx.lineWidth = 0.5;
-    ctx.beginPath();
-    ctx.moveTo(-stickWidth / 2 + 2, 0);
-    ctx.lineTo(stickWidth / 2 - 2, 0);
-    ctx.stroke();
-    ctx.rotate(-Math.PI / 6);
-    ctx.rotate(-Math.PI / 5);
-    ctx.fillRect(-stickWidth / 2, -stickHeight / 2, stickWidth, stickHeight);
-    ctx.beginPath();
-    ctx.moveTo(-stickWidth / 2 + 2, 0);
-    ctx.lineTo(stickWidth / 2 - 2, 0);
-    ctx.stroke();
-    ctx.rotate(Math.PI / 5);
-    ctx.translate(-x, -logBaseY);
-    const flameColors = [
-      {
-        color: `rgba(255, 100, 0, ${0.5 + Math.sin(timeSlow * 1.1 + 1) * 0.1})`,
-        baseHeight: 45,
-        widthFactor: 1.0,
-      },
-      {
-        color: `rgba(255, 165, 0, ${0.6 + Math.sin(timeSlow * 0.9 + 2) * 0.15
-          })`,
-        baseHeight: 35,
-        widthFactor: 0.7,
-      },
-      {
-        color: `rgba(255, 255, 180, ${0.7 + Math.sin(timeSlow * 1.3 + 3) * 0.2
-          })`,
-        baseHeight: 25,
-        widthFactor: 0.4,
-      },
-    ];
-    for (let layer = 0; layer < flameColors.length; layer++) {
-      const layerData = flameColors[layer];
-      ctx.fillStyle = layerData.color;
-      for (let i = 0; i < numFlames; i++) {
-        const flameOffsetX =
-          (i - (numFlames - 1) / 2) * (flameBaseWidth / numFlames) * 0.8;
-        const uniqueTimeOffset = i * 1.57;
-        const flickerHeight =
-          Math.sin(timeSlow * (1.0 + i * 0.1) + uniqueTimeOffset) *
-          heightMagnitude +
-          1.0;
-        const flickerWidth =
-          Math.sin(timeSlow * (0.8 + i * 0.15) - uniqueTimeOffset) *
-          widthMagnitude +
-          1.0;
-        const currentHeight =
-          layerData.baseHeight * flickerHeight * (1.0 - layer * 0.1);
-        const currentWidth =
-          (flameBaseWidth * layerData.widthFactor * flickerWidth) / numFlames;
-        const swayX1 =
-          Math.sin(timeSlow * 1.2 + uniqueTimeOffset + i) * curveMagnitude;
-        const swayY1 =
-          Math.sin(timeSlow * 1.4 + uniqueTimeOffset + i + 1) *
-          curveMagnitude *
-          0.5;
-        const swayX2 =
-          Math.sin(timeSlow * 1.3 - uniqueTimeOffset + i + 2) * curveMagnitude;
-        const swayY2 =
-          Math.sin(timeSlow * 1.5 - uniqueTimeOffset + i + 3) *
-          curveMagnitude *
-          0.5;
-        const startX = x + flameOffsetX;
-        const startY = logBaseY - stickHeight / 2;
-        const tipY = startY - currentHeight;
-        const midY1 = startY - currentHeight * 0.33;
-        const midY2 = startY - currentHeight * 0.66;
+
+    function drawDamageTexts(ctx, damageTexts) {
+      if (!damageTexts) return;
+      const now = performance.now(),
+        pd = 250, // Peak duration in ms
+        td = 1000; // Total duration in ms
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      Object.values(damageTexts).forEach((dt) => {
+        if (!dt) return;
+        const x = dt.x ?? 0,
+          y = dt.y ?? 0,
+          txt = dt.text ?? "?",
+          ic = dt.is_crit ?? false,
+          st = dt.spawn_time ? dt.spawn_time * 1000 : now,
+          ts = now - st; // Time since spawn
+        if (ts > td) return; // Text has expired
+
+        let cfs = ic ? damageTextCritFontSize : damageTextFontSize,
+          cfc = ic ? damageTextCritColor : damageTextColor;
+        let alpha = 1.0;
+        let yOffset = 0;
+
+        // Animation: Scale up slightly then fade/move up
+        if (ts < pd) {
+            const progress = ts / pd;
+            const scaleFactor = 1.0 + Math.sin(progress * Math.PI) * 0.5; // Ease-in/out scaling
+            cfs *= scaleFactor;
+        } else {
+            const fadeProgress = (ts - pd) / (td - pd);
+            alpha = Math.max(0, 1.0 - fadeProgress); // Fade out
+            yOffset = -fadeProgress * 20; // Move up
+        }
+
+        ctx.font = `bold ${Math.round(cfs)}px ${fontFamily}`;
+        ctx.fillStyle = cfc;
+        ctx.globalAlpha = alpha; // Apply fading
+
+        ctx.fillText(txt, x, y + yOffset);
+
+        ctx.globalAlpha = 1.0; // Restore alpha
+      });
+    }
+
+    function drawCampfire(ctx, campfireData, width, height) {
+      if (!campfireData || !campfireData.active) return;
+      const now = performance.now();
+      const x = campfireData.x ?? width / 2;
+      const y = campfireData.y ?? height / 2;
+      const baseRadius = campfireData.radius ?? 0;
+      if (baseRadius <= 0) return;
+      const stickWidth = 35;
+      const stickHeight = 8;
+      const stickColor = "#5a3a1e";
+      const stickYOffset = 6;
+      const logBaseY = y + stickYOffset;
+      const flameBaseWidth = stickWidth * 0.8;
+      const numFlames = 4;
+      const timeSlow = now * 0.0015;
+      const heightMagnitude = 0.6;
+      const widthMagnitude = 0.3;
+      const curveMagnitude = 5;
+      ctx.save();
+      const glowRadius = baseRadius * 1.1;
+      const glowPulse = Math.sin(now * 0.001) * 0.05;
+      const currentGlowRadius = glowRadius * (1 + glowPulse);
+      try {
+        const gradient = ctx.createRadialGradient(
+          x,
+          logBaseY,
+          0,
+          x,
+          logBaseY,
+          currentGlowRadius
+        );
+        gradient.addColorStop(0, `rgba(255, 165, 0, ${0.35 + glowPulse * 2})`);
+        gradient.addColorStop(0.6, "rgba(255, 165, 0, 0.1)");
+        gradient.addColorStop(1, "rgba(255, 165, 0, 0)");
+        ctx.fillStyle = gradient;
         ctx.beginPath();
-        ctx.moveTo(startX - currentWidth / 2, startY);
-        ctx.bezierCurveTo(
-          startX - currentWidth / 2 + swayX1,
-          midY2 + swayY1,
-          startX + swayX2,
-          midY1 + swayY2,
-          startX,
-          tipY
+        ctx.arc(x, logBaseY, currentGlowRadius, 0, Math.PI * 2);
+        ctx.fill();
+      } catch (e) {
+        console.error("Failed to create campfire gradient:", e);
+      }
+      ctx.fillStyle = stickColor;
+      ctx.translate(x, logBaseY);
+      ctx.rotate(Math.PI / 6);
+      ctx.fillRect(-stickWidth / 2, -stickHeight / 2, stickWidth, stickHeight);
+      ctx.strokeStyle = "rgba(0,0,0,0.4)";
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(-stickWidth / 2 + 2, 0);
+      ctx.lineTo(stickWidth / 2 - 2, 0);
+      ctx.stroke();
+      ctx.rotate(-Math.PI / 6);
+      ctx.rotate(-Math.PI / 5);
+      ctx.fillRect(-stickWidth / 2, -stickHeight / 2, stickWidth, stickHeight);
+      ctx.beginPath();
+      ctx.moveTo(-stickWidth / 2 + 2, 0);
+      ctx.lineTo(stickWidth / 2 - 2, 0);
+      ctx.stroke();
+      ctx.rotate(Math.PI / 5);
+      ctx.translate(-x, -logBaseY);
+      const flameColors = [
+        {
+          color: `rgba(255, 100, 0, ${0.5 + Math.sin(timeSlow * 1.1 + 1) * 0.1})`,
+          baseHeight: 45,
+          widthFactor: 1.0,
+        },
+        {
+          color: `rgba(255, 165, 0, ${
+            0.6 + Math.sin(timeSlow * 0.9 + 2) * 0.15
+          })`,
+          baseHeight: 35,
+          widthFactor: 0.7,
+        },
+        {
+          color: `rgba(255, 255, 180, ${
+            0.7 + Math.sin(timeSlow * 1.3 + 3) * 0.2
+          })`,
+          baseHeight: 25,
+          widthFactor: 0.4,
+        },
+      ];
+      for (let layer = 0; layer < flameColors.length; layer++) {
+        const layerData = flameColors[layer];
+        ctx.fillStyle = layerData.color;
+        for (let i = 0; i < numFlames; i++) {
+          const flameOffsetX =
+            (i - (numFlames - 1) / 2) * (flameBaseWidth / numFlames) * 0.8;
+          const uniqueTimeOffset = i * 1.57;
+          const flickerHeight =
+            Math.sin(timeSlow * (1.0 + i * 0.1) + uniqueTimeOffset) *
+              heightMagnitude +
+            1.0;
+          const flickerWidth =
+            Math.sin(timeSlow * (0.8 + i * 0.15) - uniqueTimeOffset) *
+              widthMagnitude +
+            1.0;
+          const currentHeight =
+            layerData.baseHeight * flickerHeight * (1.0 - layer * 0.1);
+          const currentWidth =
+            (flameBaseWidth * layerData.widthFactor * flickerWidth) / numFlames;
+          const swayX1 =
+            Math.sin(timeSlow * 1.2 + uniqueTimeOffset + i) * curveMagnitude;
+          const swayY1 =
+            Math.sin(timeSlow * 1.4 + uniqueTimeOffset + i + 1) *
+            curveMagnitude *
+            0.5;
+          const swayX2 =
+            Math.sin(timeSlow * 1.3 - uniqueTimeOffset + i + 2) * curveMagnitude;
+          const swayY2 =
+            Math.sin(timeSlow * 1.5 - uniqueTimeOffset + i + 3) *
+            curveMagnitude *
+            0.5;
+          const startX = x + flameOffsetX;
+          const startY = logBaseY - stickHeight / 2;
+          const tipY = startY - currentHeight;
+          const midY1 = startY - currentHeight * 0.33;
+          const midY2 = startY - currentHeight * 0.66;
+          ctx.beginPath();
+          ctx.moveTo(startX - currentWidth / 2, startY);
+          ctx.bezierCurveTo(
+            startX - currentWidth / 2 + swayX1,
+            midY2 + swayY1,
+            startX + swayX2,
+            midY1 + swayY2,
+            startX,
+            tipY
+          );
+          ctx.bezierCurveTo(
+            startX - swayX2,
+            midY1 + swayY2,
+            startX + currentWidth / 2 - swayX1,
+            midY2 + swayY1,
+            startX + currentWidth / 2,
+            startY
+          );
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+
+    function drawDamageVignette(ctx, intensity, width, height) {
+      if (intensity <= 0) return;
+      ctx.save();
+      const or = Math.sqrt(width ** 2 + height ** 2) / 2;
+      const g = ctx.createRadialGradient(
+        width / 2,
+        height / 2,
+        0,
+        width / 2,
+        height / 2,
+        or
+      );
+      const ra = Math.min(1.0, Math.max(0.0, 0.4 * intensity)); // Clamped alpha
+      g.addColorStop(0, "rgba(255,0,0,0)");
+      g.addColorStop(0.75, "rgba(255,0,0,0)");
+      g.addColorStop(1, `rgba(255,0,0,${ra.toFixed(2)})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, width, height);
+      ctx.restore();
+    }
+
+    function drawTemperatureTint(ctx, temperature, width, height) {
+      let tcs = null,
+        a = 0.0;
+      const tfc = TEMP_FREEZING_CLIENT,
+        tcc = TEMP_COLD_CLIENT,
+        thc = TEMP_HOT_CLIENT,
+        tsc = TEMP_SCORCHING_CLIENT,
+        mta = MAX_TINT_ALPHA;
+      if (temperature === null || typeof temperature === "undefined") {
+        return;
+      }
+      if (temperature <= tfc) {
+        tcs = "rgba(100,150,255,A)";
+        a = mta * Math.min(1.0, (tfc - temperature + 5) / 5.0);
+      } else if (temperature <= tcc) {
+        tcs = "rgba(150,180,255,A)";
+        a = mta * ((tcc - temperature) / (tcc - tfc));
+      } else if (temperature >= tsc) {
+        tcs = "rgba(255,100,0,A)";
+        a = mta * Math.min(1.0, (temperature - tsc + 5) / 5.0);
+      } else if (temperature >= thc) {
+        tcs = "rgba(255,150,50,A)";
+        a = mta * ((temperature - thc) / (tsc - thc));
+      }
+      a = Math.max(0, Math.min(mta, a));
+      if (tcs && a > 0.01) {
+        ctx.fillStyle = tcs.replace("A", a.toFixed(2));
+        ctx.fillRect(0, 0, width, height);
+      }
+    }
+
+    function drawEnemySpeechBubbles(ctx, enemiesToRender, activeEnemyBubblesRef) {
+      if (!activeEnemyBubblesRef) return;
+      const now = performance.now();
+      const bubbleFont = "italic 13px " + fontFamily;
+      const cornerRadius = 5;
+      const textPadding = 5;
+      const bubbleOffsetY = 25;
+      const bubbleBg = enemySpeechBubbleBg;
+      const bubbleColor = enemySpeechBubbleColor;
+      const shadowColor = "rgba(0, 0, 0, 0.5)";
+      const shadowOffsetX = 2;
+      const shadowOffsetY = 2;
+      const shadowBlur = 4;
+      ctx.font = bubbleFont;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      const expiredBubbleIds = [];
+      for (const enemyId in activeEnemyBubblesRef) {
+        const bubbleData = activeEnemyBubblesRef[enemyId];
+        if (now >= bubbleData.endTime) {
+          expiredBubbleIds.push(enemyId);
+          continue;
+        }
+        const enemy = enemiesToRender?.[enemyId];
+        if (enemy && enemy.health > 0 && !enemy.death_timestamp) {
+          const enemyX = enemy.x;
+          const enemyY = enemy.y;
+          const enemyHeight = enemy.height ?? 40;
+          const bubbleTargetY = enemyY - enemyHeight / 2 - bubbleOffsetY;
+          const textMetrics = ctx.measureText(bubbleData.text);
+          const textWidth = textMetrics.width;
+          const bubbleHeight = 13 + textPadding * 2;
+          const bubbleWidth = textWidth + textPadding * 2;
+          const bubbleX = enemyX - bubbleWidth / 2;
+          const bubbleDrawY = bubbleTargetY - bubbleHeight;
+          ctx.save();
+          ctx.shadowColor = shadowColor;
+          ctx.shadowBlur = shadowBlur;
+          ctx.shadowOffsetX = shadowOffsetX;
+          ctx.shadowOffsetY = shadowOffsetY;
+          ctx.fillStyle = bubbleBg;
+          if (typeof drawRoundedRect === "function") {
+            drawRoundedRect(
+              ctx,
+              bubbleX,
+              bubbleDrawY,
+              bubbleWidth,
+              bubbleHeight,
+              cornerRadius
+            );
+            ctx.fill();
+          } else {
+            ctx.fillRect(bubbleX, bubbleDrawY, bubbleWidth, bubbleHeight);
+          }
+          ctx.restore();
+          ctx.fillStyle = bubbleColor;
+          ctx.fillText(bubbleData.text, enemyX, bubbleTargetY - textPadding);
+        } else {
+          expiredBubbleIds.push(enemyId);
+        }
+      }
+      expiredBubbleIds.forEach((id) => {
+        if (activeEnemyBubblesRef) delete activeEnemyBubblesRef[id];
+      });
+    }
+
+    function drawSpeechBubbles(
+      ctx,
+      playersToRender,
+      activeSpeechBubblesRef,
+      appStateRef
+    ) {
+      if (!activeSpeechBubblesRef || !appStateRef) return;
+      const now = performance.now();
+      const bubbleFont = "bold 14px " + fontFamily;
+      const cornerRadius = 6;
+      const textPadding = 6;
+      const bubbleOffsetY = 35;
+      const bubbleBg = playerSpeechBubbleBg;
+      const bubbleColor = playerSpeechBubbleColor;
+      const shadowColor = "rgba(0, 0, 0, 0.6)";
+      const shadowOffsetX = 2;
+      const shadowOffsetY = 2;
+      const shadowBlur = 5;
+      ctx.font = bubbleFont;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      const expiredBubbleIds = [];
+      for (const playerId in activeSpeechBubblesRef) {
+        const bubbleData = activeSpeechBubblesRef[playerId];
+        if (now >= bubbleData.endTime) {
+          expiredBubbleIds.push(playerId);
+          continue;
+        }
+        const player = playersToRender?.[playerId];
+        if (player && player.player_status !== "dead" && player.health > 0) {
+          const playerX =
+            playerId === appStateRef.localPlayerId
+              ? appStateRef.renderedPlayerPos.x
+              : player.x;
+          const playerY =
+            playerId === appStateRef.localPlayerId
+              ? appStateRef.renderedPlayerPos.y
+              : player.y;
+          const playerHeight = player.height ?? 48; // Use hardcoded default if needed
+          const bubbleTargetY = playerY - playerHeight / 2 - bubbleOffsetY;
+          const textMetrics = ctx.measureText(bubbleData.text);
+          const textWidth = textMetrics.width;
+          const bubbleHeight = 14 + textPadding * 2;
+          const bubbleWidth = textWidth + textPadding * 2;
+          const bubbleX = playerX - bubbleWidth / 2;
+          const bubbleDrawY = bubbleTargetY - bubbleHeight;
+          ctx.save();
+          ctx.shadowColor = shadowColor;
+          ctx.shadowBlur = shadowBlur;
+          ctx.shadowOffsetX = shadowOffsetX;
+          ctx.shadowOffsetY = shadowOffsetY;
+          ctx.fillStyle = bubbleBg;
+          if (typeof drawRoundedRect === "function") {
+            drawRoundedRect(
+              ctx,
+              bubbleX,
+              bubbleDrawY,
+              bubbleWidth,
+              bubbleHeight,
+              cornerRadius
+            );
+            ctx.fill();
+          } else {
+            ctx.fillRect(bubbleX, bubbleDrawY, bubbleWidth, bubbleHeight);
+          }
+          ctx.restore();
+          ctx.fillStyle = bubbleColor;
+          ctx.fillText(bubbleData.text, playerX, bubbleTargetY - textPadding);
+        } else {
+          expiredBubbleIds.push(playerId);
+        }
+      }
+      expiredBubbleIds.forEach((id) => {
+        if (activeSpeechBubblesRef) delete activeSpeechBubblesRef[id];
+      });
+    }
+
+    function drawSnake(ctx, snakeRef) {
+      if (
+        !snakeRef ||
+        !snakeRef.isActiveFromServer ||
+        !snakeRef.segments ||
+        snakeRef.segments.length < 2
+      )
+        return;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = snakeLineColor;
+      ctx.lineWidth = snakeRef.lineWidth ?? 3; // Add default width
+      ctx.beginPath();
+      ctx.moveTo(
+        snakeRef.segments[snakeRef.segments.length - 1].x,
+        snakeRef.segments[snakeRef.segments.length - 1].y
+      );
+      for (let i = snakeRef.segments.length - 2; i >= 1; i--) {
+        const s = snakeRef.segments[i],
+          ns = snakeRef.segments[i - 1];
+        if (!s || !ns) continue;
+        const xc = (s.x + ns.x) / 2,
+          yc = (s.y + ns.y) / 2;
+        ctx.quadraticCurveTo(s.x, s.y, xc, yc);
+      }
+      if (snakeRef.segments.length > 0) {
+        const h = snakeRef.segments[0];
+        if (snakeRef.segments.length > 1) {
+          const n = snakeRef.segments[1],
+            xc = (n.x + h.x) / 2,
+            yc = (n.y + h.y) / 2;
+          ctx.quadraticCurveTo(n.x, n.y, xc, yc);
+        }
+        ctx.lineTo(h.x, h.y);
+      }
+      ctx.stroke();
+    }
+
+    function drawHealthBar(ctx, x, y, width, currentHealth, maxHealth) {
+      if (maxHealth <= 0) return;
+      const bh = 5,
+        yo = -(width / 2 + 27),
+        bw = Math.max(20, width * 0.8);
+      const cw = Math.max(0, (currentHealth / maxHealth) * bw),
+        hp = currentHealth / maxHealth,
+        bx = x - bw / 2,
+        by = y + yo;
+      ctx.fillStyle = healthBarBg;
+      ctx.fillRect(bx, by, bw, bh);
+      let bc = healthBarLow;
+      if (hp > 0.66) bc = healthBarHigh;
+      else if (hp > 0.33) bc = healthBarMedium;
+      ctx.fillStyle = bc;
+      ctx.fillRect(bx, by, cw, bh);
+    }
+
+    function drawArmorBar(ctx, x, y, width, currentArmor) {
+      const ma = 100;
+      if (currentArmor <= 0) return;
+      const abh = 4,
+        hbh = 5,
+        bs = 1,
+        hbyo = -(width / 2 + 27);
+      const hbty = y + hbyo,
+        abty = hbty + hbh + bs,
+        bw = Math.max(20, width * 0.8),
+        cw = Math.max(0, (currentArmor / ma) * bw),
+        bx = x - bw / 2,
+        by = abty;
+      ctx.fillStyle = healthBarBg;
+      ctx.fillRect(bx, by, bw, abh);
+      ctx.fillStyle = armorBarColor;
+      ctx.fillRect(bx, by, cw, abh);
+    }
+
+    // --- REVISED drawEnemyRect (Enhanced Shapes, Shading, Animations) ---
+    function drawEnemyRect(
+      ctx,
+      x,
+      y,
+      w,
+      h,
+      type,
+      enemyState,
+      activeBloodSparkEffectsRef,
+      clientNowTime
+    ) {
+      const currentW = w;
+      const currentH = h;
+      const t = clientNowTime; // Use passed client time
+      const bobOffset =
+        type !== "giant"
+          ? Math.sin(t / IDLE_BOB_SPEED_DIVISOR) * IDLE_BOB_AMPLITUDE
+          : 0;
+      const nowSeconds = t / 1000.0;
+      const snakeEffect = enemyState?.effects?.snake_bite_slow;
+      const isSnakeBitten =
+        snakeEffect &&
+        typeof snakeEffect.expires_at === "number" &&
+        nowSeconds < snakeEffect.expires_at;
+      const attackState =
+        type === "giant" && enemyState?.attack_state
+          ? enemyState.attack_state
+          : "idle";
+      const enemyId = enemyState?.id;
+      const showBloodSparks =
+        enemyId &&
+        activeBloodSparkEffectsRef?.[enemyId] &&
+        t < activeBloodSparkEffectsRef[enemyId];
+      const isHit = enemyState?.is_hit; // Assume is_hit flag exists
+
+      ctx.save();
+
+      // Apply hit flash effect
+      if (isHit) {
+          ctx.filter = 'brightness(1.5) saturate(1.5)'; // Simple flash effect
+      }
+
+
+      // --- Giant Drawing (Enhanced) ---
+      if (type === "giant") {
+        const bodyWidth = currentW * 0.85;
+        const bodyHeight = currentH * 0.7;
+        const bodyTopY = y - currentH * 0.4;
+        const bodyBottomY = bodyTopY + bodyHeight;
+        const legHeight = currentH * 0.25;
+        const legWidth = currentW * 0.2;
+        const legSpacing = currentW * 0.2;
+        const legTopY = bodyBottomY;
+        const bootHeight = currentH * 0.1;
+        const bootWidth = legWidth * 1.2;
+        const bootTopY = legTopY + legHeight;
+        const headRadius = currentW * 0.2;
+        const headCenterY = bodyTopY - headRadius * 0.5;
+        const shakoHeight = headRadius * 1.5;
+        const shakoWidth = headRadius * 1.8;
+        const shakoBaseY = headCenterY - headRadius * 0.8;
+        const shakoPeakHeight = shakoHeight * 0.2;
+        const shakoPeakWidth = shakoWidth * 1.1;
+        const armShoulderWidth = currentW * 0.18;
+        const armWristWidth = currentW * 0.14;
+        const armLength = currentH * 0.55;
+        const shoulderY = bodyTopY + bodyHeight * 0.15;
+        const shoulderXOffset = bodyWidth / 2;
+
+        // Legs & Boots
+        ctx.fillStyle = bootColor; // Use bootColor constant
+        ctx.fillRect(x - legSpacing - legWidth / 2, legTopY, legWidth, legHeight);
+        ctx.fillRect(x + legSpacing - legWidth / 2, legTopY, legWidth, legHeight);
+        ctx.fillStyle = bootColor; // Use bootColor constant
+        ctx.fillRect(
+          x - legSpacing - bootWidth / 2,
+          bootTopY,
+          bootWidth,
+          bootHeight
         );
-        ctx.bezierCurveTo(
-          startX - swayX2,
-          midY1 + swayY2,
-          startX + currentWidth / 2 - swayX1,
-          midY2 + swayY1,
-          startX + currentWidth / 2,
-          startY
+        ctx.fillRect(
+          x + legSpacing - bootWidth / 2,
+          bootTopY,
+          bootWidth,
+          bootHeight
         );
+
+        // Body (More shaped)
+        ctx.fillStyle = enemyGiantRed;
+        ctx.beginPath();
+        ctx.moveTo(x - bodyWidth / 2, bodyTopY);
+        ctx.quadraticCurveTo(x - bodyWidth * 0.6, bodyTopY + bodyHeight * 0.3, x - bodyWidth / 2, bodyBottomY);
+        ctx.lineTo(x + bodyWidth / 2, bodyBottomY);
+        ctx.quadraticCurveTo(x + bodyWidth * 0.6, bodyTopY + bodyHeight * 0.3, x + bodyWidth / 2, bodyTopY);
         ctx.closePath();
         ctx.fill();
-      }
-    }
-    ctx.restore();
-  }
 
-  function drawDamageVignette(ctx, intensity, width, height) { // Added width, height params
-    if (intensity <= 0) return; // No vignette if intensity is zero or negative
+        // Body Highlight/Shadow
+        ctx.fillStyle = enemyUniformHighlight;
+        ctx.beginPath();
+        ctx.moveTo(x - bodyWidth / 2 + bodyWidth * 0.1, bodyTopY + bodyHeight * 0.1);
+        ctx.quadraticCurveTo(x - bodyWidth * 0.5, bodyTopY + bodyHeight * 0.3, x - bodyWidth / 2 + bodyWidth * 0.1, bodyBottomY - bodyHeight * 0.1);
+        ctx.lineTo(x + bodyWidth / 2 - bodyWidth * 0.1, bodyBottomY - bodyHeight * 0.1);
+        ctx.quadraticCurveTo(x + bodyWidth * 0.5, bodyTopY + bodyHeight * 0.3, x + bodyWidth / 2 - bodyWidth * 0.1, bodyTopY + bodyHeight * 0.1);
+        ctx.closePath();
+        ctx.fill();
 
-    ctx.save(); // Save current context state
+        ctx.fillStyle = enemyUniformShadow;
+         ctx.beginPath();
+        ctx.moveTo(x - bodyWidth / 2 + bodyWidth * 0.2, bodyTopY + bodyHeight * 0.2);
+        ctx.quadraticCurveTo(x - bodyWidth * 0.4, bodyTopY + bodyHeight * 0.4, x - bodyWidth / 2 + bodyWidth * 0.2, bodyBottomY - bodyHeight * 0.2);
+        ctx.lineTo(x + bodyWidth / 2 - bodyWidth * 0.2, bodyBottomY - bodyHeight * 0.2);
+        ctx.quadraticCurveTo(x + bodyWidth * 0.4, bodyTopY + bodyHeight * 0.4, x + bodyWidth / 2 - bodyWidth * 0.2, bodyTopY + bodyHeight * 0.2);
+        ctx.closePath();
+        ctx.fill();
 
-    // Calculate the radius for the gradient based on canvas diagonal
-    // Use the passed width and height parameters
-    const outerRadius = Math.sqrt(width ** 2 + height ** 2) / 2;
 
-    // Create a radial gradient centered on the canvas
-    // Use the passed width and height parameters
-    const gradient = ctx.createRadialGradient(
-      width / 2, height / 2, 0,           // Inner circle (center, radius 0)
-      width / 2, height / 2, outerRadius  // Outer circle (center, calculated radius)
-    );
+        if (attackState === "winding_up") {
+          ctx.fillStyle = "rgba(255, 255, 100, 0.15)";
+           ctx.beginPath(); // Redraw the body shape for the tint
+            ctx.moveTo(x - bodyWidth / 2, bodyTopY);
+            ctx.quadraticCurveTo(x - bodyWidth * 0.6, bodyTopY + bodyHeight * 0.3, x - bodyWidth / 2, bodyBottomY);
+            ctx.lineTo(x + bodyWidth / 2, bodyBottomY);
+            ctx.quadraticCurveTo(x + bodyWidth * 0.6, bodyTopY + bodyHeight * 0.3, x + bodyWidth / 2, bodyTopY);
+            ctx.closePath();
+           ctx.fill();
+        }
+        // Belt
+        ctx.fillStyle = beltColor;
+        ctx.fillRect(
+          x - bodyWidth / 2,
+          bodyTopY + bodyHeight * 0.7,
+          bodyWidth,
+          bodyHeight * 0.08
+        );
+        // Arms (More shaped, animated)
+        ctx.fillStyle = enemyGiantRed;
+        const drawGiantArm = (armCtx, shoulderX, shoulderY, windUp) => {
+             armCtx.beginPath();
+             armCtx.moveTo(0, 0); // Shoulder joint
+             const elbowX = windUp ? armShoulderWidth * 0.5 : armShoulderWidth * 0.8;
+             const elbowY = windUp ? armLength * 0.5 : armLength * 0.2;
+             const wristX = windUp ? armWristWidth * 0.3 : armWristWidth * 0.5;
+             const wristY = armLength;
+             armCtx.quadraticCurveTo(elbowX, elbowY, wristX, wristY);
+             armCtx.lineTo(wristX + armWristWidth * 0.5, wristY); // Wrist width
+             armCtx.quadraticCurveTo(elbowX + armShoulderWidth * 0.2, elbowY, armShoulderWidth, 0); // Back to shoulder width
+             armCtx.closePath();
+             armCtx.fill();
 
-    // Clamp the calculated alpha based on intensity
-    // Ensure alpha is between 0.0 and 0.4 (or adjust max as needed)
-    const vignetteAlpha = Math.min(0.4, Math.max(0.0, 0.4 * intensity));
+             // Arm Shading
+             armCtx.fillStyle = enemyUniformHighlight;
+             armCtx.beginPath();
+             armCtx.moveTo(armShoulderWidth * 0.1, armLength * 0.1);
+             armCtx.quadraticCurveTo(elbowX * 0.8, elbowY * 0.8, wristX * 0.8, wristY * 0.8);
+             armCtx.lineTo(wristX * 0.8 + armWristWidth * 0.3, wristY * 0.8);
+             armCtx.quadraticCurveTo(elbowX * 0.8 + armShoulderWidth * 0.1, elbowY * 0.8, armShoulderWidth * 0.8, armLength * 0.1);
+             armCtx.closePath();
+             armCtx.fill();
 
-    // Define gradient color stops
-    gradient.addColorStop(0, "rgba(255,0,0,0)");     // Center is fully transparent red
-    gradient.addColorStop(0.75, "rgba(255,0,0,0)");  // Stays transparent until 75% of the radius
-    gradient.addColorStop(1, `rgba(255,0,0,${vignetteAlpha.toFixed(2)})`); // Fades to red at the edges
+             armCtx.fillStyle = enemyUniformShadow;
+             armCtx.beginPath();
+             armCtx.moveTo(armShoulderWidth * 0.3, armLength * 0.3);
+             armCtx.quadraticCurveTo(elbowX * 1.2, elbowY * 1.2, wristX * 1.2, wristY * 1.2);
+             armCtx.lineTo(wristX * 1.2 + armWristWidth * 0.1, wristY * 1.2);
+             armCtx.quadraticCurveTo(elbowX * 1.2 + armShoulderWidth * 0.05, elbowY * 1.2, armShoulderWidth * 0.6, armLength * 0.3);
+             armCtx.closePath();
+             armCtx.fill();
+        };
 
-    // Apply the gradient fill
-    ctx.fillStyle = gradient;
-    // Use the passed width and height parameters to fill the entire canvas
-    ctx.fillRect(0, 0, width, height);
+        const windUpAngle = -Math.PI / 6;
+        const raisedOffsetY = -armLength * 0.1;
 
-    ctx.restore(); // Restore context state
-  }
-
-  function drawTemperatureTint(ctx, temperature, width, height) { // Added width, height params
-    let tcs = null, a = 0.0;
-    const tfc = TEMP_FREEZING_CLIENT, tcc = TEMP_COLD_CLIENT,
-      thc = TEMP_HOT_CLIENT, tsc = TEMP_SCORCHING_CLIENT,
-      mta = MAX_TINT_ALPHA;
-
-    if (temperature === null || typeof temperature === 'undefined') {
-      return; // Exit if temperature is invalid
-    }
-
-    // Determine tint color and base alpha based on temperature ranges
-    if (temperature <= tfc) {
-      tcs = "rgba(100,150,255,A)"; // Freezing blue
-      a = mta * Math.min(1.0, (tfc - temperature + 5) / 5.0);
-    } else if (temperature <= tcc) {
-      tcs = "rgba(150,180,255,A)"; // Cold blue
-      a = mta * ((tcc - temperature) / (tcc - tfc));
-    } else if (temperature >= tsc) {
-      tcs = "rgba(255,100,0,A)";   // Scorching orange
-      a = mta * Math.min(1.0, (temperature - tsc + 5) / 5.0);
-    } else if (temperature >= thc) {
-      tcs = "rgba(255,150,50,A)";   // Hot orange
-      a = mta * ((temperature - thc) / (tsc - thc));
-    }
-
-    // Clamp alpha and apply fill if needed
-    a = Math.max(0, Math.min(mta, a)); // Ensure alpha is between 0 and MAX_TINT_ALPHA
-    if (tcs && a > 0.01) { // Only draw if there's a noticeable tint
-      ctx.fillStyle = tcs.replace("A", a.toFixed(2));
-      // Use the passed width and height parameters to fill the entire canvas
-      ctx.fillRect(0, 0, width, height);
-    }
-  }
-
-  function drawEnemySpeechBubbles(ctx, enemiesToRender, activeEnemyBubbles) { // <-- Parameter name is now `activeEnemyBubbles`
-    if (!activeEnemyBubbles) return; // <-- Use `activeEnemyBubbles` here as well
-    const now = performance.now();
-    const bubbleFont = "italic 13px " + fontFamily;
-    const cornerRadius = 5;
-    const textPadding = 5;
-    const bubbleOffsetY = 25;
-    const bubbleBg = enemySpeechBubbleBg;
-    const bubbleColor = enemySpeechBubbleColor;
-    const shadowColor = "rgba(0, 0, 0, 0.5)";
-    const shadowOffsetX = 2;
-    const shadowOffsetY = 2;
-    const shadowBlur = 4;
-    ctx.font = bubbleFont;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "bottom";
-    const expiredBubbleIds = [];
-    for (const enemyId in activeEnemyBubbles) { // <-- Use `activeEnemyBubbles` here
-      const bubbleData = activeEnemyBubbles[enemyId]; // <-- Use `activeEnemyBubbles` here
-      if (now >= bubbleData.endTime) {
-        expiredBubbleIds.push(enemyId);
-        continue;
-      }
-      const enemy = enemiesToRender?.[enemyId];
-      if (enemy && enemy.health > 0 && !enemy.death_timestamp) {
-        const enemyX = enemy.x;
-        const enemyY = enemy.y;
-        const enemyHeight = enemy.height ?? 40;
-        const bubbleTargetY = enemyY - enemyHeight / 2 - bubbleOffsetY;
-        const textMetrics = ctx.measureText(bubbleData.text);
-        const textWidth = textMetrics.width;
-        const bubbleHeight = 13 + textPadding * 2;
-        const bubbleWidth = textWidth + textPadding * 2;
-        const bubbleX = enemyX - bubbleWidth / 2;
-        const bubbleDrawY = bubbleTargetY - bubbleHeight;
         ctx.save();
-        ctx.shadowColor = shadowColor;
-        ctx.shadowBlur = shadowBlur;
-        ctx.shadowOffsetX = shadowOffsetX;
-        ctx.shadowOffsetY = shadowOffsetY;
-        ctx.fillStyle = bubbleBg;
-        if (typeof drawRoundedRect === "function") {
-          drawRoundedRect(
-            ctx,
-            bubbleX,
-            bubbleDrawY,
-            bubbleWidth,
-            bubbleHeight,
-            cornerRadius
-          );
+        ctx.translate(x - shoulderXOffset, shoulderY + (attackState === "winding_up" ? raisedOffsetY : 0));
+        ctx.rotate(attackState === "winding_up" ? windUpAngle : Math.PI / 10); // Slightly angled down when idle
+        drawGiantArm(ctx, 0, 0, attackState === "winding_up");
+        ctx.restore();
+
+        ctx.save();
+        ctx.translate(x + shoulderXOffset, shoulderY + (attackState === "winding_up" ? raisedOffsetY : 0));
+        ctx.rotate(attackState === "winding_up" ? -windUpAngle : -Math.PI / 10); // Slightly angled down when idle
+        ctx.scale(-1, 1); // Flip horizontally for the right arm
+        drawGiantArm(ctx, 0, 0, attackState === "winding_up");
+        ctx.restore();
+
+
+        // Head & Face (More shaped)
+        ctx.fillStyle = enemySkinColor;
+        ctx.beginPath();
+        ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Head Shading
+        ctx.fillStyle = enemySkinHighlight;
+        ctx.beginPath();
+        ctx.arc(x - headRadius * 0.3, headCenterY - headRadius * 0.3, headRadius * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+         ctx.fillStyle = enemySkinShadow;
+        ctx.beginPath();
+        ctx.arc(x + headRadius * 0.3, headCenterY + headRadius * 0.3, headRadius * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+
+
+        const beardWidth = headRadius * 1.6;
+        const beardHeight = headRadius * 1.0;
+        const beardTopY = headCenterY + headRadius * 0.2;
+        ctx.fillStyle = enemyCapColor; // Using CapColor for beard
+        ctx.fillRect(x - beardWidth / 2, beardTopY, beardWidth, beardHeight);
+        ctx.strokeStyle = "#000000";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        const giantBrowLength = headRadius * 0.7;
+        const giantBrowY = headCenterY - headRadius * 0.4;
+        const giantBrowXOffset = headRadius * 0.4;
+        ctx.moveTo(
+          x - giantBrowXOffset - giantBrowLength / 2,
+          giantBrowY + giantBrowLength / 4
+        );
+        ctx.lineTo(
+          x - giantBrowXOffset + giantBrowLength / 2,
+          giantBrowY - giantBrowLength / 4
+        );
+        ctx.moveTo(
+          x + giantBrowXOffset - giantBrowLength / 2,
+          giantBrowY - giantBrowLength / 4
+        );
+        ctx.lineTo(
+          x + giantBrowXOffset + giantBrowLength / 2,
+          giantBrowY + giantBrowLength / 4
+        );
+        ctx.stroke();
+        // Shako Hat (More shaped)
+        ctx.fillStyle = enemyCapColor;
+        ctx.beginPath();
+        ctx.moveTo(x - shakoWidth / 2, shakoBaseY - shakoHeight);
+        ctx.lineTo(x + shakoWidth / 2, shakoBaseY - shakoHeight);
+        ctx.lineTo(x + shakoWidth * 0.8, shakoBaseY);
+        ctx.lineTo(x - shakoWidth * 0.8, shakoBaseY);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = enemyCapColor; // Peak
+        ctx.beginPath();
+        ctx.moveTo(x - shakoPeakWidth / 2, shakoBaseY - shakoHeight);
+        ctx.lineTo(x + shakoPeakWidth / 2, shakoBaseY - shakoHeight);
+        ctx.lineTo(x + shakoPeakWidth * 0.8, shakoBaseY - shakoHeight - shakoPeakHeight);
+        ctx.lineTo(x - shakoPeakWidth * 0.8, shakoBaseY - shakoHeight - shakoPeakHeight);
+        ctx.closePath();
+        ctx.fill();
+
+
+      }
+      // --- Standard Enemy (Enhanced Shapes, Shading, Animations) ---
+      else {
+        const headRadius = currentH * 0.16;
+        const coatShoulderWidth = currentW * 1.1;
+        const coatHemWidth = currentW * 0.9;
+        const torsoShoulderWidth = currentW * 0.9;
+        const torsoHemWidth = currentW * 0.7;
+        const coatTopY = y - currentH * 0.35 + bobOffset;
+        const coatBottomY = y + currentH * 0.25 + bobOffset;
+        const coatHeight = coatBottomY - coatTopY;
+        const headCenterY = coatTopY - headRadius * 0.6;
+        const armWidth = currentW * 0.2;
+        const armHeight = currentH * 0.45;
+        const armOffsetY = coatTopY + coatHeight * 0.1;
+        const trouserHeight = currentH * 0.2;
+        const trouserWidth = currentW * 0.25;
+        const trouserTopY = coatBottomY;
+        const legSpacing = currentW * 0.15;
+        const bootHeight = currentH * 0.12;
+        const bootWidth = currentW * 0.3;
+        const bootTopY = trouserTopY + trouserHeight;
+        const hatBrimWidth = headRadius * 3.5;
+        const hatBrimHeight = headRadius * 0.6;
+        const hatCrownRadiusH = headRadius * 1.5;
+        const hatCrownRadiusV = headRadius * 1.1;
+        const hatCenterY = headCenterY - headRadius * 1.0;
+        const stepCycle = 400;
+        const stepPhase = Math.floor(t / stepCycle) % 2;
+        const walkLift = 2; // Pixels to lift foot during walk
+
+        // Trousers & Boots
+        ctx.fillStyle = enemyBootColor;
+        const leftLegX = x - legSpacing;
+        const rightLegX = x + legSpacing;
+        let leftBootYOffset = 0;
+        let rightBootYOffset = 0;
+
+        if (enemyState?.is_moving) { // Assume is_moving flag exists
+             if (stepPhase === 0) {
+                leftBootYOffset = -walkLift;
+             } else {
+                rightBootYOffset = -walkLift;
+             }
+        }
+
+        // Draw Legs (Simple Rects for now, can enhance later)
+        ctx.fillRect(leftLegX - trouserWidth / 2, trouserTopY, trouserWidth, trouserHeight);
+        ctx.fillRect(rightLegX - trouserWidth / 2, trouserTopY, trouserWidth, trouserHeight);
+
+        // Draw Boots (Simple Rects for now, can enhance later)
+        ctx.fillStyle = bootColor;
+        ctx.fillRect(leftLegX - bootWidth / 2, bootTopY + leftBootYOffset, bootWidth, bootHeight);
+        ctx.fillRect(rightLegX - bootWidth / 2, bootTopY + rightBootYOffset, bootWidth, bootHeight);
+
+
+        // Coats/Arms/Torso (More shaped)
+        ctx.fillStyle = enemyCoatColor;
+        ctx.beginPath();
+        ctx.moveTo(x - coatShoulderWidth / 2, coatTopY);
+        ctx.quadraticCurveTo(x - coatShoulderWidth * 0.8, coatTopY + coatHeight * 0.3, x - coatHemWidth / 2, coatBottomY);
+        ctx.lineTo(x + coatHemWidth / 2, coatBottomY);
+        ctx.quadraticCurveTo(x + coatShoulderWidth * 0.8, coatTopY + coatHeight * 0.3, x + coatShoulderWidth / 2, coatTopY);
+        ctx.closePath();
+        ctx.fill();
+
+         // Coat Shading
+        ctx.fillStyle = enemyCoatHighlight;
+        ctx.beginPath();
+        ctx.moveTo(x - coatShoulderWidth / 2 + coatShoulderWidth * 0.1, coatTopY + coatHeight * 0.05);
+        ctx.quadraticCurveTo(x - coatShoulderWidth * 0.7, coatTopY + coatHeight * 0.3, x - coatHemWidth / 2 + coatHemWidth * 0.1, coatBottomY - coatHeight * 0.05);
+        ctx.lineTo(x + coatHemWidth / 2 - coatHemWidth * 0.1, coatBottomY - coatHeight * 0.05);
+        ctx.quadraticCurveTo(x + coatShoulderWidth * 0.7, coatTopY + coatHeight * 0.3, x + coatShoulderWidth / 2 - coatShoulderWidth * 0.1, coatTopY + coatHeight * 0.05);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = enemyCoatShadow;
+        ctx.beginPath();
+        ctx.moveTo(x - coatShoulderWidth / 2 + coatShoulderWidth * 0.2, coatTopY + coatHeight * 0.1);
+        ctx.quadraticCurveTo(x - coatShoulderWidth * 0.6, coatTopY + coatHeight * 0.4, x - coatHemWidth / 2 + coatHemWidth * 0.2, coatBottomY - coatHeight * 0.1);
+        ctx.lineTo(x + coatHemWidth / 2 - coatHemWidth * 0.2, coatBottomY - coatHeight * 0.1);
+        ctx.quadraticCurveTo(x + coatShoulderWidth * 0.6, coatTopY + coatHeight * 0.4, x + coatShoulderWidth / 2 - coatShoulderWidth * 0.2, coatTopY + coatHeight * 0.1);
+        ctx.closePath();
+        ctx.fill();
+
+
+        // Arms (Simple Rects for now, can enhance later)
+        ctx.fillStyle = enemyCoatColor;
+        ctx.fillRect(
+          x - coatShoulderWidth * 0.45 - armWidth / 2,
+          armOffsetY,
+          armWidth,
+          armHeight
+        );
+        ctx.fillRect(
+          x + coatShoulderWidth * 0.45 - armWidth / 2,
+          armOffsetY,
+          armWidth,
+          armHeight
+        );
+
+        // Torso (More shaped)
+        ctx.fillStyle = enemyUniformBlue;
+        ctx.beginPath();
+        ctx.moveTo(x - torsoShoulderWidth / 2, torsoTopY);
+        ctx.quadraticCurveTo(x - torsoShoulderWidth * 0.7, torsoTopY + torsoHeight * 0.3, x - torsoHemWidth / 2, torsoBottomY);
+        ctx.lineTo(x + torsoHemWidth / 2, torsoBottomY);
+        ctx.quadraticCurveTo(x + torsoShoulderWidth * 0.7, torsoTopY + torsoHeight * 0.3, x + torsoShoulderWidth / 2, torsoTopY);
+        ctx.closePath();
+        ctx.fill();
+
+        // Torso Shading
+        ctx.fillStyle = enemyUniformHighlight;
+        ctx.beginPath();
+        ctx.moveTo(x - torsoShoulderWidth / 2 + torsoShoulderWidth * 0.1, torsoTopY + torsoHeight * 0.05);
+        ctx.quadraticCurveTo(x - torsoShoulderWidth * 0.6, torsoTopY + torsoHeight * 0.3, x - torsoHemWidth / 2 + torsoHemWidth * 0.1, torsoBottomY - torsoHeight * 0.05);
+        ctx.lineTo(x + torsoHemWidth / 2 - torsoHemWidth * 0.1, torsoBottomY - torsoHeight * 0.05);
+        ctx.quadraticCurveTo(x + torsoShoulderWidth * 0.6, torsoTopY + torsoHeight * 0.3, x + torsoShoulderWidth / 2 - torsoShoulderWidth * 0.1, torsoTopY + torsoHeight * 0.05);
+        ctx.closePath();
+        ctx.fill();
+
+         ctx.fillStyle = enemyUniformShadow;
+        ctx.beginPath();
+        ctx.moveTo(x - torsoShoulderWidth / 2 + torsoShoulderWidth * 0.2, torsoTopY + torsoHeight * 0.1);
+        ctx.quadraticCurveTo(x - torsoShoulderWidth * 0.5, torsoTopY + torsoHeight * 0.4, x - torsoHemWidth / 2 + torsoHemWidth * 0.2, torsoBottomY - torsoHeight * 0.1);
+        ctx.lineTo(x + torsoHemWidth / 2 - torsoHemWidth * 0.2, torsoBottomY - torsoHeight * 0.1);
+        ctx.quadraticCurveTo(x + torsoShoulderWidth * 0.5, torsoTopY + torsoHeight * 0.4, x + torsoShoulderWidth / 2 - torsoShoulderWidth * 0.2, torsoTopY + torsoHeight * 0.1);
+        ctx.closePath();
+        ctx.fill();
+
+
+        // Head & Face (More shaped)
+        ctx.fillStyle = enemySkinColor;
+        ctx.beginPath();
+        ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Head Shading
+        ctx.fillStyle = enemySkinHighlight;
+        ctx.beginPath();
+        ctx.arc(x - headRadius * 0.3, headCenterY - headRadius * 0.3, headRadius * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+         ctx.fillStyle = enemySkinShadow;
+        ctx.beginPath();
+        ctx.arc(x + headRadius * 0.3, headCenterY + headRadius * 0.3, headRadius * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+
+
+        ctx.strokeStyle = "#000000";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        const browLength = headRadius * 0.5;
+        const browY = headCenterY - headRadius * 0.3;
+        const browXOffset = headRadius * 0.3;
+        ctx.moveTo(x - browXOffset - browLength / 2, browY - browLength / 3);
+        ctx.lineTo(x - browXOffset + browLength / 2, browY + browLength / 3);
+        ctx.moveTo(x + browXOffset - browLength / 2, browY + browLength / 3);
+        ctx.lineTo(x + browXOffset + browLength / 2, browY - browLength / 3);
+        ctx.stroke();
+        // Hat (More shaped)
+        ctx.fillStyle = enemyCapColor;
+        ctx.beginPath(); // Brim
+        ctx.ellipse(
+          x,
+          hatCenterY + hatCrownRadiusV * 0.7,
+          hatBrimWidth / 2,
+          hatBrimHeight / 2,
+          0,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+        ctx.beginPath(); // Crown
+        ctx.ellipse(
+          x,
+          hatCenterY,
+          hatCrownRadiusH / 2,
+          hatCrownRadiusV,
+          0,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+
+        // Shooter Gun (Slightly more detailed)
+        if (type === "shooter") {
+          const gunBarrelLength = w * 1.2;
+          const gunBarrelThickness = 3;
+          const gunStockLength = w * 0.5;
+          const gunStockThickness = 5;
+          const gunColorBarrel = "#555555";
+          const gunColorStock = "#7a4a2a";
+          ctx.save();
+          const gunAngle = Math.PI / 10; // Static angle for now
+          const gunCenterY = y + bobOffset;
+          const gunCenterX = x;
+          ctx.translate(gunCenterX, gunCenterY);
+          ctx.rotate(gunAngle);
+
+          // Draw Stock
+          ctx.fillStyle = gunColorStock;
+          ctx.beginPath();
+          ctx.moveTo(-stockLength - 2, -gunStockThickness / 2);
+          ctx.lineTo(0, -gunStockThickness / 2);
+          ctx.lineTo(5, gunStockThickness / 2); // Slight angle
+          ctx.lineTo(-stockLength - 2, gunStockThickness / 2);
+          ctx.closePath();
           ctx.fill();
+
+          // Draw Barrel
+          ctx.fillStyle = gunColorBarrel;
+          ctx.fillRect(0, -gunBarrelThickness / 2, gunBarrelLength, gunBarrelThickness);
+
+          // Simple sight
+          ctx.fillStyle = "#333";
+          ctx.fillRect(gunBarrelLength * 0.8, -gunBarrelThickness / 2 - 2, 4, 2);
+
+
+          ctx.restore();
+        }
+      }
+
+      // --- Common Effects ---
+      // Snake Bite
+      if (isSnakeBitten) {
+        let footY;
+        if (type === "giant") {
+          const bodyHeight = currentH * 0.7;
+          const legHeight = currentH * 0.25;
+          const bootHeight = currentH * 0.1;
+          const bodyTopY = y - currentH * 0.4;
+          footY = bodyTopY + bodyHeight + legHeight + bootHeight;
         } else {
-          ctx.fillRect(bubbleX, bubbleDrawY, bubbleWidth, bubbleHeight);
+          const coatBottomY = y + currentH * 0.25 + bobOffset;
+          const trouserHeight = currentH * 0.2;
+          const bootHeight = currentH * 0.12;
+          footY = coatBottomY + trouserHeight + bootHeight;
         }
-        ctx.restore();
-        ctx.fillStyle = bubbleColor;
-        ctx.fillText(bubbleData.text, enemyX, bubbleTargetY - textPadding);
-      } else {
-        expiredBubbleIds.push(enemyId);
-      }
-    }
-    expiredBubbleIds.forEach((id) => {
-      if (activeEnemyBubbles) delete activeEnemyBubbles[id]; // <-- Use `activeEnemyBubbles` here
-    });
-  }
-  // --- Add drawSpeechBubbles function with offset parameters (Optional) ---
-  function drawSpeechBubbles(ctx, playersToRender, activeSpeechBubbles, appState,
-    offsetX = 0, offsetY = 0) { // Add offsets
-    if (!activeSpeechBubbles || !appState) return;
-    const now = performance.now();
-    const bubbleFont = "bold 14px " + fontFamily;
-    // ... (rest of bubble constants/setup) ...
-    const textPadding = 6; const cornerRadius = 6; const bubbleOffsetY = 35;
-    const bubbleBg = playerSpeechBubbleBg; const bubbleColor = playerSpeechBubbleColor;
-    const shadowColor = "rgba(0, 0, 0, 0.6)"; const shadowOffsetX = 2;
-    const shadowOffsetY = 2; const shadowBlur = 5;
-    ctx.font = bubbleFont; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
-
-    const expiredBubbleIds = [];
-    for (const playerId in activeSpeechBubbles) {
-      const bubbleData = activeSpeechBubbles[playerId];
-      if (now >= bubbleData.endTime) { expiredBubbleIds.push(playerId); continue; }
-
-      const player = playersToRender?.[playerId];
-      if (player && player.player_status !== "dead" && player.health > 0) {
-        const isSelf = playerId === appState.localPlayerId;
-        let playerX = isSelf ? appState.renderedPlayerPos.x : player.x;
-        let playerY = isSelf ? appState.renderedPlayerPos.y : player.y;
-
-        // --- Apply Offset ONLY to Self ---
-        if (isSelf) {
-          playerX += offsetX;
-          playerY += offsetY;
-        }
-
-        const playerHeight = player.height ?? PLAYER_DEFAULTS.height;
-        const bubbleTargetY = playerY - playerHeight / 2 - bubbleOffsetY;
-        const textMetrics = ctx.measureText(bubbleData.text);
-        const textWidth = textMetrics.width;
-        const bubbleHeight = 14 + textPadding * 2;
-        const bubbleWidth = textWidth + textPadding * 2;
-        const bubbleX = playerX - bubbleWidth / 2;
-        const bubbleDrawY = bubbleTargetY - bubbleHeight;
-
+        const numParticles = 10; // Increased particles
+        const particleBaseSize = 4; // Increased size
+        const particleSpeedY = -70; // Faster
+        const particleSpeedX = 20; // Horizontal spread
+        const particleLifetimeMs = 800; // Longer lifetime
         ctx.save();
-        ctx.shadowColor = shadowColor; ctx.shadowBlur = shadowBlur;
-        ctx.shadowOffsetX = shadowOffsetX; ctx.shadowOffsetY = shadowOffsetY;
-        ctx.fillStyle = bubbleBg;
-        if (typeof drawRoundedRect === "function") {
-          drawRoundedRect(ctx, bubbleX, bubbleDrawY, bubbleWidth, bubbleHeight, cornerRadius);
-          ctx.fill();
-        } else { ctx.fillRect(bubbleX, bubbleDrawY, bubbleWidth, bubbleHeight); }
-        ctx.restore();
-
-        ctx.fillStyle = bubbleColor;
-        ctx.fillText(bubbleData.text, playerX, bubbleTargetY - textPadding);
-
-      } else { expiredBubbleIds.push(playerId); }
-    }
-    expiredBubbleIds.forEach((id) => { if (activeSpeechBubbles) delete activeSpeechBubbles[id]; });
-  }
-
-  function drawSnake(ctx, snake) {
-    if (
-      !snake ||
-      !snake.isActiveFromServer ||
-      !snake.segments ||
-      snake.segments.length < 2
-    )
-      return;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = snakeLineColor;
-    ctx.lineWidth = snake.lineWidth ?? 3; // Add default width
-    ctx.beginPath();
-    ctx.moveTo(
-      snake.segments[snake.segments.length - 1].x,
-      snake.segments[snake.segments.length - 1].y
-    );
-    for (let i = snake.segments.length - 2; i >= 1; i--) {
-      const s = snake.segments[i],
-        ns = snake.segments[i - 1];
-      if (!s || !ns) continue;
-      const xc = (s.x + ns.x) / 2,
-        yc = (s.y + ns.y) / 2;
-      ctx.quadraticCurveTo(s.x, s.y, xc, yc);
-    }
-    if (snake.segments.length > 0) {
-      const h = snake.segments[0];
-      if (snake.segments.length > 1) {
-        const n = snake.segments[1],
-          xc = (n.x + h.x) / 2,
-          yc = (n.y + h.y) / 2;
-        ctx.quadraticCurveTo(n.x, n.y, xc, yc);
-      }
-      ctx.lineTo(h.x, h.y);
-    }
-    ctx.stroke();
-  }
-
-    function drawHealthBar(ctx, x, y, w, h, currentHealth, maxHealth) { // Added 'h' parameter
-        if (maxHealth <= 0) return;
-
-        const bh = 7; // Reduced height (see next point)
-        // *** Calculate offset based on height 'h' instead of width 'w' ***
-        const yo = -(h / 2 + 15); // Offset above center based on height + padding
-        // *****************************************************************
-        const bw = Math.max(30, w * 0.8); // Bar width still based on entity width 'w'
-        const cw = Math.max(0, (currentHealth / maxHealth) * bw);
-        const hp = currentHealth / maxHealth;
-        const bx = x - bw / 2;
-        const by = y + yo; // Apply the vertical offset
-
-        ctx.fillStyle = healthBarBg;
-        ctx.fillRect(bx, by, bw, bh);
-
-        let bc = healthBarLow;
-        if (hp > 0.66) bc = healthBarHigh;
-        else if (hp > 0.33) bc = healthBarMedium;
-
-        ctx.fillStyle = bc;
-        ctx.fillRect(bx, by, cw, bh);
-    }
-
-    // --- MODIFY drawArmorBar (to align with new health bar height/pos) ---
-    function drawArmorBar(ctx, x, y, w, h, currentArmor) { // Added 'h' parameter
-        const ma = 100;
-        if (currentArmor <= 0) return;
-
-        const bh = 7; // Health bar height (MUST match drawHealthBar)
-        const abh = 4; // Armor bar height
-        const barSpacing = 2; // Space between health and armor bar
-
-        // Calculate vertical offset (same as health bar)
-        const yo = -(h / 2 + 15);
-        const healthBarTopY = y + yo;
-
-        // Position armor bar below health bar
-        const armorBarTopY = healthBarTopY + bh + barSpacing;
-
-        const bw = Math.max(20, w * 0.8); // Bar width based on entity width 'w'
-        const cw = Math.max(0, (currentArmor / ma) * bw);
-        const bx = x - bw / 2; // Center the bar horizontally
-
-        ctx.fillStyle = healthBarBg;
-        ctx.fillRect(bx, armorBarTopY, bw, abh); // Use calculated Y
-        ctx.fillStyle = armorBarColor;
-        ctx.fillRect(bx, armorBarTopY, cw, abh); // Use calculated Y
-    }
-
-// --- REVISED: drawEnemyRect (Handles Giant/Standard, Hit Sparks, Raised Elements) ---
-/**
- * Draws different enemy types (standard, giant, shooter) onto a canvas context.
- * Handles visual states like idle bobbing, attack wind-up, and effects (snake bite, hit sparks).
- * Includes adjustments for a more human-like appearance:
- * - Standard enemy has a face (eyes, brows, mouth).
- * - Giant has a revised face (eyes, adjusted brows, mouth), lowered hat, and shaped beard.
- *
- * @param {CanvasRenderingContext2D} ctx - The canvas rendering context.
- * @param {number} x - Center X coordinate for the enemy.
- * @param {number} y - Center Y coordinate (baseline before vertical offset).
- * @param {number} w - Width of the enemy bounding box.
- * @param {number} h - Height of the enemy bounding box.
- * @param {string} type - Type of enemy ('giant', 'standard', 'shooter', etc.).
- * @param {object} enemyState - Object containing enemy status (e.g., effects, attack_state, id).
- * @param {object} activeBloodSparkEffects - Map tracking active hit spark effects per enemy ID { [enemyId]: expiryTime }.
- * @param {number} clientNowTime - Current client time in milliseconds.
- */
-function drawEnemyRect(
-  ctx,          // Canvas rendering context
-  x,            // Center X coordinate
-  y,            // Center Y coordinate (baseline before vertical offset)
-  w,            // Width of the enemy bounding box
-  h,            // Height of the enemy bounding box
-  type,         // Type of enemy ('giant', 'standard', 'shooter', etc.)
-  enemyState,   // Object containing enemy status (effects, attack_state, id)
-  activeBloodSparkEffects, // Map tracking active hit spark effects per enemy ID
-  clientNowTime // Current client time in milliseconds
-) {
-  // --- Base Setup & State ---
-  const currentW = w;
-  const currentH = h;
-  const t = clientNowTime;
-  const bobOffset = type !== "giant" ? Math.sin(t / IDLE_BOB_SPEED_DIVISOR) * IDLE_BOB_AMPLITUDE : 0;
-  const nowSeconds = t / 1000.0;
-  const snakeEffect = enemyState?.effects?.snake_bite_slow;
-  const isSnakeBitten = snakeEffect && typeof snakeEffect.expires_at === "number" && nowSeconds < snakeEffect.expires_at;
-  const attackState = type === "giant" && enemyState?.attack_state ? enemyState.attack_state : "idle";
-  const enemyId = enemyState?.id;
-  const showBloodSparks = enemyId && activeBloodSparkEffects?.[enemyId] && t < activeBloodSparkEffects[enemyId];
-
-  // Vertical offset to raise elements visually (e.g., for health bars above)
-  const verticalDrawOffset = -h * 0.1; // Raise by 10% of height
-  const drawY = y + verticalDrawOffset; // Apply offset to baseline Y
-
-  ctx.save(); // Save context state before drawing this enemy
-
-  // --- Giant Drawing ---
-  if (type === "giant") {
-    // --- Giant Dimensions ---
-    const bodyWidth = currentW * 0.85;
-    const bodyHeight = currentH * 0.7;
-    const bodyTopY = drawY - currentH * 0.4; // Use offset drawY
-    const bodyBottomY = bodyTopY + bodyHeight;
-    const legHeight = currentH * 0.25;
-    const legWidth = currentW * 0.2;
-    const legSpacing = currentW * 0.2;
-    const legTopY = bodyBottomY;
-    const bootHeight = currentH * 0.1;
-    const bootWidth = legWidth * 1.2;
-    const bootTopY = legTopY + legHeight;
-    const headRadius = currentW * 0.2;
-    const headCenterY = bodyTopY - headRadius * 0.7; // Raised head position
-    // Hat dimensions (Revised position)
-    const shakoHeight = headRadius * 1.5;
-    const shakoWidth = headRadius * 1.8;
-    const shakoBaseY = headCenterY - headRadius * 0.6; // Lowered hat base
-    const shakoPeakHeight = shakoHeight * 0.2;
-    const shakoPeakWidth = shakoWidth * 1.1;
-    // Arm dimensions
-    const armRadius = currentW * 0.18;
-    const armLength = currentH * 0.55;
-    const shoulderY = bodyTopY + bodyHeight * 0.15;
-    const shoulderXOffset = bodyWidth / 2 - armRadius * 0.5;
-
-    // --- Giant Body Parts ---
-    // Legs & Boots
-    ctx.fillStyle = enemyBootColor; // Trousers color
-    ctx.fillRect(x - legSpacing - legWidth / 2, legTopY, legWidth, legHeight);
-    ctx.fillRect(x + legSpacing - legWidth / 2, legTopY, legWidth, legHeight);
-    ctx.fillStyle = enemyBootColor; // Boots color
-    ctx.fillRect(x - legSpacing - bootWidth / 2, bootTopY, bootWidth, bootHeight);
-    ctx.fillRect(x + legSpacing - bootWidth / 2, bootTopY, bootWidth, bootHeight);
-
-    // Body
-    ctx.fillStyle = enemyGiantRed; // Giant's tunic color
-    ctx.fillRect(x - bodyWidth / 2, bodyTopY, bodyWidth, bodyHeight);
-    // Attack Wind-up Indicator
-    if (attackState === "winding_up" || attackState === "attacking") {
-       ctx.strokeStyle = "rgba(255, 255, 100, 0.8)"; // Yellow glow
-       ctx.lineWidth = 3;
-       ctx.strokeRect(x - bodyWidth / 2, bodyTopY, bodyWidth, bodyHeight);
-       ctx.lineWidth = 1; // Reset line width
-    }
-    // Belt
-    ctx.fillStyle = beltColor;
-    ctx.fillRect(x - bodyWidth / 2, bodyTopY + bodyHeight * 0.7, bodyWidth, bodyHeight * 0.08);
-
-    // Arms (Rounded Shoulders)
-    ctx.fillStyle = enemyGiantRed; // Arm color same as body
-    const leftShoulderX = x - shoulderXOffset;
-    const rightShoulderX = x + shoulderXOffset;
-    // Draw arms based on attack state
-    if (attackState === "winding_up" || attackState === "attacking") {
-      const windUpAngle = Math.PI / 4; const raisedOffsetY = -armLength * 0.15;
-      // Left Arm (Raised)
-      ctx.save(); ctx.translate(leftShoulderX, shoulderY + raisedOffsetY); ctx.rotate(-windUpAngle); ctx.beginPath(); ctx.arc(0, 0, armRadius, Math.PI / 2, Math.PI * 1.5); ctx.lineTo(0, armLength - armRadius); ctx.arc(0, armLength - armRadius, armRadius, Math.PI * 1.5, Math.PI / 2, true); ctx.closePath(); ctx.fill(); ctx.restore();
-      // Right Arm (Raised)
-      ctx.save(); ctx.translate(rightShoulderX, shoulderY + raisedOffsetY); ctx.rotate(windUpAngle); ctx.beginPath(); ctx.arc(0, 0, armRadius, -Math.PI / 2, Math.PI / 2); ctx.lineTo(0, armLength - armRadius); ctx.arc(0, armLength - armRadius, armRadius, Math.PI / 2, -Math.PI / 2, true); ctx.closePath(); ctx.fill(); ctx.restore();
-    } else {
-      // Left Arm (Idle)
-      ctx.beginPath(); ctx.arc(leftShoulderX, shoulderY, armRadius, Math.PI, Math.PI * 2); ctx.rect(leftShoulderX - armRadius, shoulderY, armRadius * 2, armLength - armRadius); ctx.arc(leftShoulderX, shoulderY + armLength - armRadius, armRadius, 0, Math.PI); ctx.fill();
-      // Right Arm (Idle)
-      ctx.beginPath(); ctx.arc(rightShoulderX, shoulderY, armRadius, Math.PI, Math.PI * 2); ctx.rect(rightShoulderX - armRadius, shoulderY, armRadius * 2, armLength - armRadius); ctx.arc(rightShoulderX, shoulderY + armLength - armRadius, armRadius, 0, Math.PI); ctx.fill();
-    }
-
-    // Head
-    ctx.fillStyle = enemySkinColor;
-    ctx.beginPath();
-    ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Beard (Revised Shape & Lowered Position)
-    const beardWidth = headRadius * 1.6;
-    const beardHeight = headRadius * 1.1;
-    // --- REVISED: Lowered the beard starting position ---
-    const beardTopY = headCenterY + headRadius * 0.4; // Increased offset from 0.1 to lower the beard
-    const beardBottomY = beardTopY + beardHeight;
-    const beardBottomWidth = beardWidth * 0.6; // Tapered bottom
-    ctx.fillStyle = enemyCapColor; // Beard color
-    ctx.beginPath();
-    ctx.moveTo(x - beardWidth / 2, beardTopY); // Top left
-    ctx.lineTo(x + beardWidth / 2, beardTopY); // Top right
-    ctx.lineTo(x + beardBottomWidth / 2, beardBottomY); // Bottom right (tapered)
-    ctx.lineTo(x - beardBottomWidth / 2, beardBottomY); // Bottom left (tapered)
-    ctx.closePath();
-    ctx.fill();
-
-    // Giant Face Details (Revised)
-    ctx.strokeStyle = "#000000"; // Black lines
-    ctx.fillStyle = "#000000";   // Black fill (eyes)
-    ctx.lineWidth = 3; // Thicker lines for giant
-
-    // Eyes (Added)
-    const giantEyeRadius = headRadius * 0.12;
-    const giantEyeY = headCenterY - headRadius * 0.15;
-    const giantEyeXOffset = headRadius * 0.4;
-    ctx.beginPath(); ctx.arc(x - giantEyeXOffset, giantEyeY, giantEyeRadius, 0, Math.PI * 2); ctx.fill(); // Left eye
-    ctx.beginPath(); ctx.arc(x + giantEyeXOffset, giantEyeY, giantEyeRadius, 0, Math.PI * 2); ctx.fill(); // Right eye
-
-    // Eyebrows (Revised: \/ shape - outer ends higher)
-    const giantBrowLength = headRadius * 0.6;
-    const giantBrowY = giantEyeY - headRadius * 0.3; // Position above eyes
-    const giantBrowXOffset = headRadius * 0.4; // Align with eyes
-    const browAngleOffset = giantBrowLength / 5;
-    ctx.beginPath();
-    // Left Eyebrow
-    ctx.moveTo(x - giantBrowXOffset - giantBrowLength / 2, giantBrowY - browAngleOffset); // Outer end higher
-    ctx.lineTo(x - giantBrowXOffset + giantBrowLength / 2, giantBrowY + browAngleOffset); // Inner end lower
-    // Right Eyebrow
-    ctx.moveTo(x + giantBrowXOffset - giantBrowLength / 2, giantBrowY + browAngleOffset); // Inner end lower
-    ctx.lineTo(x + giantBrowXOffset + giantBrowLength / 2, giantBrowY - browAngleOffset); // Outer end higher
-    ctx.stroke();
-
-    // Shako Hat (Revised: Lowered)
-    ctx.fillStyle = enemyCapColor; // Hat color
-    // Main hat rectangle
-    ctx.fillRect( x - shakoWidth / 2, shakoBaseY - shakoHeight, shakoWidth, shakoHeight);
-    // Hat Peak/Brim
-    ctx.beginPath();
-    ctx.moveTo(x - shakoPeakWidth / 2, shakoBaseY); ctx.lineTo(x + shakoPeakWidth / 2, shakoBaseY); ctx.lineTo(x + shakoWidth / 2, shakoBaseY - shakoPeakHeight); ctx.lineTo(x - shakoWidth / 2, shakoBaseY - shakoPeakHeight); ctx.closePath();
-    ctx.fill();
-
-  }
-  // --- Standard Enemy ---
-  else {
-    // --- Standard Enemy Dimensions ---
-    const headRadius = currentH * 0.16;
-    const coatShoulderWidth = currentW * 1.1;
-    const coatHemWidth = currentW * 0.9;
-    const torsoShoulderWidth = currentW * 0.9;
-    const torsoHemWidth = currentW * 0.7;
-    const coatTopY = drawY - currentH * 0.35 + bobOffset; // Use offset drawY
-    const coatBottomY = drawY + currentH * 0.25 + bobOffset; // Use offset drawY
-    const coatHeight = coatBottomY - coatTopY;
-    const headCenterY = coatTopY - headRadius * 0.8; // Raised head position
-    const armWidth = currentW * 0.2;
-    const armHeight = currentH * 0.45;
-    const armOffsetY = coatTopY + coatHeight * 0.1;
-    const trouserHeight = currentH * 0.2;
-    const trouserWidth = currentW * 0.25;
-    const trouserTopY = coatBottomY;
-    const legSpacing = currentW * 0.15;
-    const bootHeight = currentH * 0.12;
-    const bootWidth = currentW * 0.3;
-    const bootTopY = trouserTopY + trouserHeight;
-    // Hat dimensions
-    const hatBrimWidth = headRadius * 3.5;
-    const hatBrimHeight = headRadius * 0.6;
-    const hatCrownRadiusH = headRadius * 1.5;
-    const hatCrownRadiusV = headRadius * 1.1;
-    const hatCenterY = headCenterY - headRadius * 1.3; // Raised hat position
-    // Step cycle for animation
-    const stepCycle = 400;
-    const stepPhase = Math.floor(t / stepCycle) % 2;
-
-    // --- Standard Enemy Body Parts ---
-    // Trousers & Boots
-    ctx.fillStyle = enemyBootColor; // Trouser color
-    const leftLegX = x - legSpacing;
-    ctx.fillRect( leftLegX - trouserWidth / 2, trouserTopY, trouserWidth, trouserHeight );
-    const rightLegX = x + legSpacing;
-    ctx.fillRect( rightLegX - trouserWidth / 2, trouserTopY, trouserWidth, trouserHeight );
-    ctx.fillStyle = enemyBootColor; // Boot color
-    // Alternate leg stepping visual
-    if (stepPhase === 0) {
-      ctx.fillRect( leftLegX - bootWidth / 2, bootTopY - 2, bootWidth, bootHeight ); // Left boot slightly raised
-      ctx.fillRect( rightLegX - bootWidth / 2, bootTopY, bootWidth, bootHeight );
-    } else {
-      ctx.fillRect(leftLegX - bootWidth / 2, bootTopY, bootWidth, bootHeight);
-      ctx.fillRect( rightLegX - bootWidth / 2, bootTopY - 2, bootWidth, bootHeight ); // Right boot slightly raised
-    }
-
-    // Coats/Arms/Torso
-    ctx.fillStyle = enemyCoatColor; // Outer coat
-    ctx.beginPath(); ctx.moveTo(x - coatShoulderWidth / 2, coatTopY); ctx.lineTo(x + coatShoulderWidth / 2, coatTopY); ctx.lineTo(x + coatHemWidth / 2, coatBottomY); ctx.lineTo(x - coatHemWidth / 2, coatBottomY); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = enemyCoatColor; // Arms
-    ctx.fillRect( x - coatShoulderWidth * 0.45 - armWidth / 2, armOffsetY, armWidth, armHeight );
-    ctx.fillRect( x + coatShoulderWidth * 0.45 - armWidth / 2, armOffsetY, armWidth, armHeight );
-    ctx.fillStyle = enemyUniformBlue; // Inner torso/uniform
-    ctx.beginPath(); ctx.moveTo(x - torsoShoulderWidth / 2, coatTopY); ctx.lineTo(x + torsoShoulderWidth / 2, coatTopY); ctx.lineTo(x + torsoHemWidth / 2, coatBottomY); ctx.lineTo(x - torsoHemWidth / 2, coatBottomY); ctx.closePath(); ctx.fill();
-
-    // Head
-    ctx.fillStyle = enemySkinColor;
-    ctx.beginPath();
-    ctx.arc(x, headCenterY, headRadius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Standard Enemy Face Details (Added)
-    ctx.fillStyle = "#000000"; // Black fill (eyes)
-    ctx.strokeStyle = "#000000"; // Black lines (brows, mouth)
-    ctx.lineWidth = 2; // Standard line width
-
-    // Eyes
-    const eyeRadius = headRadius * 0.1;
-    const eyeY = headCenterY - headRadius * 0.1;
-    const eyeXOffset = headRadius * 0.35;
-    ctx.beginPath(); ctx.arc(x - eyeXOffset, eyeY, eyeRadius, 0, Math.PI * 2); ctx.fill(); // Left eye
-    ctx.beginPath(); ctx.arc(x + eyeXOffset, eyeY, eyeRadius, 0, Math.PI * 2); ctx.fill(); // Right eye
-
-    // Eyebrows
-    const browLength = headRadius * 0.5;
-    const browY = eyeY - headRadius * 0.3; // Position above eyes
-    const browXOffset = headRadius * 0.35; // Align roughly with eyes
-    const browAngleOffset = browLength / 6; // Slight angle
-    ctx.beginPath();
-    // Left Eyebrow
-    ctx.moveTo(x - browXOffset - browLength / 2, browY + browAngleOffset);
-    ctx.lineTo(x - browXOffset + browLength / 2, browY - browAngleOffset);
-    // Right Eyebrow
-    ctx.moveTo(x + browXOffset - browLength / 2, browY - browAngleOffset);
-    ctx.lineTo(x + browXOffset + browLength / 2, browY + browAngleOffset);
-    ctx.stroke();
-
-    // Mouth
-    const mouthWidth = headRadius * 0.5;
-    const mouthY = headCenterY + headRadius * 0.4;
-    ctx.beginPath();
-    ctx.moveTo(x - mouthWidth / 2, mouthY);
-    ctx.lineTo(x + mouthWidth / 2, mouthY);
-    ctx.stroke();
-
-    // Hat
-    ctx.fillStyle = enemyCapColor; // Hat color
-    // Brim
-    ctx.beginPath(); ctx.ellipse( x, hatCenterY + hatCrownRadiusV * 0.7, hatBrimWidth / 2, hatBrimHeight / 2, 0, 0, Math.PI * 2); ctx.fill();
-    // Crown
-    ctx.beginPath(); ctx.ellipse( x, hatCenterY, hatCrownRadiusH / 2, hatCrownRadiusV, 0, 0, Math.PI * 2); ctx.fill();
-
-    // Shooter Gun (If applicable - logic unchanged)
-    if (type === "shooter") {
-      const gunBarrelLength = w * 1.2; const gunBarrelThickness = 3; const gunStockLength = w * 0.5; const gunStockThickness = 5; const gunColorBarrel = "#555555"; const gunColorStock = "#7a4a2a"; ctx.save(); const gunAngle = Math.PI / 10; const gunCenterY = drawY + bobOffset; const gunCenterX = x; ctx.translate(gunCenterX, gunCenterY); ctx.rotate(gunAngle); ctx.fillStyle = gunColorStock; ctx.fillRect( -gunStockLength * 0.8, -gunStockThickness / 2, gunStockLength, gunStockThickness ); ctx.fillStyle = gunColorBarrel; ctx.fillRect( -gunStockLength * 0.2, -gunBarrelThickness / 2, gunBarrelLength, gunBarrelThickness ); ctx.restore();
-    }
-  }
-
-  // --- Common Effects (Snake Bite, Blood Sparks - Unchanged Logic) ---
-  // Snake Bite Visuals
-  if (isSnakeBitten) {
-    let footY;
-     if (type === "giant") {
-        const bodyHeight = currentH * 0.7; const legHeight = currentH * 0.25; const bootHeight = currentH * 0.1; const bodyTopY = drawY - currentH * 0.4; footY = bodyTopY + bodyHeight + legHeight + bootHeight;
-    } else {
-        const coatBottomY = drawY + currentH * 0.25 + bobOffset; const trouserHeight = currentH * 0.2; const bootHeight = currentH * 0.12; footY = coatBottomY + trouserHeight + bootHeight;
-    }
-    const numParticles = 6; const particleBaseSize = 4; const particleSpeedY = -50; const particleLifetimeMs = 600; ctx.save();
-    for (let i = 0; i < numParticles; i++) {
-        // Ensure SNAKE_BITE_DURATION is defined or provide a default
-        const biteDurationMs = (typeof SNAKE_BITE_DURATION !== 'undefined' ? SNAKE_BITE_DURATION : 8) * 1000;
-        const effectStartTime = snakeEffect.expires_at * 1000 - biteDurationMs;
-        const timeSinceEffectStart = Math.max(0, t - effectStartTime);
-        const particleSimulatedAge = (timeSinceEffectStart + (particleLifetimeMs / numParticles) * i) % particleLifetimeMs;
-        const particleProgress = particleSimulatedAge / particleLifetimeMs;
-        if (particleProgress < 0 || particleProgress >= 1) continue;
-        const particleX = x + (Math.random() - 0.5) * currentW * 0.7;
-        const particleY = footY + particleSpeedY * (particleSimulatedAge / 1000);
-        const particleSize = particleBaseSize * (1.0 - particleProgress * 0.5) * (0.8 + Math.random() * 0.4);
-        const alpha = 0.75 * (1.0 - particleProgress) * (0.7 + Math.random() * 0.3);
-        const green = 180 + Math.floor(75 * particleProgress); const yellow = 180 * (1.0 - particleProgress);
-        ctx.fillStyle = `rgba(${Math.floor(yellow)}, ${green}, 50, ${alpha.toFixed(2)})`;
-        ctx.fillRect( particleX - particleSize / 2, particleY - particleSize / 2, particleSize, particleSize );
-    }
-    ctx.restore();
-  }
-
-  // Blood Sparks (Hit Animation)
-  if (showBloodSparks) {
-    ctx.save(); const numSparks = 4 + Math.floor(Math.random() * 6); const sparkColors = ["rgba(200, 0, 0, 0.9)", "rgba(240, 40, 40, 0.8)", "rgba(170, 0, 0, 0.7)"]; const sparkCenterY = drawY + (type !== "giant" ? bobOffset : 0) - currentH * 0.1;
-    for (let i = 0; i < numSparks; i++) {
-        const sparkAngle = Math.random() * Math.PI * 2; const sparkRadius = Math.random() * currentW * 0.9; const sparkX = x + Math.cos(sparkAngle) * sparkRadius; const sparkY = sparkCenterY + Math.sin(sparkAngle) * sparkRadius * 0.8; const sparkSize = 4 + Math.random() * 5; ctx.fillStyle = sparkColors[Math.floor(Math.random() * sparkColors.length)]; ctx.beginPath(); ctx.arc(sparkX, sparkY, sparkSize / 2, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.restore();
-  }
-  // --- End Common Effects ---
-
-  ctx.restore(); // Restore context state to before this enemy was drawn
-}
-
-  function drawPlayerCharacter(
-    ctx,
-    x, y, // Final draw position
-    w, h, isSelf, playerState,
-    aimDx, aimDy, // Received aim vector
-    pushbackAnimState
-) {
-    const t = performance.now();
-    const now = t;
-    const ii = (playerState?.input_vector?.dx ?? 0) === 0 && (playerState?.input_vector?.dy ?? 0) === 0;
-    const bo = ii ? Math.sin(t / IDLE_BOB_SPEED_DIVISOR) * IDLE_BOB_AMPLITUDE : 0;
-    const isPushbackAnimating = pushbackAnimState?.active && now < pushbackAnimState?.endTime;
-    const playerSnakeEffect = playerState?.effects?.snake_bite_slow;
-    const isPlayerBitten = playerState?.effects?.snake_bite_slow && now < (playerState.effects.snake_bite_slow.expires_at * 1000);
-
-
-    // --- Visual Constants & Dimensions ---
-    const ironArmorColor = "#4a4a4a"; const ironArmorHighlight = "#777777"; const ironArmorShadow = "#2a2a2a";
-    const ironHelmetColor = "#3d3d3d"; const ironHelmetHighlight = "#666666"; const ironHelmetShadow = "#1a1a1a";
-    const darkClothingColor = "#3a2d27"; const slitColor = "#000000"; const bootColor = "#241c1c";
-    const helmetHeight = h * 0.26; const helmetWidth = w * 0.85; const plateTopMargin = h * 0.04;
-    const torsoArmorHeight = h * 0.45; const torsoArmorWidth = w * 1.1;
-    const shoulderPadHeight = h * 0.18; const shoulderPadWidth = w * 0.45;
-    const legHeight = h * 0.35; const legWidth = w * 0.35;
-    const bootHeight = h * 0.15; const bootWidth = w * 0.4;
-    // Y Positions
-    const helmetTopY = y - h * 0.5 + bo; const helmetBottomY = helmetTopY + helmetHeight;
-    const plateTopY = helmetBottomY + plateTopMargin; const plateBottomY = plateTopY + torsoArmorHeight;
-    const legTopY = plateBottomY - torsoArmorHeight * 0.1; const legBottomY = legTopY + legHeight;
-    const bootTopY = legBottomY;
-    // Shoulder/Arm
-    const shoulderCenterY = plateTopY + torsoArmorHeight * 0.15; const shoulderOffsetX = torsoArmorWidth * 0.4;
-
-    ctx.save(); // SAVE 1: Before drawing player
-
-    // 1. Shadow
-    ctx.beginPath(); ctx.ellipse(x, legBottomY + bootHeight + 2, w * 0.55, h * 0.07, 0, 0, Math.PI * 2);
-    ctx.fillStyle = backgroundShadowColor; ctx.fill();
-
-    // 2. Legs & Boots (Added Pushback Logic Back)
-    ctx.fillStyle = darkClothingColor; // Trousers color
-
-    // --- LEG DRAWING ---
-    if (isPushbackAnimating) {
-      const kickAngle = Math.PI / 6; // Approx 30 degrees forward/outward kick
-      const kickLegForwardOffset = legWidth * 0.5; // How much the kicking leg moves forward from center X
-
-      // --- Supporting Leg (Slightly back for balance) ---
-      const supportLegX = x + w * 0.2; // Shift supporting leg slightly right
-      const supportLegYOffset = 2; // Plant it slightly lower/firmer
-      // Draw Supporting Leg
-      ctx.fillStyle = darkClothingColor;
-      ctx.fillRect(supportLegX - legWidth / 2, legTopY + supportLegYOffset, legWidth, legHeight);
-      // Draw Supporting Boot
-      ctx.fillStyle = bootColor;
-      ctx.fillRect(supportLegX - bootWidth / 2, bootTopY + supportLegYOffset, bootWidth, bootHeight);
-      // Boot highlight/sole
-      ctx.fillStyle = ironArmorHighlight;
-      ctx.fillRect(supportLegX - bootWidth / 2, bootTopY + bootHeight - 4 + supportLegYOffset, bootWidth, 4);
-
-
-      // --- Kicking Leg (Rotated from hip) ---
-      const kickPivotX = x - w * 0.15; // Pivot point slightly left of center body
-      const kickPivotY = legTopY + legHeight * 0.1; // Pivot near the actual hip joint
-
-      ctx.save(); // Save context state before transforming for kicking leg
-      ctx.translate(kickPivotX, kickPivotY); // Move origin to the hip pivot point
-      ctx.rotate(kickAngle); // Rotate the entire coordinate system
-
-      // Draw the leg extending DOWN and slightly FORWARD from the (now rotated) pivot
-      // The forward offset is applied *before* rotation conceptually
-      // We draw relative to the new (0,0) which is the pivot point
-      ctx.fillStyle = darkClothingColor;
-      ctx.fillRect(-legWidth / 2, 0, legWidth, legHeight); // Leg extends downwards from pivot
-
-      // Draw the boot at the end of the leg (also relative to pivot)
-      ctx.fillStyle = bootColor;
-      ctx.fillRect(-bootWidth / 2, legHeight, bootWidth, bootHeight); // Boot at the bottom of the leg segment
-      // Boot highlight/sole
-      ctx.fillStyle = ironArmorHighlight;
-      ctx.fillRect(-bootWidth / 2, legHeight + bootHeight - 4, bootWidth, 4);
-
-      ctx.restore(); // Restore context state (removes translation and rotation)
-      // --- End Kicking Leg ---
-
-  } else {
-      // --- REGULAR WALKING / IDLE LEGS (Keep original logic) ---
-      const leftLegX = x - w * 0.3;
-      const rightLegX = x + w * 0.3;
-      let leftYOffset = 0;
-      let rightYOffset = 0;
-      if (!ii) { // Simple walk bob if not idle
-          const walkCycleTime = 300;
-          const phase = (t % walkCycleTime) / walkCycleTime;
-          const liftAmount = -3;
-          leftYOffset = Math.max(0, Math.sin(phase * Math.PI * 2)) * liftAmount;
-          rightYOffset = Math.max(0, Math.sin((phase + 0.5) * Math.PI * 2)) * liftAmount;
-      }
-      // Draw Legs
-      ctx.fillStyle = darkClothingColor;
-      ctx.fillRect(leftLegX - legWidth / 2, legTopY + leftYOffset, legWidth, legHeight);
-      ctx.fillRect(rightLegX - legWidth / 2, legTopY + rightYOffset, legWidth, legHeight);
-      // Draw Boots
-      ctx.fillStyle = bootColor;
-      ctx.fillRect(leftLegX - bootWidth / 2, bootTopY + leftYOffset, bootWidth, bootHeight);
-      ctx.fillRect(rightLegX - bootWidth / 2, bootTopY + rightYOffset, bootWidth, bootHeight);
-      // Boot highlight/sole line
-      ctx.fillStyle = ironArmorHighlight;
-      ctx.fillRect(leftLegX - bootWidth / 2, bootTopY + bootHeight - 4 + leftYOffset, bootWidth, 4);
-      ctx.fillRect(rightLegX - bootWidth / 2, bootTopY + bootHeight - 4 + rightYOffset, bootWidth, 4);
-  }
-  // --- END Legs & Boots section ---
-
-    // 3. Torso Armor (Chest Plate) - Draw AFTER legs
-    // ... (Keep torso armor drawing logic) ...
-    ctx.fillStyle = ironArmorColor; ctx.fillRect(x - torsoArmorWidth / 2, plateTopY, torsoArmorWidth, torsoArmorHeight);
-    ctx.fillStyle = ironArmorHighlight; ctx.fillRect(x - torsoArmorWidth / 2 + 4, plateTopY + 4, torsoArmorWidth - 8, 5);
-    ctx.fillStyle = ironArmorShadow; ctx.fillRect(x - torsoArmorWidth / 2 + 4, plateTopY + 9, torsoArmorWidth - 8, 4);
-    // Rivets...
-
-    // 4. Shoulder Pads - Draw OVER chest plate edges
-    // ... (Keep shoulder pad drawing logic) ...
-    ctx.fillStyle = ironArmorColor; ctx.beginPath(); ctx.ellipse(x - shoulderOffsetX, shoulderCenterY, shoulderPadWidth / 2, shoulderPadHeight / 2, 0, Math.PI, Math.PI * 2); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = ironArmorHighlight; ctx.beginPath(); ctx.ellipse(x - shoulderOffsetX, shoulderCenterY - 2, shoulderPadWidth / 2 * 0.8, shoulderPadHeight / 2 * 0.7, 0, Math.PI * 1.1, Math.PI * 1.9); ctx.fill();
-    ctx.fillStyle = ironArmorColor; ctx.beginPath(); ctx.ellipse(x + shoulderOffsetX, shoulderCenterY, shoulderPadWidth / 2, shoulderPadHeight / 2, 0, Math.PI, Math.PI * 2); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = ironArmorHighlight; ctx.beginPath(); ctx.ellipse(x + shoulderOffsetX, shoulderCenterY - 2, shoulderPadWidth / 2 * 0.8, shoulderPadHeight / 2 * 0.7, 0, Math.PI * 0.1, Math.PI * 0.9, true); ctx.fill();
-
-    // 5. Helmet - Draw OVER shoulder pads/chest plate top
-    // ... (Keep helmet drawing logic) ...
-    ctx.fillStyle = ironHelmetColor; ctx.fillRect(x - helmetWidth / 2, helmetTopY, helmetWidth, helmetHeight);
-    ctx.fillStyle = ironHelmetHighlight; ctx.fillRect(x - helmetWidth / 2 + 3, helmetTopY + 3, helmetWidth - 6, 3);
-    ctx.fillStyle = slitColor; const slitY = helmetTopY + helmetHeight * 0.45; const slitHeight = helmetHeight * 0.1;
-    ctx.fillRect(x - helmetWidth * 0.4, slitY, helmetWidth * 0.8, slitHeight);
-
-
-    // 6. Gun Logic & Drawing (Using Stored Aim)
-    let shouldDrawGun = false;
-    let gunDrawAngle = -Math.PI / 2; // Default idle aim (up)
-    let gunDrawMode = "idle";
-
-    if (isPushbackAnimating) {
-        shouldDrawGun = true;
-        gunDrawMode = "pushback";
-        gunDrawAngle = -Math.PI / 3; // Point gun down/forward during pushback
-    } else if (isSelf && (aimDx !== 0 || aimDy !== 0)) {
-        // Use the stored aim direction passed in
-        shouldDrawGun = true;
-        gunDrawMode = "aiming";
-        gunDrawAngle = Math.atan2(aimDy, aimDx);
-    } else if (isSelf) {
-        // Local player, idle state (aimDx/Dy is 0)
-        shouldDrawGun = true; // Draw idle gun
-        gunDrawMode = "idle";
-        gunDrawAngle = -Math.PI / 2; // Keep default idle aim (up)
-    }
-
-    if (shouldDrawGun) {
-        // ... (Keep gun drawing logic: calculate dimensions, pivot, save, translate, rotate, fillRects, restore) ...
-        const gunLevel = playerState?.gun ?? 1;
-        const baseBarrelLength = 22; const barrelLengthIncrease = 2.5; const barrelLength = baseBarrelLength + (gunLevel - 1) * barrelLengthIncrease;
-        const barrelThickness = 4 + (gunLevel - 1) * 0.3; const stockLength = 10 + (gunLevel - 1) * 0.6;
-        const stockThickness = 6 + (gunLevel - 1) * 0.4;
-        const stockColor = "#6F4E37"; const barrelColor = "#5A5A5A";
-        const gunPivotX = x; const gunPivotY = plateTopY + torsoArmorHeight * 0.4 + bo;
-
-        ctx.save(); // SAVE 2: Gun transform
-        ctx.translate(gunPivotX, gunPivotY);
-        ctx.rotate(gunDrawAngle);
-        // Barrel
-        ctx.fillStyle = barrelColor; ctx.fillRect(0, -barrelThickness / 2, barrelLength, barrelThickness);
-        // Stock
-        ctx.fillStyle = stockColor; ctx.fillRect(-stockLength, -stockThickness / 2, stockLength, stockThickness);
-        // Sight
-        ctx.fillStyle = "#333333"; ctx.fillRect(barrelLength * 0.7, -barrelThickness / 2 - 2, 4, 2);
-        ctx.restore(); // RESTORE 2: Gun transform
-    }
-
-    // 7. Effects (Snake Bite - Keep as is)
-    if (isPlayerBitten) {
-      // Ensure SNAKE_BITE_DURATION is accessible or provide default
-      const biteDuration = typeof SNAKE_BITE_DURATION !== 'undefined' ? SNAKE_BITE_DURATION : 8.0;
-      const footY = legBottomY + bootHeight;
-      const numParticles = 8; const particleBaseSize = 4; const particleSpeedY = -60; const particleLifetimeMs = 600;
-      ctx.save();
-      for (let i = 0; i < numParticles; i++) {
-          const effectStartTime = playerSnakeEffect.expires_at * 1000 - biteDuration * 1000;
-          const timeSinceEffectStart = Math.max(0, now - effectStartTime);
-          const particleSimulatedAge = (timeSinceEffectStart + (particleLifetimeMs / numParticles) * i) % particleLifetimeMs;
+        ctx.globalCompositeOperation = 'lighter'; // Blend particles
+
+        for (let i = 0; i < numParticles; i++) {
+          const effectStartTime =
+            snakeEffect.expires_at * 1000 - SNAKE_BITE_DURATION * 1000;
+          const timeSinceEffectStart = Math.max(0, t - effectStartTime);
+          const particleSimulatedAge =
+            (timeSinceEffectStart + (particleLifetimeMs / numParticles) * i * 1.5) % // Stagger spawn
+            particleLifetimeMs;
           const particleProgress = particleSimulatedAge / particleLifetimeMs;
           if (particleProgress < 0 || particleProgress >= 1) continue;
-          const particleX = x + (Math.random() - 0.5) * w * 0.7;
-          const particleY = footY + particleSpeedY * (particleSimulatedAge / 1000);
-          const particleSize = particleBaseSize * (1.0 - particleProgress * 0.5) * (0.8 + Math.random() * 0.4);
-          const alpha = 0.8 * (1.0 - particleProgress) * (0.7 + Math.random() * 0.3);
+
+          const initialOffsetX = (Math.random() - 0.5) * currentW * 0.8;
+          const initialOffsetY = (Math.random() - 0.5) * currentH * 0.2;
+
+          const particleX = x + initialOffsetX + particleSpeedX * (particleProgress - 0.5); // Add horizontal movement
+          const particleY = footY + initialOffsetY + particleSpeedY * (particleSimulatedAge / 1000);
+
+          const particleSize =
+            particleBaseSize *
+            (1.0 - particleProgress * 0.7) * // Shrink more over time
+            (0.8 + Math.random() * 0.4);
+          const alpha =
+            0.9 * (1.0 - particleProgress) * (0.7 + Math.random() * 0.3); // Fade out
+
           const green = 180 + Math.floor(75 * particleProgress);
-          const yellow = 200 * (1.0 - particleProgress);
-          ctx.fillStyle = `rgba(${Math.floor(yellow)}, ${green}, 50, ${alpha.toFixed(2)})`;
-          ctx.fillRect( particleX - particleSize / 2, particleY - particleSize / 2, particleSize, particleSize );
-      }
-      ctx.restore(); // Restore after drawing particles
-  }
+          const yellow = 220 * (1.0 - particleProgress); // More yellow initially
+          const blue = 50 + Math.floor(50 * particleProgress); // Add a touch of blue
 
-    ctx.restore(); // Restore context state from the very start of the function
-
-  }
-
-  function drawPlayers(
-    ctx, players, appState, localPlayerMuzzleFlash, localPlayerPushbackAnim,
-    // --- OFFSET PARAMETERS ---
-    offsetX = 0, offsetY = 0,
-    // --- NEW: Local Player Aim Parameters ---
-    localAimDx = 0, localAimDy = -1 // Default aim up if not provided
-) {
-    if (!players || !appState) return;
-    // console.log(`[drawPlayers] Received localAimDx: ${localAimDx.toFixed(2)}, localAimDy: ${localAimDy.toFixed(2)}`); // Log received aim
-
-    Object.values(players).forEach(p => {
-        if (!p || p.player_status === 'dead') return;
-
-        const isSelf = p.id === appState.localPlayerId;
-        const ps = p.player_status || 'alive';
-        let dx = isSelf ? appState.renderedPlayerPos.x : p.x;
-        let dy = isSelf ? appState.renderedPlayerPos.y : p.y;
-        const w = p.width ?? PLAYER_DEFAULTS.width; // Assume PLAYER_DEFAULTS is accessible or define it
-        const h = p.height ?? PLAYER_DEFAULTS.height;
-        const mh = p.max_health ?? PLAYER_DEFAULTS.max_health;
-        const ca = p.armor ?? 0;
-        const isDown = (ps === 'down');
-        const alpha = isDown ? 0.4 : 1.0;
-
-        let drawX = dx;
-        let drawY = dy;
-        if (isSelf) {
-            drawX += offsetX;
-            drawY += offsetY;
+          ctx.fillStyle = `rgba(${Math.floor(
+            yellow
+          )}, ${green}, ${blue}, ${alpha.toFixed(2)})`;
+          ctx.fillRect(
+            particleX - particleSize / 2,
+            particleY - particleSize / 2,
+            particleSize,
+            particleSize
+          );
         }
-
+        ctx.restore();
+      }
+      // Blood Sparks (Enhanced)
+      if (showBloodSparks) {
         ctx.save();
-        ctx.globalAlpha = alpha;
+        ctx.globalCompositeOperation = 'lighter'; // Blend sparks
+        const numSparks = 5 + Math.floor(Math.random() * 8); // More sparks
+        const sparkColors = [
+          "rgba(255, 50, 50, 0.9)", // Brighter red
+          "rgba(255, 100, 0, 0.8)", // Orange-ish
+          "rgba(200, 0, 0, 0.7)",
+          "rgba(255, 150, 150, 0.6)", // Pinkish highlight
+        ];
+        const sparkCenterY = y + (type !== "giant" ? bobOffset : 0) - currentH * 0.3; // Sparks higher up
+        const sparkMaxDistance = currentW * 0.6; // Sparks spread wider
 
-        const pushbackState = isSelf ? localPlayerPushbackAnim : null;
+        for (let i = 0; i < numSparks; i++) {
+          const sparkAngle = Math.random() * Math.PI * 2;
+          const sparkDistance = Math.random() * sparkMaxDistance;
+          const sparkX = x + Math.cos(sparkAngle) * sparkDistance;
+          const sparkY = sparkCenterY + Math.sin(sparkAngle) * sparkDistance * 0.6; // Vertical compression
+          const sparkSize = 3 + Math.random() * 4; // Larger sparks
+          const sparkAlpha = 0.5 + Math.random() * 0.5; // Vary alpha
 
-        // Determine aimDx/aimDy to pass down based on whether it's the local player
-        const aimDxForDraw = isSelf ? localAimDx : 0;
-        const aimDyForDraw = isSelf ? localAimDy : 0;
-
-        // if (isSelf) { // Log only for self
-        //     console.log(`  [drawPlayers -> drawPlayerCharacter] Passing aim: dx=${aimDxForDraw.toFixed(2)}, dy=${aimDyForDraw.toFixed(2)} for PID ${p.id}`);
-        // }
-
-        drawPlayerCharacter(ctx, drawX, drawY, w, h, isSelf, p, aimDxForDraw, aimDyForDraw, pushbackState);
-
-        ctx.restore();
-
-        ctx.restore();
-
-        // *** THIS IS WHERE 'h' IS USED ***
-        if (ps === 'alive') {
-            // Pass 'h' to drawHealthBar
-            drawHealthBar(ctx, drawX, drawY, w, h, p.health, mh); // Using h
-            if (ca > 0) {
-                // Pass 'h' to drawArmorBar
-                drawArmorBar(ctx, drawX, drawY, w, h, ca);       // Using h
-            }
+          ctx.fillStyle =
+            sparkColors[Math.floor(Math.random() * sparkColors.length)];
+          ctx.globalAlpha = sparkAlpha;
+          ctx.beginPath();
+          ctx.arc(sparkX, sparkY, sparkSize / 2, 0, Math.PI * 2);
+          ctx.fill();
         }
-    }); // End of forEach loop
-
-}
-  function drawEnemies(
-    ctx,
-    enemies,
-    activeBloodSparkEffects
-  ) {
-    if (!enemies) return;
-    const now = performance.now() / 1000; // Server time for fade check
-    const clientNow = performance.now(); // Client time for effects
-    const fd = 0.5; // Fade duration
-
-    Object.values(enemies).forEach((e) => {
-      if (!e) return;
-      const w = e.width ?? 20,
-        h = e.height ?? 40,
-        mh = e.max_health ?? 50;
-      let a = 1.0,
-        sd = true,
-        id = false;
-      if (e.health <= 0 && e.death_timestamp) {
-        id = true;
-        const el = now - e.death_timestamp;
-        if (el < fd) a = Math.max(0.1, 1.0 - (el / fd) * 0.9);
-        // Smoother fade
-        else sd = false; // Don't draw if faded
+        ctx.restore();
       }
-      if (sd) {
+
+      // Restore hit flash filter
+      if (isHit) {
+          ctx.filter = 'none';
+      }
+
+      ctx.restore(); // Restore context from start of function
+    }
+
+    // --- REVISED drawPlayerCharacter (Enhanced Shapes, Shading, Animations) ---
+    function drawPlayerCharacter(
+      ctx,
+      x,
+      y,
+      w,
+      h,
+      isSelf,
+      playerState,
+      aimDx,
+      aimDy,
+      pushbackAnimState
+    ) {
+      const t = performance.now();
+      const now = t;
+      const ii =
+        (playerState?.input_vector?.dx ?? 0) === 0 &&
+        (playerState?.input_vector?.dy ?? 0) === 0;
+      const bo = ii
+        ? Math.sin(t / IDLE_BOB_SPEED_DIVISOR) * IDLE_BOB_AMPLITUDE
+        : 0;
+      const playerSnakeEffect = playerState?.effects?.snake_bite_slow;
+      const isPlayerBitten =
+        playerSnakeEffect &&
+        typeof playerSnakeEffect === "object" &&
+        typeof playerSnakeEffect.expires_at === "number" &&
+        now < playerSnakeEffect.expires_at * 1000;
+      const isHit = playerState?.is_hit; // Assume is_hit flag exists
+
+      // Dimensions
+      const headHeight = h * 0.28;
+      const headWidth = w * 0.9;
+      const neckHeight = h * 0.05;
+      const torsoHeight = h * 0.35;
+      const torsoUpperWidth = w * 0.95;
+      const torsoLowerWidth = w * 0.8;
+      const beltHeight = h * 0.06;
+      const legHeight = h * 0.32;
+      const legUpperWidth = w * 0.4;
+      const legLowerWidth = w * 0.3;
+      const bootShaftHeight = h * 0.1;
+      const bootSoleHeight = h * 0.04;
+      const bootWidth = w * 0.35;
+      const armWidth = w * 0.22;
+      const armLength = h * 0.42;
+      const shoulderPadRadius = w * 0.3;
+      // Y Positions
+      const headTopY = y - h * 0.5 + bo;
+      const headBottomY = headTopY + headHeight;
+      const neckTopY = headBottomY;
+      const neckBottomY = neckTopY + neckHeight;
+      const torsoTopY = neckBottomY;
+      const torsoBottomY = torsoTopY + torsoHeight;
+      const beltTopY = torsoBottomY - beltHeight * 0.3;
+      const beltBottomY = beltTopY + beltHeight;
+      const legTopY = beltBottomY - beltHeight * 0.2;
+      const legBottomY = legTopY + legHeight;
+      const bootTopY = legBottomY - bootShaftHeight * 0.1;
+      const bootShaftBottomY = bootTopY + bootShaftHeight;
+      const bootSoleTopY = bootShaftBottomY;
+      const bootBottomY = bootSoleTopY + bootSoleHeight;
+      // Arm/Shoulder Positions
+      const shoulderCenterY = torsoTopY + torsoHeight * 0.15;
+      const shoulderOffsetX = torsoUpperWidth * 0.4; // Adjusted offset slightly
+      const armTopY = shoulderCenterY + shoulderPadRadius * 0.3;
+      // Colors
+      const playerBodyColor = isSelf
+        ? dustyPlayerSelfColor
+        : dustyPlayerOtherColor;
+      const helmetColor = ironHelmetColor;
+      const armorColor = simpleChestPlateColor;
+      const armorHighlight = chestPlateHighlight;
+      const armorShadow = ironHelmetShadow;
+      const slitColor = "#000000";
+      const beltColor = "#412a19";
+      const beltBuckleColor = "#b0a080";
+      const bootColor = "#241c1c";
+      const bootSoleColor = "#1a1a1a";
+      const playerBodyHighlightColor = playerBodyHighlight;
+      const playerBodyShadowColor = playerBodyShadow;
+
+      ctx.save();
+
+       // Apply hit flash effect
+      if (isHit) {
+          ctx.filter = 'brightness(1.5) saturate(1.5)'; // Simple flash effect
+      }
+
+
+      // Shadow
+      ctx.beginPath();
+      ctx.ellipse(x, bootBottomY + 2, w * 0.5, h * 0.06, 0, 0, Math.PI * 2);
+      ctx.fillStyle = backgroundShadowColor;
+      ctx.fill();
+
+      // Boot Helper (More shaped)
+      const drawBoot = (bootCtx, bootX, bootTopYCoord, isKick = false, kickAngle = 0) => {
+        bootCtx.save();
+        if (isKick) {
+          bootCtx.translate(bootX, bootTopYCoord);
+          bootCtx.rotate(kickAngle);
+          bootX = 0; bootTopYCoord = 0; // Translate origin
+        }
+        const shaftTopY = bootTopYCoord;
+        const shaftBottomY = shaftTopY + bootShaftHeight;
+        const soleTopY = shaftBottomY;
+        const soleBottomY = soleTopY + bootSoleHeight;
+
+        // Shaft
+        bootCtx.fillStyle = bootColor;
+        bootCtx.beginPath();
+        bootCtx.moveTo(bootX - bootWidth / 2, shaftTopY);
+        bootCtx.lineTo(bootX + bootWidth / 2, shaftTopY);
+        bootCtx.lineTo(bootX + bootWidth * 0.4, shaftBottomY); // Slight taper
+        bootCtx.lineTo(bootX - bootWidth * 0.4, shaftBottomY);
+        bootCtx.closePath();
+        bootCtx.fill();
+
+        // Sole
+        bootCtx.fillStyle = bootSoleColor;
+        const soleWidth = bootWidth * 1.1;
+        bootCtx.beginPath();
+        bootCtx.moveTo(bootX - soleWidth / 2, soleTopY);
+        bootCtx.lineTo(bootX + soleWidth / 2, soleTopY);
+        bootCtx.lineTo(bootX + soleWidth * 0.4, soleBottomY); // Slight angle
+        bootCtx.lineTo(bootX - soleWidth * 0.4, soleBottomY);
+        bootCtx.closePath();
+        bootCtx.fill();
+
+
+        // Heel
+        bootCtx.fillStyle = bootSoleColor;
+        const heelWidth = bootWidth * 0.6;
+        const heelHeight = bootSoleHeight * 0.8;
+         bootCtx.beginPath();
+         bootCtx.moveTo(bootX - heelWidth * 0.1, soleBottomY - heelHeight);
+         bootCtx.lineTo(bootX + heelWidth * 0.9, soleBottomY - heelHeight);
+         bootCtx.lineTo(bootX + heelWidth * 0.8, soleBottomY);
+         bootCtx.lineTo(bootX, soleBottomY);
+         bootCtx.closePath();
+         bootCtx.fill();
+
+        if (isKick) {
+          bootCtx.restore();
+        }
+      };
+
+      // Legs & Boots (More shaped, animated walk cycle)
+      const isPushbackAnimating =
+        pushbackAnimState?.active && now < pushbackAnimState?.endTime;
+      ctx.fillStyle = playerBodyColor;
+
+      const leftLegX = x - w * 0.2;
+      const rightLegX = x + w * 0.2;
+      let leftLegYOffset = 0;
+      let rightLegYOffset = 0;
+      const walkCycleTime = 400;
+      const phase = (t % walkCycleTime) / walkCycleTime;
+      const liftAmount = 2; // Pixels to lift foot
+
+      if (!ii && !isPushbackAnimating) { // Walking animation
+         if (phase < 0.5) {
+            leftLegYOffset = -Math.sin(phase * 2 * Math.PI) * liftAmount;
+         } else {
+            rightLegYOffset = -Math.sin((phase - 0.5) * 2 * Math.PI) * liftAmount;
+         }
+      }
+
+
+      if (isPushbackAnimating) {
+        const kickAngle = -Math.PI / 4.5;
+        const supportLegX = x + w * 0.15;
+        const kickLegX = x - w * 0.15;
+        const kickLegVisualLength = legHeight * 1.05;
+
+        // Support Leg (More shaped)
+        ctx.beginPath();
+        ctx.moveTo(supportLegX - legUpperWidth / 2, legTopY);
+        ctx.quadraticCurveTo(supportLegX - legUpperWidth * 0.6, legTopY + legHeight * 0.3, supportLegX - legLowerWidth / 2, legBottomY);
+        ctx.lineTo(supportLegX + legLowerWidth / 2, legBottomY);
+        ctx.quadraticCurveTo(supportLegX + legUpperWidth * 0.6, legTopY + legHeight * 0.3, supportLegX + legUpperWidth / 2, legTopY);
+        ctx.closePath();
+        ctx.fill();
+        drawBoot(ctx, supportLegX, bootTopY);
+
+        // Kick Leg (More shaped, rotated)
         ctx.save();
-        ctx.globalAlpha = a;
-        drawEnemyRect(
-          ctx,
-          e.x,
-          e.y,
-          w,
-          h,
-          e.type,
-          e,
-          activeBloodSparkEffects,
-          clientNow
-        ); // Pass client time & spark map
+        ctx.translate(kickLegX, legTopY + legHeight * 0.1);
+        ctx.rotate(kickAngle);
+        ctx.fillStyle = playerBodyColor;
+        ctx.beginPath();
+        ctx.moveTo(-legUpperWidth / 2, 0);
+        ctx.quadraticCurveTo(-legUpperWidth * 0.6, kickLegVisualLength * 0.3, -legLowerWidth / 2, kickLegVisualLength);
+        ctx.lineTo(legLowerWidth / 2, kickLegVisualLength);
+        ctx.quadraticCurveTo(legUpperWidth * 0.6, kickLegVisualLength * 0.3, legUpperWidth / 2, 0);
+        ctx.closePath();
+        ctx.fill();
         ctx.restore();
-      }
-      if (!id && e.health > 0 && sd) {
-        // Pass 'h' to drawHealthBar
-        drawHealthBar(ctx, e.x, e.y, w, h, e.health, mh);
-    }
-    });
-  }
 
-  function drawMuzzleFlash(ctx, playerX, playerY, aimDx, aimDy) {
-    const numPoints = 5;
-    const outerRadiusBase = 9;
-    const outerRadiusVariance = 3;
-    const innerRadiusBase = 4;
-    const innerRadiusVariance = 1.5;
-    const glowRadius = 25;
-    const glowColor = "rgba(255, 200, 50, 0.25)";
-    const flashColor = "rgba(255, 230, 100, 0.95)";
-    const offsetDistance = 30;
-    const flashX = playerX + aimDx * offsetDistance;
-    const flashY = playerY + aimDy * offsetDistance;
-    const angle = Math.atan2(aimDy, aimDx);
-    ctx.save();
-    ctx.translate(flashX, flashY);
-    ctx.rotate(angle);
-    const glowGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, glowRadius);
-    glowGradient.addColorStop(0, glowColor);
-    glowGradient.addColorStop(1, "rgba(255, 200, 50, 0)");
-    ctx.fillStyle = glowGradient;
-    ctx.beginPath();
-    ctx.arc(0, 0, glowRadius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = flashColor;
-    ctx.beginPath();
-    for (let i = 0; i < numPoints * 2; i++) {
-      const radius =
-        i % 2 === 0
-          ? outerRadiusBase + Math.random() * outerRadiusVariance
-          : innerRadiusBase + Math.random() * innerRadiusVariance;
-      const pointAngle = (i / (numPoints * 2)) * (Math.PI * 2) - Math.PI / 2;
-      const px = Math.cos(pointAngle) * radius;
-      const py = Math.sin(pointAngle) * radius;
-      if (i === 0) {
-        ctx.moveTo(px, py);
-      } else {
-        ctx.lineTo(px, py);
-      }
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  }
+        const kickEndX = kickLegX + Math.sin(kickAngle) * kickLegVisualLength;
+        const kickEndY = legTopY + legHeight * 0.1 + Math.cos(kickAngle) * kickLegVisualLength;
+        drawBoot(ctx, kickEndX, kickEndY - bootShaftHeight, false);
 
-  function drawBulletCircle(
-    ctx,
-    bullet,
-    trailLengthFactor = 0.8,
-    trailBaseAlpha = 0.6
-  ) {
-    const { x, y, vx = 0, vy = 0, radius: r = 4, owner_type } = bullet;
-    const isPlayerBullet = owner_type === "player";
-    const color = isPlayerBullet ? bulletPlayerColor : bulletEnemyColor;
-    const speed = Math.sqrt(vx * vx + vy * vy);
-    const trailLength = r * 2 * trailLengthFactor * Math.min(1, speed / 100);
-    let startX = x,
-      startY = y;
-    if (speed > 1) {
-      startX = x - (vx / speed) * trailLength;
-      startY = y - (vy / speed) * trailLength;
-    }
-    if (trailLength > 1 && speed > 1) {
-      try {
-        const gradient = ctx.createLinearGradient(startX, startY, x, y);
-        let trailStartColor = color;
-        if (color.startsWith("#")) {
-          let alphaHex = Math.round(trailBaseAlpha * 255)
-            .toString(16)
-            .padStart(2, "0");
-          trailStartColor = color + alphaHex;
-        } else if (color.startsWith("rgb")) {
-          trailStartColor = color
-            .replace(/rgb/i, "rgba")
-            .replace(")", `, ${trailBaseAlpha})`);
-        }
-        gradient.addColorStop(0, trailStartColor);
-        gradient.addColorStop(1, color);
-        ctx.strokeStyle = gradient;
-        ctx.lineWidth = r * 0.8;
-        ctx.lineCap = "round";
+      } else { // Idle or Walking
+        // Left Leg (More shaped)
         ctx.beginPath();
-        ctx.moveTo(startX, startY);
-        ctx.lineTo(x, y);
-        ctx.stroke();
-      } catch (e) {
-        ctx.strokeStyle = color;
-        ctx.lineWidth = r * 0.8;
+        ctx.moveTo(leftLegX - legUpperWidth / 2, legTopY + leftLegYOffset);
+        ctx.quadraticCurveTo(leftLegX - legUpperWidth * 0.6, legTopY + legHeight * 0.3 + leftLegYOffset, leftLegX - legLowerWidth / 2, legBottomY + leftLegYOffset);
+        ctx.lineTo(leftLegX + legLowerWidth / 2, legBottomY + leftLegYOffset);
+        ctx.quadraticCurveTo(leftLegX + legUpperWidth * 0.6, legTopY + legHeight * 0.3 + leftLegYOffset, leftLegX + legUpperWidth / 2, legTopY + leftLegYOffset);
+        ctx.closePath();
+        ctx.fill();
+        drawBoot(ctx, leftLegX, bootTopY + leftLegYOffset);
+
+        // Right Leg (More shaped)
         ctx.beginPath();
-        ctx.moveTo(startX, startY);
-        ctx.lineTo(x, y);
-        ctx.stroke();
+        ctx.moveTo(rightLegX - legUpperWidth / 2, legTopY + rightLegYOffset);
+        ctx.quadraticCurveTo(rightLegX - legUpperWidth * 0.6, legTopY + legHeight * 0.3 + rightLegYOffset, rightLegX - legLowerWidth / 2, legBottomY + rightLegYOffset);
+        ctx.lineTo(rightLegX + legLowerWidth / 2, legBottomY + rightLegYOffset);
+        ctx.quadraticCurveTo(rightLegX + legUpperWidth * 0.6, legTopY + legHeight * 0.3 + rightLegYOffset, rightLegX + legUpperWidth / 2, legTopY + rightLegYOffset);
+        ctx.closePath();
+        ctx.fill();
+        drawBoot(ctx, rightLegX, bootTopY + rightLegYOffset);
       }
-    }
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.lineCap = "butt";
-  }
 
-  function drawShapedBullet(
-    ctx,
-    bullet,
-    trailLengthFactor = 3.0,
-    trailBaseAlpha = 0.3
-  ) {
-    const { x, y, vx = 0, vy = 0, radius: r = 4, owner_type } = bullet;
-    const isPlayerBullet = owner_type === "player";
-    const color = isPlayerBullet ? bulletPlayerColor : bulletEnemyColor;
-    const speed = Math.sqrt(vx * vx + vy * vy);
-    const baseLength = 8, baseWidth = 4;
-    const scaleFactor = r / 4;
-    const shapeLength = baseLength * scaleFactor;
-    const shapeWidth = baseWidth * scaleFactor;
-    const trailLength = shapeLength * trailLengthFactor * Math.min(1, speed / 150);
-    let startX = x, startY = y;
 
-    if (speed > 1) {
-      startX = x - (vx / speed) * trailLength;
-      startY = y - (vy / speed) * trailLength;
-    }
+      // Torso (More shaped)
+      ctx.fillStyle = playerBodyColor;
+      ctx.beginPath();
+      ctx.moveTo(x - torsoUpperWidth / 2, torsoTopY);
+      ctx.quadraticCurveTo(x - torsoUpperWidth * 0.6, torsoTopY + torsoHeight * 0.3, x - torsoLowerWidth / 2, torsoBottomY);
+      ctx.lineTo(x + torsoLowerWidth / 2, torsoBottomY);
+      ctx.quadraticCurveTo(x + torsoUpperWidth * 0.6, torsoTopY + torsoHeight * 0.3, x + torsoUpperWidth / 2, torsoTopY);
+      ctx.closePath();
+      ctx.fill();
 
-    if (trailLength > 1 && speed > 1) {
-      try {
-        const gradient = ctx.createLinearGradient(startX, startY, x, y);
-        let trailStartColor = color;
-        if (color.startsWith("#")) {
-          let alphaHex = Math.round(trailBaseAlpha * 255).toString(16).padStart(2, "0");
-          trailStartColor = color + alphaHex;
-        } else if (color.startsWith("rgb")) {
-          trailStartColor = color.replace(/rgb/i, "rgba").replace(")", `, ${trailBaseAlpha})`);
-        }
-        gradient.addColorStop(0, trailStartColor);
-        gradient.addColorStop(1, color);
-        ctx.strokeStyle = gradient;
-        ctx.lineWidth = shapeWidth * .5;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(startX, startY);
-        ctx.lineTo(x, y);
-        ctx.stroke();
-      } catch (e) {
-        ctx.strokeStyle = color;
-        ctx.lineWidth = shapeWidth * 1.2;
-        ctx.beginPath();
-        ctx.moveTo(startX, startY);
-        ctx.lineTo(x, y);
-        ctx.stroke();
-      }
-    }
+      // Torso Shading
+      ctx.fillStyle = playerBodyHighlightColor;
+      ctx.beginPath();
+      ctx.moveTo(x - torsoUpperWidth / 2 + torsoUpperWidth * 0.1, torsoTopY + torsoHeight * 0.05);
+      ctx.quadraticCurveTo(x - torsoUpperWidth * 0.5, torsoTopY + torsoHeight * 0.3, x - torsoLowerWidth / 2 + torsoLowerWidth * 0.1, torsoBottomY - torsoHeight * 0.05);
+      ctx.lineTo(x + torsoLowerWidth / 2 - torsoLowerWidth * 0.1, torsoBottomY - torsoHeight * 0.05);
+      ctx.quadraticCurveTo(x + torsoUpperWidth * 0.5, torsoTopY + torsoHeight * 0.3, x + torsoUpperWidth / 2 - torsoUpperWidth * 0.1, torsoTopY + torsoHeight * 0.05);
+      ctx.closePath();
+      ctx.fill();
 
-    const angle = Math.atan2(vy, vx); // Keep original angle for drawing orientation
+       ctx.fillStyle = playerBodyShadowColor;
+      ctx.beginPath();
+      ctx.moveTo(x - torsoUpperWidth / 2 + torsoUpperWidth * 0.2, torsoTopY + torsoHeight * 0.1);
+      ctx.quadraticCurveTo(x - torsoUpperWidth * 0.4, torsoTopY + torsoHeight * 0.4, x - torsoLowerWidth / 2 + torsoLowerWidth * 0.2, torsoBottomY - torsoHeight * 0.1);
+      ctx.lineTo(x + torsoLowerWidth / 2 - torsoLowerWidth * 0.2, torsoBottomY - torsoHeight * 0.1);
+      ctx.quadraticCurveTo(x + torsoUpperWidth * 0.4, torsoTopY + torsoHeight * 0.4, x + torsoUpperWidth / 2 - torsoUpperWidth * 0.2, torsoTopY + torsoHeight * 0.1);
+      ctx.closePath();
+      ctx.fill();
 
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle); // Rotate to match velocity direction
 
-    ctx.fillStyle = color;
+      // Arms (More shaped)
+       const drawArm = (armCtx, shoulderX, shoulderY) => {
+            armCtx.beginPath();
+            armCtx.moveTo(0, 0); // Shoulder joint
+            const elbowX = armWidth * 0.8;
+            const elbowY = armLength * 0.3;
+            const wristX = armWidth * 0.5;
+            const wristY = armLength;
+            armCtx.quadraticCurveTo(elbowX, elbowY, wristX, wristY);
+            armCtx.lineTo(wristX + armWidth * 0.5, wristY); // Wrist width
+            armCtx.quadraticCurveTo(elbowX + armWidth * 0.2, elbowY, armWidth, 0); // Back to shoulder width
+            armCtx.closePath();
+            armCtx.fill();
 
-    // Draw body relative to the origin (0,0) before the nose
-    const bodyStartX = -shapeLength * 0.7; // Start body behind origin
-    const bodyEndX = bodyStartX + shapeLength; // End body before nose tip
+             // Arm Shading
+             armCtx.fillStyle = playerBodyHighlightColor;
+             armCtx.beginPath();
+             armCtx.moveTo(armWidth * 0.1, armLength * 0.1);
+             armCtx.quadraticCurveTo(elbowX * 0.8, elbowY * 0.8, wristX * 0.8, wristY * 0.8);
+             armCtx.lineTo(wristX * 0.8 + armWidth * 0.3, wristY * 0.8);
+             armCtx.quadraticCurveTo(elbowX * 0.8 + armWidth * 0.1, elbowY * 0.8, armWidth * 0.8, armLength * 0.1);
+             armCtx.closePath();
+             armCtx.fill();
 
-    ctx.fillRect(bodyStartX, -shapeWidth / 2, shapeLength, shapeWidth);
+             armCtx.fillStyle = playerBodyShadowColor;
+             armCtx.beginPath();
+             armCtx.moveTo(armWidth * 0.3, armLength * 0.3);
+             armCtx.quadraticCurveTo(elbowX * 1.2, elbowY * 1.2, wristX * 1.2, wristY * 1.2);
+             armCtx.lineTo(wristX * 1.2 + armWidth * 0.1, wristY * 1.2);
+             armCtx.quadraticCurveTo(elbowX * 1.2 + armWidth * 0.05, elbowY * 1.2, armWidth * 0.6, armLength * 0.3);
+             armCtx.closePath();
+             armCtx.fill();
+       };
 
-    // Draw nose cone extending from the front (positive X) of the body
-    const noseLength = shapeLength * 0.4;
-    ctx.beginPath();
-    ctx.moveTo(bodyEndX, -shapeWidth / 2); // Start at front-top corner of body
-    ctx.lineTo(bodyEndX, shapeWidth / 2);  // Line to front-bottom corner
-    ctx.lineTo(bodyEndX + noseLength, 0);  // Point to the tip
-    ctx.closePath();
-    ctx.fill();
+       ctx.save();
+       ctx.translate(x - shoulderOffsetX, armTopY);
+       drawArm(ctx, 0, 0);
+       ctx.restore();
 
-    ctx.restore();
-    ctx.lineCap = "butt";
-  }
+       ctx.save();
+       ctx.translate(x + shoulderOffsetX, armTopY);
+       ctx.scale(-1, 1); // Flip horizontally for the right arm
+       drawArm(ctx, 0, 0);
+       ctx.restore();
 
-  function drawBullets(ctx, bullets) {
-    if (!bullets) return;
-    Object.values(bullets).forEach((b) => {
-      if (!b) return;
-      const bt = b.bullet_type || "standard";
-      const hv = Math.abs(b.vx ?? 0) > 0.01 || Math.abs(b.vy ?? 0) > 0.01;
-      if (bt === "ammo_heavy_slug") {
-        if (hv) {
-          drawShapedBullet(ctx, b, 0.6, 0.8);
-        } else {
-          drawBulletCircle(ctx, b, 0.4, 0.8);
-        }
-      } else if (bt === "ammo_shotgun") {
-        drawBulletCircle(ctx, b, 0.5, 0.5);
-      } else if (
-        bt === "ammo_rapid_fire" ||
-        bt === "standard" ||
-        bt === "standard_enemy"
-      ) {
-        if (hv) {
-          drawShapedBullet(ctx, b, 1.0, 0.7);
-        } else {
-          drawBulletCircle(ctx, b, 0, 0);
-        }
-      } else {
-        drawBulletCircle(ctx, b, 0.8, 0.6);
-      }
-    });
-  }
 
-  function drawPowerupSquare(ctx, x, y, size, type) {
-    let baseColor = powerupDefaultColor;
-    let symbol = "?";
-    let symbolColor = "#FFFFFF";
-    let symbolSizeFactor = 0.7;
-    if (type === "health") {
-      symbol = "+";
-      baseColor = powerupHealthColor;
-      symbolColor = "#FFFFFF";
-    } else if (type === "gun_upgrade") {
-      symbol = "▲";
-      baseColor = powerupGunColor;
-      symbolColor = "#FFFF00";
-      symbolSizeFactor = 0.6;
-    } else if (type === "speed_boost") {
-      symbol = "»";
-      baseColor = powerupSpeedColor;
-      symbolColor = "#FFFFFF";
-      symbolSizeFactor = 0.8;
-    } else if (type === "armor") {
-      symbol = "■";
-      baseColor = powerupArmorColor;
-      symbolColor = "#DDDDDD";
-      symbolSizeFactor = 0.5;
-    } else if (type === "ammo_shotgun") {
-      symbol = "::";
-      baseColor = powerupShotgunColor;
-      symbolColor = "#FFFFFF";
-      symbolSizeFactor = 0.6;
-    } else if (type === "ammo_heavy_slug") {
-      symbol = "●";
-      baseColor = powerupSlugColor;
-      symbolColor = "#FFEBCD";
-      symbolSizeFactor = 0.5;
-    } else if (type === "ammo_rapid_fire") {
-      symbol = ">";
-      baseColor = powerupRapidColor;
-      symbolColor = "#333333";
-      symbolSizeFactor = 0.6;
-    } else if (type === "bonus_score") {
-      symbol = "$";
-      baseColor = powerupScoreColor;
-      symbolColor = "#FFFFFF";
-    }
-    const t = performance.now();
-    const pulseSpeed = 0.002;
-    const pulseSizeAmount = 0.08;
-    const pulseAlphaAmount = 0.15;
-    const pulseFactor = Math.sin(t * pulseSpeed);
-    const currentSize = size * (1 + pulseFactor * pulseSizeAmount);
-    const currentAlpha = 0.85 + pulseFactor * pulseAlphaAmount;
-    ctx.save();
-    ctx.globalAlpha = currentAlpha;
-    const glowRadius = currentSize * 0.7;
-    const glowColor = baseColor.replace("rgb", "rgba").replace(")", `, 0.3)`);
-    try {
-      const gradient = ctx.createRadialGradient(
-        x,
-        y,
-        currentSize * 0.3,
-        x,
-        y,
-        glowRadius
-      );
-      gradient.addColorStop(0, glowColor);
-      gradient.addColorStop(
-        1,
-        baseColor.replace("rgb", "rgba").replace(")", `, 0.0)`)
-      );
-      ctx.fillStyle = gradient;
+      // Belt (Slightly more detailed buckle)
+      ctx.fillStyle = beltColor;
       ctx.fillRect(
-        x - glowRadius,
-        y - glowRadius,
-        glowRadius * 2,
-        glowRadius * 2
+        x - torsoLowerWidth * 0.55,
+        beltTopY,
+        torsoLowerWidth * 1.1,
+        beltHeight
       );
-    } catch (e) { }
-    ctx.fillStyle = baseColor;
-    ctx.beginPath();
-    if (typeof drawRoundedRect === "function") {
-      drawRoundedRect(
-        ctx,
-        x - currentSize / 2,
-        y - currentSize / 2,
-        currentSize,
-        currentSize,
-        currentSize * 0.15
+      ctx.fillStyle = beltBuckleColor;
+      const buckleWidth = w * 0.25;
+      const buckleHeight = beltHeight * 0.8;
+      const buckleX = x - buckleWidth / 2;
+      const buckleY = beltTopY + (beltHeight - buckleHeight) / 2;
+      ctx.fillRect(
+        buckleX,
+        buckleY,
+        buckleWidth,
+        buckleHeight
       );
-    } else {
-      ctx.rect(
-        x - currentSize / 2,
-        y - currentSize / 2,
-        currentSize,
-        currentSize
+      ctx.fillStyle = "rgba(255, 255, 255, 0.3)"; // Highlight
+      ctx.fillRect(buckleX + 2, buckleY + 2, buckleWidth - 4, 2);
+      ctx.fillStyle = "rgba(0, 0, 0, 0.3)"; // Shadow
+      ctx.fillRect(buckleX + 2, buckleY + buckleHeight - 4, buckleWidth - 4, 2);
+
+
+      // Chest Plate (More shaped)
+      const plateWidth = torsoUpperWidth * 0.9;
+      const plateHeight = torsoHeight * 0.9;
+      const plateTopY = torsoTopY + torsoHeight * 0.05;
+      const plateBottomY = plateTopY + plateHeight;
+      ctx.fillStyle = armorColor;
+      ctx.beginPath();
+      ctx.moveTo(x - plateWidth / 2, plateTopY);
+      ctx.quadraticCurveTo(x - plateWidth * 0.6, plateTopY + plateHeight * 0.3, x - plateWidth * 0.4, plateBottomY);
+      ctx.lineTo(x + plateWidth * 0.4, plateBottomY);
+      ctx.quadraticCurveTo(x + plateWidth * 0.6, plateTopY + plateHeight * 0.3, x + plateWidth / 2, plateTopY);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = armorHighlight; // Highlight
+      ctx.beginPath();
+      ctx.moveTo(x - plateWidth / 2 + 4, plateTopY + 4);
+      ctx.quadraticCurveTo(x - plateWidth * 0.5, plateTopY + plateHeight * 0.3, x - plateWidth * 0.3, plateBottomY - 4);
+      ctx.lineTo(x + plateWidth * 0.3, plateBottomY - 4);
+      ctx.quadraticCurveTo(x + plateWidth * 0.5, plateTopY + plateHeight * 0.3, x + plateWidth / 2 - 4, plateTopY + 4);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = armorShadow; // Shadow
+      ctx.beginPath();
+      ctx.moveTo(x - plateWidth / 2 + 6, plateTopY + 6);
+      ctx.quadraticCurveTo(x - plateWidth * 0.4, plateTopY + plateHeight * 0.4, x - plateWidth * 0.2, plateBottomY - 6);
+      ctx.lineTo(x + plateWidth * 0.2, plateBottomY - 6);
+      ctx.quadraticCurveTo(x + plateWidth * 0.4, plateTopY + plateHeight * 0.4, x + plateWidth / 2 - 6, plateTopY + 6);
+      ctx.closePath();
+      ctx.fill();
+
+
+      // Shoulders (More shaped)
+      ctx.fillStyle = armorColor;
+      ctx.beginPath(); // Left Shoulder
+      ctx.arc(
+        x - shoulderOffsetX,
+        shoulderCenterY,
+        shoulderPadRadius,
+        Math.PI * 1.1,
+        Math.PI * 1.9
       );
-    }
-    ctx.fill();
-    ctx.fillStyle = symbolColor;
-    let fs = Math.round(currentSize * symbolSizeFactor);
-    fs = Math.max(8, fs);
-    ctx.font = `bold ${fs}px ${fontFamily}`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.shadowColor = "rgba(0,0,0,0.5)";
-    ctx.shadowBlur = 2;
-    ctx.shadowOffsetX = 1;
-    ctx.shadowOffsetY = 1;
-    ctx.fillText(symbol, x, y + currentSize * 0.03);
-    ctx.restore();
-  }
+      ctx.closePath();
+      ctx.fill();
 
-  function drawPowerups(ctx, powerups) {
-    if (!powerups) return;
-    Object.values(powerups).forEach((p) => {
-      if (!p) return;
-      const s = p.size ?? 20;
-      drawPowerupSquare(ctx, p.x, p.y, s, p.type);
-    });
-  }
+      ctx.fillStyle = armorHighlight; // Left Highlight
+      ctx.beginPath();
+      ctx.arc(
+        x - shoulderOffsetX,
+        shoulderCenterY - 2,
+        shoulderPadRadius * 0.8,
+        Math.PI * 1.2,
+        Math.PI * 1.8
+      );
+      ctx.arc(
+        x - shoulderOffsetX,
+        shoulderCenterY,
+        shoulderPadRadius * 0.9,
+        Math.PI * 1.8,
+        Math.PI * 1.2,
+        true
+      );
+      ctx.closePath();
+      ctx.fill();
 
-  /**
-   * Triggers or extends a screen shake effect.
-   * @param {number} magnitude - Strength of the shake.
-   * @param {number} durationMs - How long the shake should last in milliseconds.
-   */
-  function triggerShake(magnitude, durationMs) {
-    // Ensure module-level shake variables exist
-    if (typeof currentShakeMagnitude === 'undefined' || typeof shakeEndTime === 'undefined') {
-      console.error("triggerShake called before shake state variables are initialized.");
-      return;
-    }
-    const now = performance.now();
-    const newEndTime = now + durationMs;
-    // Apply if new shake is stronger or lasts longer than current one
-    if (magnitude >= currentShakeMagnitude || newEndTime >= shakeEndTime) {
-      currentShakeMagnitude = Math.max(magnitude, currentShakeMagnitude); // Use the stronger magnitude
-      shakeEndTime = Math.max(newEndTime, shakeEndTime); // Extend to the later end time
-    }
-  }
-  // --- END triggerShake definition ---
+      ctx.fillStyle = armorColor;
+      ctx.beginPath(); // Right Shoulder
+      ctx.arc(
+        x + shoulderOffsetX,
+        shoulderCenterY,
+        shoulderPadRadius,
+        Math.PI * 0.1,
+        Math.PI * 0.9,
+        true
+      );
+      ctx.closePath();
+      ctx.fill();
 
-  //---function drawGame ---
-  function drawGame(
-    ctx, appState, stateToRender,
-    localPlayerMuzzleFlash, localPlayerPushbackAnim,
-    activeBloodSparkEffects, activeEnemyBubbles,
-    currentMousePos // Still passed in, maybe useful for UI later
-) {
-    // --- Initial Checks & Setup ---
-    if (!ctx || !appState) {
+      ctx.fillStyle = armorHighlight; // Right Highlight
+      ctx.beginPath();
+      ctx.arc(
+        x + shoulderOffsetX,
+        shoulderCenterY - 2,
+        shoulderPadRadius * 0.8,
+        Math.PI * 0.2,
+        Math.PI * 0.8,
+        true
+      );
+      ctx.arc(
+        x + shoulderOffsetX,
+        shoulderCenterY,
+        shoulderPadRadius * 0.9,
+        Math.PI * 0.8,
+        Math.PI * 0.2,
+        false
+      );
+      ctx.closePath();
+      ctx.fill();
+
+
+      // Helmet (More shaped)
+      ctx.fillStyle = helmetColor;
+      ctx.beginPath();
+      ctx.moveTo(x - headWidth / 2, headTopY + headHeight * 0.1);
+      ctx.quadraticCurveTo(x - headWidth * 0.6, headTopY + headHeight * 0.4, x - headWidth / 2, headBottomY);
+      ctx.lineTo(x + headWidth / 2, headBottomY);
+      ctx.quadraticCurveTo(x + headWidth * 0.6, headTopY + headHeight * 0.4, x + headWidth / 2, headTopY + headHeight * 0.1);
+      ctx.quadraticCurveTo(x + headWidth * 0.5, headTopY, x, headTopY); // Top curve
+      ctx.quadraticCurveTo(x - headWidth * 0.5, headTopY, x - headWidth / 2, headTopY + headHeight * 0.1);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = helmetColor; // Neck guard
+      ctx.fillRect(
+        x - headWidth * 0.4,
+        headBottomY - neckHeight * 0.5,
+        headWidth * 0.8,
+        neckHeight * 1.2
+      );
+
+      ctx.fillStyle = armorHighlight; // Helmet Highlight
+      ctx.beginPath();
+      ctx.moveTo(x - headWidth / 2 + 3, headTopY + headHeight * 0.1 + 3);
+      ctx.quadraticCurveTo(x - headWidth * 0.5, headTopY + headHeight * 0.4, x - headWidth / 2 + 3, headBottomY - 3);
+      ctx.lineTo(x + headWidth / 2 - 3, headBottomY - 3);
+      ctx.quadraticCurveTo(x + headWidth * 0.5, headTopY + headHeight * 0.4, x + headWidth / 2 - 3, headTopY + headHeight * 0.1 + 3);
+      ctx.quadraticCurveTo(x + headWidth * 0.4, headTopY + 3, x, headTopY + 3); // Top curve
+      ctx.quadraticCurveTo(x - headWidth * 0.4, headTopY + 3, x - headWidth / 2 + 3, headTopY + headHeight * 0.1 + 3);
+      ctx.closePath();
+      ctx.fill();
+
+      const rivetRadius = 1.5; // Rivets
+      ctx.fillStyle = armorHighlight;
+      ctx.beginPath();
+      ctx.arc(
+        x - headWidth * 0.4,
+        headBottomY - neckHeight * 0.2,
+        rivetRadius,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(
+        x + headWidth * 0.4,
+        headBottomY - neckHeight * 0.2,
+        rivetRadius,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x, headTopY + headHeight * 0.85, rivetRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = slitColor; // Visor Slit
+      const slitHeight = headHeight * 0.12;
+      const slitWidth = headWidth * 0.8;
+      const slitY = headTopY + headHeight * 0.45;
+      ctx.fillRect(x - slitWidth / 2, slitY, slitWidth, slitHeight);
+
+      // Gun (More detailed based on level, animated aiming)
+      let shouldDrawGun = false;
+      let gunDrawAngle = 0;
+      let gunOriginXOffset = w * 0.1;
+      let gunOriginYOffset = armTopY + armLength * 0.4;
+
+      if (isPushbackAnimating) {
+        shouldDrawGun = true;
+        gunDrawAngle = -Math.PI / 2; // Gun points down during pushback
+        gunOriginXOffset = w * 0.05;
+      } else if (isSelf && (aimDx !== 0 || aimDy !== 0)) {
+        shouldDrawGun = true;
+        gunDrawAngle = Math.atan2(aimDy, aimDx);
+      }
+
+      if (shouldDrawGun) {
+        const gunLevel = playerState?.gun ?? 1;
+        const baseBarrelLength = 18;
+        const barrelLengthIncrease = 3; // More increase
+        const barrelLength = baseBarrelLength + (gunLevel - 1) * barrelLengthIncrease;
+        const barrelThickness = 3 + (gunLevel - 1) * 0.3; // More thickness
+        const stockLength = 8 + (gunLevel - 1) * 0.8; // More length
+        const stockThickness = 5 + (gunLevel - 1) * 0.4; // More thickness
+        const stockColor = "#8B4513";
+        const barrelColor = "#444444";
+        const sightColor = "#333";
+
+        ctx.save();
+        ctx.translate(x + gunOriginXOffset, gunOriginYOffset);
+        ctx.rotate(gunDrawAngle);
+
+        // Draw Stock (More shaped)
+        ctx.fillStyle = stockColor;
+        ctx.beginPath();
+        ctx.moveTo(-stockLength - 2, -stockThickness / 2);
+        ctx.lineTo(0, -stockThickness / 2);
+        ctx.quadraticCurveTo(stockLength * 0.2, 0, 0, stockThickness / 2); // Curved end
+        ctx.lineTo(-stockLength - 2, stockThickness / 2);
+        ctx.closePath();
+        ctx.fill();
+
+        // Draw Barrel
+        ctx.fillStyle = barrelColor;
+        ctx.fillRect(0, -barrelThickness / 2, barrelLength, barrelThickness);
+
+        // Draw Sight (More prominent)
+        const sightLength = barrelLength * 0.2;
+        const sightHeight = barrelThickness * 0.8;
+        ctx.fillStyle = sightColor;
+        ctx.fillRect(barrelLength * 0.7, -barrelThickness / 2 - sightHeight, sightLength, sightHeight);
+        ctx.fillRect(barrelLength * 0.7 + sightLength * 0.8, -barrelThickness / 2 - sightHeight, sightLength * 0.2, sightHeight * 0.5); // Front post
+
+
+        ctx.restore();
+      }
+
+
+      // Effects
+      if (isPlayerBitten) {
+        const footY = bootBottomY;
+        const numParticles = 12; // More particles
+        const particleBaseSize = 5; // Larger
+        const particleSpeedY = -80; // Faster rise
+        const particleSpeedX = 30; // Wider spread
+        const particleLifetimeMs = 1000; // Longer lifetime
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter'; // Blend particles
+
+        for (let i = 0; i < numParticles; i++) {
+          const effectStartTime =
+            playerSnakeEffect.expires_at * 1000 - SNAKE_BITE_DURATION * 1000;
+          const timeSinceEffectStart = Math.max(0, now - effectStartTime);
+          const particleSimulatedAge =
+            (timeSinceEffectStart + (particleLifetimeMs / numParticles) * i * 1.2) % // Stagger spawn
+            particleLifetimeMs;
+          const particleProgress = particleSimulatedAge / particleLifetimeMs;
+          if (particleProgress < 0 || particleProgress >= 1) continue;
+
+          const initialOffsetX = (Math.random() - 0.5) * w * 0.8;
+          const initialOffsetY = (Math.random() - 0.5) * h * 0.1;
+
+          const particleX = x + initialOffsetX + particleSpeedX * (particleProgress - 0.5);
+          const particleY = footY + initialOffsetY + particleSpeedY * (particleSimulatedAge / 1000);
+
+          const particleSize =
+            particleBaseSize *
+            (1.0 - particleProgress * 0.7) * // Shrink more
+            (0.8 + Math.random() * 0.4);
+          const alpha =
+            0.9 * (1.0 - particleProgress) * (0.7 + Math.random() * 0.3); // Fade out
+
+          const green = 180 + Math.floor(75 * particleProgress);
+          const yellow = 220 * (1.0 - particleProgress);
+          const blue = 50 + Math.floor(50 * particleProgress);
+
+          ctx.fillStyle = `rgba(${Math.floor(
+            yellow
+          )}, ${green}, ${blue}, ${alpha.toFixed(2)})`;
+          ctx.fillRect(
+            particleX - particleSize / 2,
+            particleY - particleSize / 2,
+            particleSize,
+            particleSize
+          );
+        }
+        ctx.restore();
+      }
+
+      // Restore hit flash filter
+      if (isHit) {
+          ctx.filter = 'none';
+      }
+
+      ctx.restore(); // Restore context state from the very start of the function
+    }
+
+    function drawPlayers(
+      ctx,
+      players,
+      appState,
+      localPlayerMuzzleFlashRef,
+      localPlayerPushbackAnimState
+    ) {
+      if (!players || !appState) return;
+      const now = performance.now() / 1000; // Server time for fade check
+      const clientNow = performance.now(); // Client time for effects
+      const fd = 0.3; // Fade duration
+      const localPlayer = players[appState.localPlayerId];
+
+      Object.values(players).forEach((p) => {
+        if (!p) return;
+        const w = p.width ?? 20,
+          h = p.height ?? 48,
+          mh = p.max_health ?? 100,
+          ma = p.max_armor ?? 100;
+        const isSelf = p.id === appState.localPlayerId;
+        let px = p.x,
+          py = p.y;
+        let a = 1.0,
+          sd = true,
+          id = false;
+
+        // Use rendered position for local player for smooth movement
+        if (isSelf && appState.renderedPlayerPos) {
+          px = appState.renderedPlayerPos.x;
+          py = appState.renderedPlayerPos.y;
+        }
+
+        if (p.player_status === "dead" && p.death_timestamp) {
+          id = true;
+          const el = now - p.death_timestamp;
+          if (el < fd) a = Math.max(0.1, 1.0 - (el / fd) * 0.9); // Smoother fade
+          else sd = false; // Don't draw if faded
+        }
+
+        if (sd) {
+          ctx.save();
+          ctx.globalAlpha = a;
+          drawPlayerCharacter(
+            ctx,
+            px,
+            py,
+            w,
+            h,
+            isSelf,
+            p, // Pass player state
+            isSelf ? appState.aimDx : 0, // Pass aim direction for local player
+            isSelf ? appState.aimDy : 0,
+            isSelf ? localPlayerPushbackAnimState : null // Pass pushback state for local player
+          );
+          ctx.restore();
+        }
+
+        if (!id && p.health > 0 && sd) {
+          drawHealthBar(ctx, px, py, w, p.health, mh);
+          if (p.armor > 0) {
+            drawArmorBar(ctx, px, py, w, p.armor);
+          }
+        }
+      });
+    }
+
+
+    function drawEnemies(
+      ctx,
+      enemies,
+      activeEnemyBubblesRef,
+      activeBloodSparkEffectsRef
+    ) {
+      if (!enemies) return;
+      const now = performance.now() / 1000; // Server time for fade check
+      const clientNow = performance.now(); // Client time for effects
+      const fd = 0.3; // Fade duration
+
+      Object.values(enemies).forEach((e) => {
+        if (!e) return;
+        const w = e.width ?? 20,
+          h = e.height ?? 40,
+          mh = e.max_health ?? 50;
+        let a = 1.0,
+          sd = true,
+          id = false;
+        if (e.health <= 0 && e.death_timestamp) {
+          id = true;
+          const el = now - e.death_timestamp;
+          if (el < fd) a = Math.max(0.1, 1.0 - (el / fd) * 0.9);
+          // Smoother fade
+          else sd = false; // Don't draw if faded
+        }
+        if (sd) {
+          ctx.save();
+          ctx.globalAlpha = a;
+          drawEnemyRect(
+            ctx,
+            e.x,
+            e.y,
+            w,
+            h,
+            e.type,
+            e, // Pass enemy state
+            activeBloodSparkEffectsRef,
+            clientNow
+          ); // Pass client time & spark map
+          ctx.restore();
+        }
+        if (!id && e.health > 0 && sd) {
+          drawHealthBar(ctx, e.x, e.y, w, e.health, mh);
+        }
+      });
+    }
+
+    // --- REVISED drawMuzzleFlash (More detailed) ---
+    function drawMuzzleFlash(ctx, playerX, playerY, aimDx, aimDy) {
+      const numPoints = 8; // More points for starburst
+      const outerRadiusBase = 12; // Larger
+      const outerRadiusVariance = 5;
+      const innerRadiusBase = 5; // Larger
+      const innerRadiusVariance = 2;
+      const glowRadius = 35; // Larger glow
+      const glowColor = muzzleFlashGlowCore; // Use new glow color constant
+      const flashColor = "rgba(255, 230, 100, 0.95)";
+      const coreColor = "rgba(255, 255, 255, 1.0)"; // Bright white core
+      const offsetDistance = 35; // Further offset
+      const flashX = playerX + aimDx * offsetDistance;
+      const flashY = playerY + aimDy * offsetDistance;
+      const angle = Math.atan2(aimDy, aimDx);
+
+      ctx.save();
+      ctx.translate(flashX, flashY);
+      ctx.rotate(angle);
+      ctx.globalCompositeOperation = 'lighter'; // Blend for glow effect
+
+      // Draw Glow
+      try {
+        const glowGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, glowRadius);
+        glowGradient.addColorStop(0, glowColor);
+        glowGradient.addColorStop(1, "rgba(255, 200, 50, 0)");
+        ctx.fillStyle = glowGradient;
+        ctx.beginPath();
+        ctx.arc(0, 0, glowRadius, 0, Math.PI * 2);
+        ctx.fill();
+      } catch (e) {
+         // Fallback if gradient fails
+         ctx.fillStyle = glowColor;
+         ctx.beginPath();
+         ctx.arc(0, 0, glowRadius * 0.5, 0, Math.PI * 2);
+         ctx.fill();
+      }
+
+
+      // Draw Flash Starburst
+      ctx.fillStyle = flashColor;
+      ctx.beginPath();
+      for (let i = 0; i < numPoints * 2; i++) {
+        const radius =
+          i % 2 === 0
+            ? outerRadiusBase + Math.random() * outerRadiusVariance
+            : innerRadiusBase + Math.random() * innerRadiusVariance;
+        const pointAngle = (i / (numPoints * 2)) * (Math.PI * 2) - Math.PI / 2;
+        const px = Math.cos(pointAngle) * radius;
+        const py = Math.sin(pointAngle) * radius;
+        if (i === 0) {
+          ctx.moveTo(px, py);
+        } else {
+          ctx.lineTo(px, py);
+        }
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      // Draw Bright Core
+      const coreRadius = innerRadiusBase * 0.8;
+      ctx.fillStyle = coreColor;
+      ctx.beginPath();
+      ctx.arc(0, 0, coreRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+
+      ctx.restore(); // Restore globalCompositeOperation and transform
+    }
+
+    // --- REVISED drawBulletCircle (Enhanced Trail) ---
+    function drawBulletCircle(
+      ctx,
+      bullet,
+      trailLengthFactor = 0.8,
+      trailBaseAlpha = 0.6
+    ) {
+      const { x, y, vx = 0, vy = 0, radius: r = 4, owner_type } = bullet;
+      const isPlayerBullet = owner_type === "player";
+      const color = isPlayerBullet ? bulletPlayerColor : bulletEnemyColor;
+      const speed = Math.sqrt(vx * vx + vy * vy);
+      const trailLength = r * 3 * trailLengthFactor * Math.min(1, speed / 150); // Longer trail
+      let startX = x,
+        startY = y;
+      if (speed > 1) {
+        startX = x - (vx / speed) * trailLength;
+        startY = y - (vy / speed) * trailLength;
+      }
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter'; // Blend trail
+
+      if (trailLength > 1 && speed > 1) {
+        try {
+          const gradient = ctx.createLinearGradient(startX, startY, x, y);
+          let trailStartColor = color;
+          if (color.startsWith("#")) {
+            let alphaHex = Math.round(trailBaseAlpha * 255)
+              .toString(16)
+              .padStart(2, "0");
+            trailStartColor = color + alphaHex;
+          } else if (color.startsWith("rgb")) {
+            trailStartColor = color
+              .replace(/rgb/i, "rgba")
+              .replace(")", `, ${trailBaseAlpha})`);
+          }
+          gradient.addColorStop(0, trailStartColor);
+          gradient.addColorStop(0.8, color); // Fade to full color near bullet
+          gradient.addColorStop(1, color);
+          ctx.strokeStyle = gradient;
+          ctx.lineWidth = r * 1.2; // Thicker trail
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(startX, startY);
+          ctx.lineTo(x, y);
+          ctx.stroke();
+
+           // Add subtle glow trail
+           const glowGradient = ctx.createLinearGradient(startX, startY, x, y);
+           glowGradient.addColorStop(0, bulletTrailGlow.replace("A", (trailBaseAlpha * 0.5).toFixed(2)));
+           glowGradient.addColorStop(1, bulletTrailGlow.replace("A", "0"));
+           ctx.strokeStyle = glowGradient;
+           ctx.lineWidth = r * 2; // Wider glow trail
+           ctx.stroke();
+
+
+        } catch (e) {
+           // Fallback trail
+          ctx.strokeStyle = color;
+          ctx.lineWidth = r * 0.8;
+          ctx.beginPath();
+          ctx.moveTo(startX, startY);
+          ctx.lineTo(x, y);
+          ctx.stroke();
+        }
+      }
+
+      // Draw Bullet Core
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore(); // Restore globalCompositeOperation
+      ctx.lineCap = "butt"; // Restore line cap
+    }
+
+     // --- REVISED drawShapedBullet (Enhanced Shape, Trail, Glow) ---
+    function drawShapedBullet(
+      ctx,
+      bullet,
+      trailLengthFactor = 1.0,
+      trailBaseAlpha = 0.7
+    ) {
+      const { x, y, vx = 0, vy = 0, radius: r = 4, owner_type } = bullet;
+      const isPlayerBullet = owner_type === "player";
+      const color = isPlayerBullet ? bulletPlayerColor : bulletEnemyColor;
+      const speed = Math.sqrt(vx * vx + vy * vy);
+      const baseLength = 10, // Longer base
+        baseWidth = 5; // Wider base
+      const scaleFactor = r / 4;
+      const shapeLength = baseLength * scaleFactor;
+      const shapeWidth = baseWidth * scaleFactor;
+      const trailLength =
+        shapeLength * trailLengthFactor * Math.min(1, speed / 150); // Longer trail
+      let startX = x,
+        startY = y;
+      if (speed > 1) {
+        startX = x - (vx / speed) * trailLength;
+        startY = y - (vy / speed) * trailLength;
+      }
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter'; // Blend trail/glow
+
+      if (trailLength > 1 && speed > 1) {
+         try {
+            const gradient = ctx.createLinearGradient(startX, startY, x, y);
+            let trailStartColor = color;
+            if (color.startsWith("#")) {
+                let alphaHex = Math.round(trailBaseAlpha * 255)
+                .toString(16)
+                .padStart(2, "0");
+                trailStartColor = color + alphaHex;
+            } else if (color.startsWith("rgb")) {
+                trailStartColor = color
+                .replace(/rgb/i, "rgba")
+                .replace(")", `, ${trailBaseAlpha})`);
+            }
+            gradient.addColorStop(0, trailStartColor);
+            gradient.addColorStop(0.8, color);
+            gradient.addColorStop(1, color);
+            ctx.strokeStyle = gradient;
+            ctx.lineWidth = shapeWidth * 0.8; // Thicker trail
+            ctx.lineCap = "round";
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+
+            // Add subtle glow trail
+            const glowGradient = ctx.createLinearGradient(startX, startY, x, y);
+            glowGradient.addColorStop(0, bulletTrailGlow.replace("A", (trailBaseAlpha * 0.6).toFixed(2)));
+            glowGradient.addColorStop(1, bulletTrailGlow.replace("A", "0"));
+            ctx.strokeStyle = glowGradient;
+            ctx.lineWidth = shapeWidth * 1.5; // Wider glow trail
+            ctx.stroke();
+
+         } catch(e) {
+             // Fallback trail
+             ctx.strokeStyle = color;
+             ctx.lineWidth = shapeWidth * 0.6;
+             ctx.beginPath();
+             ctx.moveTo(startX, startY);
+             ctx.lineTo(x, y);
+             ctx.stroke();
+         }
+      }
+
+      // Draw Bullet Shape (More streamlined)
+      const angle = Math.atan2(vy, vx);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(-shapeLength / 2, -shapeWidth / 2);
+      ctx.lineTo(shapeLength / 2, 0); // Pointed front
+      ctx.lineTo(-shapeLength / 2, shapeWidth / 2);
+      ctx.quadraticCurveTo(-shapeLength / 2 + shapeLength * 0.2, 0, -shapeLength / 2, -shapeWidth / 2); // Rounded back
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore(); // Restore shape transform
+
+      ctx.restore(); // Restore globalCompositeOperation
+      ctx.lineCap = "butt"; // Restore line cap
+    }
+
+
+    function drawBullets(ctx, bullets) {
+      if (!bullets) return;
+      Object.values(bullets).forEach((b) => {
+        if (!b) return;
+        const bt = b.bullet_type || "standard";
+        const hv = Math.abs(b.vx ?? 0) > 0.01 || Math.abs(b.vy ?? 0) > 0.01;
+        if (bt === "ammo_heavy_slug") {
+          // Heavy slug uses shaped bullet
+          drawShapedBullet(ctx, b, 0.8, 0.9); // Longer, more opaque trail
+        } else if (bt === "ammo_shotgun") {
+          // Shotgun pellets are simple circles
+          drawBulletCircle(ctx, b, 0.4, 0.6); // Shorter, less opaque trail
+        } else if (
+          bt === "ammo_rapid_fire"
+        ) {
+          // Rapid fire uses shaped bullet with prominent trail
+           drawShapedBullet(ctx, b, 1.2, 0.7); // Long, bright trail
+        }
+         else if (bt === "standard" || bt === "standard_enemy")
+        {
+           // Standard bullets use shaped bullet
+           drawShapedBullet(ctx, b, 1.0, 0.7); // Standard trail
+        }
+        else {
+          // Default fallback to circle
+          drawBulletCircle(ctx, b, 0.8, 0.6);
+        }
+      });
+    }
+
+    function drawPowerupSquare(ctx, x, y, size, type) {
+      let baseColor = powerupDefaultColor;
+      let symbol = "?";
+      let symbolColor = "#FFFFFF";
+      let symbolSizeFactor = 0.7;
+      if (type === "health") {
+        symbol = "+";
+        baseColor = powerupHealthColor;
+        symbolColor = "#FFFFFF";
+      } else if (type === "gun_upgrade") {
+        symbol = "▲";
+        baseColor = powerupGunColor;
+        symbolColor = "#FFFF00";
+        symbolSizeFactor = 0.6;
+      } else if (type === "speed_boost") {
+        symbol = "»";
+        baseColor = powerupSpeedColor;
+        symbolColor = "#FFFFFF";
+        symbolSizeFactor = 0.8;
+      } else if (type === "armor") {
+        symbol = "■";
+        baseColor = powerupArmorColor;
+        symbolColor = "#DDDDDD";
+        symbolSizeFactor = 0.5;
+      } else if (type === "ammo_shotgun") {
+        symbol = "::";
+        baseColor = powerupShotgunColor;
+        symbolColor = "#FFFFFF";
+        symbolSizeFactor = 0.6;
+      } else if (type === "ammo_heavy_slug") {
+        symbol = "●";
+        baseColor = powerupSlugColor;
+        symbolColor = "#FFEBCD";
+        symbolSizeFactor = 0.5;
+      } else if (type === "ammo_rapid_fire") {
+        symbol = ">";
+        baseColor = powerupRapidColor;
+        symbolColor = "#333333";
+        symbolSizeFactor = 0.6;
+      } else if (type === "bonus_score") {
+        symbol = "$";
+        baseColor = powerupScoreColor;
+        symbolColor = "#FFFFFF";
+      }
+      const t = performance.now();
+      const pulseSpeed = 0.002;
+      const pulseSizeAmount = 0.08;
+      const pulseAlphaAmount = 0.15;
+      const pulseFactor = Math.sin(t * pulseSpeed);
+      const currentSize = size * (1 + pulseFactor * pulseSizeAmount);
+      const currentAlpha = 0.85 + pulseFactor * pulseAlphaAmount;
+      ctx.save();
+      ctx.globalAlpha = currentAlpha;
+      const glowRadius = currentSize * 0.7;
+      const glowColor = baseColor.replace("rgb", "rgba").replace(")", `, 0.3)`);
+      try {
+        const gradient = ctx.createRadialGradient(
+          x,
+          y,
+          currentSize * 0.3,
+          x,
+          y,
+          glowRadius
+        );
+        gradient.addColorStop(0, glowColor);
+        gradient.addColorStop(
+          1,
+          baseColor.replace("rgb", "rgba").replace(")", `, 0.0)`)
+        );
+        ctx.fillStyle = gradient;
+        ctx.fillRect(
+          x - glowRadius,
+          y - glowRadius,
+          glowRadius * 2,
+          glowRadius * 2
+        );
+      } catch (e) {}
+      ctx.fillStyle = baseColor;
+      ctx.beginPath();
+      if (typeof drawRoundedRect === "function") {
+        drawRoundedRect(
+          ctx,
+          x - currentSize / 2,
+          y - currentSize / 2,
+          currentSize,
+          currentSize,
+          currentSize * 0.15
+        );
+      } else {
+        ctx.rect(
+          x - currentSize / 2,
+          y - currentSize / 2,
+          currentSize,
+          currentSize
+        );
+      }
+      ctx.fill();
+      ctx.fillStyle = symbolColor;
+      let fs = Math.round(currentSize * symbolSizeFactor);
+      fs = Math.max(8, fs);
+      ctx.font = `bold ${fs}px ${fontFamily}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.shadowColor = "rgba(0,0,0,0.5)";
+      ctx.shadowBlur = 2;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 1;
+      ctx.fillText(symbol, x, y + currentSize * 0.03);
+      ctx.restore();
+    }
+
+    function drawPowerups(ctx, powerups) {
+      if (!powerups) return;
+      Object.values(powerups).forEach((p) => {
+        if (!p) return;
+        const s = p.size ?? 20;
+        drawPowerupSquare(ctx, p.x, p.y, s, p.type);
+      });
+    }
+
+    function triggerShake(magnitude, durationMs) {
+      const now = performance.now(),
+        net = now + durationMs;
+      if (magnitude >= currentShakeMagnitude || net >= shakeEndTime) {
+        currentShakeMagnitude = Math.max(magnitude, currentShakeMagnitude);
+        shakeEndTime = Math.max(net, shakeEndTime);
+      }
+    }
+
+    // --- NEW: Draw Heat Haze Effect (Performance Optimized - from Phase 1) ---
+    function drawHeatHazeEffect(ctx, intensity, width, height, now) {
+        if (intensity <= 0.01) return;
+
+        const maxOffset = HEAT_HAZE_WAVE_OFFSET_MAX * intensity;
+        const waveHeight = HEAT_HAZE_WAVE_HEIGHT_MAX * intensity;
+        const baseAlpha = HEAT_HAZE_WAVE_ALPHA_BASE * intensity;
+        const timeFactor = now * HEAT_HAZE_WAVE_SPEED_BASE;
+
+        ctx.save();
+        ctx.fillStyle = HEAT_HAZE_COLOR.replace("A", baseAlpha.toFixed(3));
+        ctx.globalCompositeOperation = 'lighter'; // Blend for glowing effect
+
+        for (let i = 0; i < HEAT_HAZE_WAVE_COUNT; i++) {
+            const offsetX = Math.sin(timeFactor * (1.0 + i * 0.1) + i * 0.5) * maxOffset * (0.5 + Math.random() * 0.5);
+            const offsetY = Math.cos(timeFactor * (0.8 + i * 0.15) + i * 0.7) * maxOffset * 0.3 * (0.5 + Math.random() * 0.5);
+            const waveY = height - waveHeight + (i / HEAT_HAZE_WAVE_COUNT) * waveHeight * 0.8;
+            const waveWidth = width * (0.8 + Math.random() * 0.4); // Vary width slightly
+
+            ctx.beginPath();
+            // Simple wavy shape - adjust control points for desired wave
+            const cp1x = offsetX + waveWidth * 0.2 + Math.sin(timeFactor * 1.2 + i * 0.3) * maxOffset * 0.5;
+            const cp1y = waveY + waveHeight * 0.5 + Math.cos(timeFactor * 1.3 + i * 0.4) * maxOffset * 0.5;
+            const cp2x = offsetX + waveWidth * 0.8 + Math.sin(timeFactor * 1.4 + i * 0.5) * maxOffset * 0.5;
+            const cp2y = waveY + waveHeight * 0.5 + Math.cos(timeFactor * 1.5 + i * 0.6) * maxOffset * 0.5;
+
+            ctx.moveTo(offsetX - waveWidth / 2, waveY + offsetY);
+            ctx.bezierCurveTo(
+                offsetX - waveWidth / 2 + cp1x, cp1y + offsetY,
+                offsetX + waveWidth / 2 - cp2x, cp2y + offsetY,
+                offsetX + waveWidth / 2, waveY + offsetY
+            );
+            ctx.lineTo(offsetX + waveWidth / 2, height);
+            ctx.lineTo(offsetX - waveWidth / 2, height);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        ctx.restore();
+    }
+
+
+    // --- Main Render Function --- V5 --- Updated Signature ---
+    function drawGame(
+      ctx,
+      appState,
+      stateToRender,
+      localPlayerMuzzleFlashRef,
+      localPlayerPushbackAnimState,
+      activeBloodSparkEffectsRef,
+      activeSpeechBubbles,
+      activeEnemyBubbles,
+      snake,
+      width,
+      height
+    ) {
+      if (!mainCtx) mainCtx = ctx;
+      if (!ctx || !appState) {
         console.error("drawGame missing context or appState!");
         return;
-    }
-    const now = performance.now();
-    const width = appState.canvasWidth;
-    const height = appState.canvasHeight;
-    if (width <= 0 || height <= 0 || !Number.isFinite(width) || !Number.isFinite(height)) {
-        console.error(`drawGame called with invalid dimensions: ${width}x${height}`);
+      }
+      const now = performance.now();
+      canvasWidth = typeof width === "number" && isFinite(width) ? width : 1600; // Use fallback
+      canvasHeight =
+        typeof height === "number" && isFinite(height) ? height : 900; // Use fallback
+      if (!isFinite(canvasWidth) || !isFinite(canvasHeight)) {
+        console.error("drawGame received invalid width/height:", width, height);
         return;
-    }
+      }
 
-    ctx.clearRect(0, 0, width, height);
-    ctx.globalAlpha = 1.0;
-
-    // --- 1. Calculate Player Shake Offset ---
-    let shakeOffsetX = 0, shakeOffsetY = 0;
-    if (typeof currentShakeMagnitude !== 'undefined' && typeof shakeEndTime !== 'undefined') {
-        if (currentShakeMagnitude > 0 && now < shakeEndTime) {
-            const timeRemaining = shakeEndTime - now;
-            const initialDuration = Math.max(1, (shakeEndTime > now ? shakeEndTime - (now - timeRemaining) : 1));
-            let currentMag = currentShakeMagnitude * (timeRemaining / initialDuration);
-            currentMag = Math.max(0, currentMag);
-            if (currentMag > 0.5) {
-                const shakeAngle = Math.random() * Math.PI * 2;
-                shakeOffsetX = Math.cos(shakeAngle) * currentMag;
-                shakeOffsetY = Math.sin(shakeAngle) * currentMag;
-            } else { currentShakeMagnitude = 0; }
-        } else if (currentShakeMagnitude > 0) { currentShakeMagnitude = 0; }
-    }
-    // --- End Shake Calculation ---
-
-    // --- Get Gun Aim Direction from Stored State ---
-    // This direction should have been calculated relative to the player in handleShooting
-    // and stored in appState.
-    const storedAim = appState.localPlayerAimState || { lastAimDx: 0, lastAimDy: -1 }; // Default aim up if not set yet
-    const gunAimDx = storedAim.lastAimDx;
-    const gunAimDy = storedAim.lastAimDy;
-    // console.log(`[drawGame] Using Stored Aim for Gun: dx=${gunAimDx.toFixed(2)}, dy=${gunAimDy.toFixed(2)}`); // Optional Debug
-
-    // --- Draw Static Background (NO camera translation) ---
-    if (typeof isBackgroundReady !== 'undefined' && isBackgroundReady) {
-        if (typeof isTransitioningBackground !== 'undefined' && isTransitioningBackground) {
-            const elapsed = now - (typeof transitionStartTime !== 'undefined' ? transitionStartTime : now);
-            const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS);
-            ctx.globalAlpha = 1.0;
-            if (typeof oldOffscreenCanvas !== 'undefined') { try { ctx.drawImage(oldOffscreenCanvas, 0, 0, width, height); } catch(e) { console.error("BG Draw Error (Trans Old):", e); }}
-            ctx.globalAlpha = progress;
-            if (typeof offscreenCanvas !== 'undefined') { try { ctx.drawImage(offscreenCanvas, 0, 0, width, height); } catch(e) { console.error("BG Draw Error (Trans New):", e); }}
-            ctx.globalAlpha = 1.0;
-            if (progress >= 1.0) { isTransitioningBackground = false; }
+      let shakeApplied = false,
+        shakeOffsetX = 0,
+        shakeOffsetY = 0;
+      if (currentShakeMagnitude > 0 && now < shakeEndTime) {
+        shakeApplied = true;
+        const timeRemaining = shakeEndTime - now;
+        const initialDuration = Math.max(1, shakeEndTime - (now - timeRemaining));
+        let currentMag = currentShakeMagnitude * (timeRemaining / initialDuration);
+        currentMag = Math.max(0, currentMag);
+        if (currentMag > 0.5) {
+          const shakeAngle = Math.random() * Math.PI * 2;
+          shakeOffsetX = Math.cos(shakeAngle) * currentMag;
+          shakeOffsetY = Math.sin(shakeAngle) * currentMag;
         } else {
-             if (typeof offscreenCanvas !== 'undefined') { try { ctx.drawImage(offscreenCanvas, 0, 0, width, height); } catch(e) { console.error("BG Draw Error (Static):", e); }}
-             else { console.warn("[drawGame] Background ready but offscreenCanvas undefined."); }
+          currentShakeMagnitude = 0;
+          shakeEndTime = 0;
+          shakeApplied = false;
         }
-    } else {
-        // Fallback background color
-        ctx.fillStyle = typeof dayBaseColor !== 'undefined' ? dayBaseColor : "#8FBC8F";
-        ctx.fillRect(0, 0, width, height);
-    }
-    // --- End Background Drawing ---
+      } else if (currentShakeMagnitude > 0) {
+        currentShakeMagnitude = 0;
+        shakeEndTime = 0;
+      }
 
-    // --- Draw Heat Haze ---
-    if (appState && typeof appState.currentTemp === 'number') {
-        // Make sure drawHeatHaze is defined and accessible
-        if (typeof drawHeatHaze === 'function') {
-            drawHeatHaze(ctx, appState.currentTemp, width, height, now);
-        } else { console.warn("drawHeatHaze function not found."); }
-    }
-    // --- End Heat Haze ---
-
-    // --- Draw Dynamic World Elements (Campfire, Snake, Powerups) ---
-    // Drawn at their absolute coordinates (screen = world in this setup)
-    if (stateToRender) {
-        if (typeof drawCampfire === 'function') drawCampfire(ctx, stateToRender.campfire, width, height);
-        // Ensure snake object and needed properties exist
-        if (typeof snake !== 'undefined' && stateToRender.snake_state?.active && snake.segments && typeof drawSnake === 'function') {
-            drawSnake(ctx, snake);
+      // Background
+      ctx.globalAlpha = 1.0;
+      if (!isBackgroundReady) {
+        ctx.fillStyle = dayBaseColor;
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        if (appState?.serverState && currentBackgroundIsNight === null) {
+          updateGeneratedBackground(
+            appState.serverState.is_night,
+            canvasWidth,
+            canvasHeight
+          );
         }
-        if (typeof drawPowerups === 'function') drawPowerups(ctx, stateToRender.powerups);
-    }
-    // --- End Background Elements ---
-
-    // --- Draw Main Gameplay Elements ---
-    if (stateToRender) {
-        if (typeof drawBullets === 'function') drawBullets(ctx, stateToRender.bullets);
-        if (typeof drawEnemies === 'function') drawEnemies(ctx, stateToRender.enemies, activeBloodSparkEffects);
-
-        // Enemy Speech Bubbles
-        const activeEnemyBubblesObj = activeEnemyBubbles || {}; // Ensure object exists
-        if (stateToRender.enemies && typeof drawEnemySpeechBubbles === 'function') {
-            drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubblesObj);
+      } else if (isTransitioningBackground) {
+        const elapsed = now - transitionStartTime;
+        const progress = Math.min(1.0, elapsed / BACKGROUND_FADE_DURATION_MS);
+        ctx.globalAlpha = 1.0;
+        ctx.drawImage(oldOffscreenCanvas, 0, 0);
+        ctx.globalAlpha = progress;
+        ctx.drawImage(offscreenCanvas, 0, 0);
+        ctx.globalAlpha = 1.0;
+        if (progress >= 1.0) {
+          isTransitioningBackground = false;
         }
+      } else {
+        ctx.drawImage(offscreenCanvas, 0, 0);
+      }
 
-        // Draw Players - Pass the STORED gun aim direction
-        if (appState && stateToRender.players && typeof drawPlayers === 'function') {
-            drawPlayers(
-                ctx, stateToRender.players, appState,
-                localPlayerMuzzleFlash, localPlayerPushbackAnim,
-                shakeOffsetX, shakeOffsetY,
-                gunAimDx, gunAimDy // Pass the direction from appState.localPlayerAimState
-            );
+      // Apply Shake Transform
+      if (shakeApplied) {
+        ctx.save();
+        ctx.translate(shakeOffsetX, shakeOffsetY);
+      }
 
-            // Player Speech Bubbles
-            const activeSpeechBubblesObj = (typeof activeSpeechBubbles !== 'undefined') ? activeSpeechBubbles : {};
-            if (typeof drawSpeechBubbles === 'function') {
-                 drawSpeechBubbles(ctx, stateToRender.players, activeSpeechBubblesObj, appState, shakeOffsetX, shakeOffsetY);
-            }
-        } else if (!appState || !stateToRender.players) {
-             console.warn("[drawGame] Skipping player draw: Missing appState or stateToRender.players");
-        } else if (typeof drawPlayers !== 'function') {
-             console.error("[drawGame] Skipping player draw: drawPlayers function not found!");
-        }
+      // Draw Game World Elements
+      if (!stateToRender) {
+        if (shakeApplied) ctx.restore();
+        return;
+      }
+
+      drawCampfire(ctx, stateToRender.campfire, canvasWidth, canvasHeight);
+      drawSnake(ctx, snake);
+      drawPowerups(ctx, stateToRender.powerups);
+      drawBullets(ctx, stateToRender.bullets);
+
+      drawEnemies(
+        ctx,
+        stateToRender.enemies,
+        activeEnemyBubbles,
+        activeBloodSparkEffectsRef
+      );
+
+      drawPlayers(
+        ctx,
+        stateToRender.players,
+        appState,
+        localPlayerMuzzleFlashRef,
+        localPlayerPushbackAnimState
+      );
+
+      drawSpeechBubbles(
+        ctx,
+        stateToRender.players,
+        activeSpeechBubbles,
+        appState
+      );
+      drawEnemySpeechBubbles(ctx, stateToRender.enemies, activeEnemyBubbles);
+
+      drawDamageTexts(ctx, stateToRender.damage_texts);
+
+      let shouldDrawMuzzleFlash =
+        localPlayerMuzzleFlashRef?.active &&
+        now < localPlayerMuzzleFlashRef?.endTime;
+      if (shouldDrawMuzzleFlash) {
+        drawMuzzleFlash(
+          ctx,
+          appState.renderedPlayerPos.x,
+          appState.renderedPlayerPos.y,
+          localPlayerMuzzleFlashRef.aimDx,
+          localPlayerMuzzleFlashRef.aimDy
+        );
+      } else if (localPlayerMuzzleFlashRef?.active) {
+        localPlayerMuzzleFlashRef.active = false;
+      }
+
+      // Restore Shake Transform
+      if (shakeApplied) {
+        ctx.restore();
+      }
+
+      // --- Draw Heat Haze (Performance Optimized) ---
+      const currentTempForEffect = appState?.currentTemp;
+      if (
+        currentTempForEffect !== null &&
+        typeof currentTempForEffect !== "undefined" &&
+        currentTempForEffect >= HEAT_HAZE_START_TEMP
+      ) {
+        const hazeIntensity = Math.max(
+          0,
+          Math.min(
+            1,
+            (currentTempForEffect - HEAT_HAZE_START_TEMP) /
+              (HEAT_HAZE_MAX_TEMP - HEAT_HAZE_START_TEMP)
+          )
+        );
+        drawHeatHazeEffect(ctx, hazeIntensity, canvasWidth, canvasHeight, now);
+      }
+      // --- End Heat Haze ---
 
 
-        if (typeof drawDamageTexts === 'function') drawDamageTexts(ctx, stateToRender.damage_texts);
-
-        // Draw Muzzle Flash - Uses its OWN stored direction (localPlayerMuzzleFlash.aimDx/Dy)
-        let shouldDrawMuzzleFlash = localPlayerMuzzleFlash?.active && now < localPlayerMuzzleFlash?.endTime;
-        if (shouldDrawMuzzleFlash && typeof appState.renderedPlayerPos !== 'undefined' && localPlayerMuzzleFlash.aimDx !== undefined) {
-            // Ensure drawMuzzleFlash function exists
-             if (typeof drawMuzzleFlash === 'function') {
-                drawMuzzleFlash(
-                    ctx,
-                    appState.renderedPlayerPos.x + shakeOffsetX, // Position based on player render pos + shake
-                    appState.renderedPlayerPos.y + shakeOffsetY,
-                    localPlayerMuzzleFlash.aimDx, // Direction from the flash state itself
-                    localPlayerMuzzleFlash.aimDy
-                );
-             } else { console.warn("drawMuzzleFlash function not found."); }
-        } else if (localPlayerMuzzleFlash?.active) {
-            localPlayerMuzzleFlash.active = false; // Deactivate if expired
-        }
-    } else {
-        console.warn("drawGame called with no stateToRender, skipping entity drawing.");
-    }
-    // --- End Main Gameplay Elements ---
-
-    // --- Draw Overlays (Rain, Dust, Tint, Vignette) ---
-    ctx.globalAlpha = 1.0; // Ensure alpha is reset before overlays
-    if (appState?.isRaining && typeof RAIN_COLOR !== 'undefined' && typeof RAIN_DROPS !== 'undefined') {
-        const RAIN_SPEED_Y = 12; const RAIN_SPEED_X = 1;
-        ctx.strokeStyle = RAIN_COLOR; ctx.lineWidth = 1.5; ctx.beginPath();
+      // Draw Overlays (Rain, Dust, Tint, Vignette)
+      ctx.globalAlpha = 1.0;
+      if (appState?.isRaining) {
+        const RAIN_SPEED_Y = 12;
+        const RAIN_SPEED_X = 1;
+        ctx.strokeStyle = RAIN_COLOR;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
         for (let i = 0; i < RAIN_DROPS; i++) {
-            const rainX = ((i * 137 + now * 0.05) % (width + 100)) - 50; // Example rain calc
-            const rainY = (i * 271 + now * 0.3) % height;
-            const endX = rainX + RAIN_SPEED_X; const endY = rainY + RAIN_SPEED_Y;
-            ctx.moveTo(rainX, rainY); ctx.lineTo(endX, endY);
+          const rainX = ((i * 137 + now * 0.05) % (canvasWidth + 100)) - 50;
+          const rainY = (i * 271 + now * 0.3) % canvasHeight;
+          const endX = rainX + RAIN_SPEED_X;
+          const endY = rainY + RAIN_SPEED_Y;
+          ctx.moveTo(rainX, rainY);
+          ctx.lineTo(endX, endY);
         }
         ctx.stroke();
-    } else if (appState?.isDustStorm) {
-        ctx.fillStyle = "rgba(229, 169, 96, 0.2)"; ctx.fillRect(0, 0, width, height);
-    }
+      } else if (appState?.isDustStorm) {
+        ctx.fillStyle = "rgba(229, 169, 96, 0.2)";
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+      }
+      if (appState)
+        drawTemperatureTint(ctx, appState.currentTemp, canvasWidth, canvasHeight);
+      const localPlayerState = stateToRender.players?.[appState?.localPlayerId];
+      if (
+        localPlayerState &&
+        localPlayerState.health < DAMAGE_VIGNETTE_HEALTH_THRESHOLD
+      ) {
+        const vi =
+          1.0 - localPlayerState.health / DAMAGE_VIGNETTE_HEALTH_THRESHOLD;
+        drawDamageVignette(ctx, vi, canvasWidth, canvasHeight);
+      }
 
-    if (appState && typeof drawTemperatureTint === 'function') drawTemperatureTint(ctx, appState.currentTemp, width, height);
+      ctx.globalAlpha = 1.0;
+    } // --- End drawGame ---
 
-    const currentPlayerState = stateToRender?.players?.[appState?.localPlayerId];
-    if (currentPlayerState && typeof currentPlayerState.health === 'number' && typeof drawDamageVignette === 'function') {
-         const healthThreshold = typeof DAMAGE_VIGNETTE_HEALTH_THRESHOLD !== 'undefined' ? DAMAGE_VIGNETTE_HEALTH_THRESHOLD : 30;
-         if (currentPlayerState.health < healthThreshold) {
-             const intensity = 1.0 - Math.max(0, currentPlayerState.health) / healthThreshold;
-             drawDamageVignette(ctx, intensity, width, height);
-         }
-    }
-    // --- End Overlays ---
+    return { drawGame, triggerShake, updateGeneratedBackground };
+  })(); // End Renderer module IIFE
 
-    // --- Draw Particles (Ammo Casings) ---
-    // Ensure activeAmmoCasings is defined (likely globally in main.js)
-    if (typeof activeAmmoCasings !== 'undefined' && Array.isArray(activeAmmoCasings)) {
-        // It's generally better to update physics in the main game loop, not here.
-        // Filtering expired casings here is acceptable.
-        activeAmmoCasings = activeAmmoCasings.filter(casing => (now - casing.spawnTime) < casing.lifetime);
-
-        if (activeAmmoCasings.length > 0) {
-            ctx.save();
-            activeAmmoCasings.forEach(casing => {
-                // Calculate alpha based on remaining lifetime
-                const lifeLeft = casing.lifetime - (now - casing.spawnTime);
-                const fadeDuration = 200;
-                const alpha = (lifeLeft < fadeDuration) ? Math.max(0, lifeLeft / fadeDuration) * 0.9 : 0.9;
-
-                let casingColor = casing.color || "rgba(218, 165, 32, 0.9)";
-                // Apply calculated alpha
-                if (casingColor.startsWith('rgba')) { casingColor = casingColor.replace(/[\d\.]+\)$/g, `${alpha.toFixed(2)})`); }
-                 else if (casingColor.startsWith('#')) { /* Optional: convert hex to rgba */ }
-                ctx.fillStyle = casingColor;
-
-                // Draw rotated rectangle at casing's current x, y, rotation
-                // Assumes x, y, rotation are updated elsewhere (e.g., main game loop)
-                ctx.translate(casing.x, casing.y);
-                ctx.rotate(casing.rotation);
-                ctx.fillRect(-casing.width / 2, -casing.height / 2, casing.width, casing.height);
-                // Undo transforms for this specific casing before drawing the next one
-                ctx.rotate(-casing.rotation);
-                ctx.translate(-casing.x, -casing.y);
-            });
-            ctx.restore(); // Restore after drawing all casings
-        }
-    }
-    // --- End Particles ---
-
-    ctx.globalAlpha = 1.0; // Final reset before function ends
-
-} // --- End of function drawGame ---
-
-  // --- Exported Renderer Module ---
-
-  return {
-    drawGame,                 // Export the main drawing function
-    triggerShake,             // Export the shake function
-    updateGeneratedBackground // Export the background update function
-    // Add other functions you need to export here, like drawPlayers if called externally
-  };
-
-})(); // --- End of Renderer module IIFE ---
-
-// Final log to confirm execution
-console.log(
-  "--- Renderer.js: Executed. Renderer object defined?",
-  typeof Renderer
-);
+  console.log(
+    "--- Renderer.js: Executed. Renderer object defined?",
+    typeof Renderer
+  );
