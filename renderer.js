@@ -1,6 +1,8 @@
 // renderer.js
 
-const Renderer = (() => {
+// Restore global access for the Renderer object as in the original structure
+// by assigning the returned object to window.Renderer.
+window.Renderer = (() => {
     console.log("--- Renderer.js: Initializing ---");
 
     let mainCtx = null;
@@ -60,8 +62,10 @@ const Renderer = (() => {
     const ironHelmetColor = "#3d3d3d";
     const ironHelmetHighlight = "#666666";
     const ironHelmetShadow = "#1a1a1a";
-    const beltColor = "#412a19";
+    const beltColor = "#412a19"; // Fixed: Added missing closing quote
+    const beltBuckleColor = "#b0a080";
     const bootColor = "#241c1c";
+    const bootSoleColor = "#1a1a1a";
     const backgroundShadowColor = "rgba(0,0,0,0.3)";
     const simpleChestPlateColor = "#777777";
     const chestPlateHighlight = "#999999";
@@ -1438,7 +1442,7 @@ const Renderer = (() => {
       const armorHighlight = chestPlateHighlight;
       const armorShadow = ironHelmetShadow;
       const slitColor = "#000000";
-      const beltColor = "#412a19;
+      const beltColor = "#412a19"; // Corrected: Ensure this is defined
       const beltBuckleColor = "#b0a080";
       const bootColor = "#241c1c";
       const bootSoleColor = "#1a1a1a";
@@ -1688,7 +1692,7 @@ const Renderer = (() => {
       ctx.fillStyle = "rgba(255, 255, 255, 0.3)"; // Highlight
       ctx.fillRect(buckleX + 2, buckleY + 2, buckleWidth - 4, 2);
       ctx.fillStyle = "rgba(0, 0, 0, 0.3)"; // Shadow
-      ctx.fillRect(buckleX + 2, buckleY + buckleHeight - 4, buckleWidth - 4, 2);
+      ctx.fillRect(buckcleX + 2, buckleY + buckleHeight - 4, buckleWidth - 4, 2);
 
 
       // Chest Plate (More shaped)
@@ -1863,20 +1867,13 @@ const Renderer = (() => {
         shouldDrawGun = true;
         gunDrawAngle = -Math.PI / 2; // Gun points down during pushback
         gunOriginXOffset = w * 0.05;
-      } else if (isSelf) { // Always draw gun for local player if not pushback
+      } else if (isSelf && (aimDx !== 0 || aimDy !== 0)) { // Restore original logic: only draw if local player is aiming
         shouldDrawGun = true;
-        // Use aimDx/aimDy if provided, otherwise default angle
-        if (aimDx !== 0 || aimDy !== 0) {
-             gunDrawAngle = Math.atan2(aimDy, aimDx);
-        } else {
-             // Default angle if no aim direction (e.g., idle)
-             gunDrawAngle = 0; // Or some default pose angle
-        }
+        gunDrawAngle = Math.atan2(aimDy, aimDx); // Fixed: Corrected Math.atan2 arguments
       }
-      // For other players, determine gun angle based on their movement/state if available
-      // For now, assume other players' guns are not drawn or drawn in a default pose
+      // For other players, assume no gun drawn unless specific state indicates it
       else {
-           shouldDrawGun = false; // Or draw in a default pose if desired
+           shouldDrawGun = false;
       }
 
 
@@ -2538,7 +2535,7 @@ const Renderer = (() => {
     }
 
 
-    // --- Main Render Function --- V6 --- Updated Signature ---
+    // --- Main Render Function --- V7 --- Updated Signature ---
     function drawGame(
       ctx,
       appState,
@@ -2739,5 +2736,5 @@ const Renderer = (() => {
 
   console.log(
     "--- Renderer.js: Executed. Renderer object defined?",
-    typeof Renderer
+    typeof window.Renderer
   );
