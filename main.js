@@ -271,7 +271,75 @@ const Game = (() => {
     }
 
     function startGameLoop() { if (appState.mode === 'menu' || appState.animationFrameId) return; if (!appState.serverState && appState.mode !== 'singleplayer') { log("Delaying loop: Waiting for state."); return; } Input.setup(); log("Starting game loop..."); appState.lastLoopTime = null; appState.animationFrameId = requestAnimationFrame(gameLoop); }
-    function getInterpolatedState(renderTime) { const INTERPOLATION_BUFFER_MS=100; const serverState=appState.serverState; const lastServerState=appState.lastServerState; if (!serverState||!lastServerState||!serverState.timestamp||!lastServerState.timestamp) return serverState; const serverTime=serverState.timestamp*1000; const lastServerTime=lastServerState.timestamp*1000; if (serverTime<=lastServerTime) return serverState; const renderTargetTime=renderTime-INTERPOLATION_BUFFER_MS; const timeBetweenStates=serverTime-lastServerTime; const timeSinceLastState=renderTargetTime-lastServerTime; let t=Math.max(0,Math.min(1,timeSinceLastState/timeBetweenStates)); let interpolatedState=JSON.parse(JSON.stringify(serverState)); if (interpolatedState.players){for (const pId in interpolatedState.players){const currentP=serverState.players[pId]; const lastP=lastServerState.players?.[pId]; if(pId===appState.localPlayerId&&appState.mode!=='singleplayer'){interpolatedState.players[pId].x=appState.renderedPlayerPos.x; interpolatedState.players[pId].y=appState.renderedPlayerPos.y;}else if(lastP&&typeof currentP.x==='number'&&typeof lastP.x==='number'){interpolatedState.players[pId].x=lerp(lastP.x,currentP.x,t); interpolatedState.players[pId].y=lerp(lastP.y,currentP.y,t);}}} if (interpolatedState.enemies){for (const eId in interpolatedState.enemies){const currentE=serverState.enemies[eId]; const lastE=lastServerState.enemies?.[eId]; if(lastE&&typeof currentE.x==='number'&&typeof lastE.x==='number'&¤tE.health>0){interpolatedState.enemies[eId].x=lerp(lastE.x,currentE.x,t); interpolatedState.enemies[eId].y=lerp(lastE.y,currentE.y,t);}}} if (interpolatedState.bullets){for (const bId in interpolatedState.bullets){const currentB=serverState.bullets[bId]; const lastB=lastServerState.bullets?.[bId]; if(lastB&&typeof currentB.x==='number'&&typeof lastB.x==='number'){interpolatedState.bullets[bId].x=lerp(lastB.x,currentB.x,t); interpolatedState.bullets[bId].y=lerp(lastB.y,currentB.y,t);}}} interpolatedState.powerups=serverState.powerups; interpolatedState.damage_texts=serverState.damage_texts; return interpolatedState; }
+    function getInterpolatedState(renderTime) {
+        const INTERPOLATION_BUFFER_MS = 100;
+        const serverState = appState.serverState;
+        const lastServerState = appState.lastServerState;
+
+        if (!serverState || !lastServerState || !serverState.timestamp || !lastServerState.timestamp) {
+            return serverState; // Return latest known state if interpolation isn't possible
+        }
+
+        const serverTime = serverState.timestamp * 1000;
+        const lastServerTime = lastServerState.timestamp * 1000;
+
+        if (serverTime <= lastServerTime) {
+            return serverState; // New state isn't newer, return it directly
+        }
+
+        const renderTargetTime = renderTime - INTERPOLATION_BUFFER_MS;
+        const timeBetweenStates = serverTime - lastServerTime;
+        const timeSinceLastState = renderTargetTime - lastServerTime;
+        let t = Math.max(0, Math.min(1, timeSinceLastState / timeBetweenStates));
+
+        // Create a deep copy to avoid modifying the original state objects
+        let interpolatedState = JSON.parse(JSON.stringify(serverState));
+
+        // Interpolate Players
+        if (interpolatedState.players) {
+            for (const pId in interpolatedState.players) {
+                const currentP = serverState.players[pId];
+                const lastP = lastServerState.players?.[pId];
+                if (pId === appState.localPlayerId && appState.mode !== 'singleplayer') {
+                    interpolatedState.players[pId].x = appState.renderedPlayerPos.x;
+                    interpolatedState.players[pId].y = appState.renderedPlayerPos.y;
+                } else if (lastP && typeof currentP.x === 'number' && typeof lastP.x === 'number') {
+                    interpolatedState.players[pId].x = lerp(lastP.x, currentP.x, t);
+                    interpolatedState.players[pId].y = lerp(lastP.y, currentP.y, t);
+                }
+            }
+        }
+
+        // Interpolate Enemies
+        if (interpolatedState.enemies) {
+            for (const eId in interpolatedState.enemies) {
+                const currentE = serverState.enemies[eId];
+                const lastE = lastServerState.enemies?.[eId];
+                // Corrected Condition: Check lastE, types, AND current health before interpolating
+                if (lastE && typeof currentE.x === 'number' && typeof lastE.x === 'number' && currentE.health > 0) {
+                    interpolatedState.enemies[eId].x = lerp(lastE.x, currentE.x, t);
+                    interpolatedState.enemies[eId].y = lerp(lastE.y, currentE.y, t);
+                }
+            }
+        }
+
+        // Interpolate Bullets
+        if (interpolatedState.bullets) {
+            for (const bId in interpolatedState.bullets) {
+                const currentB = serverState.bullets[bId];
+                const lastB = lastServerState.bullets?.[bId];
+                if (lastB && typeof currentB.x === 'number' && typeof lastB.x === 'number') {
+                    interpolatedState.bullets[bId].x = lerp(lastB.x, currentB.x, t);
+                    interpolatedState.bullets[bId].y = lerp(lastB.y, currentB.y, t);
+                }
+            }
+        }
+
+        // Non-interpolated data
+        interpolatedState.powerups = serverState.powerups;
+        interpolatedState.damage_texts = serverState.damage_texts;
+        return interpolatedState;
+    }
     function cleanupLoop() { if (appState.animationFrameId) { cancelAnimationFrame(appState.animationFrameId); appState.animationFrameId = null; log("Game loop stopped."); } Input.cleanup(); appState.lastLoopTime = null; }
     function updatePredictedPosition(deltaTime) { if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return; const moveVector = Input.getMovementInputVector(); const playerState = appState.serverState.players[appState.localPlayerId]; const playerSpeed = playerState?.speed ?? PLAYER_DEFAULTS.base_speed; if (moveVector.dx !== 0 || moveVector.dy !== 0) { appState.predictedPlayerPos.x += moveVector.dx * playerSpeed * deltaTime; appState.predictedPlayerPos.y += moveVector.dy * playerSpeed * deltaTime; } const w_half = (playerState?.width ?? PLAYER_DEFAULTS.width) / 2; const h_half = (playerState?.height ?? PLAYER_DEFAULTS.height) / 2; appState.predictedPlayerPos.x = Math.max(w_half, Math.min(appState.canvasWidth - w_half, appState.predictedPlayerPos.x)); appState.predictedPlayerPos.y = Math.max(h_half, Math.min(appState.canvasHeight - h_half, appState.predictedPlayerPos.y)); }
     function reconcileWithServer() { if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return; const serverPos = appState.serverState.players[appState.localPlayerId]; if (typeof serverPos.x !== 'number' || typeof serverPos.y !== 'number') return; const predictedPos = appState.predictedPlayerPos; const renderedPos = appState.renderedPlayerPos; const dist = distance(predictedPos.x, predictedPos.y, serverPos.x, serverPos.y); const snapThreshold = parseFloat(getCssVar('--reconciliation-threshold')) || 35; const renderLerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.15; if (dist > snapThreshold) { predictedPos.x = serverPos.x; predictedPos.y = serverPos.y; renderedPos.x = serverPos.x; renderedPos.y = serverPos.y; } else { renderedPos.x = lerp(renderedPos.x, predictedPos.x, renderLerpFactor); renderedPos.y = lerp(renderedPos.y, predictedPos.y, renderLerpFactor); } }
