@@ -20,6 +20,7 @@
         <div id="top-bar"><h1>SUCH IS LIFE</h1></div>
         <div id="game-status">Initializing...</div>
 
+        <!-- Menu Sections (No changes needed) -->
         <div id="main-menu-section" class="menu-section">
             <h2>Main Menu</h2>
             <button id="singlePlayerBtn">Single Player</button>
@@ -50,7 +51,9 @@
              <button class="back-button" onclick="UI.showSection('multiplayer-menu-section')">Back</button>
         </div>
 
+        <!-- Game Area -->
         <div id="game-area">
+            <!-- Left Panel (No changes needed) -->
             <div id="left-panel">
                  <div class="left-panel-top-group">
                     <div id="player-stats-grid">Loading Stats...</div>
@@ -64,12 +67,19 @@
                     <button id="sendChatBtn">Send</button>
                  </div>
             </div>
+            <!-- Canvas Container -->
             <div id="canvas-container">
                  <!-- Canvas will be injected here by THREE.js -->
-                 <div id="countdown"></div> <!-- Moved countdown overlay inside container -->
+                 <div id="countdown"></div>
+                 <!-- NEW: HTML Overlay for UI Elements -->
+                 <div id="html-overlay">
+                     <!-- Damage text, health bars, speech bubbles will be added here dynamically -->
+                 </div>
+                 <!-- End HTML Overlay -->
             </div>
         </div>
 
+        <!-- Game Over Screen (No changes needed) -->
         <div id="game-over-screen">
             <h2>Game Over, Mate!</h2>
             <div id="final-stats"></div>
@@ -78,7 +88,6 @@
     </div>
 
     <!-- SCRIPTS -->
-    <!-- Load THREE.js library (using jsdelivr CDN) -->
     <script type="importmap">
         {
             "imports": {
@@ -87,10 +96,8 @@
             }
         }
     </script>
-    <!-- Load dependencies/new renderer first -->
-    <script type="module" src="Renderer3D.js"></script> <!-- Changed type to module -->
-    <!-- Load main application logic -->
-    <script type="module" src="main.js"></script> <!-- Changed type to module -->
+    <script type="module" src="Renderer3D.js"></script>
+    <script type="module" src="main.js"></script>
 
 </body>
 </html>
