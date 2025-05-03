@@ -1,4 +1,5 @@
 // main.js
+import Renderer3D from './Renderer3D.js'; // Import the new 3D Renderer
 
 console.log("--- main.js: Starting execution ---");
 
@@ -23,7 +24,7 @@ const PLAYER_STATUS_DOWN = 'down';
 const PLAYER_STATUS_DEAD = 'dead';
 const ENEMY_TYPE_CHASER = 'chaser';
 const ENEMY_TYPE_SHOOTER = 'shooter';
-const SNAKE_BITE_DURATION = 8.0; 
+const SNAKE_BITE_DURATION = 8.0;
 
 // --- Utility Functions ---
 function getCssVar(varName) { return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || ''; }
@@ -37,8 +38,10 @@ const DOM = {
     hostWaitSection: document.getElementById('host-wait-section'), joinCodeSection: document.getElementById('join-code-section'),
     gameArea: document.getElementById('game-area'), gameOverScreen: document.getElementById('game-over-screen'),
     gameCodeDisplay: document.getElementById('game-code-display'), waitingMessage: document.getElementById('waiting-message'),
-    gameIdInput: document.getElementById('gameIdInput'), canvas: document.getElementById('gameCanvas'),
-    ctx: null,
+    gameIdInput: document.getElementById('gameIdInput'),
+    // REMOVED: canvas: document.getElementById('gameCanvas'),
+    // REMOVED: ctx: null,
+    canvasContainer: document.getElementById('canvas-container'), // ADDED Reference to the container
     dayNightIndicator: document.getElementById('day-night-indicator'),
     countdownDiv: document.getElementById('countdown'), finalStatsDiv: document.getElementById('final-stats'),
     chatInput: document.getElementById('chatInput'), chatLog: document.getElementById('chat-log'),
@@ -49,195 +52,80 @@ const DOM = {
     sendChatBtn: document.getElementById('sendChatBtn'), leaveGameBtn: document.getElementById('leaveGameBtn'),
     gameOverBackBtn: document.getElementById('gameOverBackBtn'),
 };
-if (DOM.canvas) {
-    DOM.ctx = DOM.canvas.getContext('2d');
-    if (!DOM.ctx) { console.error("Failed to get 2D context from canvas!"); }
-} else { console.error("Canvas element not found!"); }
-
+// REMOVED: Canvas/Context fetching logic here
 
 // --- Global Client State ---
 let appState = {
     mode: 'menu', localPlayerId: null, maxPlayersInGame: null, currentGameId: null,
     serverState: null, animationFrameId: null, isConnected: false,
-    renderedPlayerPos: { x: 0, y: 0 },  // Initial position can be 0,0 now
-    predictedPlayerPos: { x: 0, y: 0 }, // Initial position can be 0,0 now
+    renderedPlayerPos: { x: 0, y: 0 },
+    predictedPlayerPos: { x: 0, y: 0 },
     lastServerState: null, previousServerState: null, lastLoopTime: null,
     lastStateReceiveTime: performance.now(), currentTemp: 18.0, isRaining: false,
     isDustStorm: false, targetTint: null, targetTintAlpha: 0.0,
-    canvasWidth: 1600,  // Add to appState, with default values
-    canvasHeight: 900, // Add to appState, with default values
+    canvasWidth: 1600, // Keep these defaults, updated by server
+    canvasHeight: 900,
+    localPlayerAimState: { lastAimDx: 0, lastAimDy: -1 }, // Initialize aiming state
 };
 
-// --- Local Effects State ---
+// --- Local Effects State (Remains in main.js, read by Renderer3D) ---
 let localPlayerMuzzleFlash = { active: false, endTime: 0, aimDx: 0, aimDy: 0 };
-// --- NEW: Pushback Animation State ---
-let localPlayerPushbackAnim = {
-    active: false,
-    endTime: 0,
-    duration: 250 // Animation duration in ms (adjust for desired speed)
-};
-// -------------------------------------
-let hitPauseFrames = 0;
-let activeSpeechBubbles = {};
-let activeEnemyBubbles = {};
+let localPlayerPushbackAnim = { active: false, endTime: 0, duration: 250 };
+let hitPauseFrames = 0; // Consider removing or adapting hit pause for 3D
+let activeSpeechBubbles = {}; // Still managed here for UI updates
+let activeEnemyBubbles = {}; // Still managed here for UI updates
 let socket = null;
-let activeAmmoCasings = [];
-let activeBloodSparkEffects = {}; // Stores { enemyId: effectEndTime }
+let activeAmmoCasings = []; // Physics managed here, rendering done in Renderer3D
+let activeBloodSparkEffects = {}; // State managed here, rendering done in Renderer3D
 
-// --- Sound Manager ---
+// --- Sound Manager (No changes needed here) ---
 const SoundManager = (() => {
     let audioContext = null;
-    let loadedSounds = {}; // Holds the decoded AudioBuffers
-    let soundFiles = {      // Map sound names to their file paths
+    let loadedSounds = {};
+    let soundFiles = {
         'shoot': 'assets/sounds/shoot.mp3',
         'damage': 'assets/sounds/damage.mp3'
-        // Add more sounds here later
     };
     let soundsLoading = 0;
     let soundsLoaded = 0;
-    let isInitialized = false; // Tracks if init() has been called at least once
-    let canPlaySound = false;  // Tracks if AudioContext is successfully running
-
-    // Function to initialize the AudioContext.
-    // IMPORTANT: Must be called directly as a result of a user interaction (e.g., button click)
-    // due to browser autoplay policies.
+    let isInitialized = false;
+    let canPlaySound = false;
     function init() {
-        if (isInitialized) {
-            return canPlaySound; // Prevent re-initialization attempts
-        }
-        isInitialized = true;
-        console.log("[SoundManager] Attempting initialization...");
-
+        if (isInitialized) { return canPlaySound; }
+        isInitialized = true; console.log("[SoundManager] Attempting initialization...");
         try {
             const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-            if (!AudioContextClass) {
-                console.error("[SoundManager] Web Audio API not supported by this browser.");
-                canPlaySound = false;
-                return false;
-            }
-
-            audioContext = new AudioContextClass();
-            console.log("[SoundManager] AudioContext created. Initial state:", audioContext.state);
-
-            // Handle potential suspended state - requires user interaction to resume
+            if (!AudioContextClass) { console.error("[SoundManager] Web Audio API not supported."); canPlaySound = false; return false; }
+            audioContext = new AudioContextClass(); console.log("[SoundManager] AudioContext created. State:", audioContext.state);
             if (audioContext.state === 'suspended') {
-                console.log("[SoundManager] AudioContext is suspended. Waiting for user interaction (or resume call).");
-                // Attempt immediate resume - this might only work if init() IS the direct result of the click
-                audioContext.resume().then(() => {
-                    console.log("[SoundManager] AudioContext resumed successfully.");
-                    canPlaySound = true;
-                    loadSounds(); // Load sounds once context is ready
-                }).catch(err => {
-                    // Log error but don't halt; sound might be enabled later manually if needed
-                    console.error("[SoundManager] Failed to auto-resume AudioContext (may need more direct user gesture):", err);
-                    canPlaySound = false;
-                });
-            } else if (audioContext.state === 'running') {
-                console.log("[SoundManager] AudioContext is running.");
-                canPlaySound = true;
-                loadSounds(); // Load sounds now
-            } else {
-                 console.warn("[SoundManager] AudioContext in unexpected state:", audioContext.state);
-                 canPlaySound = false;
-            }
-        } catch (e) {
-            console.error("[SoundManager] Error creating AudioContext:", e);
-            audioContext = null;
-            canPlaySound = false;
-            return false;
-        }
-        return canPlaySound; // Return status after initial attempt
+                console.log("[SoundManager] AudioContext suspended. Waiting for interaction.");
+                audioContext.resume().then(() => { console.log("[SoundManager] Resumed."); canPlaySound = true; loadSounds(); }).catch(err => { console.error("[SoundManager] Failed to auto-resume:", err); canPlaySound = false; });
+            } else if (audioContext.state === 'running') { console.log("[SoundManager] AudioContext running."); canPlaySound = true; loadSounds(); }
+            else { console.warn("[SoundManager] Context in state:", audioContext.state); canPlaySound = false; }
+        } catch (e) { console.error("[SoundManager] Error creating AudioContext:", e); audioContext = null; canPlaySound = false; return false; }
+        return canPlaySound;
     }
-
-    // Function to load all defined sounds
     function loadSounds() {
-        if (!audioContext) {
-             console.error("[SoundManager] Cannot load sounds, AudioContext not available.");
-             return;
-        }
-        console.log("[SoundManager] Starting to load sounds...");
-        soundsLoading = Object.keys(soundFiles).length;
-        soundsLoaded = 0;
-        loadedSounds = {}; // Clear previous buffers
-
+        if (!audioContext) { console.error("[SoundManager] Cannot load sounds, AudioContext NA."); return; }
+        console.log("[SoundManager] Loading sounds..."); soundsLoading = Object.keys(soundFiles).length; soundsLoaded = 0; loadedSounds = {};
         Object.entries(soundFiles).forEach(([name, path]) => {
-            fetch(path)
-                .then(response => {
-                    if (!response.ok) {
-                        console.error(`[SoundManager] HTTP error! status: ${response.status} fetching ${path}`);
-                        throw new Error(`HTTP error! status: ${response.status} for ${path}`);
-                    }
-                    return response.arrayBuffer();
-                })
-                .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
-                .then(decodedBuffer => {
-                    console.log(`[SoundManager] Decoded: ${name}`);
-                    loadedSounds[name] = decodedBuffer;
-                    soundsLoaded++;
-                    if (soundsLoaded === soundsLoading) {
-                         console.log("[SoundManager] All sounds loaded successfully.");
-                    }
-                })
-                .catch(error => {
-                    console.error(`[SoundManager] Error loading/decoding sound '${name}' from ${path}:`, error);
-                    soundsLoaded++; // Still count as "processed" even if failed
-                     if (soundsLoaded === soundsLoading) {
-                         console.log("[SoundManager] Sound loading finished (with errors).");
-                     }
-                });
+            fetch(path).then(response => { if (!response.ok) throw new Error(`HTTP error ${response.status} for ${path}`); return response.arrayBuffer(); }).then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer)).then(decodedBuffer => { console.log(`[SoundManager] Decoded: ${name}`); loadedSounds[name] = decodedBuffer; soundsLoaded++; if (soundsLoaded === soundsLoading) console.log("[SoundManager] All sounds loaded."); }).catch(error => { console.error(`[SoundManager] Error loading/decoding '${name}':`, error); soundsLoaded++; if (soundsLoaded === soundsLoading) console.log("[SoundManager] Sound loading finished (with errors)."); });
         });
     }
-
-    // Function to play a loaded sound by name
     function playSound(name, volume = 1.0) {
-        // Essential checks: Init called? Context running? Sound buffer ready?
-        if (!isInitialized || !canPlaySound || !audioContext || audioContext.state !== 'running') {
-            // Log warning if sound cannot play due to system state
-             if (!isInitialized) console.warn(`[SoundManager] Cannot play '${name}': Not initialized.`);
-             else if (!canPlaySound || audioContext?.state !== 'running') console.warn(`[SoundManager] Cannot play '${name}': AudioContext not running (State: ${audioContext?.state}).`);
-            return;
-        }
-
-        const buffer = loadedSounds[name];
-        if (!buffer) {
-            // Log warning if the specific sound buffer isn't ready
-            console.warn(`[SoundManager] Sound buffer not ready for: ${name}`);
-            return;
-        }
-
-        // Proceed with playback
+        if (!isInitialized || !canPlaySound || !audioContext || audioContext.state !== 'running') { if (!isInitialized) console.warn(`[SM] Cannot play '${name}': Not initialized.`); else if (!canPlaySound || audioContext?.state !== 'running') console.warn(`[SM] Cannot play '${name}': Context not running (State: ${audioContext?.state}).`); return; }
+        const buffer = loadedSounds[name]; if (!buffer) { console.warn(`[SoundManager] Sound buffer not ready for: ${name}`); return; }
         try {
-            const source = audioContext.createBufferSource();
-            source.buffer = buffer;
-
-            const gainNode = audioContext.createGain();
-            const clampedVolume = Math.max(0, Math.min(1, volume)); // Ensure volume is 0-1
-            gainNode.gain.setValueAtTime(clampedVolume, audioContext.currentTime);
-
-            source.connect(gainNode).connect(audioContext.destination);
-            source.start(0); // Play immediately
-
-            // Disconnect nodes after playback finishes to free resources
-            source.onended = () => {
-                try {
-                    source.disconnect();
-                    gainNode.disconnect();
-                } catch (e) { /* Ignore errors during cleanup */ }
-            };
-
-        } catch (e) {
-            console.error(`[SoundManager] Error playing sound '${name}':`, e);
-        }
+            const source = audioContext.createBufferSource(); source.buffer = buffer;
+            const gainNode = audioContext.createGain(); const clampedVolume = Math.max(0, Math.min(1, volume)); gainNode.gain.setValueAtTime(clampedVolume, audioContext.currentTime);
+            source.connect(gainNode).connect(audioContext.destination); source.start(0);
+            source.onended = () => { try { source.disconnect(); gainNode.disconnect(); } catch (e) { /* Ignore */ } };
+        } catch (e) { console.error(`[SoundManager] Error playing sound '${name}':`, e); }
     }
-
-    return {
-        init,
-        playSound
-    };
+    return { init, playSound };
 })();
-// --- End Sound Manager ---
 
-// --- Snake Effect State ---
+// --- Snake Effect State (No changes needed here) ---
 let snake = {
     segmentLength: 6.0, segments: [], maxSegments: 12, frequency: 0.03, amplitude: 15.0,
     lineWidth: 3, serverHeadX: 0, serverHeadY: 0, serverBaseY: 0, isActiveFromServer: false,
@@ -270,7 +158,7 @@ let snake = {
 function log(...args) { console.log("[Client]", ...args); }
 function error(...args) { console.error("[Client]", ...args); }
 
-// --- UI Management Module ---
+// --- UI Management Module (Minor changes for Renderer dependency) ---
 const UI = (() => {
     const allSections = [ DOM.mainMenuSection, DOM.multiplayerMenuSection, DOM.hostWaitSection, DOM.joinCodeSection, DOM.gameArea, DOM.gameOverScreen ];
     const gameSections = ['game-area'];
@@ -290,22 +178,15 @@ const UI = (() => {
     }
     function addChatMessage(sender, message, isSelf, isSystem = false) { if (!DOM.chatLog) return; const div = document.createElement('div'); if (isSystem) { div.className = 'system-message'; div.textContent = message; } else { div.className = isSelf ? 'my-message' : 'other-message'; div.textContent = `${sender ? `P:${sender.substring(0,4)}` : '???'}: ${message}`; } DOM.chatLog.appendChild(div); DOM.chatLog.scrollTop = DOM.chatLog.scrollHeight; }
     function updateCountdown(serverState) { if (!DOM.countdownDiv || !DOM.dayNightIndicator) return; const isCountdown = serverState?.status === 'countdown' && serverState?.countdown >= 0; DOM.countdownDiv.textContent = isCountdown ? Math.ceil(serverState.countdown) : ''; DOM.countdownDiv.style.display = isCountdown ? 'block' : 'none'; DOM.dayNightIndicator.style.display = (serverState?.status === 'active') ? 'block' : 'none'; }
-    // Inside the UI Module in main.js
     function updateDayNight(serverState) {
-        if (!DOM.dayNightIndicator || !DOM.canvas || !DOM.gameContainer) return;
+        // This function no longer needs to call the renderer for background updates.
+        // Renderer3D will handle lighting/sky changes internally based on state.
+        if (!DOM.dayNightIndicator || !DOM.gameContainer) return;
         if (serverState?.status === 'active') {
             const isNight = serverState.is_night;
             DOM.dayNightIndicator.textContent = isNight ? 'Night' : 'Day';
             DOM.dayNightIndicator.style.display = 'block';
-            if (typeof Renderer !== 'undefined') {
-                // --- CORRECTED LINE ---
-                // Use the canvas dimensions stored in appState
-                Renderer.updateGeneratedBackground(isNight, appState.canvasWidth, appState.canvasHeight);
-                // --- END CORRECTION ---
-            } else {
-                error("Renderer not defined when calling updateGeneratedBackground from UI!");
-            }
-            DOM.gameContainer.classList.toggle('night-mode', isNight);
+            DOM.gameContainer.classList.toggle('night-mode', isNight); // Keep class for potential CSS effects
         } else {
             DOM.dayNightIndicator.style.display = 'none';
             DOM.gameContainer.classList.remove('night-mode');
@@ -316,7 +197,7 @@ const UI = (() => {
     return { showSection, updateStatus, updateHUD, addChatMessage, updateCountdown, updateDayNight, showGameOver, updateEnvironmentDisplay };
 })();
 
-// --- Network Module ---
+// --- Network Module (No changes needed here) ---
 const Network = (() => {
     let reconnectTimer = null;
     function connect(onOpenCallback) {
@@ -337,24 +218,30 @@ const Network = (() => {
 const Input = (() => {
     let keys = {}; let lastShotTime = 0; let movementInterval = null; let mouseCanvasPos = { x: 0, y: 0 }; let isMouseDown = false;
 
-    // Named function for context menu prevention
+    // Keep context menu prevention
     function preventContextMenu(event) {
-        console.log("Canvas contextmenu event triggered! Preventing default...");
-        event.preventDefault();
+        // Only prevent if the event target is the canvas container or its children (like the injected canvas)
+        if (DOM.canvasContainer && DOM.canvasContainer.contains(event.target)) {
+             console.log("Canvas container contextmenu event triggered! Preventing default...");
+             event.preventDefault();
+        }
     }
 
     function setup() {
-        cleanup(); // Calls cleanup first
+        cleanup(); // Ensure clean state
         document.addEventListener('keydown', handleKeyDown);
         document.addEventListener('keyup', handleKeyUp);
         DOM.chatInput.addEventListener('keydown', handleChatEnter);
-        if (DOM.canvas) {
-            DOM.canvas.addEventListener('mousemove', handleMouseMove);
-            DOM.canvas.addEventListener('mousedown', handleMouseDown);
-            DOM.canvas.addEventListener('contextmenu', preventContextMenu); // Add listener
+        // Attach listeners to the CONTAINER, not the canvas itself initially
+        if (DOM.canvasContainer) {
+            DOM.canvasContainer.addEventListener('mousemove', handleMouseMove);
+            DOM.canvasContainer.addEventListener('mousedown', handleMouseDown);
+            // Add context menu listener to the container to catch right-clicks
+            DOM.canvasContainer.addEventListener('contextmenu', preventContextMenu);
         } else {
-            error("Input setup failed: Canvas element not found.");
+            error("Input setup failed: Canvas container element not found.");
         }
+        // Mouse up listener remains on document to catch releases outside the container
         document.addEventListener('mouseup', handleMouseUp);
         movementInterval = setInterval(sendMovementInput, INPUT_SEND_INTERVAL);
         log("Input listeners setup.");
@@ -364,10 +251,10 @@ const Input = (() => {
         document.removeEventListener('keydown', handleKeyDown);
         document.removeEventListener('keyup', handleKeyUp);
         DOM.chatInput.removeEventListener('keydown', handleChatEnter);
-        if (DOM.canvas) {
-            DOM.canvas.removeEventListener('mousemove', handleMouseMove);
-            DOM.canvas.removeEventListener('mousedown', handleMouseDown);
-            DOM.canvas.removeEventListener('contextmenu', preventContextMenu); // Remove listener
+        if (DOM.canvasContainer) {
+            DOM.canvasContainer.removeEventListener('mousemove', handleMouseMove);
+            DOM.canvasContainer.removeEventListener('mousedown', handleMouseDown);
+            DOM.canvasContainer.removeEventListener('contextmenu', preventContextMenu);
         }
         document.removeEventListener('mouseup', handleMouseUp);
         clearInterval(movementInterval);
@@ -379,240 +266,137 @@ const Input = (() => {
     }
 
     function handleMouseMove(event) {
-        if (!DOM.canvas) return;
-        const rect = DOM.canvas.getBoundingClientRect();
-        const rawMouseX = event.clientX - rect.left;
-        const rawMouseY = event.clientY - rect.top;
+        // Calculate mouse position relative to the container, then scale to internal canvas size
+        if (!DOM.canvasContainer) return;
+        const rect = DOM.canvasContainer.getBoundingClientRect();
+        const rendererCanvas = renderer ? renderer.domElement : null; // Get the actual canvas from THREE
+
+        const containerRawX = event.clientX - rect.left;
+        const containerRawY = event.clientY - rect.top;
+
         const visualWidth = rect.width;
         const visualHeight = rect.height;
-        const internalWidth = DOM.canvas.width;
-        const internalHeight = DOM.canvas.height;
+        const internalWidth = appState.canvasWidth; // Use dimensions from appState
+        const internalHeight = appState.canvasHeight;
+
+        // Calculate scale based on the container's visual size vs internal game size
         const scaleX = (visualWidth > 0) ? internalWidth / visualWidth : 1;
         const scaleY = (visualHeight > 0) ? internalHeight / visualHeight : 1;
-        mouseCanvasPos.x = rawMouseX * scaleX;
-        mouseCanvasPos.y = rawMouseY * scaleY;
+
+        mouseCanvasPos.x = containerRawX * scaleX;
+        mouseCanvasPos.y = containerRawY * scaleY;
+
+        // Clamp mouse coordinates to internal canvas bounds just in case
+        mouseCanvasPos.x = Math.max(0, Math.min(internalWidth, mouseCanvasPos.x));
+        mouseCanvasPos.y = Math.max(0, Math.min(internalHeight, mouseCanvasPos.y));
     }
 
-    // --- MODIFIED: handleMouseDown ---
-    function handleMouseDown(event) {
-        if (document.activeElement === DOM.chatInput) return; // Ignore if typing in chat
 
-        // Button mapping: 0 = Left, 1 = Middle, 2 = Right
+    function handleMouseDown(event) {
+        if (document.activeElement === DOM.chatInput) return;
+
         if (event.button === 0) { // Left Click - Shoot
             isMouseDown = true;
-            event.preventDefault(); // Prevent text selection, etc.
-            // Shooting logic is handled by isShootHeld() check in game loop
+            event.preventDefault();
         } else if (event.button === 2) { // Right Click - Pushback
-            event.preventDefault(); // Prevent context menu (extra safety)
-
-            // Check game state before sending
+            event.preventDefault();
             if (appState.serverState?.status === 'active' && appState.isConnected) {
-                log("Sending player_pushback message (triggered by RMB).");
                 Network.sendMessage({ type: 'player_pushback' });
-
-                // Trigger the visual animation
                 localPlayerPushbackAnim.active = true;
                 localPlayerPushbackAnim.endTime = performance.now() + localPlayerPushbackAnim.duration;
                 log("Pushback animation triggered.");
-
-            } else {
-                log("Pushback (RMB) ignored: Game not active or not connected.");
-            }
+            } else { log("Pushback (RMB) ignored: Game not active or not connected."); }
         }
-        // Ignore middle mouse button (event.button === 1) for now
-    }
-    function isShootHeld() {
-        // Shoot is triggered by holding Space or Left Mouse Button
-        return keys[' '] || isMouseDown;
     }
 
-    function handleMouseUp(event) {
-        if (event.button === 0) { // Left Click Release
-            isMouseDown = false;
-        }
-        // No action needed for right-click release
-    }
+    function isShootHeld() { return keys[' '] || isMouseDown; }
+
+    function handleMouseUp(event) { if (event.button === 0) { isMouseDown = false; } }
 
     function handleKeyDown(e) {
         if (document.activeElement === DOM.chatInput) return;
         const key = e.key.toLowerCase();
         if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) {
-            if (!keys[key]) { keys[key] = true; }
-            e.preventDefault();
-            return;
+            if (!keys[key]) { keys[key] = true; } e.preventDefault(); return;
         }
-        if (key === 'e') { // Keep 'E' key functional too
+        if (key === 'e') {
             if (appState.serverState?.status === 'active' && appState.isConnected) {
-                log("Sending player_pushback message (triggered by E key).");
                 Network.sendMessage({ type: 'player_pushback' });
-
-                 // Trigger the visual animation (same as RMB)
                 localPlayerPushbackAnim.active = true;
                 localPlayerPushbackAnim.endTime = performance.now() + localPlayerPushbackAnim.duration;
-                 log("Pushback animation triggered.");
-
-                e.preventDefault();
-            } else {
-                log("Pushback ('e') ignored: Game not active or not connected.");
-            }
+                log("Pushback animation triggered."); e.preventDefault();
+            } else { log("Pushback ('e') ignored: Game not active or not connected."); }
             return;
         }
     }
 
-    function handleKeyUp(e) {
-        const key = e.key.toLowerCase();
-        if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) {
-            if (keys[key]) { keys[key] = false; }
-        }
-    }
-
-    function handleChatEnter(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            log("Enter key detected in chat input.");
-            Game.sendChatMessage();
-        }
-    }
+    function handleKeyUp(e) { const key = e.key.toLowerCase(); if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) { if (keys[key]) { keys[key] = false; } } }
+    function handleChatEnter(e) { if (e.key === 'Enter') { e.preventDefault(); Game.sendChatMessage(); } }
 
     function getMovementInputVector() {
         let dx = 0, dy = 0;
-        if (keys['w'] || keys['arrowup']) dy -= 1;
-        if (keys['s'] || keys['arrowdown']) dy += 1;
-        if (keys['a'] || keys['arrowleft']) dx -= 1;
-        if (keys['d'] || keys['arrowright']) dx += 1;
-        if (dx !== 0 && dy !== 0) {
-            const factor = 1 / Math.sqrt(2);
-            dx *= factor;
-            dy *= factor;
-        }
+        if (keys['w'] || keys['arrowup']) dy -= 1; if (keys['s'] || keys['arrowdown']) dy += 1;
+        if (keys['a'] || keys['arrowleft']) dx -= 1; if (keys['d'] || keys['arrowright']) dx += 1;
+        if (dx !== 0 && dy !== 0) { const factor = 1 / Math.sqrt(2); dx *= factor; dy *= factor; }
         return { dx, dy };
     }
 
-    function sendMovementInput() {
-        if (appState.mode !== 'menu' && appState.serverState?.status === 'active' && appState.isConnected) {
-            Network.sendMessage({ type: 'player_move', direction: getMovementInputVector() });
-        }
-    }
+    function sendMovementInput() { if (appState.mode !== 'menu' && appState.serverState?.status === 'active' && appState.isConnected) { Network.sendMessage({ type: 'player_move', direction: getMovementInputVector() }); } }
 
     function handleShooting() {
-        // --- Basic Checks ---
-        if (appState.serverState?.status !== 'active') {
-            // console.log("Shoot ignored: Game not active.");
-            return;
-        }
+        if (appState.serverState?.status !== 'active') return;
         const playerState = appState.serverState?.players?.[appState.localPlayerId];
-        if (!playerState) {
-            // console.log("Shoot ignored: Local player state not found.");
-            return;
-        }
-         if (playerState.player_status !== 'alive') {
-            // console.log("Shoot ignored: Player not alive.");
-            return; // Cannot shoot if down or dead
-        }
-    
-        // --- Cooldown Check ---
+        if (!playerState || playerState.player_status !== 'alive') return;
+
         const currentAmmo = playerState?.active_ammo_type || 'standard';
         const isRapidFire = currentAmmo === 'ammo_rapid_fire';
         const cooldownMultiplier = isRapidFire ? RAPID_FIRE_COOLDOWN_MULTIPLIER : 1.0;
         const actualCooldown = SHOOT_COOLDOWN * cooldownMultiplier;
-        const nowTimestamp = Date.now(); // Use Date.now for simple time comparison
-    
-        if (nowTimestamp - lastShotTime < actualCooldown) {
-            // console.log("Shoot ignored: Cooldown active.");
-            return; // Still on cooldown
-        }
-        lastShotTime = nowTimestamp; // Reset cooldown timer
-    
-        // --- Aim Calculation (Relative to Player's Rendered Position) ---
+        const nowTimestamp = Date.now();
+        if (nowTimestamp - lastShotTime < actualCooldown) return;
+        lastShotTime = nowTimestamp;
+
+        // Aim calculation using rendered player pos (which should be lerped/corrected)
         const playerRenderX = appState.renderedPlayerPos.x;
         const playerRenderY = appState.renderedPlayerPos.y;
-    
-        // Ensure player position is valid before proceeding
-        if (typeof playerRenderX !== 'number' || typeof playerRenderY !== 'number') {
-            console.error("[handleShooting] Cannot shoot: Invalid renderedPlayerPos", appState.renderedPlayerPos);
-            return;
+        if (typeof playerRenderX !== 'number' || typeof playerRenderY !== 'number' || typeof mouseCanvasPos.x !== 'number' || typeof mouseCanvasPos.y !== 'number') {
+            console.error("[handleShooting] Cannot shoot: Invalid positions", appState.renderedPlayerPos, mouseCanvasPos); return;
         }
-         // Ensure mouse position is valid
-         if (typeof mouseCanvasPos.x !== 'number' || typeof mouseCanvasPos.y !== 'number') {
-            console.error("[handleShooting] Cannot shoot: Invalid mouseCanvasPos", mouseCanvasPos);
-            return;
-         }
-    
-        // Calculate vector from player's screen position to mouse screen position
-        let aimDx = mouseCanvasPos.x - playerRenderX;
-        let aimDy = mouseCanvasPos.y - playerRenderY;
+        let aimDx = mouseCanvasPos.x - playerRenderX; let aimDy = mouseCanvasPos.y - playerRenderY;
         const aimMagSq = aimDx * aimDx + aimDy * aimDy;
-    
-        // Normalize the vector
-        if (aimMagSq > 1) { // Avoid division by zero or NaN if magnitude is tiny
-            const aimMag = Math.sqrt(aimMagSq);
-            aimDx /= aimMag;
-            aimDy /= aimMag;
-        } else {
-            // If mouse is too close, default to aiming upwards
-            aimDx = 0;
-            aimDy = -1;
-        }
-        // --- End Aim Calculation ---
-    
-        // --- Update Muzzle Flash State ---
-        // Use performance.now() for smooth animation timing if available
+        if (aimMagSq > 1) { const aimMag = Math.sqrt(aimMagSq); aimDx /= aimMag; aimDy /= aimMag; }
+        else { aimDx = 0; aimDy = -1; }
+
+        // Update Muzzle Flash (State managed here, Renderer3D reads it)
         const nowPerf = performance.now();
-        localPlayerMuzzleFlash.active = true;
-        localPlayerMuzzleFlash.endTime = nowPerf + 75; // Flash duration
-        localPlayerMuzzleFlash.aimDx = aimDx; // Store the calculated player-relative direction
-        localPlayerMuzzleFlash.aimDy = aimDy; // Store the calculated player-relative direction
-    
-        // --- Store Aim Direction for Gun Visual ---
-        // Initialize the state object if it doesn't exist
-        if (!appState.localPlayerAimState) {
-            appState.localPlayerAimState = { lastAimDx: 0, lastAimDy: -1 }; // Start aiming up by default
-        }
-        // Store the *correct* calculated direction
+        localPlayerMuzzleFlash.active = true; localPlayerMuzzleFlash.endTime = nowPerf + 75;
+        localPlayerMuzzleFlash.aimDx = aimDx; localPlayerMuzzleFlash.aimDy = aimDy;
+
+        // Store Aim Direction for Renderer3D to use
         appState.localPlayerAimState.lastAimDx = aimDx;
         appState.localPlayerAimState.lastAimDy = aimDy;
-        // console.log(`[Input.handleShooting] Stored Gun Aim: dx=${aimDx.toFixed(2)}, dy=${aimDy.toFixed(2)}`); // Keep for debug if needed
-    
-        // --- Send Message to Server ---
-        // Send the raw mouse coordinates; server calculates world target or uses direction
-        log("Sending shoot message with Target Coords:", mouseCanvasPos);
-        Network.sendMessage({ type: 'player_shoot', target: { x: mouseCanvasPos.x, y: mouseCanvasPos.y } });
 
-        // Play sound
+        // Send Message to Server
+        Network.sendMessage({ type: 'player_shoot', target: { x: mouseCanvasPos.x, y: mouseCanvasPos.y } });
         SoundManager.playSound('shoot');
-    
-        // --- Spawn Ammo Casing Particle ---
+
+        // Spawn Ammo Casing Particle (Physics managed here)
         const casingLifetime = 500 + Math.random() * 300;
-        const ejectAngleOffset = Math.PI / 2 + (Math.random() - 0.5) * 0.4; // Eject sideways-ish
-        const ejectAngle = Math.atan2(aimDy, aimDx) + ejectAngleOffset; // Base angle + offset
-        const ejectSpeed = 80 + Math.random() * 40;
-        const gravity = 150; // Example gravity value
-    
-        // Ensure activeAmmoCasings array exists (might be better initialized elsewhere)
-        if (typeof activeAmmoCasings === 'undefined' || !Array.isArray(activeAmmoCasings)) {
-            activeAmmoCasings = [];
-        }
-    
+        const ejectAngleOffset = Math.PI / 2 + (Math.random() - 0.5) * 0.4;
+        const ejectAngle = Math.atan2(aimDy, aimDx) + ejectAngleOffset;
+        const ejectSpeed = 80 + Math.random() * 40; const gravity = 150;
+        if (typeof activeAmmoCasings === 'undefined' || !Array.isArray(activeAmmoCasings)) { activeAmmoCasings = []; }
         const casing = {
-            id: `casing_${nowPerf}_${Math.random().toString(16).slice(2)}`, // Unique ID
-            x: playerRenderX + Math.cos(ejectAngle) * 15, // Start near player
-            y: playerRenderY + Math.sin(ejectAngle) * 15 - 10, // Offset slightly up
-            vx: Math.cos(ejectAngle) * ejectSpeed,
-            vy: Math.sin(ejectAngle) * ejectSpeed - 40, // Initial upward pop
-            rotation: Math.random() * Math.PI * 2,
-            rotationSpeed: (Math.random() - 0.5) * 10, // Random spin
-            spawnTime: nowPerf,
-            lifetime: casingLifetime,
-            gravity: gravity,
-            width: 6, height: 3, // Casing dimensions
-            color: "rgba(218, 165, 32, 0.9)" // Brass color
+            id: `casing_${nowPerf}_${Math.random().toString(16).slice(2)}`,
+            x: playerRenderX + Math.cos(ejectAngle) * 15, y: playerRenderY + Math.sin(ejectAngle) * 15 - 10,
+            vx: Math.cos(ejectAngle) * ejectSpeed, vy: Math.sin(ejectAngle) * ejectSpeed - 40,
+            rotation: Math.random() * Math.PI * 2, rotationSpeed: (Math.random() - 0.5) * 10,
+            spawnTime: nowPerf, lifetime: casingLifetime, gravity: gravity,
+            width: 6, height: 3, color: "rgba(218, 165, 32, 0.9)"
         };
         activeAmmoCasings.push(casing);
-        // Limit total casings to prevent performance issues
-        if (activeAmmoCasings.length > 30) {
-            activeAmmoCasings.shift();
-        }
-    } // --- End of handleShooting ---
+        if (activeAmmoCasings.length > 50) { activeAmmoCasings.shift(); } // Increased limit slightly
+    }
 
     return { setup, cleanup, getMovementInputVector, handleShooting, isShootHeld };
 })();
@@ -624,751 +408,525 @@ const Game = (() => {
     function hostMultiplayer(maxPlayers) { log(`Requesting to Host MP game for ${maxPlayers} players...`); if (![2, 3, 4].includes(maxPlayers)) { error("Invalid max player count requested:", maxPlayers); UI.updateStatus("Invalid player count.", true); return; } resetClientState(false); appState.mode = 'multiplayer-host'; UI.updateStatus(`Creating ${maxPlayers}-player game...`); Network.sendMessage({ type: 'create_game', max_players: maxPlayers }); }
     function leaveGame() { log("Leaving current game..."); if (appState.isConnected && appState.currentGameId && appState.localPlayerId) { Network.sendMessage({ type: 'leave_game' }); } resetClientState(true); }
     function sendChatMessage() { const message = DOM.chatInput.value.trim(); if (message && appState.isConnected && appState.currentGameId && appState.localPlayerId) { Network.sendMessage({ type: 'player_chat', message: message }); DOM.chatInput.value = ''; } }
+
     function resetClientState(showMenu = true) {
-        log(`Resetting client state. Show Menu: ${showMenu}`); cleanupLoop();
+        log(`Resetting client state. Show Menu: ${showMenu}`);
+        cleanupLoop(); // Stop the loop first
+        // Reset core app state
         appState.localPlayerId = null; appState.currentGameId = null; appState.serverState = null; appState.lastServerState = null; appState.previousServerState = null; appState.maxPlayersInGame = null;
-        appState.predictedPlayerPos = { x: appState.canvasWidth / 2, y: appState.canvasHeight / 2 }; // USE appState.canvasWidth and appState.canvasHeight
-        appState.renderedPlayerPos = { x: appState.canvasWidth / 2, y: appState.canvasHeight / 2 }; // USE appState.canvasWidth and appState.canvasHeight
+        appState.predictedPlayerPos = { x: appState.canvasWidth / 2, y: appState.canvasHeight / 2 };
+        appState.renderedPlayerPos = { x: appState.canvasWidth / 2, y: appState.canvasHeight / 2 };
         appState.lastLoopTime = null;
+        appState.localPlayerAimState = { lastAimDx: 0, lastAimDy: -1 };
+        // Reset local effects
         localPlayerMuzzleFlash = { active: false, endTime: 0, aimDx: 0, aimDy: 0 };
         localPlayerPushbackAnim = { active: false, endTime: 0, duration: 250 };
-        hitPauseFrames = 0; activeSpeechBubbles = {}; activeEnemyBubbles = {}; if(typeof snake !== 'undefined'){ snake.isActiveFromServer = false; snake.segments = []; }
+        hitPauseFrames = 0; activeSpeechBubbles = {}; activeEnemyBubbles = {};
+        activeAmmoCasings = []; activeBloodSparkEffects = {};
+        if(typeof snake !== 'undefined'){ snake.isActiveFromServer = false; snake.segments = []; }
+        // Reset UI elements
         DOM.chatLog.innerHTML = ''; DOM.gameCodeDisplay.textContent = '------'; DOM.gameIdInput.value = ''; if(DOM.countdownDiv) DOM.countdownDiv.style.display = 'none'; if(DOM.dayNightIndicator) DOM.dayNightIndicator.style.display = 'none'; if(DOM.gameOverScreen) DOM.gameOverScreen.style.display = 'none';
         const gridContainer = document.getElementById('player-stats-grid'); if (gridContainer) gridContainer.innerHTML = 'Loading Stats...';
-        if (showMenu) { appState.mode = 'menu'; UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected."); UI.showSection('main-menu-section'); }
+        // Call Renderer cleanup
+        if (typeof Renderer3D !== 'undefined') {
+            Renderer3D.cleanup(); // Request renderer resource cleanup
+        }
+        if (showMenu) {
+            appState.mode = 'menu';
+            UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
+            UI.showSection('main-menu-section');
+        }
     }
+
     function gameLoop(currentTime) {
-        // --- Animation State Reset ---
-        // Check and reset expired animations at the start of the loop
-        const now = performance.now();
+        const now = performance.now(); // Use performance.now for smooth timing
+
+        // --- Check and reset expired local animations ---
         if (localPlayerPushbackAnim.active && now >= localPlayerPushbackAnim.endTime) {
             localPlayerPushbackAnim.active = false;
         }
-        // (Muzzle flash reset is implicitly handled in Renderer when drawing)
-        // ---------------------------
+        // --- End Animation Reset ---
 
-        if (hitPauseFrames > 0) { hitPauseFrames--; if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) { appState.animationFrameId = requestAnimationFrame(gameLoop); } return; }
-        if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) { if (appState.serverState?.game_over) { UI.updateStatus("Game Over!"); UI.showGameOver(appState.serverState); } else if (appState.mode === 'menu') { UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected."); } cleanupLoop(); return; }
-        if (!appState.serverState && appState.mode !== 'singleplayer') { appState.animationFrameId = requestAnimationFrame(gameLoop); return; }
-        if (appState.lastLoopTime === null) { appState.lastLoopTime = currentTime; } const deltaTime = Math.min(0.1, (currentTime - appState.lastLoopTime) / 1000); appState.lastLoopTime = currentTime;
-        if (typeof snake !== 'undefined' && typeof snake.update === 'function') { snake.update(currentTime); }
-        if (appState.serverState?.status === 'active' && Input.isShootHeld()) { Input.handleShooting(); }
+        // --- Exit Conditions ---
+        if (appState.mode === 'menu' || !appState.isConnected || appState.serverState?.game_over) {
+            if (appState.serverState?.game_over && appState.mode !== 'menu') { // Check mode to avoid double update
+                UI.updateStatus("Game Over!");
+                UI.showGameOver(appState.serverState);
+            } else if (appState.mode === 'menu') {
+                UI.updateStatus(appState.isConnected ? "Connected. Select Mode." : "Disconnected.");
+            }
+            cleanupLoop(); // Stop loop if exiting
+            return;
+        }
+        // --- End Exit Conditions ---
 
-        // Client-side prediction / reconciliation
-        if (appState.serverState?.status === 'active' && Input.isShootHeld()) { Input.handleShooting(); }
+        // Wait for initial state
+        if (!appState.serverState && appState.mode !== 'singleplayer') {
+            appState.animationFrameId = requestAnimationFrame(gameLoop);
+            return;
+        }
 
+        // --- Delta Time Calculation ---
+        if (appState.lastLoopTime === null) appState.lastLoopTime = now;
+        const deltaTime = Math.min(0.1, (now - appState.lastLoopTime) / 1000); // Use 'now', cap delta
+        appState.lastLoopTime = now;
+        // --- End Delta Time ---
+
+        // --- Update Local Effects (Snake, Shooting) ---
+        if (typeof snake !== 'undefined' && typeof snake.update === 'function') {
+            snake.update(now); // Pass 'now' (performance.now based)
+        }
+        if (appState.serverState?.status === 'active' && Input.isShootHeld()) {
+            Input.handleShooting(); // Handles cooldown internally
+        }
+        // --- End Local Effects ---
+
+        // --- Update Ammo Casing Physics ---
+        activeAmmoCasings = activeAmmoCasings.filter(casing => (now - casing.spawnTime) < casing.lifetime);
+        activeAmmoCasings.forEach(casing => {
+            casing.vy += casing.gravity * deltaTime;
+            casing.x += casing.vx * deltaTime;
+            casing.y += casing.vy * deltaTime;
+            casing.rotation += casing.rotationSpeed * deltaTime;
+        });
+        // --- End Casing Physics ---
+
+
+        // --- Client-Side Prediction / Reconciliation ---
         if (appState.serverState?.status === 'active') {
-            if (appState.mode === 'singleplayer') {
+            if (appState.mode === 'singleplayer') { // SP directly uses server state
                 const playerState = appState.serverState?.players?.[appState.localPlayerId];
                 if (playerState && typeof playerState.x === 'number' && typeof playerState.y === 'number') {
                     appState.renderedPlayerPos.x = playerState.x;
                     appState.renderedPlayerPos.y = playerState.y;
                 }
-            } else {
+            } else { // MP uses prediction/reconciliation
                 updatePredictedPosition(deltaTime);
                 reconcileWithServer();
             }
         }
+        // --- End Prediction ---
 
-        const stateToRender = Game.getInterpolatedState(currentTime);
-        if (stateToRender && typeof Renderer !== 'undefined' && DOM.ctx) {
+        // --- Get Interpolated State for Rendering ---
+        const stateToRender = getInterpolatedState(now); // Pass 'now'
+        // --- End Interpolation ---
 
-            // Get current mouse position (ensure Input module is accessible)
-            const currentMousePos = (typeof Input !== 'undefined' && Input.mouseCanvasPos)
-                                     ? Input.mouseCanvasPos
-                                     : { x: appState.canvasWidth / 2, y: 0 }; // Fallback if Input isn't ready
-
-            // --- MODIFIED CALL TO Renderer.drawGame ---
-            Renderer.drawGame(
-                DOM.ctx,                        // ctx
-                appState,                       // appState
-                stateToRender,                  // stateToRender
-                localPlayerMuzzleFlash,         // localPlayerMuzzleFlash
-                localPlayerPushbackAnim,        // localPlayerPushbackAnimState
-                activeBloodSparkEffects,
-                activeEnemyBubbles,
-                currentMousePos                 // *** Pass mouse position ***
-            );
-
-            // --- DRAW CASINGS *AFTER* main game render ---
-            const now = performance.now(); // Need 'now' again if not declared earlier in this scope after move
-            // Filter expired (redundant if already filtered before drawGame, but safe)
-            activeAmmoCasings = activeAmmoCasings.filter(casing => (now - casing.spawnTime) < casing.lifetime);
-            if (activeAmmoCasings.length > 0) {
-                 DOM.ctx.save();
-                 activeAmmoCasings.forEach(casing => {
-                     // Update physics (using deltaTime from start of loop)
-                     const tickDeltaTime = deltaTime; // Use loop's deltaTime
-                     casing.vy += casing.gravity * tickDeltaTime;
-                     casing.x += casing.vx * tickDeltaTime;
-                     casing.y += casing.vy * tickDeltaTime;
-                     casing.rotation += casing.rotationSpeed * tickDeltaTime;
-
-                     // Calculate fade alpha
-                     const lifeLeft = casing.lifetime - (now - casing.spawnTime);
-                     const fadeDuration = 200;
-                     const alpha = (lifeLeft < fadeDuration) ? Math.max(0, lifeLeft / fadeDuration) * 0.9 : 0.9;
-
-                     // Draw rotated rectangle
-                     DOM.ctx.fillStyle = casing.color.replace(/[\d\.]+\)$/g, `${alpha.toFixed(2)})`);
-                     DOM.ctx.translate(casing.x, casing.y);
-                     DOM.ctx.rotate(casing.rotation);
-                     DOM.ctx.fillRect(-casing.width / 2, -casing.height / 2, casing.width, casing.height);
-                     DOM.ctx.rotate(-casing.rotation);
-                     DOM.ctx.translate(-casing.x, -casing.y);
-                 });
-                 DOM.ctx.restore();
-            }
-            // --- END CASING DRAWING ---
-
-        } else {
+        // --- Render Scene ---
+        if (stateToRender && typeof Renderer3D !== 'undefined' && appState.mode !== 'menu') {
+             // Pass all necessary state to the renderer
+             // Renderer3D now internally accesses appState for things like aim direction
+             // and reads local effect states (muzzle flash, pushback anim, sparks, casings)
+             Renderer3D.renderScene(stateToRender, appState);
+        } else if (appState.mode !== 'menu') {
              log("Skipping render: Missing state, Renderer, or context.");
         }
+        // --- End Rendering ---
 
-
-        // Request next frame or clean up loop
-        if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) { appState.animationFrameId = requestAnimationFrame(gameLoop); } else { if(appState.animationFrameId) cleanupLoop(); }
+        // --- Request Next Frame ---
+        // Check conditions again before requesting next frame
+        if (appState.mode !== 'menu' && appState.isConnected && !appState.serverState?.game_over) {
+            appState.animationFrameId = requestAnimationFrame(gameLoop);
+        } else {
+            if (appState.animationFrameId) cleanupLoop(); // Clean up if loop shouldn't continue
+        }
+        // --- End Next Frame ---
     }
-    function startGameLoop() { if (appState.mode === 'menu') return; if (appState.animationFrameId) return; if (!appState.serverState && appState.mode !== 'singleplayer') return; Input.setup(); log("Starting game loop..."); appState.lastLoopTime = null; appState.animationFrameId = requestAnimationFrame(gameLoop); }
+
+    function startGameLoop() {
+        if (appState.mode === 'menu') return;
+        if (appState.animationFrameId) return; // Already running
+        if (!appState.serverState && appState.mode !== 'singleplayer') {
+             log("Delaying game loop start: Waiting for initial server state.");
+             return; // Wait for state
+        }
+        Input.setup(); // Setup input handlers
+        log("Starting game loop...");
+        appState.lastLoopTime = null; // Reset timer
+        appState.animationFrameId = requestAnimationFrame(gameLoop); // Start the loop
+    }
+
     function getInterpolatedState(renderTime) {
-        const INTERPOLATION_BUFFER_MS = 100; const serverTime = appState.serverState?.timestamp * 1000; const lastServerTime = appState.lastServerState?.timestamp * 1000;
-        if (!appState.serverState || !appState.lastServerState || !serverTime || !lastServerTime || serverTime <= lastServerTime) { return appState.serverState; }
-        const renderTargetTime = renderTime - INTERPOLATION_BUFFER_MS; const timeBetweenStates = serverTime - lastServerTime;
-        const timeSinceLastState = renderTargetTime - lastServerTime; let t = Math.max(0, Math.min(1, timeSinceLastState / timeBetweenStates));
-        let interpolatedState = { ...appState.serverState }; interpolatedState.players = {}; interpolatedState.enemies = {}; interpolatedState.bullets = {};
-        if (appState.serverState.players) { for (const pId in appState.serverState.players) { const currentP = appState.serverState.players[pId]; const lastP = appState.lastServerState.players?.[pId]; if (pId === appState.localPlayerId) { interpolatedState.players[pId] = { ...currentP, x: appState.renderedPlayerPos.x, y: appState.renderedPlayerPos.y }; } else if (lastP && typeof currentP.x === 'number' && typeof lastP.x === 'number') { interpolatedState.players[pId] = { ...currentP, x: lerp(lastP.x, currentP.x, t), y: lerp(lastP.y, currentP.y, t) }; } else { interpolatedState.players[pId] = { ...currentP }; } } }
-        if (appState.serverState.enemies) { for (const eId in appState.serverState.enemies) { const currentE = appState.serverState.enemies[eId]; const lastE = appState.lastServerState.enemies?.[eId]; if (lastE && typeof currentE.x === 'number' && typeof lastE.x === 'number' && currentE.health > 0) { interpolatedState.enemies[eId] = { ...currentE, x: lerp(lastE.x, currentE.x, t), y: lerp(lastE.y, currentE.y, t) }; } else { interpolatedState.enemies[eId] = { ...currentE }; } } }
-        if (appState.serverState.bullets) { for (const bId in appState.serverState.bullets) { const currentB = appState.serverState.bullets[bId]; const lastB = appState.lastServerState.bullets?.[bId]; if (lastB && typeof currentB.x === 'number' && typeof lastB.x === 'number') { interpolatedState.bullets[bId] = { ...currentB, x: lerp(lastB.x, currentB.x, t), y: lerp(lastB.y, currentB.y, t) }; } else { interpolatedState.bullets[bId] = { ...currentB }; } } }
-        interpolatedState.powerups = appState.serverState.powerups; interpolatedState.damage_texts = appState.serverState.damage_texts;
+        const INTERPOLATION_BUFFER_MS = 100;
+        const serverState = appState.serverState;
+        const lastServerState = appState.lastServerState;
+
+        // Basic checks for valid states to interpolate
+        if (!serverState || !lastServerState || !serverState.timestamp || !lastServerState.timestamp) {
+            return serverState; // Return latest known state if interpolation isn't possible
+        }
+
+        const serverTime = serverState.timestamp * 1000;
+        const lastServerTime = lastServerState.timestamp * 1000;
+
+        if (serverTime <= lastServerTime) {
+             return serverState; // New state isn't newer, return it directly
+        }
+
+        const renderTargetTime = renderTime - INTERPOLATION_BUFFER_MS;
+        const timeBetweenStates = serverTime - lastServerTime;
+        const timeSinceLastState = renderTargetTime - lastServerTime;
+        let t = Math.max(0, Math.min(1, timeSinceLastState / timeBetweenStates));
+
+        // Create a deep copy to avoid modifying the original state objects
+        let interpolatedState = JSON.parse(JSON.stringify(serverState));
+
+        // Interpolate Players (excluding local player if prediction is active)
+        if (interpolatedState.players) {
+            for (const pId in interpolatedState.players) {
+                const currentP = serverState.players[pId];
+                const lastP = lastServerState.players?.[pId];
+
+                if (pId === appState.localPlayerId && appState.mode !== 'singleplayer') {
+                    // Use the client's corrected rendered position for the local player
+                    interpolatedState.players[pId].x = appState.renderedPlayerPos.x;
+                    interpolatedState.players[pId].y = appState.renderedPlayerPos.y;
+                } else if (lastP && typeof currentP.x === 'number' && typeof lastP.x === 'number') {
+                    // Interpolate remote players
+                    interpolatedState.players[pId].x = lerp(lastP.x, currentP.x, t);
+                    interpolatedState.players[pId].y = lerp(lastP.y, currentP.y, t);
+                }
+                // else: Keep the latest server state for players without previous data
+            }
+        }
+
+        // Interpolate Enemies
+        if (interpolatedState.enemies) {
+            for (const eId in interpolatedState.enemies) {
+                const currentE = serverState.enemies[eId];
+                const lastE = lastServerState.enemies?.[eId];
+                // Interpolate only if enemy exists in both states and is likely alive/moving
+                if (lastE && typeof currentE.x === 'number' && typeof lastE.x === 'number' && currentE.health > 0) {
+                    interpolatedState.enemies[eId].x = lerp(lastE.x, currentE.x, t);
+                    interpolatedState.enemies[eId].y = lerp(lastE.y, currentE.y, t);
+                }
+            }
+        }
+
+        // Interpolate Bullets
+        if (interpolatedState.bullets) {
+            for (const bId in interpolatedState.bullets) {
+                const currentB = serverState.bullets[bId];
+                const lastB = lastServerState.bullets?.[bId];
+                if (lastB && typeof currentB.x === 'number' && typeof lastB.x === 'number') {
+                    interpolatedState.bullets[bId].x = lerp(lastB.x, currentB.x, t);
+                    interpolatedState.bullets[bId].y = lerp(lastB.y, currentB.y, t);
+                }
+            }
+        }
+
+        // Non-interpolated data (use latest state)
+        interpolatedState.powerups = serverState.powerups;
+        interpolatedState.damage_texts = serverState.damage_texts;
+        // Keep other top-level state as is (status, score, is_night, etc.)
+
         return interpolatedState;
     }
-    function cleanupLoop() { if (appState.animationFrameId) { cancelAnimationFrame(appState.animationFrameId); appState.animationFrameId = null; log("Game loop stopped and cleaned up."); } Input.cleanup(); appState.lastLoopTime = null; }
+
+    function cleanupLoop() {
+        if (appState.animationFrameId) {
+            cancelAnimationFrame(appState.animationFrameId);
+            appState.animationFrameId = null;
+            log("Game loop stopped and cleaned up.");
+        }
+        Input.cleanup(); // Cleanup input listeners
+        appState.lastLoopTime = null; // Reset loop timer
+    }
+
     function updatePredictedPosition(deltaTime) {
         if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return;
-        const moveVector = Input.getMovementInputVector(); const playerState = appState.serverState.players[appState.localPlayerId];
+        const moveVector = Input.getMovementInputVector();
+        const playerState = appState.serverState.players[appState.localPlayerId];
+        // Use the player's *current actual speed* from the server state for prediction
         const playerSpeed = playerState?.speed ?? PLAYER_DEFAULTS.base_speed;
-        if (moveVector.dx !== 0 || moveVector.dy !== 0) { appState.predictedPlayerPos.x += moveVector.dx * playerSpeed * deltaTime; appState.predictedPlayerPos.y += moveVector.dy * playerSpeed * deltaTime; }
-        const w_half = (playerState?.width ?? PLAYER_DEFAULTS.width) / 2; const h_half = (playerState?.height ?? PLAYER_DEFAULTS.height) / 2;
-        appState.predictedPlayerPos.x = Math.max(w_half, Math.min(appState.canvasWidth - w_half, appState.predictedPlayerPos.x)); // CORRECTED LINE: Use appState.canvasWidth
-        appState.predictedPlayerPos.y = Math.max(h_half, Math.min(appState.canvasHeight - h_half, appState.predictedPlayerPos.y)); // CORRECTED LINE: Use appState.canvasHeight
+        if (moveVector.dx !== 0 || moveVector.dy !== 0) {
+            appState.predictedPlayerPos.x += moveVector.dx * playerSpeed * deltaTime;
+            appState.predictedPlayerPos.y += moveVector.dy * playerSpeed * deltaTime;
+        }
+        // Clamp using player dimensions from server state or defaults
+        const w_half = (playerState?.width ?? PLAYER_DEFAULTS.width) / 2;
+        const h_half = (playerState?.height ?? PLAYER_DEFAULTS.height) / 2;
+        appState.predictedPlayerPos.x = Math.max(w_half, Math.min(appState.canvasWidth - w_half, appState.predictedPlayerPos.x));
+        appState.predictedPlayerPos.y = Math.max(h_half, Math.min(appState.canvasHeight - h_half, appState.predictedPlayerPos.y));
     }
+
     function reconcileWithServer() {
         if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return;
-        const serverPos = appState.serverState.players[appState.localPlayerId]; if (typeof serverPos.x !== 'number' || typeof serverPos.y !== 'number') return;
-        const predictedPos = appState.predictedPlayerPos; const renderedPos = appState.renderedPlayerPos; const dist = distance(predictedPos.x, predictedPos.y, serverPos.x, serverPos.y);
-        const snapThreshold = (parseFloat(getCssVar('--reconciliation-threshold')) || 35); const renderLerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.15;
-        if (dist > snapThreshold) { predictedPos.x = serverPos.x; predictedPos.y = serverPos.y; renderedPos.x = serverPos.x; renderedPos.y = serverPos.y; }
-        else { renderedPos.x = lerp(renderedPos.x, predictedPos.x, renderLerpFactor); renderedPos.y = lerp(renderedPos.y, predictedPos.y, renderLerpFactor); }
+        const serverPos = appState.serverState.players[appState.localPlayerId];
+        if (typeof serverPos.x !== 'number' || typeof serverPos.y !== 'number') return;
+
+        const predictedPos = appState.predictedPlayerPos;
+        const renderedPos = appState.renderedPlayerPos;
+
+        const dist = distance(predictedPos.x, predictedPos.y, serverPos.x, serverPos.y);
+        const snapThreshold = parseFloat(getCssVar('--reconciliation-threshold')) || 35;
+        const renderLerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.15;
+
+        if (dist > snapThreshold) {
+            // Snap prediction and render position directly to server position
+            predictedPos.x = serverPos.x; predictedPos.y = serverPos.y;
+            renderedPos.x = serverPos.x; renderedPos.y = serverPos.y;
+        } else {
+            // Gently lerp the rendered position towards the predicted position
+            renderedPos.x = lerp(renderedPos.x, predictedPos.x, renderLerpFactor);
+            renderedPos.y = lerp(renderedPos.y, predictedPos.y, renderLerpFactor);
+        }
     }
-    // --- CORRECTED initListeners ---
-    // This function is now intended to be called ONCE during initialization
-    // to set up the event handlers for the buttons.
+
     function initListeners() {
         log("Initializing button listeners...");
-
-        // --- Game Start/Join Buttons ---
-        // These handlers now call SoundManager.init() THEN the relevant game function
-
-        if (DOM.singlePlayerBtn) {
-            DOM.singlePlayerBtn.onclick = () => {
-                log("Single Player button clicked.");
-                SoundManager.init(); // Initialize sound system on user interaction
-                startSinglePlayer(); // Call the internal function to start the game
-            };
-        } else { error("DOM Element not found: singlePlayerBtn"); }
-
-
-        const hostHandler = (maxPlayers) => {
-            log(`Host Game (${maxPlayers}p) button clicked.`);
-            SoundManager.init(); // Initialize sound system on user interaction
-            hostMultiplayer(maxPlayers); // Call the internal function to host
-        };
+        if (DOM.singlePlayerBtn) DOM.singlePlayerBtn.onclick = () => { SoundManager.init(); startSinglePlayer(); };
+        const hostHandler = (maxPlayers) => { SoundManager.init(); hostMultiplayer(maxPlayers); };
         if (DOM.hostGameBtn2) DOM.hostGameBtn2.onclick = () => hostHandler(2);
-        else { error("DOM Element not found: hostGameBtn2"); }
-
         if (DOM.hostGameBtn3) DOM.hostGameBtn3.onclick = () => hostHandler(3);
-        else { error("DOM Element not found: hostGameBtn3"); }
-
         if (DOM.hostGameBtn4) DOM.hostGameBtn4.onclick = () => hostHandler(4);
-        else { error("DOM Element not found: hostGameBtn4"); }
-
-
-        if (DOM.joinGameSubmitBtn) {
-            DOM.joinGameSubmitBtn.onclick = () => {
-                log("Join Game Submit button clicked.");
-                SoundManager.init(); // Initialize sound system on user interaction
-                joinMultiplayer(); // Call the internal function to join
-            };
-        } else { error("DOM Element not found: joinGameSubmitBtn"); }
-
-
-        // --- Other UI/Game Action Buttons ---
-        // These typically don't need to initialize the sound system
-
+        if (DOM.joinGameSubmitBtn) DOM.joinGameSubmitBtn.onclick = () => { SoundManager.init(); joinMultiplayer(); };
         if (DOM.multiplayerBtn) DOM.multiplayerBtn.onclick = () => UI.showSection('multiplayer-menu-section');
-        else { error("DOM Element not found: multiplayerBtn"); }
-
         if (DOM.showJoinUIBtn) DOM.showJoinUIBtn.onclick = () => UI.showSection('join-code-section');
-        else { error("DOM Element not found: showJoinUIBtn"); }
-
-        if (DOM.cancelHostBtn) DOM.cancelHostBtn.onclick = leaveGame; // Directly assign if leaveGame is simple
-        else { error("DOM Element not found: cancelHostBtn"); }
-
-        if (DOM.sendChatBtn) DOM.sendChatBtn.onclick = sendChatMessage; // Directly assign
-        else { error("DOM Element not found: sendChatBtn"); }
-
-        if (DOM.leaveGameBtn) DOM.leaveGameBtn.onclick = leaveGame; // Directly assign
-        else { error("DOM Element not found: leaveGameBtn"); }
-
-        if (DOM.gameOverBackBtn) DOM.gameOverBackBtn.onclick = () => resetClientState(true); // Use arrow func for clarity or direct assign if simple
-        else { error("DOM Element not found: gameOverBackBtn"); }
-
-
-        // Back buttons
+        if (DOM.cancelHostBtn) DOM.cancelHostBtn.onclick = leaveGame;
+        if (DOM.sendChatBtn) DOM.sendChatBtn.onclick = sendChatMessage;
+        if (DOM.leaveGameBtn) DOM.leaveGameBtn.onclick = leaveGame;
+        if (DOM.gameOverBackBtn) DOM.gameOverBackBtn.onclick = () => resetClientState(true);
+        // Back buttons (ensure UI module is accessible)
         DOM.gameContainer.querySelectorAll('.back-button').forEach(btn => {
-            const targetMatch = btn.getAttribute('onclick')?.match(/'([^']+)'/); // Keep original logic for finding target
-            if (targetMatch && targetMatch[1]) {
-                const targetId = targetMatch[1];
-                if (DOM[targetId] || document.getElementById(targetId)) {
+            const onclickAttr = btn.getAttribute('onclick');
+            if (onclickAttr && onclickAttr.startsWith("UI.showSection")) { // Make sure it's the right handler
+                const targetMatch = onclickAttr.match(/'([^']+)'/);
+                if (targetMatch && targetMatch[1]) {
+                     const targetId = targetMatch[1];
                      // Re-assign using addEventListener or standard onclick
                      btn.onclick = (e) => { e.preventDefault(); UI.showSection(targetId); };
-                } else {
-                    log(`Warning: Back button target section invalid: ${targetId}`);
-                }
-            } else {
-                // This handles buttons that might not have the expected onclick format
-                 log("Warning: Back button found without standard target in onclick:", btn);
-                 // Optionally add a default handler or leave it unassigned if it has other means of working
-            }
-        });
+                 } else { log(`Warning: Could not parse target section from back button onclick: ${onclickAttr}`); }
+             } else { log("Warning: Back button found without standard 'UI.showSection' onclick:", btn); }
+         });
+        log("Finished initializing button listeners.");
     }
-    // --- END initListeners ---
 
-    // --- CORRECTED Return Statement ---
-    // Expose all functions needed externally, including those called by initListeners
     return {
-        // Functions called by click handlers in initListeners:
-        startSinglePlayer,
-        joinMultiplayer,
-        hostMultiplayer,
-        leaveGame,
-        sendChatMessage,
-        resetClientState,
-
-        // Core game loop functions:
-        startGameLoop,
-        cleanupLoop,
-        getInterpolatedState,
-
-        // Expose initListeners itself so it can be called from DOMContentLoaded
-        initListeners
+        startSinglePlayer, joinMultiplayer, hostMultiplayer, leaveGame, sendChatMessage,
+        resetClientState, startGameLoop, cleanupLoop, getInterpolatedState, initListeners
     };
-})(); // End of Game IIFE
+})();
 
-// --- Global Server Message Handler ---
-
-// --- Global Server Message Handler ---
-// Processes all messages received via the WebSocket
+// --- Global Server Message Handler (Minor changes for Renderer dependency) ---
 function handleServerMessage(event) {
     let data;
     try { data = JSON.parse(event.data); }
     catch (err) { error("Failed to parse server message:", err, event.data); UI.updateStatus("Received invalid data from server.", true); return; }
 
     try {
-        // Prevent critical errors if Renderer isn't ready yet for drawing-related messages
-        if (typeof Renderer === 'undefined' && ['sp_game_started', 'game_joined', 'game_state', 'game_created'].includes(data.type)) {
-             error(`Received critical message type '${data.type}' before Renderer was ready! Check loading order.`);
-             return; // Don't process further if Renderer isn't loaded
+        // Check if Renderer3D is loaded before processing state-dependent messages
+        if (typeof Renderer3D === 'undefined' && ['sp_game_started', 'game_joined', 'game_state', 'game_created', 'game_over_notification'].includes(data.type)) {
+             error(`Received critical message type '${data.type}' before Renderer3D was ready! Check loading order.`);
+             return; // Don't process further
         }
 
         switch (data.type) {
-            // --- Association Cases (Now include canvas dimension setting) ---
             case 'game_created':
-                log("Received 'game_created'");
-                appState.localPlayerId = data.player_id;
-                appState.currentGameId = data.game_id;
-                appState.serverState = data.initial_state; // Initial state received
-                appState.maxPlayersInGame = data.max_players;
-
-                // --- NEW: SET CANVAS DIMENSIONS IMMEDIATELY ---
-                if (data.initial_state && typeof data.initial_state.canvas_width === 'number' && typeof data.initial_state.canvas_height === 'number') {
-                    appState.canvasWidth = data.initial_state.canvas_width;
-                    appState.canvasHeight = data.initial_state.canvas_height;
-                    if (DOM.canvas) {
-                        DOM.canvas.width = appState.canvasWidth;
-                        DOM.canvas.height = appState.canvasHeight;
-                        log(`Canvas dimensions set to: ${DOM.canvas.width}x${DOM.canvas.height}`);
-                        // Force initial background generation *after* setting dimensions
-                        if (typeof Renderer !== 'undefined' && appState.serverState) {
-                             Renderer.updateGeneratedBackground(appState.serverState.is_night);
-                        }
-                    } else {
-                        error("DOM.canvas not found when trying to set dimensions!");
-                    }
-                } else {
-                    error("Initial state ('game_created') missing canvas dimensions!", data.initial_state);
-                    // Fallback - dimensions might be set later via game_state if server includes them
-                    appState.canvasWidth = 1600; // Default fallback
-                    appState.canvasHeight = 900; // Default fallback
-                    if (DOM.canvas) {
-                        DOM.canvas.width = appState.canvasWidth;
-                        DOM.canvas.height = appState.canvasHeight;
-                    }
-                }
-                // -------------------------------------------
-
-                const hostP = appState.serverState?.players[appState.localPlayerId];
-                if (hostP) { appState.predictedPlayerPos = { x: hostP.x, y: hostP.y }; appState.renderedPlayerPos = { x: hostP.x, y: hostP.y }; }
-                if (!appState.maxPlayersInGame) { error("'game_created' missing 'max_players'!"); appState.maxPlayersInGame = '?'; }
-
-                DOM.gameCodeDisplay.textContent = appState.currentGameId || 'ERROR';
-                const currentP = Object.keys(appState.serverState?.players || {}).length;
-                DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentP}/${appState.maxPlayersInGame})`;
-                UI.updateStatus(`Game hosted. Code: ${appState.currentGameId}`);
-                UI.showSection('host-wait-section');
-                // Host loop starts when game status changes from 'waiting' via game_state update
-                break;
-
             case 'game_joined':
-                log("Received 'game_joined'");
-                appState.localPlayerId = data.player_id;
-                appState.currentGameId = data.game_id;
-                appState.serverState = data.initial_state; // Initial state received
-                appState.maxPlayersInGame = appState.serverState?.max_players;
-
-                // --- NEW: SET CANVAS DIMENSIONS IMMEDIATELY ---
-                if (data.initial_state && typeof data.initial_state.canvas_width === 'number' && typeof data.initial_state.canvas_height === 'number') {
-                    appState.canvasWidth = data.initial_state.canvas_width;
-                    appState.canvasHeight = data.initial_state.canvas_height;
-                    if (DOM.canvas) {
-                        DOM.canvas.width = appState.canvasWidth;
-                        DOM.canvas.height = appState.canvasHeight;
-                        log(`Canvas dimensions set to: ${DOM.canvas.width}x${DOM.canvas.height}`);
-                        // Force initial background generation *after* setting dimensions
-                        if (typeof Renderer !== 'undefined' && appState.serverState) {
-                             Renderer.updateGeneratedBackground(appState.serverState.is_night);
-                        }
-                    } else {
-                        error("DOM.canvas not found when trying to set dimensions!");
-                    }
-                } else {
-                    error("Initial state ('game_joined') missing canvas dimensions!", data.initial_state);
-                    appState.canvasWidth = 1600; // Fallback
-                    appState.canvasHeight = 900; // Fallback
-                    if (DOM.canvas) {
-                        DOM.canvas.width = appState.canvasWidth;
-                        DOM.canvas.height = appState.canvasHeight;
-                    }
-                }
-                // -------------------------------------------
-
-                if (!appState.maxPlayersInGame) { error("'game_joined' initial_state missing 'max_players'!"); appState.maxPlayersInGame = '?'; }
-                const joinedP = appState.serverState?.players[appState.localPlayerId];
-                if (joinedP) { appState.predictedPlayerPos = { x: joinedP.x, y: joinedP.y }; appState.renderedPlayerPos = { x: joinedP.x, y: joinedP.y }; }
-
-                UI.updateStatus(`Joined game ${appState.currentGameId}. Get ready!`);
-                UI.showSection('game-area');
-                // Initial UI updates (HUD, Countdown) - Background already triggered above
-                if (appState.serverState) {
-                    UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState);
-                }
-                Game.startGameLoop(); // Joining client starts loop immediately
-                break;
-
             case 'sp_game_started':
-                log("Received 'sp_game_started'");
+                log(`Received '${data.type}'`);
                 appState.localPlayerId = data.player_id;
                 appState.currentGameId = data.game_id;
-                appState.serverState = data.initial_state; // Initial state received
-                appState.maxPlayersInGame = 1;
+                appState.serverState = data.initial_state;
+                appState.maxPlayersInGame = data.max_players || appState.serverState?.max_players || (data.type === 'sp_game_started' ? 1 : '?'); // Ensure maxPlayers is set
 
-                // --- NEW: SET CANVAS DIMENSIONS IMMEDIATELY ---
+                // Set Canvas Dimensions from initial state
                 if (data.initial_state && typeof data.initial_state.canvas_width === 'number' && typeof data.initial_state.canvas_height === 'number') {
                     appState.canvasWidth = data.initial_state.canvas_width;
                     appState.canvasHeight = data.initial_state.canvas_height;
-                    if (DOM.canvas) {
-                        DOM.canvas.width = appState.canvasWidth;
-                        DOM.canvas.height = appState.canvasHeight;
-                        log(`Canvas dimensions set to: ${DOM.canvas.width}x${DOM.canvas.height}`);
-                        // Force initial background generation *after* setting dimensions
-                        if (typeof Renderer !== 'undefined' && appState.serverState) {
-                            Renderer.updateGeneratedBackground(appState.serverState.is_night);
-                        }
-                    } else {
-                        error("DOM.canvas not found when trying to set dimensions!");
-                    }
+                    // Renderer3D.updateSize() will be called internally or explicitly if needed
                 } else {
-                    error("Initial state ('sp_game_started') missing canvas dimensions!", data.initial_state);
-                    appState.canvasWidth = 1600; // Fallback
-                    appState.canvasHeight = 900; // Fallback
-                    if (DOM.canvas) {
-                        DOM.canvas.width = appState.canvasWidth;
-                        DOM.canvas.height = appState.canvasHeight;
-                    }
+                    error(`Initial state ('${data.type}') missing canvas dimensions! Using defaults.`, data.initial_state);
+                    // Keep defaults in appState
                 }
-                // -------------------------------------------
 
-                const spP = appState.serverState?.players[appState.localPlayerId];
-                if (spP) { appState.predictedPlayerPos = { x: spP.x, y: spP.y }; appState.renderedPlayerPos = { x: spP.x, y: spP.y }; }
-
-                UI.updateStatus("Single Player Game Started!"); UI.showSection('game-area');
-                // Initial UI updates (HUD, Countdown) - Background already triggered above
-                if (appState.serverState) {
-                    UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState);
+                const initialPlayer = appState.serverState?.players[appState.localPlayerId];
+                if (initialPlayer) {
+                     appState.predictedPlayerPos = { x: initialPlayer.x, y: initialPlayer.y };
+                     appState.renderedPlayerPos = { x: initialPlayer.x, y: initialPlayer.y };
+                } else { // Reset position if player data missing somehow
+                     appState.predictedPlayerPos = { x: appState.canvasWidth / 2, y: appState.canvasHeight / 2 };
+                     appState.renderedPlayerPos = { x: appState.canvasWidth / 2, y: appState.canvasHeight / 2 };
                 }
-                Game.startGameLoop(); // SP client starts loop immediately
+                appState.localPlayerAimState = { lastAimDx: 0, lastAimDy: -1 }; // Reset aim
+
+                if (data.type === 'game_created') {
+                    DOM.gameCodeDisplay.textContent = appState.currentGameId || 'ERROR';
+                    const currentP = Object.keys(appState.serverState?.players || {}).length;
+                    DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentP}/${appState.maxPlayersInGame})`;
+                    UI.updateStatus(`Game hosted. Code: ${appState.currentGameId}`);
+                    UI.showSection('host-wait-section');
+                    // Loop starts when state becomes 'countdown' or 'active'
+                } else { // game_joined or sp_game_started
+                     UI.updateStatus(data.type === 'game_joined' ? `Joined game ${appState.currentGameId}.` : "Single Player Started!");
+                     UI.showSection('game-area');
+                     // Initial UI updates
+                     if (appState.serverState) {
+                         UI.updateHUD(appState.serverState);
+                         UI.updateCountdown(appState.serverState);
+                         UI.updateDayNight(appState.serverState);
+                         UI.updateEnvironmentDisplay();
+                     }
+                     Game.startGameLoop(); // Start loop immediately
+                }
                 break;
 
-                // --- Game State Update ---
             case 'game_state':
-                // If client is in menu mode, ignore state updates entirely.
-                if (appState.mode === 'menu') {
-                    // log("Ignoring game_state message while in menu mode.");
-                    return; // Stop processing this message
-                }
+                if (appState.mode === 'menu') return; // Ignore if in menu
 
-                // --- Proceed with processing state if not in menu ---
                 const previousStatus = appState.serverState?.status;
                 const previousPlayerState = appState.serverState?.players?.[appState.localPlayerId];
 
-                // Update state history for interpolation
                 appState.previousServerState = appState.lastServerState;
                 appState.lastServerState = appState.serverState;
-                appState.serverState = data.state; // Store the new state
-                const newState = appState.serverState; // Alias for clarity
+                appState.serverState = data.state;
+                const newState = appState.serverState;
                 const currentPlayerState = newState?.players?.[appState.localPlayerId];
+                appState.lastStateReceiveTime = performance.now(); // Update receive time
 
-                // --- CRITICAL: Ensure canvas dimensions are set if missed initially ---
-                // This is a safety net. The primary setting should happen in the association cases.
-                if ((DOM.canvas.width <= 0 || DOM.canvas.height <= 0 || DOM.canvas.width !== newState.canvas_width) &&
-                    newState && typeof newState.canvas_width === 'number' && typeof newState.canvas_height === 'number') {
-                    error(`Correcting canvas dimensions via game_state: ${newState.canvas_width}x${newState.canvas_height}`);
-                    appState.canvasWidth = newState.canvas_width;
-                    appState.canvasHeight = newState.canvas_height;
-                    if (DOM.canvas) {
-                        DOM.canvas.width = appState.canvasWidth;
-                        DOM.canvas.height = appState.canvasHeight;
-                        // Force background update if dimensions changed significantly
-                        if (typeof Renderer !== 'undefined' && newState) {
-                            Renderer.updateGeneratedBackground(newState.is_night);
-                        }
-                    }
-                }
-                // -----------------------------------------------------------------
-
-
-                // Update local client variables mirrored from server state
-                appState.currentTemp = newState.current_temperature ?? 18.0; // Use a default if missing
+                // Update local state copies
+                appState.currentTemp = newState.current_temperature ?? 18.0;
                 appState.isRaining = newState.is_raining ?? false;
                 appState.isDustStorm = newState.is_dust_storm ?? false;
-                UI.updateEnvironmentDisplay(); // Update temp display
 
-
-                // --- Update Visual Snake State ---
+                // Update Snake State (Visuals handled by Renderer3D reading 'snake')
                 const serverSnakeState = newState.snake_state;
-                if (serverSnakeState && typeof snake !== 'undefined') { // Check if snake object exists
+                if (serverSnakeState && typeof snake !== 'undefined') {
                     snake.isActiveFromServer = serverSnakeState.active;
                     snake.serverHeadX = serverSnakeState.head_x;
                     snake.serverHeadY = serverSnakeState.head_y;
                     snake.serverBaseY = serverSnakeState.base_y;
-                    // If snake just became active visually, ensure segment array starts correctly
-                    if (snake.isActiveFromServer && snake.segments.length === 0) {
-                        snake.segments = [{ x: snake.serverHeadX, y: snake.serverHeadY, time: performance.now() }];
-                    } else if (!snake.isActiveFromServer) {
-                        snake.segments = []; // Clear if inactive
-                    }
-                } else if (typeof snake !== 'undefined') {
-                     snake.isActiveFromServer = false; // Ensure inactive if state missing
-                     snake.segments = [];
-                }
-                // --- End Snake Update ---
+                    if (snake.isActiveFromServer && snake.segments.length === 0) { snake.segments = [{ x: snake.serverHeadX, y: snake.serverHeadY, time: performance.now() }]; }
+                    else if (!snake.isActiveFromServer) { snake.segments = []; }
+                } else if (typeof snake !== 'undefined') { snake.isActiveFromServer = false; snake.segments = []; }
 
-
-                // --- Trigger Screen Shake on Snake Bite (Check Local Player) ---
-                if (currentPlayerState?.trigger_snake_bite_shake_this_tick) {
-                    // Use constants defined in your JS (ensure they match backend if needed)
-                    const shakeMag = snake?.shakeMagnitude ?? 15.0; // Access magnitude from snake object or default
-                    const shakeDur = snake?.shakeDurationMs ?? 400.0; // Access duration from snake object or default
-                    if(typeof Renderer !== 'undefined') {
-                         Renderer.triggerShake(shakeMag, shakeDur);
-                    }
-                }
-                // --- End Shake Trigger ---
-
-                let localPlayerDamagedThisTick = false; // Initialize flag
-
-                 // Trigger screen shake AND set flag ONLY if local player took damage THIS tick
-                if (previousPlayerState && currentPlayerState &&
-                    typeof currentPlayerState.health === 'number' &&
-                    typeof previousPlayerState.health === 'number' &&
-                    currentPlayerState.health < previousPlayerState.health)
-                {
-                    // --- Actions INSIDE the damage detection block ---
-                    const damageTaken = previousPlayerState.health - currentPlayerState.health;
-                    const baseMag = 5; const dmgScale = 0.18; const maxMag = 18; // Shake params
-                    const shakeMagnitude = Math.min(maxMag, baseMag + damageTaken * dmgScale);
-                     if(typeof Renderer !== 'undefined') {
-                         Renderer.triggerShake(shakeMagnitude, 250); // Trigger shake effect
-                    }
-
-                    // *** MOVE THIS LINE INSIDE ***
-                    localPlayerDamagedThisTick = true; // Set the flag ONLY when damage is detected
-                    // *****************************
-
-                    console.log('[Main DEBUG] Health decreased, setting damage flag.'); // Optional log
-                }
-                // --- End of damage detection block ---
-
-
-                 // Play damage sound if flag was set THIS tick
-                 if (localPlayerDamagedThisTick) {
-                    console.log('[Main DEBUG] Damage flag is true, attempting to play damage sound.'); // Optional log
-                    SoundManager.playSound('damage');
-                }
-
-                // ... (rest of the game_state case)
-
-                 // Trigger hit pause if local player was hit this tick
-                 // Check currentPlayerState exists before accessing properties
-                 if (currentPlayerState?.hit_flash_this_tick && hitPauseFrames <= 0) {
-                     hitPauseFrames = 3; // Pause rendering for 3 frames
-                 }
-
-
-                // --- V3: Update Blood Spark Effects ---
-                if (newState.enemies) {
+                 // --- Update Blood Spark Effects ---
+                 if (newState.enemies) {
                     const now = performance.now();
-                    const sparkDuration = 300; // How long sparks stay visible (ms)
-
-                    // Add/refresh sparks for enemies hit *this* tick according to server state
+                    const sparkDuration = 300; // ms
                     for (const enemyId in newState.enemies) {
                         const enemy = newState.enemies[enemyId];
-                        // Check if enemy has a *new* last_damage_time compared to previous state
                         const previousEnemy = appState.lastServerState?.enemies?.[enemyId];
-                        if (enemy && enemy.last_damage_time &&
-                            (!previousEnemy || enemy.last_damage_time > (previousEnemy.last_damage_time || 0)))
-                        {
-                            // Server uses seconds, performance.now() is ms
+                        if (enemy && enemy.last_damage_time && (!previousEnemy || enemy.last_damage_time > (previousEnemy.last_damage_time || 0))) {
                             const serverHitTimeMs = enemy.last_damage_time * 1000;
-                            // Only trigger if the hit happened very recently to avoid re-triggering on late packets
-                            if (now - serverHitTimeMs < 200) {
-                                activeBloodSparkEffects[enemyId] = now + sparkDuration;
-                            }
+                            if (now - serverHitTimeMs < 200) { activeBloodSparkEffects[enemyId] = now + sparkDuration; }
                         }
                     }
-
-                    // Clean up expired sparks (optional, could also be done in renderer)
-                    for (const enemyId in activeBloodSparkEffects) {
-                        if (now >= activeBloodSparkEffects[enemyId]) {
-                            delete activeBloodSparkEffects[enemyId];
-                        }
-                    }
-                }
-                // --- End V3 Blood Spark Update ---
-
-
-                // Store max_players if received in state update (e.g., if missed initial message)
-                if (!appState.maxPlayersInGame && newState.max_players) {
-                     appState.maxPlayersInGame = newState.max_players;
+                    for (const enemyId in activeBloodSparkEffects) { if (now >= activeBloodSparkEffects[enemyId]) { delete activeBloodSparkEffects[enemyId]; } }
                 }
 
-                // --- Handle transitions between game statuses ---
+                // Damage Check and Sound/Shake Trigger
+                let localPlayerDamagedThisTick = false;
+                if (previousPlayerState && currentPlayerState && typeof currentPlayerState.health === 'number' && typeof previousPlayerState.health === 'number' && currentPlayerState.health < previousPlayerState.health) {
+                    const damageTaken = previousPlayerState.health - currentPlayerState.health;
+                    const baseMag = 5; const dmgScale = 0.18; const maxMag = 18;
+                    const shakeMagnitude = Math.min(maxMag, baseMag + damageTaken * dmgScale);
+                    if (typeof Renderer3D !== 'undefined') Renderer3D.triggerShake(shakeMagnitude, 250);
+                    localPlayerDamagedThisTick = true;
+                }
+                if (localPlayerDamagedThisTick) { SoundManager.playSound('damage'); }
+
+                 // Snake Bite Shake Trigger
+                 if (currentPlayerState?.trigger_snake_bite_shake_this_tick) {
+                     const shakeMag = snake?.shakeMagnitude ?? 15.0;
+                     const shakeDur = snake?.shakeDurationMs ?? 400.0;
+                     if(typeof Renderer3D !== 'undefined') Renderer3D.triggerShake(shakeMag, shakeDur);
+                 }
+
+                // Handle Game Status Transitions
                 if (newState.status !== previousStatus) {
                     log(`[Client State Change] From ${previousStatus || 'null'} to ${newState.status}`);
-
-                    // Logic for STARTING the game (Countdown or Active)
                     if ((newState.status === 'countdown' || newState.status === 'active') && previousStatus !== 'active' && previousStatus !== 'countdown') {
-                        UI.updateStatus(newState.status === 'countdown' ? "Countdown starting..." : "Game active!");
-                        UI.showSection('game-area'); // Ensure game area is visible
-                        if (!appState.animationFrameId) { // Start loop if not already running
-                            log(`--> Starting game loop NOW (triggered by ${newState.status} state update).`);
-                            if (typeof Renderer !== 'undefined' && newState) { Renderer.updateGeneratedBackground(newState.is_night); }
-                            Game.startGameLoop();
-                        }
-                    }
-                    // Logic for HOST potentially returning to WAITING state
-                    else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host' && previousStatus !== 'waiting') {
-                        UI.updateStatus("Game reverted to waiting lobby.", true); // Inform host
+                        UI.updateStatus(newState.status === 'countdown' ? "Countdown..." : "Game active!");
+                        UI.showSection('game-area');
+                        if (!appState.animationFrameId) Game.startGameLoop(); // Start loop if not running
+                    } else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host' && previousStatus !== 'waiting') {
+                        UI.updateStatus("Game reverted to waiting.", true);
                         UI.showSection('host-wait-section');
-                        const currentPWaiting = Object.keys(newState.players || {}).length;
-                        DOM.waitingMessage.textContent = `Waiting for Team Mate... (${currentPWaiting}/${appState.maxPlayersInGame || '?'})`;
-                        Game.cleanupLoop(); // Stop loop if returning to wait
-                    }
-                    // If status becomes 'finished', ensure loop cleanup and show game over
-                    // This is a *fallback* to the 'game_over_notification'
-                    else if (newState.status === 'finished' && previousStatus !== 'finished') {
-                         log("-> Game Over sequence initiated by 'finished' status in game_state.");
+                        const pCountWaiting = Object.keys(newState.players || {}).length;
+                        DOM.waitingMessage.textContent = `Waiting... (${pCountWaiting}/${appState.maxPlayersInGame || '?'})`;
+                        Game.cleanupLoop();
+                    } else if (newState.status === 'finished' && previousStatus !== 'finished') {
+                         log("-> Game Over sequence via 'finished' status.");
                          Game.cleanupLoop();
-                         UI.showGameOver(newState); // Show game over based on this final state
+                         UI.showGameOver(newState);
                     }
+                }
 
-                } // End status change handling
-
-                // --- Update UI elements based on current state ---
-                // Only update HUD/Timers if game is actually running client-side
+                // Update UI if game is running
                 if (appState.animationFrameId && (newState.status === 'countdown' || newState.status === 'active')) {
-                    UI.updateHUD(newState);
-                    UI.updateCountdown(newState);
-                    UI.updateDayNight(newState);
-                }
-                // Update waiting message specifically for hosts in waiting state
-                else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') {
+                    UI.updateHUD(newState); UI.updateCountdown(newState); UI.updateDayNight(newState); UI.updateEnvironmentDisplay();
+                } else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') { // Update host waiting count
                     const pCount = Object.keys(newState.players || {}).length;
-                    DOM.waitingMessage.textContent = `Waiting for Team Mate... (${pCount}/${appState.maxPlayersInGame || '?'})`;
+                    DOM.waitingMessage.textContent = `Waiting... (${pCount}/${appState.maxPlayersInGame || '?'})`;
                 }
 
-                // Update enemy speech bubbles based on state
+                // Update Enemy Speech Bubbles
                 const speakerId = newState.enemy_speaker_id; const speechText = newState.enemy_speech_text;
-                if (speakerId && speechText) {
-                    activeEnemyBubbles[speakerId] = { text: speechText.substring(0, 50), endTime: performance.now() + 3000 };
-                }
-                break; // End game_state
+                if (speakerId && speechText) { activeEnemyBubbles[speakerId] = { text: speechText.substring(0, 50), endTime: performance.now() + 3000 }; }
+                break;
 
-            // --- Explicit Game Over Notification (Primary Trigger) ---
             case 'game_over_notification':
                 log("Received 'game_over_notification'");
                 if (data.final_state) {
-                    appState.serverState = data.final_state; // Store final state
-                    UI.updateStatus("Game Over!");
-                    Game.cleanupLoop(); // --- Stop the game loop FIRST
-                    UI.showGameOver(data.final_state); // --- THEN show the game over screen
-                    log("-> Game Over sequence initiated by notification.");
-                } else {
-                    error("Received 'game_over_notification' without final_state data.");
-                    Game.resetClientState(true); // Fallback to menu
-                }
+                    appState.serverState = data.final_state; UI.updateStatus("Game Over!");
+                    Game.cleanupLoop(); UI.showGameOver(data.final_state);
+                    log("-> Game Over sequence via notification.");
+                } else { error("Received 'game_over_notification' missing final_state."); Game.resetClientState(true); }
                 break;
 
-             // --- Chat Message ---
              case 'chat_message':
                  const senderId = data.sender_id; const msgText = data.message;
-                 if (!senderId || !msgText) { // Basic validation
-                      log("Received incomplete chat message", data);
-                      break;
-                 }
+                 if (!senderId || !msgText) { log("Received incomplete chat message", data); break; }
                  const isSelf = senderId === appState.localPlayerId;
-                 UI.addChatMessage(senderId, msgText, isSelf); // Add to chat log
-                 // Display as speech bubble only if the player is currently in the game state
-                 if (appState.serverState?.players?.[senderId]) {
-                      activeSpeechBubbles[senderId] = { text: msgText.substring(0, 50), endTime: performance.now() + 4000 };
-                 }
+                 UI.addChatMessage(senderId, msgText, isSelf);
+                 if (appState.serverState?.players?.[senderId]) { activeSpeechBubbles[senderId] = { text: msgText.substring(0, 50), endTime: performance.now() + 4000 }; }
                  break;
 
-             // --- Error Message ---
              case 'error':
-                 error("[Client] Server Error Message:", data.message);
-                 UI.updateStatus(`Server Error: ${data.message}`, true);
-                 // Handle specific errors causing UI state changes
-                 if (appState.mode === 'multiplayer-client' && (data.message.includes('not found') || data.message.includes('not waiting') || data.message.includes('full') || data.message.includes('finished'))) {
-                     UI.showSection('join-code-section'); appState.mode = 'menu'; // Back to join input
-                 } else if (appState.mode === 'multiplayer-host' && data.message.includes('Creation Error')) {
-                     Game.resetClientState(true); // Back to main menu
-                 } else if (data.message === 'Please create or join a game first.') {
-                      Game.resetClientState(true); // Back to main menu if disconnected/out of sync
-                 }
+                 error("[Client] Server Error:", data.message); UI.updateStatus(`Error: ${data.message}`, true);
+                 if (appState.mode === 'multiplayer-client' && (data.message.includes('not found') || data.message.includes('not waiting') || data.message.includes('full') || data.message.includes('finished'))) { UI.showSection('join-code-section'); appState.mode = 'menu'; }
+                 else if (appState.mode === 'multiplayer-host' && data.message.includes('Creation Error')) { Game.resetClientState(true); }
+                 else if (data.message === 'Please create or join a game first.') { Game.resetClientState(true); }
                  break;
 
-            // Unknown message type
-            default:
-                log(`Unknown message type received: ${data.type}`);
-        } // End switch
-    } catch (handlerError) {
-        error("Error inside handleServerMessage logic:", handlerError, "Data:", data); // Log data too
-        UI.updateStatus("Client error processing message.", true);
-    }
-} // End handleServerMessage
-
-document.addEventListener('DOMContentLoaded', () => {
-    log("DOM fully loaded and parsed."); // #LOG A
-
-    // --- Critical Checks ---
-    if (typeof Renderer === 'undefined') {
-        error("CRITICAL: Renderer is not defined after DOM load!");
-        UI.updateStatus("Initialization Error: Renderer failed. Refresh.", true);
-        return;
-    }
-    if (DOM.canvas) {
-        DOM.ctx = DOM.canvas.getContext('2d');
-        if (!DOM.ctx) {
-            error("Failed to get 2D context!");
-            UI.updateStatus("Error: Cannot get canvas context. Refresh.", true);
-            return;
+            default: log(`Unknown message type: ${data.type}`);
         }
+    } catch (handlerError) { error("Error in handleServerMessage:", handlerError, "Data:", data); UI.updateStatus("Client error processing msg.", true); }
+}
+
+// --- DOMContentLoaded Initializer ---
+document.addEventListener('DOMContentLoaded', () => {
+    log("DOM loaded.");
+    // --- Check for Renderer3D ---
+    if (typeof Renderer3D === 'undefined') {
+        error("CRITICAL: Renderer3D is not defined after DOM load!");
+        UI.updateStatus("Init Error: Renderer failed. Refresh.", true);
+        return; // Stop initialization
+    }
+    // --- Initialize Renderer3D ---
+    if (DOM.canvasContainer) {
+         if (!Renderer3D.init(DOM.canvasContainer)) { // Pass the container
+             error("Renderer3D initialization failed!");
+             UI.updateStatus("Init Error: Graphics failed. Refresh.", true);
+             return; // Stop initialization
+         }
+         log("Renderer3D initialized successfully.");
     } else {
-        error("Canvas element not found!");
-        UI.updateStatus("Error: Canvas element missing. Refresh.", true);
+         error("Canvas container element not found for Renderer init!");
+         UI.updateStatus("Init Error: UI missing. Refresh.", true);
+         return; // Stop initialization
+    }
+    // --- Initialize Listeners ---
+    try {
+        Game.initListeners(); // Call the exported listener setup
+        log("Button listeners initialized via Game.initListeners().");
+    } catch(listenerError) {
+        error("Error initializing button listeners:", listenerError);
+        UI.updateStatus("Init Error: Controls failed. Refresh.", true);
         return;
     }
-    // --- End Critical Checks ---
-
-    UI.updateStatus("Initializing Connection & Listeners...");
-    try {
-        // --- DIRECTLY ATTACH LISTENERS HERE ---
-        log("Directly attaching essential listeners...");
-
-        // Single Player Button
-        if (DOM.singlePlayerBtn) {
-            DOM.singlePlayerBtn.onclick = () => {
-                console.log("--- singlePlayerBtn CLICKED (Direct Attach) ---"); // #LOG D
-                log("Single Player button clicked.");
-                SoundManager.init(); // ! TRY INIT
-                Game.startSinglePlayer(); // Use Game module function
-            };
-            log("Attached listener to singlePlayerBtn.");
-        } else { error("singlePlayerBtn not found in DOM!"); }
-
-        // Host Buttons (Example for one, repeat for others if testing MP)
-        if (DOM.hostGameBtn2) {
-             const hostHandler = (maxPlayers) => {
-                 console.log(`--- hostGameBtn (${maxPlayers}p) CLICKED (Direct Attach) ---`); // #LOG E
-                 log(`Host Game (${maxPlayers}p) button clicked.`);
-                 SoundManager.init(); // ! TRY INIT
-                 Game.hostMultiplayer(maxPlayers); // Use Game module function
-             };
-            DOM.hostGameBtn2.onclick = () => hostHandler(2);
-             // Add similar blocks for hostGameBtn3 and hostGameBtn4 if needed
-            log("Attached listener to hostGameBtn2.");
-        } else { error("hostGameBtn2 not found in DOM!"); }
-
-
-        // Join Button
-        if (DOM.joinGameSubmitBtn) {
-            DOM.joinGameSubmitBtn.onclick = () => {
-                console.log("--- joinGameSubmitBtn CLICKED (Direct Attach) ---"); // #LOG F
-                log("Join Game Submit button clicked.");
-                SoundManager.init(); // ! TRY INIT
-                Game.joinMultiplayer(); // Use Game module function
-            };
-            log("Attached listener to joinGameSubmitBtn.");
-        } else { error("joinGameSubmitBtn not found in DOM!"); }
-
-        // Attach other non-init listeners (can still use Game module methods if exposed)
-        if (DOM.multiplayerBtn) DOM.multiplayerBtn.onclick = () => UI.showSection('multiplayer-menu-section');
-        if (DOM.showJoinUIBtn) DOM.showJoinUIBtn.onclick = () => UI.showSection('join-code-section');
-        if (DOM.cancelHostBtn) DOM.cancelHostBtn.onclick = Game.leaveGame; // Assumes Game.leaveGame exists
-        if (DOM.sendChatBtn) DOM.sendChatBtn.onclick = Game.sendChatMessage; // Assumes Game.sendChatMessage exists
-        if (DOM.leaveGameBtn) DOM.leaveGameBtn.onclick = Game.leaveGame;
-        if (DOM.gameOverBackBtn) DOM.gameOverBackBtn.onclick = () => Game.resetClientState(true); // Assumes Game.resetClientState exists
-
-        // Back buttons (same logic as before)
-        DOM.gameContainer.querySelectorAll('.back-button').forEach(btn => {
-             const targetMatch = btn.getAttribute('onclick')?.match(/'([^']+)'/);
-             if (targetMatch && targetMatch[1]) {
-                 const targetId = targetMatch[1];
-                 if (DOM[targetId] || document.getElementById(targetId)) {
-                     btn.onclick = (e) => { e.preventDefault(); UI.showSection(targetId); };
-                 } else { log(`Warning: Back button target section invalid: ${targetId}`); }
-             } else { log("Warning: Back button found without valid target in onclick:", btn); }
-         });
-
-        log("Finished attaching listeners directly."); // #LOG G
-        // --- END DIRECT ATTACHMENT ---
-
-        // Connect to WebSocket
-        Network.connect(() => { /* Connection success handled within Network.connect */ });
-
-    } catch (initError) {
-        error("Initialization or Listener Attachment failed:", initError);
-        UI.updateStatus("Error initializing game. Please refresh.", true);
-    }
+    // --- Connect WebSocket ---
+    UI.updateStatus("Initializing Connection...");
+    Network.connect(() => { /* Connection success handled internally */ });
 });
