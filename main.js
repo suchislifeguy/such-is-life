@@ -269,8 +269,7 @@ const Input = (() => {
         // Calculate mouse position relative to the container, then scale to internal canvas size
         if (!DOM.canvasContainer) return;
         const rect = DOM.canvasContainer.getBoundingClientRect();
-        const rendererCanvas = renderer ? renderer.domElement : null; // Get the actual canvas from THREE
-
+        
         const containerRawX = event.clientX - rect.left;
         const containerRawY = event.clientY - rect.top;
 
