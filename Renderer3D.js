@@ -1,17 +1,13 @@
 // Renderer3D.js
 import * as THREE from 'three';
 // #TODO: Import necessary addons later (e.g., OrbitControls for debugging, GLTFLoader, EffectComposer, ShaderPass, etc.)
-// import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-// import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-// import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-// import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
 const Renderer3D = (() => {
     console.log("--- Renderer3D.js: Initializing ---");
 
     let scene, camera, renderer, ambientLight, directionalLight;
-    let gameWidth = 1600; // Default, will be updated
-    let gameHeight = 900; // Default, will be updated
+    let gameWidth = 1600;
+    let gameHeight = 900;
 
     // Dictionaries to hold game object representations
     const playerMeshes = {};
@@ -19,225 +15,269 @@ const Renderer3D = (() => {
     const bulletMeshes = {};
     const powerupMeshes = {};
     let groundPlane = null;
-    let snakeObject = null; // #TODO: Representation for the snake
-    let campfireObject = null; // #TODO: Representation for the campfire
+    // #TODO: Representation for the snake
+    // #TODO: Representation for the campfire
 
     // Effect related state
-    let screenShakeOffset = new THREE.Vector3(0, 0, 0); // Applied to camera position
+    let screenShakeOffset = new THREE.Vector3(0, 0, 0);
     let shakeMagnitude = 0;
     let shakeEndTime = 0;
 
-    // Cache frequently used materials/geometries if needed
-    // #TODO: Define materials based on constants
-    const playerMaterial = new THREE.MeshStandardMaterial({ color: 0xDC143C }); // Example Crimson
-    const enemyMaterial = new THREE.MeshStandardMaterial({ color: 0x18315f }); // Example Uniform Blue
-    const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x8FBC8F, side: THREE.DoubleSide }); // Example Day Green
+    // --- Materials (Define upfront) ---
+    // Using MeshStandardMaterial for PBR properties (reacts to light)
+    const playerMaterial = new THREE.MeshStandardMaterial({
+        color: 0xDC143C, // Crimson Red
+        roughness: 0.6,
+        metalness: 0.2,
+    });
+    const enemyChaserMaterial = new THREE.MeshStandardMaterial({
+        color: 0x18315f, // Uniform Blue
+        roughness: 0.7,
+        metalness: 0.1,
+    });
+    const enemyShooterMaterial = new THREE.MeshStandardMaterial({
+        color: 0x556B2F, // Dark Olive Green (Example)
+        roughness: 0.7,
+        metalness: 0.1,
+    });
+    const enemyGiantMaterial = new THREE.MeshStandardMaterial({
+        color: 0xa00000, // Dark Red
+        roughness: 0.5,
+        metalness: 0.3,
+    });
+    const bulletPlayerMaterial = new THREE.MeshBasicMaterial({ color: 0xffed4a }); // Yellow - Basic for visibility
+    const bulletEnemyMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red - Basic for visibility
+    const powerupMaterials = { // Cache materials by type
+        default: new THREE.MeshStandardMaterial({ color: 0x888888 }),
+        health: new THREE.MeshStandardMaterial({ color: 0x81c784 }),
+        gun_upgrade: new THREE.MeshStandardMaterial({ color: 0x442848 }),
+        speed_boost: new THREE.MeshStandardMaterial({ color: 0x3edef3 }),
+        armor: new THREE.MeshStandardMaterial({ color: 0x9e9e9e }),
+        ammo_shotgun: new THREE.MeshStandardMaterial({ color: 0xFFa500 }),
+        ammo_heavy_slug: new THREE.MeshStandardMaterial({ color: 0xA0522D }),
+        ammo_rapid_fire: new THREE.MeshStandardMaterial({ color: 0xFFFF00 }),
+        bonus_score: new THREE.MeshStandardMaterial({ color: 0xFFD700 }),
+    };
+    const groundDayMaterial = new THREE.MeshStandardMaterial({ color: 0x8FBC8F, roughness: 0.8, metalness: 0.1 });
+    const groundNightMaterial = new THREE.MeshStandardMaterial({ color: 0x3E2723, roughness: 0.8, metalness: 0.1 });
 
-    // Constants for game dimensions (match backend if possible)
-    const PLAYER_MESH_HEIGHT = 4.8; // Scaled based on dimensions
-    const ENEMY_MESH_HEIGHT = 4.0;
+    // --- Geometries (Define common ones upfront) ---
+    // Adjust segments for performance vs quality tradeoff
+    const playerGeometry = new THREE.CapsuleGeometry(PLAYER_DEFAULTS.width / 2, PLAYER_DEFAULTS.height - PLAYER_DEFAULTS.width, 4, 8);
+    const enemyChaserGeometry = new THREE.BoxGeometry(ENEMY_DEFAULTS.width, ENEMY_DEFAULTS.height, ENEMY_DEFAULTS.width * 0.7);
+    const enemyShooterGeometry = new THREE.CylinderGeometry(ENEMY_DEFAULTS.width*0.6, ENEMY_DEFAULTS.width*0.6, ENEMY_DEFAULTS.height, 8); // Example different shape
+    const enemyGiantGeometry = new THREE.BoxGeometry(ENEMY_DEFAULTS.width * 2.5, ENEMY_DEFAULTS.height * 2.5, ENEMY_DEFAULTS.width * 0.7 * 2.5); // Scaled box
+    const bulletGeometry = new THREE.SphereGeometry(BULLET_DEFAULTS.radius, 6, 6); // Low poly sphere
+    const powerupGeometry = new THREE.BoxGeometry(POWERUP_DEFAULTS.size, POWERUP_DEFAULTS.size, POWERUP_DEFAULTS.size);
+
+
+    // Constants for mesh positioning
+    const PLAYER_MESH_Y_OFFSET = PLAYER_DEFAULTS.height / 2;
+    const ENEMY_MESH_Y_OFFSET = ENEMY_DEFAULTS.height / 2;
+    const GIANT_MESH_Y_OFFSET = ENEMY_DEFAULTS.height * 2.5 / 2; // Adjust for giant size
+    const BULLET_MESH_Y_OFFSET = BULLET_DEFAULTS.radius;
+    const POWERUP_MESH_Y_OFFSET = POWERUP_DEFAULTS.size / 2 + 1; // Slightly above ground
+
 
     function init(containerElement) {
         console.log("--- Renderer3D.init() ---");
-        if (!containerElement) {
-            console.error("Renderer3D init failed: No container element provided.");
-            return false;
-        }
+        if (!containerElement) { console.error("Renderer3D init failed: No container."); return false; }
 
-        // --- Renderer Setup ---
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setPixelRatio(window.devicePixelRatio);
-        // Size will be set initially based on defaults or appState if available
         renderer.setSize(gameWidth, gameHeight);
-        renderer.shadowMap.enabled = true; // Enable shadows
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         containerElement.appendChild(renderer.domElement);
-        console.log("Renderer created and appended.");
 
-        // --- Scene Setup ---
         scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x333333); // Dark grey background fallback
+        scene.background = new THREE.Color(0x1a2a28); // Use dark background
 
-        // --- Camera Setup (Orthographic for Top-Down) ---
         const aspect = gameWidth / gameHeight;
-        const frustumSize = gameHeight; // Use height as the base size
-        camera = new THREE.OrthographicCamera(
-            frustumSize * aspect / -2, // left
-            frustumSize * aspect / 2,  // right
-            frustumSize / 2,           // top
-            frustumSize / -2,          // bottom
-            1,                         // near
-            2000                       // far - increased to see ground from high up
-        );
-        // Position camera high above the center, looking straight down
-        camera.position.set(gameWidth / 2, 1000, gameHeight / 2); // Positioned above center of game world
-        camera.rotation.x = -Math.PI / 2; // Look straight down (negative 90 degrees)
-        camera.updateProjectionMatrix();
-        scene.add(camera);
-        console.log("Orthographic Camera created.");
+        const frustumSize = gameHeight;
+        camera = new THREE.OrthographicCamera(frustumSize * aspect / -2, frustumSize * aspect / 2, frustumSize / 2, frustumSize / -2, 1, 2000);
+        camera.position.set(gameWidth / 2, 1000, gameHeight / 2);
+        camera.rotation.x = -Math.PI / 2;
+        scene.add(camera); // Add camera to scene BEFORE adding lights if lights target camera
 
-        // --- Lighting Setup ---
-        ambientLight = new THREE.AmbientLight(0xffffff, 0.6); // Soft white light
+        ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambientLight);
 
         directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-        directionalLight.position.set(150, 300, 200); // Position light source
+        directionalLight.position.set(150, 300, 200);
         directionalLight.castShadow = true;
-        // Configure shadow properties
-        directionalLight.shadow.mapSize.width = 2048; // Higher resolution for better shadows
+        directionalLight.shadow.mapSize.width = 2048;
         directionalLight.shadow.mapSize.height = 2048;
         directionalLight.shadow.camera.near = 50;
         directionalLight.shadow.camera.far = 700;
-        // Adjust shadow camera bounds to cover the play area
         directionalLight.shadow.camera.left = -gameWidth / 1.5;
         directionalLight.shadow.camera.right = gameWidth / 1.5;
         directionalLight.shadow.camera.top = gameHeight / 1.5;
         directionalLight.shadow.camera.bottom = -gameHeight / 1.5;
-
         scene.add(directionalLight);
-        scene.add(directionalLight.target); // Target defaults to 0,0,0 which is fine for now
-        console.log("Lighting setup complete.");
+        // No need to add target if it stays at 0,0,0 unless you move it
 
-        // --- Ground Plane Setup ---
-        const groundGeometry = new THREE.PlaneGeometry(gameWidth * 1.5, gameHeight * 1.5); // Make slightly larger than viewport
-        groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
-        groundPlane.rotation.x = -Math.PI / 2; // Rotate plane to be horizontal
-        groundPlane.position.set(gameWidth / 2, 0, gameHeight / 2); // Center the plane
-        groundPlane.receiveShadow = true; // Allow ground to receive shadows
+        const groundGeometryPlane = new THREE.PlaneGeometry(gameWidth * 1.5, gameHeight * 1.5);
+        groundPlane = new THREE.Mesh(groundGeometryPlane, groundDayMaterial); // Start with day material
+        groundPlane.rotation.x = -Math.PI / 2;
+        groundPlane.position.set(gameWidth / 2, 0, gameHeight / 2);
+        groundPlane.receiveShadow = true;
         scene.add(groundPlane);
-        console.log("Ground plane created.");
 
-        // #TODO: Initialize post-processing effects (EffectComposer) here if needed
-
-        // Add resize listener
         window.addEventListener('resize', updateSize);
-        updateSize(); // Call once initially
+        updateSize();
 
         console.log("--- Renderer3D initialization complete ---");
-        return true; // Indicate success
+        return true;
     }
 
     function updateSize() {
-        // Use appState dimensions if available, otherwise defaults
-        const currentWidth = window.innerWidth; // Or get from a specific container
-        const currentHeight = window.innerHeight; // Or get from a specific container
+        // Use dimensions from appState which should be updated by server messages
+        const currentWidth = appState.canvasWidth || gameWidth;
+        const currentHeight = appState.canvasHeight || gameHeight;
 
-        // Calculate the best fit dimensions maintaining aspect ratio
-        const targetAspect = gameWidth / gameHeight;
-        let newCanvasWidth = currentWidth;
-        let newCanvasHeight = currentWidth / targetAspect;
+        renderer.setSize(currentWidth, currentHeight);
 
-        if (newCanvasHeight > currentHeight) {
-            newCanvasHeight = currentHeight;
-            newCanvasWidth = currentHeight * targetAspect;
-        }
-
-        // Update renderer size
-        renderer.setSize(newCanvasWidth, newCanvasHeight);
-
-        // Update camera aspect ratio and projection matrix for Orthographic
-        const aspect = newCanvasWidth / newCanvasHeight;
-        const frustumSize = gameHeight; // Keep frustum height constant
+        const aspect = currentWidth / currentHeight;
+        const frustumSize = currentHeight; // Base frustum on height
         camera.left = frustumSize * aspect / - 2;
         camera.right = frustumSize * aspect / 2;
         camera.top = frustumSize / 2;
         camera.bottom = frustumSize / - 2;
+        camera.position.set(currentWidth / 2, 1000, currentHeight / 2); // Center camera view
         camera.updateProjectionMatrix();
 
-        // Center the camera view over the game world origin
-        // This might need adjustment based on how you handle world coordinates vs view
-        camera.position.set(gameWidth / 2, 1000, gameHeight / 2);
-
-        console.log(`Renderer resized to: ${newCanvasWidth}x${newCanvasHeight}`);
+        console.log(`Renderer resized logic ran. Target: ${currentWidth}x${currentHeight}`);
     }
 
-    // --- Entity Creation Placeholders ---
+    // --- Fleshed Out Creation Functions ---
     function createPlayerMesh(playerData) {
-        // #TODO: Replace with actual model loading later (GLTFLoader)
-        const geometry = new THREE.CapsuleGeometry(playerData.width / 2, playerData.height - playerData.width, 4, 8);
-        // Use unique material per player? Or tint base material? Start simple.
-        const material = playerMaterial.clone(); // Clone to allow potential unique changes later
-        const mesh = new THREE.Mesh(geometry, material);
+        // Using predefined geometry and material
+        const mesh = new THREE.Mesh(playerGeometry, playerMaterial);
         mesh.castShadow = true;
-        mesh.position.set(playerData.x, PLAYER_MESH_HEIGHT / 2, playerData.y); // Y is up in THREE.js
-        mesh.userData.gameId = playerData.id; // Store game ID
+        mesh.position.set(playerData.x, PLAYER_MESH_Y_OFFSET, playerData.y); // Y is up
+        mesh.userData.gameId = playerData.id;
+        // #TODO: Could clone material here if needing unique player colors later
         return mesh;
     }
 
     function createEnemyMesh(enemyData) {
-        // #TODO: Replace with actual model loading later
-        // #TODO: Different geometry/material based on enemyData.type (chaser, shooter, giant)
-        const geometry = new THREE.BoxGeometry(enemyData.width, ENEMY_MESH_HEIGHT, enemyData.width * 0.7); // Example box
-        const material = enemyMaterial.clone();
-        if (enemyData.type === 'giant') { // Example: Giant variation
-            geometry.scale(2.5, 2.5, 2.5); // Scale up geometry for giant
-            material.color.set(0xa00000); // Red color for giant
+        let mesh;
+        if (enemyData.type === 'giant') {
+            mesh = new THREE.Mesh(enemyGiantGeometry, enemyGiantMaterial);
+            mesh.position.set(enemyData.x, GIANT_MESH_Y_OFFSET, playerData.y); // Use specific offset
+        } else if (enemyData.type === 'shooter') {
+            mesh = new THREE.Mesh(enemyShooterGeometry, enemyShooterMaterial);
+            mesh.position.set(enemyData.x, ENEMY_MESH_Y_OFFSET, enemyData.y);
+        } else { // Default chaser
+            mesh = new THREE.Mesh(enemyChaserGeometry, enemyChaserMaterial);
+            mesh.position.set(enemyData.x, ENEMY_MESH_Y_OFFSET, enemyData.y);
         }
-        const mesh = new THREE.Mesh(geometry, material);
         mesh.castShadow = true;
-        mesh.position.set(enemyData.x, ENEMY_MESH_HEIGHT / 2, enemyData.y); // Y is up
         mesh.userData.gameId = enemyData.id;
         return mesh;
     }
 
     function createBulletMesh(bulletData) {
-        // #TODO: Customize based on bulletData.bullet_type
-        const geometry = new THREE.SphereGeometry(bulletData.radius, 8, 8);
-        const material = new THREE.MeshBasicMaterial({ // Basic material, doesn't need light
-            color: bulletData.owner_type === 'player' ? 0xffed4a : 0xff0000
-        });
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(bulletData.x, bulletData.radius, bulletData.y); // Position slightly above ground
+        const material = bulletData.owner_type === 'player' ? bulletPlayerMaterial : bulletEnemyMaterial;
+        const mesh = new THREE.Mesh(bulletGeometry, material);
+        mesh.position.set(bulletData.x, BULLET_MESH_Y_OFFSET, bulletData.y);
         mesh.userData.gameId = bulletData.id;
-        // Bullets typically don't cast shadows for performance
+        // Bullets generally don't cast shadows
         return mesh;
     }
 
     function createPowerupMesh(powerupData) {
-        // #TODO: Different geometry/texture/color based on powerupData.type
-        const geometry = new THREE.BoxGeometry(powerupData.size, powerupData.size, powerupData.size);
-        const material = new THREE.MeshStandardMaterial({ color: 0x888888 }); // Default grey
-        // Example type handling:
-        if (powerupData.type === 'health') material.color.set(0x81c784);
-        else if (powerupData.type === 'ammo_shotgun') material.color.set(0xFFA500);
-        // ... add other types
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(powerupData.x, powerupData.size / 2 + 1, powerupData.y); // Slightly above ground
+        const material = powerupMaterials[powerupData.type] || powerupMaterials.default;
+        const mesh = new THREE.Mesh(powerupGeometry, material);
+        mesh.position.set(powerupData.x, POWERUP_MESH_Y_OFFSET, powerupData.y);
         mesh.castShadow = true;
         mesh.userData.gameId = powerupData.id;
+        // Add rotation animation in render loop if desired
+        mesh.userData.isPowerup = true; // Flag for animation
         return mesh;
     }
 
-    // --- Entity Update Logic ---
-    function updateMeshes(state, meshDict, createFn, defaultHeight) {
+    // --- Entity Update Logic with Disposal ---
+    function updateMeshes(state, meshDict, createFn, defaultYOffset) {
         const activeIds = new Set();
+
+        // Add/Update Meshes
         if (state) {
             for (const id in state) {
                 const data = state[id];
+                // Simple check to skip potentially invalid data early
+                if (typeof data.x !== 'number' || typeof data.y !== 'number') continue;
+
                 activeIds.add(id);
                 let mesh = meshDict[id];
-                if (!mesh) {
-                    // Create mesh if it doesn't exist
-                    mesh = createFn(data);
-                    meshDict[id] = mesh;
-                    scene.add(mesh);
-                } else {
-                    // Update existing mesh position (and potentially rotation, scale, etc.)
-                    const yPos = mesh.geometry.parameters.height ? mesh.geometry.parameters.height / 2 : defaultHeight / 2;
-                    mesh.position.set(data.x, yPos + (data.zOffset || 0), data.y); // Use Z for game Y
-                    // #TODO: Add rotation updates (e.g., player aiming)
-                    // #TODO: Update visibility/material based on state (e.g., fading out dead enemies)
+
+                if (!mesh) { // Create
+                    mesh = createFn(data); // Use the appropriate creation function
+                    if (mesh) { // Ensure mesh was created successfully
+                        meshDict[id] = mesh;
+                        scene.add(mesh);
+                    }
+                } else { // Update
+                    let yPos = defaultYOffset;
+                    // Determine correct Y offset based on type/size if needed
+                    if (mesh.userData.isPowerup) yPos = POWERUP_MESH_Y_OFFSET;
+                    else if (data.type === 'giant') yPos = GIANT_MESH_Y_OFFSET; // Example specific check
+                    else if(mesh.geometry.parameters.height) yPos = mesh.geometry.parameters.height / 2; // Capsule/Box etc.
+                    else if(mesh.geometry.parameters.radius) yPos = mesh.geometry.parameters.radius; // Sphere
+
+                    mesh.position.set(data.x, yPos, data.y); // Game Y is scene Z
+
+                     // --- Fading Out Dead Enemies ---
+                     if (meshDict === enemyMeshes && data.health <= 0 && data.death_timestamp) {
+                        const fadeDuration = 0.3; // seconds
+                        const timeSinceDeath = (performance.now() / 1000) - data.death_timestamp;
+                        const opacity = Math.max(0, 1.0 - (timeSinceDeath / fadeDuration));
+
+                        if (opacity <= 0.01) {
+                            // Mark for removal below instead of making invisible
+                        } else {
+                            mesh.material.opacity = opacity;
+                            mesh.material.transparent = true; // Enable transparency
+                        }
+                    } else if (mesh.material.transparent) {
+                        // Reset opacity if enemy somehow revived or state is wrong
+                        mesh.material.opacity = 1.0;
+                        mesh.material.transparent = false;
+                    }
+                     // --- End Fading ---
+
+                    // Powerup Rotation Example
+                    if (mesh.userData.isPowerup) {
+                        mesh.rotation.y += 0.01; // Simple rotation
+                        mesh.rotation.x += 0.005;
+                    }
                 }
             }
         }
-        // Remove meshes for entities no longer in the state
+
+        // Remove Meshes for inactive entities
         for (const id in meshDict) {
             if (!activeIds.has(id)) {
                 const meshToRemove = meshDict[id];
-                scene.remove(meshToRemove);
-                // #TODO: Dispose geometry and material to free memory
-                // meshToRemove.geometry.dispose();
-                // meshToRemove.material.dispose();
+                if (meshToRemove) {
+                    scene.remove(meshToRemove);
+                    // --- Dispose Resources ---
+                    if (meshToRemove.geometry) {
+                        meshToRemove.geometry.dispose();
+                    }
+                    if (meshToRemove.material) {
+                        // If materials are shared/cloned, disposal needs care.
+                        // If cloned per mesh, safe to dispose. If shared, don't.
+                        // Assuming materials are cloned or unique for now:
+                        if (Array.isArray(meshToRemove.material)) {
+                            meshToRemove.material.forEach(m => m.dispose());
+                        } else {
+                            meshToRemove.material.dispose();
+                        }
+                    }
+                    // --- End Disposal ---
+                }
                 delete meshDict[id];
             }
         }
@@ -248,111 +288,139 @@ const Renderer3D = (() => {
         const playerMesh = playerMeshes[appState.localPlayerId];
         if (playerMesh) {
             const aimDx = appState.localPlayerAimState.lastAimDx;
-            const aimDy = appState.localPlayerAimState.lastAimDy;
-            // Calculate angle based on aim vector (assuming Z is forward)
-            const angle = Math.atan2(aimDx, aimDy); // atan2(x, z) for Y-axis rotation
+            const aimDy = appState.localPlayerAimState.lastAimDy; // This is game Y, which maps to scene Z
+            const angle = Math.atan2(aimDx, aimDy); // atan2(X, Z) for Y rotation
             playerMesh.rotation.y = angle;
         }
+    }
+
+    // --- Day/Night Visual Update ---
+    function updateEnvironment(isNight) {
+        const dayLightIntensity = 1.0;
+        const nightLightIntensity = 0.4;
+        const dayAmbientIntensity = 0.6;
+        const nightAmbientIntensity = 0.2;
+        const dayDirColor = 0xffffff;
+        const nightDirColor = 0xaaaaff; // Bluish moon
+        const dayAmbColor = 0xffffff;
+        const nightAmbColor = 0x444488; // Dark blue ambient
+
+        // Smooth transitions could be added later using a lerp factor
+        ambientLight.intensity = isNight ? nightAmbientIntensity : dayAmbientIntensity;
+        ambientLight.color.setHex(isNight ? nightAmbColor : dayAmbColor);
+
+        directionalLight.intensity = isNight ? nightLightIntensity : dayLightIntensity;
+        directionalLight.color.setHex(isNight ? nightDirColor : dayDirColor);
+
+        // Update ground material
+        groundPlane.material = isNight ? groundNightMaterial : groundDayMaterial;
+
+        // #TODO: Update scene.fog
+        // Example:
+        // if (isNight) {
+        //     scene.fog = new THREE.FogExp2(0x050a15, 0.0015);
+        // } else {
+        //     scene.fog = null; // Or a lighter day fog
+        // }
     }
 
 
     // --- Main Render Function ---
     function renderScene(stateToRender, appState) {
         if (!renderer || !scene || !camera || !stateToRender || !appState) {
-            // console.warn("renderScene called before initialization or with missing state.");
             return;
         }
-
         const now = performance.now();
 
-        // --- Update Camera (Screen Shake) ---
+        // --- Update Camera Shake ---
         if (shakeMagnitude > 0 && now < shakeEndTime) {
              const timeRemaining = shakeEndTime - now;
-             // Use a simple linear decay for now
-             const currentMag = shakeMagnitude * Math.max(0, timeRemaining / (shakeEndTime - (now - timeRemaining))); // Approx initial duration needed
+             const initialDuration = shakeEndTime - (now - timeRemaining); // Estimate duration
+             const currentMag = shakeMagnitude * Math.max(0, timeRemaining / (initialDuration || 1));
              const shakeAngle = Math.random() * Math.PI * 2;
              screenShakeOffset.x = Math.cos(shakeAngle) * currentMag;
-             screenShakeOffset.z = Math.sin(shakeAngle) * currentMag; // Shake on XZ plane
+             screenShakeOffset.z = Math.sin(shakeAngle) * currentMag;
         } else {
              shakeMagnitude = 0;
              screenShakeOffset.set(0, 0, 0);
         }
-        // Apply shake relative to the base camera position
+        // Apply shake relative to the *current* center (in case canvas size changed)
         camera.position.set(
-            gameWidth / 2 + screenShakeOffset.x,
-            1000, // Keep Y position constant
-            gameHeight / 2 + screenShakeOffset.z
+            appState.canvasWidth / 2 + screenShakeOffset.x,
+            1000,
+            appState.canvasHeight / 2 + screenShakeOffset.z
         );
-        camera.updateMatrixWorld(); // Update camera matrices after position change
+        // No need to call updateMatrixWorld manually, render does it.
 
-        // --- Update Lighting (Day/Night) ---
-        // #TODO: Smoothly transition light colors/intensities based on stateToRender.is_night
-        const isNight = stateToRender.is_night;
-        ambientLight.intensity = isNight ? 0.2 : 0.6;
-        directionalLight.intensity = isNight ? 0.4 : 1.0;
-        // #TODO: Change light colors for night (e.g., bluish ambient, pale moon directional)
-        // #TODO: Optionally move directional light position for 'moon' effect
-
-        // --- Update Ground ---
-        // #TODO: Update ground texture/material based on is_night
-        // Example: groundMaterial.map = isNight ? nightTexture : dayTexture; groundMaterial.needsUpdate = true;
+        // --- Update Environment Visuals (Day/Night) ---
+        updateEnvironment(stateToRender.is_night);
 
         // --- Sync Game Objects with Meshes ---
-        updateMeshes(stateToRender.players, playerMeshes, createPlayerMesh, PLAYER_MESH_HEIGHT);
-        updateMeshes(stateToRender.enemies, enemyMeshes, createEnemyMesh, ENEMY_MESH_HEIGHT);
-        updateMeshes(stateToRender.bullets, bulletMeshes, createBulletMesh, 1); // Default height guess for bullets
-        updateMeshes(stateToRender.powerups, powerupMeshes, createPowerupMesh, 10); // Default height guess
+        updateMeshes(stateToRender.players, playerMeshes, createPlayerMesh, PLAYER_MESH_Y_OFFSET);
+        updateMeshes(stateToRender.enemies, enemyMeshes, createEnemyMesh, ENEMY_MESH_Y_OFFSET); // Uses specific offsets inside create/update now
+        updateMeshes(stateToRender.bullets, bulletMeshes, createBulletMesh, BULLET_MESH_Y_OFFSET);
+        updateMeshes(stateToRender.powerups, powerupMeshes, createPowerupMesh, POWERUP_MESH_Y_OFFSET);
 
-        // Update player aiming based on client-side input state
+        // Update local player aiming rotation
         updatePlayerAiming(appState);
 
-        // #TODO: Update Snake object/mesh based on snake data in main.js
-        // #TODO: Update Campfire object/mesh/particles based on stateToRender.campfire
+        // #TODO: Update Snake object/mesh
+        // #TODO: Update Campfire object/mesh/particles
 
-        // #TODO: Update UI elements (Sprites or HTML overlays)
-        // - Health bars, damage text, speech bubbles
+        // #TODO: Update UI elements (Health bars, damage text, speech bubbles via Sprites or HTML)
 
-        // #TODO: Update Particles (muzzle flash, hit sparks, casings, rain, dust)
+        // --- Update Particles & Effects ---
+        // #TODO: Muzzle Flash (e.g., toggle a PointLight visibility/intensity based on localPlayerMuzzleFlash)
+        // #TODO: Hit Sparks (e.g., manage a THREE.Points system based on activeBloodSparkEffects)
+        // #TODO: Ammo Casings (Create/update THREE.InstancedMesh or individual meshes based on activeAmmoCasings)
+        // #TODO: Rain/Dust (Manage THREE.Points particle systems)
 
-        // --- Render the Scene ---
+        // --- Render ---
         renderer.render(scene, camera);
-
-        // #TODO: Render post-processing effects using EffectComposer if implemented
-        // composer.render();
+        // #TODO: composer.render(); // If using post-processing
     }
 
-    // --- Effect Triggers ---
     function triggerShake(magnitude, durationMs) {
         const now = performance.now();
         const newEndTime = now + durationMs;
-        // Combine shakes: Use max magnitude and longest duration
         if (magnitude >= shakeMagnitude || newEndTime > shakeEndTime) {
             shakeMagnitude = Math.max(magnitude, shakeMagnitude);
             shakeEndTime = Math.max(newEndTime, shakeEndTime);
-            // console.log(`Triggering shake: Mag=${shakeMagnitude.toFixed(1)}, EndTime=${shakeEndTime.toFixed(0)}`);
         }
     }
 
-    // #TODO: Add functions to trigger other effects (muzzle flash, particles)
-
-
-    // --- Cleanup ---
     function cleanup() {
         console.log("--- Renderer3D Cleanup ---");
         window.removeEventListener('resize', updateSize);
-        // #TODO: Dispose all geometries, materials, textures
-        // #TODO: Remove all objects from the scene explicitly
-        // #TODO: Stop any ongoing animations or effect updates
+
+        // Remove all objects from the scene
+        while(scene.children.length > 0){
+            const child = scene.children[0];
+            scene.remove(child);
+            // Attempt to dispose geometry/material if applicable
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) {
+                 if (Array.isArray(child.material)) {
+                     child.material.forEach(m => m.dispose());
+                 } else {
+                     child.material.dispose();
+                 }
+            }
+            // #TODO: Dispose textures if loaded
+        }
+
+        // Dispose renderer
         if (renderer) {
             renderer.dispose();
-            if (renderer.domElement.parentNode) {
+            if (renderer.domElement?.parentNode) {
                 renderer.domElement.parentNode.removeChild(renderer.domElement);
             }
             renderer = null;
         }
-        scene = null;
-        camera = null;
-        // Clear mesh dictionaries
+        scene = null; camera = null; groundPlane = null;
+        ambientLight = null; directionalLight = null;
+
+        // Clear mesh dictionaries (references are gone, objects disposed above)
         Object.keys(playerMeshes).forEach(id => delete playerMeshes[id]);
         Object.keys(enemyMeshes).forEach(id => delete enemyMeshes[id]);
         Object.keys(bulletMeshes).forEach(id => delete bulletMeshes[id]);
@@ -361,21 +429,14 @@ const Renderer3D = (() => {
         console.log("Renderer3D resources released.");
     }
 
-
-    // --- Exported Module ---
     return {
         init,
         renderScene,
-        updateSize, // Expose if main.js needs to trigger resize manually
+        updateSize,
         triggerShake,
         cleanup
-        // #TODO: Export functions for triggering other effects as needed
     };
 
 })();
 
-// Make it available globally or ensure main.js imports it correctly
-// Example for global exposure (if not using modules strictly):
-// window.Renderer3D = Renderer3D;
-
-export default Renderer3D; // Use export default if main.js imports it as a module
+export default Renderer3D;
