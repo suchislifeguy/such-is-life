@@ -9,7 +9,7 @@ const SHOOT_COOLDOWN = 750; const RAPID_FIRE_COOLDOWN_MULTIPLIER = 0.4;
 const INPUT_SEND_INTERVAL = 33; const RECONNECT_DELAY = 3000;
 const PLAYER_DEFAULTS = { width: 25, height: 48, max_health: 100, base_speed: 150 };
 const PLAYER_STATUS_ALIVE = 'alive'; const PLAYER_STATUS_DOWN = 'down'; const PLAYER_STATUS_DEAD = 'dead';
-const SNAKE_BITE_DURATION = 8.0;
+const SNAKE_BITE_DURATION = 8.0; // Example, ensure consistency if needed
 
 // --- Utility Functions ---
 function getCssVar(varName) { return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || ''; }
@@ -39,11 +39,12 @@ const DOM = {
 let appState = {
     mode: 'menu', localPlayerId: null, maxPlayersInGame: null, currentGameId: null,
     serverState: null, animationFrameId: null, isConnected: false,
-    renderedPlayerPos: { x: 0, y: 0 }, predictedPlayerPos: { x: 0, y: 0 },
+    renderedPlayerPos: { x: 800, y: 450 }, // Default center
+    predictedPlayerPos: { x: 800, y: 450 }, // Default center
     lastServerState: null, previousServerState: null, lastLoopTime: null,
     lastStateReceiveTime: performance.now(), currentTemp: 18.0, isRaining: false,
     isDustStorm: false, targetTint: null, targetTintAlpha: 0.0,
-    canvasWidth: 1600, canvasHeight: 900,
+    canvasWidth: 1600, canvasHeight: 900, // Will be updated by server state
     uiPositions: {}, localPlayerAimState: { lastAimDx: 0, lastAimDy: -1 },
 };
 
@@ -56,11 +57,10 @@ let activeAmmoCasings = []; let activeBloodSparkEffects = {};
 let snake = {
     segmentLength: 6.0, segments: [], maxSegments: 12, frequency: 0.03, amplitude: 15.0,
     lineWidth: 3, serverHeadX: 0, serverHeadY: 0, serverBaseY: 0, isActiveFromServer: false,
-    // Simple update function (Renderer3D handles visualization)
-    update: function(currentTime) { if (!this.isActiveFromServer) { this.segments = []; } }
+    update: function(currentTime) { if (!this.isActiveFromServer) this.segments = []; }
 };
 
-// Combine states needed directly by Renderer3D
+// Combine states needed by Renderer3D
 let localEffects = {
     muzzleFlash: localPlayerMuzzleFlash, pushbackAnim: localPlayerPushbackAnim,
     activeBloodSparkEffects: activeBloodSparkEffects, activeAmmoCasings: activeAmmoCasings,
@@ -97,7 +97,7 @@ const UI = (() => {
     function updateCountdown(serverState) { if (!DOM.countdownDiv || !DOM.dayNightIndicator) return; const isCountdown = serverState?.status === 'countdown' && serverState?.countdown >= 0; DOM.countdownDiv.textContent = isCountdown ? Math.ceil(serverState.countdown) : ''; DOM.countdownDiv.style.display = isCountdown ? 'block' : 'none'; DOM.dayNightIndicator.style.display = (serverState?.status === 'active') ? 'block' : 'none'; }
     function updateDayNight(serverState) { if (!DOM.dayNightIndicator || !DOM.gameContainer) return; if (serverState?.status === 'active') { const isNight = serverState.is_night; DOM.dayNightIndicator.textContent = isNight ? 'Night' : 'Day'; DOM.dayNightIndicator.style.display = 'block'; DOM.gameContainer.classList.toggle('night-mode', isNight); } else { DOM.dayNightIndicator.style.display = 'none'; DOM.gameContainer.classList.remove('night-mode'); } }
     function showGameOver(finalState) { if (!DOM.finalStatsDiv || !DOM.gameOverScreen) return; const player = finalState?.players?.[appState.localPlayerId]; let statsHtml = "Stats Unavailable"; if (player) { statsHtml = `<div class="final-stat-item"><strong>Score:</strong> ${player.score ?? 0}</div><div class="final-stat-item"><strong>Kills:</strong> ${player.kills ?? 0}</div>`; } DOM.finalStatsDiv.innerHTML = statsHtml; log("UI: Showing game over screen."); showSection('game-over-screen'); }
-    function updateEnvironmentDisplay() { const tempIndicator = document.getElementById('temperature-indicator'); if (!tempIndicator) return; if ((appState.currentTemp === null && appState.serverState?.status !== 'active') || appState.mode === 'menu') { tempIndicator.style.display = 'none'; return; } tempIndicator.style.display = 'block'; const temp = appState.currentTemp; tempIndicator.innerHTML = `${temp.toFixed(0)}°C`; }
+    function updateEnvironmentDisplay() { const tempIndicator = document.getElementById('temperature-indicator'); if (!tempIndicator) return; if (appState.mode === 'menu' || !appState.serverState || appState.serverState.status !== 'active') { tempIndicator.style.display = 'none'; return; } tempIndicator.style.display = 'block'; const temp = appState.currentTemp; tempIndicator.innerHTML = `${temp.toFixed(0)}°C`; }
     return { showSection, updateStatus, updateHUD, addChatMessage, updateCountdown, updateDayNight, showGameOver, updateEnvironmentDisplay };
 })();
 
@@ -106,7 +106,7 @@ const Network = (() => {
     let reconnectTimer = null;
     function connect(onOpenCallback) { if (socket && socket.readyState !== WebSocket.CLOSED) { if (socket.readyState === WebSocket.OPEN && onOpenCallback) onOpenCallback(); return; } clearTimeout(reconnectTimer); UI.updateStatus('Connecting...'); log("WS connect:", WEBSOCKET_URL); try { socket = new WebSocket(WEBSOCKET_URL); } catch (err) { error("WS creation failed:", err); UI.updateStatus('Connection failed.', true); return; } socket.onopen = () => { log('WS open.'); appState.isConnected = true; const loadingScreen = document.getElementById('loading-screen'); const gameContainer = DOM.gameContainer; if (loadingScreen) { loadingScreen.style.opacity = '0'; loadingScreen.style.pointerEvents = 'none'; } if (gameContainer) { gameContainer.style.visibility = 'visible'; gameContainer.style.opacity = '1'; } UI.updateStatus('Connected.'); UI.showSection('main-menu-section'); if (onOpenCallback) onOpenCallback(); }; socket.onmessage = handleServerMessage; socket.onerror = (event) => { error('WS Error:', event); }; socket.onclose = (event) => { error(`WS Closed: Code=${event.code}, Reason='${event.reason||'N/A'}'`); const wasConnected = appState.isConnected; appState.isConnected = false; socket = null; Game.resetClientState(false); if (event.code === 1000) { UI.updateStatus('Disconnected.'); UI.showSection('main-menu-section'); } else if (wasConnected) { UI.updateStatus('Connection lost. Reconnecting...', true); scheduleReconnect(); } else { UI.updateStatus('Connection failed.', true); } if (appState.animationFrameId) { cancelAnimationFrame(appState.animationFrameId); appState.animationFrameId = null; Input.cleanup(); log("Game loop stopped: connection close."); } }; }
     function scheduleReconnect() { clearTimeout(reconnectTimer); log(`Reconnect in ${RECONNECT_DELAY}ms`); reconnectTimer = setTimeout(() => { log("Reconnecting..."); connect(() => { UI.updateStatus('Reconnected.'); UI.showSection('main-menu-section'); }); }, RECONNECT_DELAY); }
-    function sendMessage(payload) { if (socket && socket.readyState === WebSocket.OPEN) { try { socket.send(JSON.stringify(payload)); } catch (err) { error("Send error:", err, payload); } } else { /* error('WS not open.', payload); */ } } // Silence error if not open
+    function sendMessage(payload) { if (socket && socket.readyState === WebSocket.OPEN) { try { socket.send(JSON.stringify(payload)); } catch (err) { error("Send error:", err, payload); } } }
     function closeConnection(code = 1000, reason = "User action") { clearTimeout(reconnectTimer); if (socket && socket.readyState === WebSocket.OPEN) { log(`Closing WS: ${reason} (${code})`); socket.close(code, reason); } socket = null; appState.isConnected = false; }
     return { connect, sendMessage, closeConnection };
 })();
@@ -126,7 +126,7 @@ const Input = (() => {
     function handleChatEnter(e) { if (e.key === 'Enter') { e.preventDefault(); Game.sendChatMessage(); } }
     function getMovementInputVector() { let dx = 0, dy = 0; if (keys['w'] || keys['arrowup']) dy -= 1; if (keys['s'] || keys['arrowdown']) dy += 1; if (keys['a'] || keys['arrowleft']) dx -= 1; if (keys['d'] || keys['arrowright']) dx += 1; if (dx !== 0 && dy !== 0) { const factor = 1 / Math.sqrt(2); dx *= factor; dy *= factor; } return { dx, dy }; }
     function sendMovementInput() { if (appState.mode !== 'menu' && appState.serverState?.status === 'active' && appState.isConnected) { Network.sendMessage({ type: 'player_move', direction: getMovementInputVector() }); } }
-    function handleShooting() { if (appState.serverState?.status !== 'active') return; const playerState = appState.serverState?.players?.[appState.localPlayerId]; if (!playerState || playerState.player_status !== 'alive') return; const currentAmmo = playerState?.active_ammo_type || 'standard'; const isRapidFire = currentAmmo === 'ammo_rapid_fire'; const cooldownMultiplier = isRapidFire ? RAPID_FIRE_COOLDOWN_MULTIPLIER : 1.0; const actualCooldown = SHOOT_COOLDOWN * cooldownMultiplier; const nowTimestamp = Date.now(); if (nowTimestamp - lastShotTime < actualCooldown) return; lastShotTime = nowTimestamp; const playerRenderX = appState.renderedPlayerPos.x; const playerRenderY = appState.renderedPlayerPos.y; if (typeof playerRenderX !== 'number' || typeof playerRenderY !== 'number' || typeof mouseCanvasPos.x !== 'number' || typeof mouseCanvasPos.y !== 'number') return; let aimDx = mouseCanvasPos.x - playerRenderX; let aimDy = mouseCanvasPos.y - playerRenderY; const aimMagSq = aimDx * aimDx + aimDy * aimDy; if (aimMagSq > 1) { const aimMag = Math.sqrt(aimMagSq); aimDx /= aimMag; aimDy /= aimMag; } else { aimDx = 0; aimDy = -1; } const nowPerf = performance.now(); localPlayerMuzzleFlash.active = true; localPlayerMuzzleFlash.endTime = nowPerf + 75; localPlayerMuzzleFlash.aimDx = aimDx; localPlayerMuzzleFlash.aimDy = aimDy; appState.localPlayerAimState.lastAimDx = aimDx; appState.localPlayerAimState.lastAimDy = aimDy; Network.sendMessage({ type: 'player_shoot', target: { x: mouseCanvasPos.x, y: mouseCanvasPos.y } }); SoundManager.playSound('shoot'); const casingLifetime = 500 + Math.random() * 300; const ejectAngleOffset = Math.PI / 2 + (Math.random() - 0.5) * 0.4; const ejectAngle = Math.atan2(aimDy, aimDx) + ejectAngleOffset; const ejectSpeed = 80 + Math.random() * 40; const gravity = 150; if (typeof activeAmmoCasings === 'undefined' || !Array.isArray(activeAmmoCasings)) { activeAmmoCasings = []; } const casing = { id: `casing_${nowPerf}_${Math.random().toString(16).slice(2)}`, x: playerRenderX + Math.cos(ejectAngle) * 15, y: playerRenderY + Math.sin(ejectAngle) * 15 - 10, vx: Math.cos(ejectAngle) * ejectSpeed, vy: Math.sin(ejectAngle) * ejectSpeed - 40, rotation: Math.random() * Math.PI * 2, rotationSpeed: (Math.random() - 0.5) * 10, spawnTime: nowPerf, lifetime: casingLifetime, gravity: gravity, width: 6, height: 3, color: "rgba(218, 165, 32, 0.9)" }; activeAmmoCasings.push(casing); if (activeAmmoCasings.length > 50) { activeAmmoCasings.shift(); } }
+    function handleShooting() { if (appState.serverState?.status !== 'active') return; const playerState = appState.serverState?.players?.[appState.localPlayerId]; if (!playerState || playerState.player_status !== 'alive') return; const currentAmmo = playerState?.active_ammo_type || 'standard'; const isRapidFire = currentAmmo === 'ammo_rapid_fire'; const cooldownMultiplier = isRapidFire ? RAPID_FIRE_COOLDOWN_MULTIPLIER : 1.0; const actualCooldown = SHOOT_COOLDOWN * cooldownMultiplier; const nowTimestamp = Date.now(); if (nowTimestamp - lastShotTime < actualCooldown) return; lastShotTime = nowTimestamp; const playerRenderX = appState.renderedPlayerPos.x; const playerRenderY = appState.renderedPlayerPos.y; if (typeof playerRenderX !== 'number' || typeof playerRenderY !== 'number' || typeof mouseCanvasPos.x !== 'number' || typeof mouseCanvasPos.y !== 'number') { console.error("Invalid pos for shooting", appState.renderedPlayerPos, mouseCanvasPos); return; } let aimDx = mouseCanvasPos.x - playerRenderX; let aimDy = mouseCanvasPos.y - playerRenderY; const aimMagSq = aimDx * aimDx + aimDy * aimDy; if (aimMagSq > 1) { const aimMag = Math.sqrt(aimMagSq); aimDx /= aimMag; aimDy /= aimMag; } else { aimDx = 0; aimDy = -1; } const nowPerf = performance.now(); localPlayerMuzzleFlash.active = true; localPlayerMuzzleFlash.endTime = nowPerf + 75; localPlayerMuzzleFlash.aimDx = aimDx; localPlayerMuzzleFlash.aimDy = aimDy; appState.localPlayerAimState.lastAimDx = aimDx; appState.localPlayerAimState.lastAimDy = aimDy; Network.sendMessage({ type: 'player_shoot', target: { x: mouseCanvasPos.x, y: mouseCanvasPos.y } }); SoundManager.playSound('shoot'); const casingLifetime = 500 + Math.random() * 300; const ejectAngleOffset = Math.PI / 2 + (Math.random() - 0.5) * 0.4; const ejectAngle = Math.atan2(aimDy, aimDx) + ejectAngleOffset; const ejectSpeed = 80 + Math.random() * 40; const gravity = 150; if (typeof activeAmmoCasings === 'undefined' || !Array.isArray(activeAmmoCasings)) { activeAmmoCasings = []; } const casing = { id: `casing_${nowPerf}_${Math.random().toString(16).slice(2)}`, x: playerRenderX + Math.cos(ejectAngle) * 15, y: playerRenderY + Math.sin(ejectAngle) * 15 - 10, vx: Math.cos(ejectAngle) * ejectSpeed, vy: Math.sin(ejectAngle) * ejectSpeed - 40, rotation: Math.random() * Math.PI * 2, rotationSpeed: (Math.random() - 0.5) * 10, spawnTime: nowPerf, lifetime: casingLifetime, gravity: gravity, width: 6, height: 3, color: "rgba(218, 165, 32, 0.9)" }; activeAmmoCasings.push(casing); if (activeAmmoCasings.length > 50) { activeAmmoCasings.shift(); } }
     return { setup, cleanup, getMovementInputVector, handleShooting, isShootHeld };
 })();
 
@@ -155,19 +155,16 @@ const Game = (() => {
     function updateHtmlOverlays(stateToRender, appState) {
         if (!DOM.htmlOverlay || !stateToRender || !appState.uiPositions) return;
         const overlay = DOM.htmlOverlay; const now = performance.now();
-        const players = stateToRender.players || {};
-        const enemies = stateToRender.enemies || {};
+        const players = stateToRender.players || {}; const enemies = stateToRender.enemies || {};
         const damageTexts = stateToRender.damage_texts || {};
-        const allBubbles = { ...activeSpeechBubbles, ...activeEnemyBubbles }; // Local state
+        const allBubbles = { ...activeSpeechBubbles, ...activeEnemyBubbles };
 
-        // --- Manage Active Elements ---
         const activeDamageIds = new Set(Object.keys(damageTexts));
-        const activeHealthBarIds = new Set([...Object.keys(players), ...Object.keys(enemies)]);
-        const activeBubbleIds = new Set();
-        for (const id in allBubbles) { if (now < allBubbles[id].endTime) activeBubbleIds.add(id); }
+        const activeHealthBarIds = new Set(); // Populate below
+        const activeBubbleIds = new Set(); for (const id in allBubbles) { if (now < allBubbles[id].endTime) activeBubbleIds.add(id); }
 
         // --- Damage Text ---
-        for (const id in damageTexts) { /* ... (logic as before, using pooling) ... */
+        for (const id in damageTexts) {
              const dtData = damageTexts[id]; const posData = appState.uiPositions[id]; if (!posData) continue;
              let element = damageTextElements[id]; if (!element) { element = inactiveDamageTextElements.pop() || document.createElement('div'); element.className = 'overlay-element damage-text-overlay'; element.style.position = 'absolute'; element.style.display = 'block'; overlay.appendChild(element); damageTextElements[id] = element; }
              element.textContent = dtData.text; element.classList.toggle('crit', dtData.is_crit || false);
@@ -181,79 +178,60 @@ const Game = (() => {
         const healthBarHighColor = getCssVar('--health-bar-high') || '#66bb6a'; const healthBarMediumColor = getCssVar('--health-bar-medium') || '#FFD700';
         const healthBarLowColor = getCssVar('--health-bar-low') || '#DC143C'; const armorBarColor = getCssVar('--powerup-armor') || '#9e9e9e'; const healthBarBgColor = getCssVar('--health-bar-bg') || '#444';
 
-        for (const id in appState.uiPositions) {
-            const posData = appState.uiPositions[id];
-            const entityData = players[id] || enemies[id];
-            if (!entityData || entityData.health <= 0 || entityData.player_status === PLAYER_STATUS_DOWN || entityData.player_status === PLAYER_STATUS_DEAD) {
-                activeHealthBarIds.delete(id); // Remove if dead/down
-                continue;
-            }
+        const processEntityForHealthBar = (id, entityData) => {
+            if (!entityData || entityData.health <= 0 || entityData.player_status === PLAYER_STATUS_DOWN || entityData.player_status === PLAYER_STATUS_DEAD) return; // Skip dead/down
+            const posData = appState.uiPositions[id]; if (!posData) return; // Skip if no position data
+            activeHealthBarIds.add(id); // Mark as active
 
-            const entityWidth = entityData.width || (entityData.id in players ? PLAYER_DEFAULTS.width : 20); // Guess width if missing
-            const barWidth = Math.max(minBarWidth, entityWidth * healthBarWidthFactor);
-            const maxHealth = entityData.max_health || 100;
-            const healthPercent = Math.max(0, Math.min(1, entityData.health / maxHealth));
-            const currentHealthWidth = barWidth * healthPercent;
-            const armorPercent = Math.max(0, Math.min(1, (entityData.armor || 0) / 100));
-            const currentArmorWidth = barWidth * armorPercent;
+            const entityWidth = entityData.width || (id in players ? PLAYER_DEFAULTS.width : 20); const barWidth = Math.max(minBarWidth, entityWidth * healthBarWidthFactor);
+            const maxHealth = entityData.max_health || 100; const healthPercent = Math.max(0, Math.min(1, entityData.health / maxHealth));
+            const currentHealthWidth = barWidth * healthPercent; const armorPercent = Math.max(0, Math.min(1, (entityData.armor || 0) / 100));
+            const currentArmorWidth = barWidth * armorPercent; const showArmor = entityData.armor > 0;
 
             let barContainer = healthBarElements[id];
             if (!barContainer) {
                  barContainer = inactiveHealthBarElements.pop();
-                 if (!barContainer) { // Create new if pool empty
+                 if (!barContainer) {
                      barContainer = document.createElement('div'); barContainer.className = 'overlay-element health-bar-container'; barContainer.style.position = 'absolute';
                      const healthBg = document.createElement('div'); healthBg.className = 'health-bar-bg'; healthBg.style.height = `${healthBarHeight}px`; healthBg.style.backgroundColor = healthBarBgColor; barContainer.appendChild(healthBg);
                      const healthFg = document.createElement('div'); healthFg.className = 'health-bar-fg'; healthFg.style.height = `${healthBarHeight}px`; healthFg.style.position = 'absolute'; healthFg.style.top = '0'; healthFg.style.left = '0'; barContainer.appendChild(healthFg);
                      const armorBg = document.createElement('div'); armorBg.className = 'armor-bar-bg'; armorBg.style.height = `${armorBarHeight}px`; armorBg.style.position = 'absolute'; armorBg.style.top = `${healthBarHeight + barSpacing}px`; armorBg.style.left = '0'; armorBg.style.backgroundColor = healthBarBgColor; barContainer.appendChild(armorBg);
                      const armorFg = document.createElement('div'); armorFg.className = 'armor-bar-fg'; armorFg.style.height = `${armorBarHeight}px`; armorFg.style.position = 'absolute'; armorFg.style.top = `${healthBarHeight + barSpacing}px`; armorFg.style.left = '0'; armorFg.style.backgroundColor = armorBarColor; barContainer.appendChild(armorFg);
                      overlay.appendChild(barContainer);
-                 } else {
-                     barContainer.style.display = 'block'; // Make visible if reused
-                 }
+                 } else { barContainer.style.display = 'block'; }
                  healthBarElements[id] = barContainer;
             }
+             barContainer.style.left = `${posData.screenX}px`; barContainer.style.top = `${posData.screenY + healthBarOffsetY}px`; barContainer.style.width = `${barWidth}px`; barContainer.style.transform = 'translateX(-50%)';
+             const healthBgEl = barContainer.children[0]; const healthFgEl = barContainer.children[1]; const armorBgEl = barContainer.children[2]; const armorFgEl = barContainer.children[3];
+             healthBgEl.style.width = `${barWidth}px`; healthFgEl.style.width = `${currentHealthWidth}px`;
+             if (healthPercent > 0.66) healthFgEl.style.backgroundColor = healthBarHighColor; else if (healthPercent > 0.33) healthFgEl.style.backgroundColor = healthBarMediumColor; else healthFgEl.style.backgroundColor = healthBarLowColor;
+             armorBgEl.style.display = showArmor ? 'block' : 'none'; armorFgEl.style.display = showArmor ? 'block' : 'none';
+             if(showArmor) { armorBgEl.style.width = `${barWidth}px`; armorFgEl.style.width = `${currentArmorWidth}px`; }
+        };
 
-             // Position container
-             barContainer.style.left = `${posData.screenX}px`;
-             barContainer.style.top = `${posData.screenY + healthBarOffsetY}px`;
-             barContainer.style.width = `${barWidth}px`;
-             barContainer.style.transform = 'translateX(-50%)'; // Center
+        Object.entries(players).forEach(([id, data]) => processEntityForHealthBar(id, data));
+        Object.entries(enemies).forEach(([id, data]) => processEntityForHealthBar(id, data));
 
-             // Update Health Bar
-             const healthBgEl = barContainer.children[0]; const healthFgEl = barContainer.children[1];
-             healthBgEl.style.width = `${barWidth}px`;
-             healthFgEl.style.width = `${currentHealthWidth}px`;
-             if (healthPercent > 0.66) healthFgEl.style.backgroundColor = healthBarHighColor;
-             else if (healthPercent > 0.33) healthFgEl.style.backgroundColor = healthBarMediumColor;
-             else healthFgEl.style.backgroundColor = healthBarLowColor;
-
-             // Update Armor Bar
-             const armorBgEl = barContainer.children[2]; const armorFgEl = barContainer.children[3];
-             const showArmor = entityData.armor > 0;
-             armorBgEl.style.display = showArmor ? 'block' : 'none';
-             armorFgEl.style.display = showArmor ? 'block' : 'none';
-             if(showArmor) {
-                 armorBgEl.style.width = `${barWidth}px`;
-                 armorFgEl.style.width = `${currentArmorWidth}px`;
-             }
-        }
-        // Return unused health bar elements to pool
         for (const id in healthBarElements) { if (!activeHealthBarIds.has(id)) { const elementToPool = healthBarElements[id]; elementToPool.style.display = 'none'; inactiveHealthBarElements.push(elementToPool); delete healthBarElements[id]; } }
-
 
         // --- Speech Bubbles ---
         const playerSpeechBubbleBg = "rgba(0, 0, 0, 0.7)"; const playerSpeechBubbleColor = "#d0d8d7";
         const enemySpeechBubbleBg = "rgba(70, 0, 0, 0.7)"; const enemySpeechBubbleColor = "#FFAAAA";
-        for (const id in allBubbles) { /* ... (logic as before, using pooling) ... */
-            const bubbleData = allBubbles[id]; if (now >= bubbleData.endTime) continue; const posData = appState.uiPositions[id]; if (!posData) continue;
-            let element = speechBubbleElements[id]; if (!element) { element = inactiveSpeechBubbleElements.pop() || document.createElement('div'); element.style.position='absolute'; element.style.padding='5px 8px'; element.style.borderRadius='5px'; element.style.fontSize='13px'; element.style.textAlign='center'; element.style.maxWidth='150px'; element.style.wordWrap='break-word'; element.className='overlay-element'; overlay.appendChild(element); speechBubbleElements[id] = element; }
+        for (const id in allBubbles) {
+            const bubbleData = allBubbles[id]; if (now >= bubbleData.endTime || !activeBubbleIds.has(id)) continue; const posData = appState.uiPositions[id]; if (!posData) continue;
+            let element = speechBubbleElements[id]; if (!element) { element = inactiveSpeechBubbleElements.pop() || document.createElement('div'); element.style.position='absolute'; element.style.padding='5px 8px'; element.style.borderRadius='5px'; element.style.fontSize='13px'; element.style.textAlign='center'; element.style.maxWidth='150px'; element.style.wordWrap='break-word'; element.className='overlay-element speech-bubble'; overlay.appendChild(element); speechBubbleElements[id] = element; }
             element.textContent = bubbleData.text; element.style.display = 'block';
             const isPlayer = !!stateToRender.players[id]; element.style.backgroundColor = isPlayer ? playerSpeechBubbleBg : enemySpeechBubbleBg; element.style.color = isPlayer ? playerSpeechBubbleColor : enemySpeechBubbleColor;
-            const bubbleOffsetY = -45 - (healthBarElements[id] ? (healthBarHeight + (players[id]?.armor>0?armorBarHeight+barSpacing:0) + barSpacing) : 0) ; // Adjust if health bar exists
+            const healthBarExists = activeHealthBarIds.has(id);
+            const armorVisible = healthBarExists && (players[id]?.armor > 0 || enemies[id]?.armor > 0); // Simplified check
+            const baseOffsetY = -45;
+            const healthBarTotalHeight = healthBarExists ? (healthBarHeight + (armorVisible ? armorBarHeight + barSpacing : 0) + barSpacing) : 0;
+            const bubbleOffsetY = baseOffsetY - healthBarTotalHeight;
             element.style.left = `${posData.screenX}px`; element.style.top = `${posData.screenY + bubbleOffsetY}px`; element.style.transform = 'translateX(-50%)';
         }
         for (const id in speechBubbleElements) { if (!activeBubbleIds.has(id)) { const elementToPool = speechBubbleElements[id]; elementToPool.style.display = 'none'; inactiveSpeechBubbleElements.push(elementToPool); delete speechBubbleElements[id]; } }
     }
+
 
     // --- Game Loop ---
     function gameLoop(currentTime) {
@@ -266,7 +244,7 @@ const Game = (() => {
         const deltaTime = Math.min(0.1, (now - appState.lastLoopTime) / 1000);
         appState.lastLoopTime = now;
 
-        if (typeof snake !== 'undefined' && typeof snake.update === 'function') snake.update(now); // Snake state update
+        if (typeof snake !== 'undefined' && typeof snake.update === 'function') snake.update(now);
         if (appState.serverState?.status === 'active' && Input.isShootHeld()) Input.handleShooting();
 
         activeAmmoCasings = activeAmmoCasings.filter(c => (now - c.spawnTime) < c.lifetime);
@@ -280,11 +258,10 @@ const Game = (() => {
         const stateToRender = getInterpolatedState(now);
 
         if (stateToRender && typeof Renderer3D !== 'undefined' && appState.mode !== 'menu') {
-             localEffects.activeBloodSparkEffects = activeBloodSparkEffects; localEffects.activeAmmoCasings = activeAmmoCasings; localEffects.snake = snake; // Update effects object
+             localEffects.activeBloodSparkEffects = activeBloodSparkEffects; localEffects.activeAmmoCasings = activeAmmoCasings; localEffects.snake = snake;
              Renderer3D.renderScene(stateToRender, appState, localEffects);
         } else if (appState.mode !== 'menu') { log("Skipping render..."); }
 
-        // Update HTML Overlays AFTER rendering and UI position calculation
         if (stateToRender && appState.mode !== 'menu') {
              updateHtmlOverlays(stateToRender, appState);
         }
@@ -293,28 +270,20 @@ const Game = (() => {
         else { if(appState.animationFrameId) cleanupLoop(); }
     }
 
-    // --- Interpolation, Prediction, Cleanup ---
-    function getInterpolatedState(renderTime) {
-        const INTERPOLATION_BUFFER_MS = 100; const serverState = appState.serverState; const lastServerState = appState.lastServerState;
-        if (!serverState || !lastServerState || !serverState.timestamp || !lastServerState.timestamp) return serverState;
-        const serverTime = serverState.timestamp * 1000; const lastServerTime = lastServerState.timestamp * 1000;
-        if (serverTime <= lastServerTime) return serverState;
-        const renderTargetTime = renderTime - INTERPOLATION_BUFFER_MS; const timeBetweenStates = serverTime - lastServerTime;
-        const timeSinceLastState = renderTargetTime - lastServerTime; let t = Math.max(0, Math.min(1, timeSinceLastState / timeBetweenStates));
-        let interpolatedState = JSON.parse(JSON.stringify(serverState));
-        if (interpolatedState.players) { for (const pId in interpolatedState.players) { const currentP = serverState.players[pId]; const lastP = lastServerState.players?.[pId]; if (pId === appState.localPlayerId && appState.mode !== 'singleplayer') { interpolatedState.players[pId].x = appState.renderedPlayerPos.x; interpolatedState.players[pId].y = appState.renderedPlayerPos.y; } else if (lastP && typeof currentP.x === 'number' && typeof lastP.x === 'number') { interpolatedState.players[pId].x = lerp(lastP.x, currentP.x, t); interpolatedState.players[pId].y = lerp(lastP.y, currentP.y, t); } } }
-        if (interpolatedState.enemies) { for (const eId in interpolatedState.enemies) { const currentE = serverState.enemies[eId]; const lastE = lastServerState.enemies?.[eId]; if (lastE && typeof currentE.x === 'number' && typeof lastE.x === 'number' && currentE.health > 0) { interpolatedState.enemies[eId].x = lerp(lastE.x, currentE.x, t); interpolatedState.enemies[eId].y = lerp(lastE.y, currentE.y, t); } } }
-        if (interpolatedState.bullets) { for (const bId in interpolatedState.bullets) { const currentB = serverState.bullets[bId]; const lastB = lastServerState.bullets?.[bId]; if (lastB && typeof currentB.x === 'number' && typeof lastB.x === 'number') { interpolatedState.bullets[bId].x = lerp(lastB.x, currentB.x, t); interpolatedState.bullets[bId].y = lerp(lastB.y, currentB.y, t); } } }
-        interpolatedState.powerups = serverState.powerups; interpolatedState.damage_texts = serverState.damage_texts;
-        return interpolatedState;
-     }
+    function startGameLoop() { if (appState.mode === 'menu' || appState.animationFrameId) return; if (!appState.serverState && appState.mode !== 'singleplayer') { log("Delaying loop: Waiting for state."); return; } Input.setup(); log("Starting game loop..."); appState.lastLoopTime = null; appState.animationFrameId = requestAnimationFrame(gameLoop); }
+    function getInterpolatedState(renderTime) { const INTERPOLATION_BUFFER_MS=100; const serverState=appState.serverState; const lastServerState=appState.lastServerState; if (!serverState||!lastServerState||!serverState.timestamp||!lastServerState.timestamp) return serverState; const serverTime=serverState.timestamp*1000; const lastServerTime=lastServerState.timestamp*1000; if (serverTime<=lastServerTime) return serverState; const renderTargetTime=renderTime-INTERPOLATION_BUFFER_MS; const timeBetweenStates=serverTime-lastServerTime; const timeSinceLastState=renderTargetTime-lastServerTime; let t=Math.max(0,Math.min(1,timeSinceLastState/timeBetweenStates)); let interpolatedState=JSON.parse(JSON.stringify(serverState)); if (interpolatedState.players){for (const pId in interpolatedState.players){const currentP=serverState.players[pId]; const lastP=lastServerState.players?.[pId]; if(pId===appState.localPlayerId&&appState.mode!=='singleplayer'){interpolatedState.players[pId].x=appState.renderedPlayerPos.x; interpolatedState.players[pId].y=appState.renderedPlayerPos.y;}else if(lastP&&typeof currentP.x==='number'&&typeof lastP.x==='number'){interpolatedState.players[pId].x=lerp(lastP.x,currentP.x,t); interpolatedState.players[pId].y=lerp(lastP.y,currentP.y,t);}}} if (interpolatedState.enemies){for (const eId in interpolatedState.enemies){const currentE=serverState.enemies[eId]; const lastE=lastServerState.enemies?.[eId]; if(lastE&&typeof currentE.x==='number'&&typeof lastE.x==='number'&¤tE.health>0){interpolatedState.enemies[eId].x=lerp(lastE.x,currentE.x,t); interpolatedState.enemies[eId].y=lerp(lastE.y,currentE.y,t);}}} if (interpolatedState.bullets){for (const bId in interpolatedState.bullets){const currentB=serverState.bullets[bId]; const lastB=lastServerState.bullets?.[bId]; if(lastB&&typeof currentB.x==='number'&&typeof lastB.x==='number'){interpolatedState.bullets[bId].x=lerp(lastB.x,currentB.x,t); interpolatedState.bullets[bId].y=lerp(lastB.y,currentB.y,t);}}} interpolatedState.powerups=serverState.powerups; interpolatedState.damage_texts=serverState.damage_texts; return interpolatedState; }
     function cleanupLoop() { if (appState.animationFrameId) { cancelAnimationFrame(appState.animationFrameId); appState.animationFrameId = null; log("Game loop stopped."); } Input.cleanup(); appState.lastLoopTime = null; }
     function updatePredictedPosition(deltaTime) { if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return; const moveVector = Input.getMovementInputVector(); const playerState = appState.serverState.players[appState.localPlayerId]; const playerSpeed = playerState?.speed ?? PLAYER_DEFAULTS.base_speed; if (moveVector.dx !== 0 || moveVector.dy !== 0) { appState.predictedPlayerPos.x += moveVector.dx * playerSpeed * deltaTime; appState.predictedPlayerPos.y += moveVector.dy * playerSpeed * deltaTime; } const w_half = (playerState?.width ?? PLAYER_DEFAULTS.width) / 2; const h_half = (playerState?.height ?? PLAYER_DEFAULTS.height) / 2; appState.predictedPlayerPos.x = Math.max(w_half, Math.min(appState.canvasWidth - w_half, appState.predictedPlayerPos.x)); appState.predictedPlayerPos.y = Math.max(h_half, Math.min(appState.canvasHeight - h_half, appState.predictedPlayerPos.y)); }
     function reconcileWithServer() { if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return; const serverPos = appState.serverState.players[appState.localPlayerId]; if (typeof serverPos.x !== 'number' || typeof serverPos.y !== 'number') return; const predictedPos = appState.predictedPlayerPos; const renderedPos = appState.renderedPlayerPos; const dist = distance(predictedPos.x, predictedPos.y, serverPos.x, serverPos.y); const snapThreshold = parseFloat(getCssVar('--reconciliation-threshold')) || 35; const renderLerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.15; if (dist > snapThreshold) { predictedPos.x = serverPos.x; predictedPos.y = serverPos.y; renderedPos.x = serverPos.x; renderedPos.y = serverPos.y; } else { renderedPos.x = lerp(renderedPos.x, predictedPos.x, renderLerpFactor); renderedPos.y = lerp(renderedPos.y, predictedPos.y, renderLerpFactor); } }
 
     function initListeners() { log("Initializing button listeners..."); if (DOM.singlePlayerBtn) DOM.singlePlayerBtn.onclick = () => { SoundManager.init(); startSinglePlayer(); }; const hostHandler = (maxPlayers) => { SoundManager.init(); hostMultiplayer(maxPlayers); }; if (DOM.hostGameBtn2) DOM.hostGameBtn2.onclick = () => hostHandler(2); if (DOM.hostGameBtn3) DOM.hostGameBtn3.onclick = () => hostHandler(3); if (DOM.hostGameBtn4) DOM.hostGameBtn4.onclick = () => hostHandler(4); if (DOM.joinGameSubmitBtn) DOM.joinGameSubmitBtn.onclick = () => { SoundManager.init(); joinMultiplayer(); }; if (DOM.multiplayerBtn) DOM.multiplayerBtn.onclick = () => UI.showSection('multiplayer-menu-section'); if (DOM.showJoinUIBtn) DOM.showJoinUIBtn.onclick = () => UI.showSection('join-code-section'); if (DOM.cancelHostBtn) DOM.cancelHostBtn.onclick = leaveGame; if (DOM.sendChatBtn) DOM.sendChatBtn.onclick = sendChatMessage; if (DOM.leaveGameBtn) DOM.leaveGameBtn.onclick = leaveGame; if (DOM.gameOverBackBtn) DOM.gameOverBackBtn.onclick = () => resetClientState(true); DOM.gameContainer.querySelectorAll('.back-button').forEach(btn => { const onclickAttr = btn.getAttribute('onclick'); if (onclickAttr && onclickAttr.startsWith("UI.showSection")) { const targetMatch = onclickAttr.match(/'([^']+)'/); if (targetMatch && targetMatch[1]) { const targetId = targetMatch[1]; btn.onclick = (e) => { e.preventDefault(); UI.showSection(targetId); }; } else { log(`Warn: Could not parse target from back button: ${onclickAttr}`); } } else { log("Warn: Back button missing standard onclick:", btn); } }); log("Finished initializing button listeners."); }
 
-    return { startSinglePlayer, joinMultiplayer, hostMultiplayer, leaveGame, sendChatMessage, resetClientState, startGameLoop, cleanupLoop, getInterpolatedState, initListeners };
+    // --- Export necessary functions from Game module ---
+    return {
+        startSinglePlayer, joinMultiplayer, hostMultiplayer, leaveGame, sendChatMessage,
+        resetClientState, startGameLoop, // Ensure startGameLoop is exported
+        cleanupLoop, getInterpolatedState, initListeners
+    };
 })();
 
 // --- Global Server Message Handler ---
@@ -328,14 +297,14 @@ function handleServerMessage(event) {
                 if (data.initial_state && typeof data.initial_state.canvas_width === 'number') { appState.canvasWidth = data.initial_state.canvas_width; appState.canvasHeight = data.initial_state.canvas_height; } else { error(`Initial state ('${data.type}') missing canvas dimensions!`); }
                 const initialPlayer = appState.serverState?.players[appState.localPlayerId]; if (initialPlayer) { appState.predictedPlayerPos = { x: initialPlayer.x, y: initialPlayer.y }; appState.renderedPlayerPos = { x: initialPlayer.x, y: initialPlayer.y }; } else { appState.predictedPlayerPos = { x: appState.canvasWidth / 2, y: appState.canvasHeight / 2 }; appState.renderedPlayerPos = { x: appState.canvasWidth / 2, y: appState.canvasHeight / 2 }; } appState.localPlayerAimState = { lastAimDx: 0, lastAimDy: -1 };
                 if (data.type === 'game_created') { DOM.gameCodeDisplay.textContent = appState.currentGameId || 'ERROR'; const currentP = Object.keys(appState.serverState?.players || {}).length; DOM.waitingMessage.textContent = `Waiting... (${currentP}/${appState.maxPlayersInGame})`; UI.updateStatus(`Hosted: ${appState.currentGameId}`); UI.showSection('host-wait-section'); }
-                else { UI.updateStatus(data.type === 'game_joined' ? `Joined ${appState.currentGameId}.` : "SP Started!"); UI.showSection('game-area'); if (appState.serverState) { UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState); UI.updateDayNight(appState.serverState); UI.updateEnvironmentDisplay(); } Game.startGameLoop(); }
+                else { UI.updateStatus(data.type === 'game_joined' ? `Joined ${appState.currentGameId}.` : "SP Started!"); UI.showSection('game-area'); if (appState.serverState) { UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState); UI.updateDayNight(appState.serverState); UI.updateEnvironmentDisplay(); } Game.startGameLoop(); } // Use exported function
                 break;
             case 'game_state':
                 if (appState.mode === 'menu') return;
                 const previousStatus = appState.serverState?.status; const previousPlayerState = appState.serverState?.players?.[appState.localPlayerId];
                 appState.previousServerState = appState.lastServerState; appState.lastServerState = appState.serverState; appState.serverState = data.state;
                 const newState = appState.serverState; const currentPlayerState = newState?.players?.[appState.localPlayerId]; appState.lastStateReceiveTime = performance.now();
-                if (newState && typeof newState.canvas_width === 'number' && (appState.canvasWidth !== newState.canvas_width || appState.canvasHeight !== newState.canvas_height)) { appState.canvasWidth = newState.canvas_width; appState.canvasHeight = newState.canvas_height; }
+                if (newState && typeof newState.canvas_width === 'number' && (appState.canvasWidth !== newState.canvas_width || appState.canvasHeight !== newState.canvas_height)) { appState.canvasWidth = newState.canvas_width; appState.canvasHeight = newState.canvas_height; /* Renderer handles resize internally */ }
                 appState.currentTemp = newState.current_temperature ?? 18.0; appState.isRaining = newState.is_raining ?? false; appState.isDustStorm = newState.is_dust_storm ?? false;
                 const serverSnakeState = newState.snake_state; if (serverSnakeState && typeof snake !== 'undefined') { snake.isActiveFromServer = serverSnakeState.active; snake.serverHeadX = serverSnakeState.head_x; snake.serverHeadY = serverSnakeState.head_y; snake.serverBaseY = serverSnakeState.base_y; if (snake.isActiveFromServer && snake.segments.length === 0) { snake.segments = [{ x: snake.serverHeadX, y: snake.serverHeadY, time: performance.now() }]; } else if (!snake.isActiveFromServer) { snake.segments = []; } } else if (typeof snake !== 'undefined') { snake.isActiveFromServer = false; snake.segments = []; }
                 if (newState.enemies) { const now = performance.now(); const sparkDuration = 300; for (const enemyId in newState.enemies) { const enemy = newState.enemies[enemyId]; const previousEnemy = appState.lastServerState?.enemies?.[enemyId]; if (enemy && enemy.last_damage_time && (!previousEnemy || enemy.last_damage_time > (previousEnemy.last_damage_time || 0))) { const serverHitTimeMs = enemy.last_damage_time * 1000; if (now - serverHitTimeMs < 250) activeBloodSparkEffects[enemyId] = now + sparkDuration; } } for (const enemyId in activeBloodSparkEffects) { if (now >= activeBloodSparkEffects[enemyId]) delete activeBloodSparkEffects[enemyId]; } }
