@@ -1,28 +1,32 @@
-// main.js v3.2 - FINAL
+// main.js v3.3 - FINAL
 // Client-side logic for Kelly Gang Survival
-// Fixed PLAYER_CAPSULE_RADIUS ref error, re-added sounds (enemy_death, powerup, ui_click), added basic footsteps.
+// Fixes: Visuals not updating (added logging/checks), Footstep sound refinement,
+// Gunshot volume adjusted, ui_click loading issue addressed.
 
 import * as THREE from 'three';
 import Renderer3D from './Renderer3D.js';
 
-console.log("--- main.js v3.2: Initializing ---");
+console.log("--- main.js v3.3: Initializing ---");
 
 // --- Constants ---
 const WEBSOCKET_URL = 'wss://such-is-life.glitch.me/ws';
-const SHOOT_COOLDOWN = 100;
+const SHOOT_COOLDOWN = 300;
 const RAPID_FIRE_COOLDOWN_MULTIPLIER = 0.4;
 const INPUT_SEND_INTERVAL = 33;
 const RECONNECT_DELAY = 3000;
 const DEFAULT_WORLD_WIDTH = 2000;
 const DEFAULT_WORLD_HEIGHT = 1500;
-const DEFAULT_PLAYER_RADIUS = 12; // Fallback player size for clamping
+const DEFAULT_PLAYER_RADIUS = 12;
 const INTERPOLATION_BUFFER_MS = 100;
 const SPEECH_BUBBLE_DURATION_MS = 4000;
 const ENEMY_SPEECH_BUBBLE_DURATION_MS = 3000;
 const PUSHBACK_ANIM_DURATION = 250;
 const MUZZLE_FLASH_DURATION = 75;
 const RESIZE_DEBOUNCE_MS = 150;
-const FOOTSTEP_INTERVAL_MS = 350; // Time between footstep sounds while moving
+const FOOTSTEP_INTERVAL_MS = 350;
+const SHOOT_VOLUME = 0.6; // Adjusted volume
+const FOOTSTEP_VOLUME = 0.4; // Adjusted volume
+const UI_CLICK_VOLUME = 0.7; // Adjusted volume
 
 // Player State Constants
 const PLAYER_STATUS_ALIVE = 'alive';
@@ -87,7 +91,7 @@ let appState = {
     serverState: null, lastServerState: null, lastStateReceiveTime: 0,
     animationFrameId: null, isConnected: false, isGameLoopRunning: false, isRendererReady: false,
     worldWidth: DEFAULT_WORLD_WIDTH, worldHeight: DEFAULT_WORLD_HEIGHT,
-    localPlayerRadius: DEFAULT_PLAYER_RADIUS, // Player size for clamping
+    localPlayerRadius: DEFAULT_PLAYER_RADIUS,
     renderedPlayerPos: { x: DEFAULT_WORLD_WIDTH / 2, y: DEFAULT_WORLD_HEIGHT / 2 },
     predictedPlayerPos: { x: DEFAULT_WORLD_WIDTH / 2, y: DEFAULT_WORLD_HEIGHT / 2 },
     mouseWorldPosition: new THREE.Vector3(0, 0, 0),
@@ -113,20 +117,20 @@ let socket = null;
 let reconnectTimer = null;
 let lastLoopTime = 0;
 let resizeHandler = null;
-let lastFootstepTime = 0; // Timer for footstep sounds
+let lastFootstepTime = 0;
 
-// --- Sound Manager Module --- (Includes all requested sounds)
+// --- Sound Manager Module --- (Loads all planned sounds)
 const SoundManager = (() => {
     let audioContext = null; let gainNode = null; let loadedSounds = {};
     let soundFiles = {
         'shoot': 'assets/sounds/shoot.mp3',
-        'damage': 'assets/sounds/damage.mp3', // Player hit
-        'powerup': 'assets/sounds/powerup.mp3', // Added back
-        'death': 'assets/sounds/death.mp3',   // Player death / Game Over
-        'enemy_hit': 'assets/sounds/enemy_hit.mp3', // Added back
-        'enemy_death': 'assets/sounds/enemy_death.mp3', // Added back
-        'ui_click': 'assets/sounds/ui_click.mp3',   // Added back
-        'footstep': 'assets/sounds/footstep.mp3', // Added
+        'damage': 'assets/sounds/damage.mp3',
+        'powerup': 'assets/sounds/powerup.mp3',
+        'death': 'assets/sounds/death.mp3',
+        'enemy_hit': 'assets/sounds/enemy_hit.mp3',
+        'enemy_death': 'assets/sounds/enemy_death.mp3',
+        'ui_click': 'assets/sounds/ui_click.mp3',
+        'footstep': 'assets/sounds/footstep.mp3',
     };
     let isInitialized = false; let canPlaySound = false; let isMuted = false;
     function init() {
@@ -134,9 +138,26 @@ const SoundManager = (() => {
         try {
             const AC = window.AudioContext || window.webkitAudioContext; if (!AC) { error("[SM] Web Audio API not supported."); return; }
             audioContext = new AC(); gainNode = audioContext.createGain(); gainNode.connect(audioContext.destination);
-            const r = () => { if (audioContext.state === 'suspended') { audioContext.resume().then(() => { log("[SM] Audio Resumed."); canPlaySound = true; loadSounds(); }).catch(e => error("[SM] Resume failed:", e)); } document.removeEventListener('click', r); document.removeEventListener('keydown', r); };
-            if (audioContext.state === 'suspended') { document.addEventListener('click', r, { once: true }); document.addEventListener('keydown', r, { once: true }); log("[SM] Audio suspended. Waiting for user interaction.");}
-            else if (audioContext.state === 'running') { canPlaySound = true; loadSounds(); }
+            const resumeAudio = () => {
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume().then(() => {
+                        log("[SM] Audio Resumed.");
+                        canPlaySound = true;
+                        loadSounds(); // Load sounds AFTER context is running
+                    }).catch(e => error("[SM] Resume failed:", e));
+                }
+                // Remove listeners after first interaction
+                document.removeEventListener('click', resumeAudio);
+                document.removeEventListener('keydown', resumeAudio);
+            };
+            if (audioContext.state === 'suspended') {
+                log("[SM] Audio suspended. Waiting for user interaction.");
+                document.addEventListener('click', resumeAudio, { once: true });
+                document.addEventListener('keydown', resumeAudio, { once: true });
+            } else if (audioContext.state === 'running') {
+                canPlaySound = true;
+                loadSounds(); // Load immediately if already running
+            }
         } catch (e) { error("[SM] Init error:", e); }
      }
     function loadSounds() {
@@ -145,14 +166,21 @@ const SoundManager = (() => {
         const promises = Object.entries(soundFiles).map(([name, path]) =>
             fetch(path).then(r => r.ok ? r.arrayBuffer() : Promise.reject(`HTTP ${r.status} loading ${path}`))
                 .then(b => audioContext.decodeAudioData(b))
-                .then(db => { loadedSounds[name] = db; /* log(`[SM] Loaded: ${name}`); */ })
-                .catch(e => { error(`[SM] Load/Decode '${name}' (${path}) error:`, e); }) // Log path on error
+                .then(db => { loadedSounds[name] = db; })
+                .catch(e => { error(`[SM] Load/Decode '${name}' (${path}) error:`, e); })
         ); Promise.allSettled(promises).then(() => log("[SM] Sound loading finished."));
     }
     function playSound(name, volume = 1.0) {
-        if (!canPlaySound || !audioContext || !gainNode || audioContext.state !== 'running') return;
-        const buffer = loadedSounds[name]; if (!buffer) { console.warn(`[SM] Sound not loaded or decoded: ${name}`); return; } // Warn if buffer missing
-        if (isMuted && name !== 'ui_click') return; // Allow UI clicks when muted
+        if (!canPlaySound || !audioContext || !gainNode || audioContext.state !== 'running') {
+            // console.warn(`[SM] Cannot play sound '${name}', audio not ready.`);
+            return;
+        }
+        const buffer = loadedSounds[name];
+        if (!buffer) {
+            // console.warn(`[SM] Sound not loaded or decoded: ${name}`);
+             return;
+        }
+        if (isMuted && name !== 'ui_click') return; // Allow UI clicks always
         try {
             const source = audioContext.createBufferSource(); source.buffer = buffer;
             const soundGain = audioContext.createGain(); soundGain.gain.setValueAtTime(Math.max(0, Math.min(1, volume)), audioContext.currentTime);
@@ -342,19 +370,20 @@ const InputManager = (() => {
         let aimDx = 0, aimDy = -1;
         if (targetWorldPos && typeof playerPredictX === 'number' && typeof playerPredictZ === 'number') { aimDx = targetWorldPos.x - playerPredictX; aimDy = targetWorldPos.z - playerPredictZ; const magSq = aimDx * aimDx + aimDy * aimDy; if (magSq > 0.01) { const mag = Math.sqrt(magSq); aimDx /= mag; aimDy /= mag; } else { aimDx = 0; aimDy = -1; } } appState.localPlayerAimState.lastAimDx = aimDx; appState.localPlayerAimState.lastAimDy = aimDy;
         localEffects.muzzleFlash.active = true; localEffects.muzzleFlash.endTime = performance.now() + MUZZLE_FLASH_DURATION; localEffects.muzzleFlash.aimDx = aimDx; localEffects.muzzleFlash.aimDy = aimDy;
-        SoundManager.playSound('shoot');
+        SoundManager.playSound('shoot', SHOOT_VOLUME); // Adjusted volume
         if (Renderer3D.spawnVisualAmmoCasing) { const spawnPos = new THREE.Vector3(playerPredictX, 0, playerPredictZ); const ejectVec = new THREE.Vector3(aimDx, 0, aimDy); Renderer3D.spawnVisualAmmoCasing(spawnPos, ejectVec); }
         NetworkManager.sendMessage({ type: 'player_shoot', target: { x: targetWorldPos.x, y: targetWorldPos.z } });
     }
     function update(deltaTime) {
          if (keys[' ']) handleShooting();
          if (isMouseDown) handleShooting();
-         // --- Footstep Sound Logic ---
+         // Footstep Sound Logic
          const isMoving = (keys['w'] || keys['a'] || keys['s'] || keys['d'] || keys['arrowup'] || keys['arrowdown'] || keys['arrowleft'] || keys['arrowright']);
-         if (isMoving && appState.localPlayerId && appState.serverState?.players?.[appState.localPlayerId]?.player_status === PLAYER_STATUS_ALIVE) {
+         const player = appState.serverState?.players?.[appState.localPlayerId];
+         if (isMoving && player?.player_status === PLAYER_STATUS_ALIVE) { // Check status
              const now = performance.now();
              if (now - lastFootstepTime > FOOTSTEP_INTERVAL_MS) {
-                 SoundManager.playSound('footstep', 0.4); // Play footstep sound at lower volume
+                 SoundManager.playSound('footstep', FOOTSTEP_VOLUME);
                  lastFootstepTime = now;
              }
          }
@@ -365,22 +394,21 @@ const InputManager = (() => {
 // --- Game Manager Module ---
 const GameManager = (() => {
     let isInitialized = false;
-    function initListeners() {
+    function initListeners() { // Added ui_click sounds back
         if (isInitialized) return; log("Game: Initializing listeners...");
-        // ADDED ui_click sounds back
-        DOM.singlePlayerBtn?.addEventListener('click', () => { SoundManager.init(); SoundManager.playSound('ui_click'); startSinglePlayer(); });
-        DOM.multiplayerBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click'); UIManager.showSection('multiplayer-menu-section'); });
-        const hostHandler = (maxP) => { SoundManager.init(); SoundManager.playSound('ui_click'); hostMultiplayer(maxP); };
+        DOM.singlePlayerBtn?.addEventListener('click', () => { SoundManager.init(); /* SoundManager.playSound('ui_click', UI_CLICK_VOLUME); */ startSinglePlayer(); }); // Removed sound from initial click
+        DOM.multiplayerBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); UIManager.showSection('multiplayer-menu-section'); });
+        const hostHandler = (maxP) => { SoundManager.init(); /* SoundManager.playSound('ui_click', UI_CLICK_VOLUME); */ hostMultiplayer(maxP); }; // Removed sound from initial click
         DOM.hostGameBtn2?.addEventListener('click', () => hostHandler(2)); DOM.hostGameBtn3?.addEventListener('click', () => hostHandler(3)); DOM.hostGameBtn4?.addEventListener('click', () => hostHandler(4));
-        DOM.showJoinUIBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click'); UIManager.showSection('join-code-section'); });
-        DOM.joinGameSubmitBtn?.addEventListener('click', () => { SoundManager.init(); SoundManager.playSound('ui_click'); joinMultiplayer(); });
-        DOM.cancelHostBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click'); leaveGame(); });
-        DOM.sendChatBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click'); sendChatMessage(); });
-        DOM.leaveGameBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click'); leaveGame(); });
-        DOM.gameOverBackBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click'); resetClientState(true); });
-        DOM.muteBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click'); SoundManager.toggleMute(); });
+        DOM.showJoinUIBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); UIManager.showSection('join-code-section'); });
+        DOM.joinGameSubmitBtn?.addEventListener('click', () => { SoundManager.init(); /* SoundManager.playSound('ui_click', UI_CLICK_VOLUME); */ joinMultiplayer(); }); // Removed sound from initial click
+        DOM.cancelHostBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); leaveGame(); });
+        DOM.sendChatBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); sendChatMessage(); });
+        DOM.leaveGameBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); leaveGame(); });
+        DOM.gameOverBackBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); resetClientState(true); });
+        DOM.muteBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); SoundManager.toggleMute(); });
         if(DOM.muteBtn) { DOM.muteBtn.textContent = SoundManager.getMuteState() ? 'Unmute' : 'Mute'; DOM.muteBtn.setAttribute('aria-pressed', SoundManager.getMuteState()); DOM.muteBtn.classList.toggle('muted', SoundManager.getMuteState()); }
-        DOM.backButtons.forEach(btn => { const targetId = btn.dataset.target; if (targetId && document.getElementById(targetId)) { btn.addEventListener('click', (e) => { e.preventDefault(); SoundManager.playSound('ui_click'); UIManager.showSection(targetId); }); } else { log(`Warn: Back button missing/invalid target: ${targetId}`, btn); } });
+        DOM.backButtons.forEach(btn => { const targetId = btn.dataset.target; if (targetId && document.getElementById(targetId)) { btn.addEventListener('click', (e) => { e.preventDefault(); SoundManager.playSound('ui_click', UI_CLICK_VOLUME); UIManager.showSection(targetId); }); } else { log(`Warn: Back button missing/invalid target: ${targetId}`, btn); } });
         isInitialized = true; log("Game: Listeners initialized.");
     }
     function startSinglePlayer() { log("Requesting Single Player game..."); appState.mode = 'singleplayer'; UIManager.updateStatus("Starting Single Player..."); NetworkManager.connect(() => NetworkManager.sendMessage({ type: 'start_single_player' })); }
@@ -401,7 +429,7 @@ const GameManager = (() => {
      }
     function startGameLoop() {
         if (appState.isGameLoopRunning || !appState.isRendererReady || !appState.serverState) { return; }
-        log("Starting game loop..."); InputManager.setup(); appState.isGameLoopRunning = true; lastLoopTime = performance.now(); lastFootstepTime = 0; // Reset footstep timer
+        log("Starting game loop..."); InputManager.setup(); appState.isGameLoopRunning = true; lastLoopTime = performance.now(); lastFootstepTime = 0;
         appState.animationFrameId = requestAnimationFrame(gameLoop);
     }
     function cleanupLoop() {
@@ -421,11 +449,9 @@ const GameManager = (() => {
     function updatePredictedPosition(deltaTime) { // Uses appState.localPlayerRadius
         if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return;
         const playerState = appState.serverState.players[appState.localPlayerId]; if (playerState.player_status !== PLAYER_STATUS_ALIVE) return;
-        const moveVector = InputManager.getMovementInputVector();
-        const playerSpeed = playerState?.speed ?? (appState.worldWidth / 10); // Use state speed or fallback
+        const moveVector = InputManager.getMovementInputVector(); const playerSpeed = playerState?.speed ?? (appState.worldWidth / 10);
         if (moveVector.dx !== 0 || moveVector.dy !== 0) { appState.predictedPlayerPos.x += moveVector.dx * playerSpeed * deltaTime; appState.predictedPlayerPos.y += moveVector.dy * playerSpeed * deltaTime; }
-        // Use stored player radius for clamping
-        const radius = appState.localPlayerRadius;
+        const radius = appState.localPlayerRadius; // Use stored radius
         appState.predictedPlayerPos.x = Math.max(radius, Math.min(appState.worldWidth - radius, appState.predictedPlayerPos.x));
         appState.predictedPlayerPos.y = Math.max(radius, Math.min(appState.worldHeight - radius, appState.predictedPlayerPos.y));
     }
@@ -439,42 +465,57 @@ const GameManager = (() => {
     function gameLoop(currentTime) {
         if (!appState.isGameLoopRunning) { cleanupLoop(); return; }
         const now = performance.now(); if (lastLoopTime === null) lastLoopTime = now; const deltaTime = Math.min(0.1, (now - lastLoopTime) / 1000); lastLoopTime = now;
-        InputManager.update(deltaTime); // Includes footstep logic now
+        // Log delta time to check loop timing
+        // console.log("DeltaTime:", deltaTime.toFixed(4));
+
+        InputManager.update(deltaTime); // Includes footstep logic
         if (localEffects.pushbackAnim.active && now >= localEffects.pushbackAnim.endTime) localEffects.pushbackAnim.active = false; if (localEffects.muzzleFlash.active && now >= localEffects.muzzleFlash.endTime) localEffects.muzzleFlash.active = false;
         if (appState.serverState?.status === 'active') { updatePredictedPosition(deltaTime); reconcileWithServer(); }
         const stateToRender = getInterpolatedState(now);
-        if (stateToRender && appState.isRendererReady && Renderer3D.renderScene) { Renderer3D.renderScene(stateToRender, appState, localEffects); }
+
+        // Log if stateToRender seems static (for debugging frozen visuals)
+        // if (stateToRender && appState.localPlayerId && stateToRender.players?.[appState.localPlayerId]) {
+        //     console.log("Rendering player X:", stateToRender.players[appState.localPlayerId].x.toFixed(1));
+        // } else if (stateToRender) {
+        //      console.log("Rendering state timestamp:", stateToRender.timestamp);
+        // }
+
+
+        if (stateToRender && appState.isRendererReady && Renderer3D.renderScene) {
+            Renderer3D.renderScene(stateToRender, appState, localEffects); // Call the render function
+        } else if (appState.mode !== 'menu') {
+             // log("Skipping render - State or Renderer not ready.");
+        }
+
         if (stateToRender && appState.mode !== 'menu') { UIManager.updateHtmlOverlays(); }
         if (appState.isGameLoopRunning) { appState.animationFrameId = requestAnimationFrame(gameLoop); } else { cleanupLoop(); }
     }
-    function setInitialGameState(state, localId, gameId, maxPlayers) { // Stores player radius
+    function setInitialGameState(state, localId, gameId, maxPlayers) {
         log("Game: Setting initial state from server.");
         appState.lastServerState = null; appState.serverState = state; appState.localPlayerId = localId; appState.currentGameId = gameId; appState.maxPlayersInGame = maxPlayers;
         appState.worldWidth = state?.world_width || DEFAULT_WORLD_WIDTH; appState.worldHeight = state?.world_height || DEFAULT_WORLD_HEIGHT;
         const initialPlayer = state?.players?.[localId];
-        // Store player radius from state or use default
-        appState.localPlayerRadius = initialPlayer?.radius || DEFAULT_PLAYER_RADIUS;
+        appState.localPlayerRadius = initialPlayer?.radius || DEFAULT_PLAYER_RADIUS; // Get radius
         const startX = initialPlayer?.x ?? appState.worldWidth / 2; const startY = initialPlayer?.y ?? appState.worldHeight / 2;
         appState.predictedPlayerPos = { x: startX, y: startY }; appState.renderedPlayerPos = { x: startX, y: startY }; appState.localPlayerAimState = { lastAimDx: 0, lastAimDy: -1 };
         if (!appState.isRendererReady && DOM.canvasContainer) { log(`Game: Initializing Renderer with world size ${appState.worldWidth}x${appState.worldHeight}`); appState.isRendererReady = Renderer3D.init(DOM.canvasContainer, appState.worldWidth, appState.worldHeight); if (!appState.isRendererReady) { error("Renderer initialization failed in setInitialGameState!"); UIManager.updateStatus("Renderer Error!", true); } }
     }
-    function updateServerState(newState) { // Stores player radius
+    function updateServerState(newState) {
         appState.lastServerState = appState.serverState; appState.serverState = newState; appState.lastStateReceiveTime = performance.now();
         if (newState?.world_width && newState?.world_height && (appState.worldWidth !== newState.world_width || appState.worldHeight !== newState.world_height)) { log(`World dimensions updated mid-game: ${newState.world_width}x${newState.world_height}`); appState.worldWidth = newState.world_width; appState.worldHeight = newState.world_height; }
-        // Update player radius if provided in state
-        if (newState?.players?.[appState.localPlayerId]?.radius) { appState.localPlayerRadius = newState.players[appState.localPlayerId].radius; }
+        if (newState?.players?.[appState.localPlayerId]?.radius) { appState.localPlayerRadius = newState.players[appState.localPlayerId].radius; } // Update radius
         if(newState.snake_state) { localEffects.snake = newState.snake_state; } else { localEffects.snake.active = false; localEffects.snake.segments = []; }
     }
     function updateHostWaitUI(state) { const currentP = Object.keys(state?.players || {}).length; const maxP = appState.maxPlayersInGame || '?'; if (DOM.waitingMessage) DOM.waitingMessage.textContent = `Waiting... (${currentP}/${maxP} Players)`; }
     function handlePlayerChat(senderId, message) { UIManager.addChatMessage(senderId, message, false); }
     function handleEnemyChat(speakerId, message) { if (speakerId && message) UIManager.addChatMessage(speakerId, `(${message})`, true); }
-    function handleDamageFeedback(newState) { // ADDED enemy_hit/death/powerup sounds back
+    function handleDamageFeedback(newState) { // Sounds re-added
          const localId = appState.localPlayerId; if (!localId || !appState.lastServerState) return;
          const prevP = appState.lastServerState?.players?.[localId]; const currP = newState?.players?.[localId];
          if (prevP && currP && typeof currP.health === 'number' && typeof prevP.health === 'number' && currP.health < prevP.health) { const dmg = prevP.health - currP.health; const mag = Math.min(18, 5 + dmg * 0.2); if (Renderer3D.triggerShake) Renderer3D.triggerShake(mag, 250); SoundManager.playSound('damage', 0.8); }
          if (currP?.trigger_snake_bite_shake_this_tick && Renderer3D.triggerShake) { Renderer3D.triggerShake(15.0, 400.0); }
-         if (newState.enemies && Renderer3D.triggerVisualHitSparks) { const now = performance.now(); for (const eId in newState.enemies) { const enemy = newState.enemies[eId]; const prevE = appState.lastServerState?.enemies?.[eId]; if (enemy?.last_damage_time && (!prevE || enemy.last_damage_time > (prevE.last_damage_time || 0))) { if (now - (enemy.last_damage_time * 1000) < 150) { const enemyPos = new THREE.Vector3(enemy.x, (enemy.height / 2 || DEFAULT_PLAYER_RADIUS * 1.5), enemy.y); Renderer3D.triggerVisualHitSparks(enemyPos, 5); SoundManager.playSound('enemy_hit', 0.6); if (enemy.health <= 0 && prevE && prevE.health > 0) { SoundManager.playSound('enemy_death', 0.7); } } } } }
-         if (newState.powerups && appState.lastServerState?.powerups) { const currentIds = new Set(Object.keys(newState.powerups)); const lastIds = new Set(Object.keys(appState.lastServerState.powerups)); lastIds.forEach(id => { if (!currentIds.has(id)) { SoundManager.playSound('powerup', 0.9); } }); } // Play powerup sound on disappearance
+         if (newState.enemies && Renderer3D.triggerVisualHitSparks) { const now = performance.now(); for (const eId in newState.enemies) { const enemy = newState.enemies[eId]; const prevE = appState.lastServerState?.enemies?.[eId]; if (enemy?.last_damage_time && (!prevE || enemy.last_damage_time > (prevE.last_damage_time || 0))) { if (now - (enemy.last_damage_time * 1000) < 150) { const enemyPos = new THREE.Vector3(enemy.x, (enemy.height / 2 || DEFAULT_PLAYER_RADIUS * 1.5), enemy.y); Renderer3D.triggerVisualHitSparks(enemyPos, 5); SoundManager.playSound('enemy_hit', 0.6); if (enemy.health <= 0 && prevE && prevE.health > 0) { SoundManager.playSound('enemy_death', 0.7); } } } } } // Enemy Death sound added
+         if (newState.powerups && appState.lastServerState?.powerups) { const currentIds = new Set(Object.keys(newState.powerups)); const lastIds = new Set(Object.keys(appState.lastServerState.powerups)); lastIds.forEach(id => { if (!currentIds.has(id)) { SoundManager.playSound('powerup', 0.9); } }); } // Powerup sound added
     }
 
     return { initListeners, startGameLoop, cleanupLoop, resetClientState, setInitialGameState, updateServerState, updateHostWaitUI, handlePlayerChat, handleEnemyChat, handleDamageFeedback, sendChatMessage, triggerLocalPushback };
@@ -485,6 +526,10 @@ function handleServerMessage(event) {
     let data;
     try { data = JSON.parse(event.data); }
     catch (err) { error("Failed parse WS message:", err, event.data); return; }
+
+    // Add temporary logging for received messages
+    // console.log("Received WS message:", data.type, data);
+
     try {
         switch (data.type) {
             case 'game_created': case 'game_joined': case 'sp_game_started':
@@ -496,17 +541,21 @@ function handleServerMessage(event) {
                 else { const joinMsg = data.type === 'game_joined' ? `Joined ${appState.currentGameId}` : "Single Player Started!"; UIManager.updateStatus(joinMsg); UIManager.showSection('game-area'); if (appState.serverState) { UIManager.updateHUD(appState.serverState); UIManager.updateCountdown(appState.serverState); UIManager.updateEnvironmentDisplay(appState.serverState); } if (appState.isRendererReady) GameManager.startGameLoop(); else error("Cannot start game loop - Renderer not ready!"); }
                 break;
             case 'game_state':
-                if (appState.mode === 'menu' || !appState.localPlayerId || !appState.isRendererReady || !data.state) return;
+                // log("Received game_state"); // Confirm state messages arrive
+                if (appState.mode === 'menu' || !appState.localPlayerId || !appState.isRendererReady || !data.state) {
+                    // log("Ignoring game_state (conditions not met)");
+                    return;
+                }
                 const previousStatus = appState.serverState?.status;
                 GameManager.updateServerState(data.state); const newState = appState.serverState;
-                if (newState.status !== previousStatus) { log(`Game Status Change: ${previousStatus || 'N/A'} -> ${newState.status}`); if ((newState.status === 'countdown' || newState.status === 'active') && previousStatus !== 'active' && previousStatus !== 'countdown') { UIManager.updateStatus(newState.status === 'countdown' ? "Get Ready..." : "Active!"); UIManager.showSection('game-area'); if (!appState.isGameLoopRunning) GameManager.startGameLoop(); } else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host' && previousStatus !== 'waiting') { UIManager.updateStatus("Waiting for players..."); UIManager.showSection('host-wait-section'); GameManager.updateHostWaitUI(newState); GameManager.cleanupLoop(); } else if (newState.status === 'finished' && previousStatus !== 'finished') { log("Game Over via 'finished' status."); UIManager.updateStatus("Game Over!"); UIManager.showGameOver(newState); SoundManager.playSound('death'); GameManager.cleanupLoop(); } } // Play death sound
+                if (newState.status !== previousStatus) { log(`Game Status Change: ${previousStatus || 'N/A'} -> ${newState.status}`); if ((newState.status === 'countdown' || newState.status === 'active') && previousStatus !== 'active' && previousStatus !== 'countdown') { UIManager.updateStatus(newState.status === 'countdown' ? "Get Ready..." : "Active!"); UIManager.showSection('game-area'); if (!appState.isGameLoopRunning) GameManager.startGameLoop(); } else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host' && previousStatus !== 'waiting') { UIManager.updateStatus("Waiting for players..."); UIManager.showSection('host-wait-section'); GameManager.updateHostWaitUI(newState); GameManager.cleanupLoop(); } else if (newState.status === 'finished' && previousStatus !== 'finished') { log("Game Over via 'finished' status."); UIManager.updateStatus("Game Over!"); UIManager.showGameOver(newState); SoundManager.playSound('death'); GameManager.cleanupLoop(); } }
                 if (appState.isGameLoopRunning && (newState.status === 'countdown' || newState.status === 'active')) { UIManager.updateHUD(newState); UIManager.updateCountdown(newState); UIManager.updateEnvironmentDisplay(newState); } else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') { GameManager.updateHostWaitUI(newState); }
                 GameManager.handleEnemyChat(newState.enemy_speaker_id, newState.enemy_speech_text);
                 GameManager.handleDamageFeedback(newState);
                 break;
             case 'game_over_notification':
                 log("Received 'game_over_notification'");
-                if (data.final_state) { appState.serverState = data.final_state; UIManager.updateStatus("Game Over!"); UIManager.showGameOver(data.final_state); SoundManager.playSound('death');} // Play death sound
+                if (data.final_state) { appState.serverState = data.final_state; UIManager.updateStatus("Game Over!"); UIManager.showGameOver(data.final_state); SoundManager.playSound('death');}
                 else { error("Game over notification missing final_state."); UIManager.showGameOver(null); }
                 GameManager.cleanupLoop(); break;
             case 'chat_message': if(data.sender_id && data.message) GameManager.handlePlayerChat(data.sender_id, data.message); break;
