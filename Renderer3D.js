@@ -99,6 +99,7 @@ const Y_OFFSET_CASING = AMMO_CASING_RADIUS;
 // Core THREE
 let renderer, scene, camera, clock;
 let ambientLight, directionalLight;
+let domContainer; // Store reference to the container element
 
 // Game Area
 let gameWidth = DEFAULT_GAME_WIDTH;
@@ -111,8 +112,8 @@ const enemyGroupMap = {};  // Enemy Group (Body, Head, Optional Gun)
 const powerupGroupMap = {};// Powerup Group (Icon)
 
 // Instanced Meshes & Particle Systems
-let playerBulletMesh = null; let playerBulletMatrices = []; let playerBulletCount = 0;
-let enemyBulletMesh = null;  let enemyBulletMatrices = [];  let enemyBulletCount = 0;
+let playerBulletMesh = null; let playerBulletMatrices = []; // No count needed, mesh.count used
+let enemyBulletMesh = null;  let enemyBulletMatrices = [];
 let ammoCasingMesh = null;   let activeAmmoCasings = []; // { matrix, velocity, life, rotation }
 let hitSparkSystem = null;   // { particles, geometry, material, data }
 let rainSystem = null;       // { lines, geometry, material, data }
@@ -216,7 +217,7 @@ function _createMaterials() {
     sharedMaterials.playerSelfBody = new THREE.MeshStandardMaterial({ color: 0xff69b4, roughness: 0.5, metalness: 0.2, emissive: 0x331122, emissiveIntensity: 0.3, name: "PlayerSelfBody" }); // Different color for self
 
     // Enemies (Base materials, cloned and modified later for effects/fade)
-    const enemyStandardProps = { roughness: 0.7, metalness: 0.1, transparent: true, opacity: 1.0 };
+    const enemyStandardProps = { roughness: 0.7, metalness: 0.1, transparent: true, opacity: 1.0 }; // Start transparent for fade
     sharedMaterials.enemyChaserBody = new THREE.MeshStandardMaterial({ color: 0x18315f, ...enemyStandardProps, name: "EnemyChaserBody" });
     sharedMaterials.enemyShooterBody = new THREE.MeshStandardMaterial({ color: 0x556B2F, ...enemyStandardProps, name: "EnemyShooterBody" });
     sharedMaterials.enemyGiantBody = new THREE.MeshStandardMaterial({ color: 0x8B0000, roughness: 0.6, metalness: 0.2, transparent: true, opacity: 1.0, name: "EnemyGiantBody" });
@@ -229,7 +230,7 @@ function _createMaterials() {
     sharedMaterials.ammoCasing = new THREE.MeshStandardMaterial({ color: 0xdaa520, roughness: 0.4, metalness: 0.6, name: "AmmoCasing" });
 
     // Powerups (Base materials, cloned)
-    sharedMaterials.powerupBase = { roughness: 0.6, metalness: 0.1, name: "PowerupDefault" };
+    sharedMaterials.powerupBase = { roughness: 0.6, metalness: 0.1, name: "PowerupDefault" }; // Store default props, not a material
     sharedMaterials.powerups = {
         health: new THREE.MeshStandardMaterial({ color: 0x81c784, ...sharedMaterials.powerupBase, name: "PowerupHealth" }),
         gun_upgrade: new THREE.MeshStandardMaterial({ color: 0x6a0dad, emissive: 0x330044, emissiveIntensity: 0.4, ...sharedMaterials.powerupBase, name: "PowerupGun" }),
@@ -257,10 +258,13 @@ function _createMaterials() {
 
 /** Sets up instanced meshes and particle systems. */
 function _initParticlesAndInstances() {
+    if (!scene) return; // Guard against calling before scene exists
+
     // Player Bullets
     playerBulletMesh = new THREE.InstancedMesh(sharedGeometries.bullet, sharedMaterials.playerBullet, MAX_PLAYER_BULLETS);
     playerBulletMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     playerBulletMesh.count = 0;
+    playerBulletMesh.name = "PlayerBullets";
     scene.add(playerBulletMesh);
     playerBulletMatrices = playerBulletMesh.instanceMatrix.array; // Get direct reference
 
@@ -268,6 +272,7 @@ function _initParticlesAndInstances() {
     enemyBulletMesh = new THREE.InstancedMesh(sharedGeometries.bullet, sharedMaterials.enemyBullet, MAX_ENEMY_BULLETS);
     enemyBulletMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     enemyBulletMesh.count = 0;
+    enemyBulletMesh.name = "EnemyBullets";
     scene.add(enemyBulletMesh);
     enemyBulletMatrices = enemyBulletMesh.instanceMatrix.array; // Get direct reference
 
@@ -276,6 +281,7 @@ function _initParticlesAndInstances() {
     ammoCasingMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     ammoCasingMesh.castShadow = true;
     ammoCasingMesh.count = 0;
+    ammoCasingMesh.name = "AmmoCasings";
     scene.add(ammoCasingMesh);
     activeAmmoCasings = []; // Ensure array is ready
 
@@ -284,19 +290,17 @@ function _initParticlesAndInstances() {
     const sparkPositions = new Float32Array(MAX_HIT_SPARKS * 3);
     const sparkColors = new Float32Array(MAX_HIT_SPARKS * 3);
     const sparkAlphas = new Float32Array(MAX_HIT_SPARKS);
-    const sparkSizes = new Float32Array(MAX_HIT_SPARKS);
     const sparkData = [];
     for (let i = 0; i < MAX_HIT_SPARKS; i++) {
         sparkPositions[i * 3 + 1] = -10000; // Start offscreen
         sparkAlphas[i] = 0;
-        sparkSizes[i] = sharedMaterials.hitSpark.size;
-        sparkData.push({ position: new THREE.Vector3(0, -10000, 0), velocity: new THREE.Vector3(), color: new THREE.Color(1, 1, 1), alpha: 0.0, life: 0, size: sharedMaterials.hitSpark.size });
+        sparkData.push({ position: new THREE.Vector3(0, -10000, 0), velocity: new THREE.Vector3(), color: new THREE.Color(1, 1, 1), alpha: 0.0, life: 0 });
     }
     sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPositions, 3).setUsage(THREE.DynamicDrawUsage));
     sparkGeo.setAttribute('color', new THREE.BufferAttribute(sparkColors, 3).setUsage(THREE.DynamicDrawUsage));
     sparkGeo.setAttribute('alpha', new THREE.BufferAttribute(sparkAlphas, 1).setUsage(THREE.DynamicDrawUsage));
-    sparkGeo.setAttribute('size', new THREE.BufferAttribute(sparkSizes, 1).setUsage(THREE.DynamicDrawUsage)); // If using custom shader for size
     hitSparkSystem = { particles: new THREE.Points(sparkGeo, sharedMaterials.hitSpark), geometry: sparkGeo, material: sharedMaterials.hitSpark, data: sparkData };
+    hitSparkSystem.particles.name = "HitSparks";
     scene.add(hitSparkSystem.particles);
 
     // Rain System
@@ -314,34 +318,33 @@ function _initParticlesAndInstances() {
     rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3).setUsage(THREE.DynamicDrawUsage));
     rainSystem = { lines: new THREE.LineSegments(rainGeo, sharedMaterials.rainLine), geometry: rainGeo, material: sharedMaterials.rainLine, data: rainData };
     rainSystem.lines.visible = false;
+    rainSystem.lines.name = "RainLines";
     scene.add(rainSystem.lines);
 
     // Dust System
     const dustGeo = new THREE.BufferGeometry();
     const dustPositions = new Float32Array(MAX_DUST_MOTES * 3);
-    const dustAlphas = new Float32Array(MAX_DUST_MOTES);
+    const dustAlphas = new Float32Array(MAX_DUST_MOTES); // Only needed if shader uses it
     const dustData = [];
     for (let i = 0; i < MAX_DUST_MOTES; i++) {
         dustPositions[i * 3 + 1] = -10000; // Start offscreen
-        dustAlphas[i] = 0;
+        dustAlphas[i] = 0; // Initialize alpha if needed
         dustData.push({
             position: new THREE.Vector3(Math.random() * gameWidth, Math.random() * 80 + 5, Math.random() * gameHeight),
             velocity: new THREE.Vector3((Math.random() - 0.5) * DUST_SPEED_XZ, (Math.random() - 0.5) * DUST_SPEED_Y, (Math.random() - 0.5) * DUST_SPEED_XZ),
-            alpha: 0,
-            baseAlpha: DUST_OPACITY * (0.5 + Math.random() * 0.7)
         });
     }
     dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3).setUsage(THREE.DynamicDrawUsage));
-    dustGeo.setAttribute('alpha', new THREE.BufferAttribute(dustAlphas, 1).setUsage(THREE.DynamicDrawUsage)); // If using custom shader
+    // dustGeo.setAttribute('alpha', new THREE.BufferAttribute(dustAlphas, 1).setUsage(THREE.DynamicDrawUsage)); // If shader uses alpha attribute
     dustSystem = { particles: new THREE.Points(dustGeo, sharedMaterials.dustMote), geometry: dustGeo, material: sharedMaterials.dustMote, data: dustData };
     dustSystem.particles.visible = false;
+    dustSystem.particles.name = "DustParticles";
     scene.add(dustSystem.particles);
-
-    // Campfire Flames (initialized separately in _initCampfire)
 }
 
 /** Sets up the campfire object group. */
 function _initCampfire() {
+    if (!scene) return;
     campfireSystem = {}; // Initialize the system object
     const group = new THREE.Group();
     group.name = "CampfireGroup";
@@ -392,6 +395,7 @@ function _initCampfire() {
     flameGeo.setAttribute('alpha', new THREE.BufferAttribute(flameAlphas, 1).setUsage(THREE.DynamicDrawUsage));
 
     const flameParticles = new THREE.Points(flameGeo, sharedMaterials.flame);
+    flameParticles.name = "CampfireFlames";
 
     group.add(flameParticles);
     group.visible = false; // Start hidden
@@ -409,6 +413,7 @@ function _initCampfire() {
 
 /** Sets up the snake mesh object. */
 function _initSnake() {
+    if (!scene) return;
     // Create a basic tube geometry initially, it will be updated
     const dummyCurve = new THREE.LineCurve3(new THREE.Vector3(0, Y_OFFSET_SNAKE, 0), new THREE.Vector3(1, Y_OFFSET_SNAKE, 0));
     const tubeGeo = new THREE.TubeGeometry(dummyCurve, 1, SNAKE_RADIUS, 6, false);
@@ -419,7 +424,7 @@ function _initSnake() {
     scene.add(snakeMesh);
 }
 
-// --- Object Creation Functions ---
+// --- Object Creation Functions --- (Moved _create functions here for better organization)
 
 function _createPlayerGroup(playerData, isSelf) {
     const group = new THREE.Group();
@@ -457,7 +462,7 @@ function _createPlayerGroup(playerData, isSelf) {
         headMesh: headMesh,
         gunMesh: gunMesh,
         currentMat: bodyMat, // Store current material for status changes
-        dyingStartTime: null // For potential fade out (though players usually just disappear)
+        dyingStartTime: null
     };
     return group;
 }
@@ -467,33 +472,34 @@ function _createEnemyGroup(enemyData) {
     group.name = `EnemyGroup_${enemyData.id}`;
 
     let bodyGeo, bodyMat, headScale, yBodyOffset;
+    const enemyHeight = enemyData.height || ENEMY_CHASER_HEIGHT; // Use provided height or default
 
     switch (enemyData.type) {
         case 'shooter':
             bodyGeo = sharedGeometries.enemyShooterBody;
             bodyMat = sharedMaterials.enemyShooterBody.clone();
             headScale = ENEMY_HEAD_RADIUS;
-            yBodyOffset = ENEMY_SHOOTER_HEIGHT / 2;
+            yBodyOffset = enemyHeight / 2;
             // Add shooter gun
             const enemyGun = new THREE.Mesh(sharedGeometries.enemyGun, sharedMaterials.enemyGun.clone());
             enemyGun.position.set(0, yBodyOffset * 0.7, ENEMY_SHOOTER_RADIUS * 0.8); // Position gun forward
             enemyGun.rotation.x = Math.PI / 2;
             enemyGun.castShadow = true;
             group.add(enemyGun);
-            group.userData.gunMesh = enemyGun; // Store reference if needed
+            group.userData.gunMesh = enemyGun;
             break;
         case 'giant':
             bodyGeo = sharedGeometries.enemyGiantBody;
             bodyMat = sharedMaterials.enemyGiantBody.clone();
-            headScale = ENEMY_HEAD_RADIUS * ENEMY_GIANT_MULTIPLIER * 0.8; // Slightly smaller head relative to giant body
-            yBodyOffset = (ENEMY_CHASER_HEIGHT * ENEMY_GIANT_MULTIPLIER) / 2;
+            headScale = ENEMY_HEAD_RADIUS * ENEMY_GIANT_MULTIPLIER * 0.8;
+            yBodyOffset = enemyHeight / 2; // Use actual giant height
             break;
         case 'chaser':
         default:
             bodyGeo = sharedGeometries.enemyChaserBody;
             bodyMat = sharedMaterials.enemyChaserBody.clone();
             headScale = ENEMY_HEAD_RADIUS;
-            yBodyOffset = ENEMY_CHASER_HEIGHT / 2;
+            yBodyOffset = enemyHeight / 2;
             break;
     }
 
@@ -532,7 +538,13 @@ function _createPowerupGroup(powerupData) {
     group.name = `PowerupGroup_${powerupData.id}`;
 
     const geometry = powerupGeometries[powerupData.type] || powerupGeometries.default;
-    const material = (sharedMaterials.powerups[powerupData.type] || sharedMaterials.powerups.default).clone();
+    // Clone material to allow individual effects later if needed
+    const material = (sharedMaterials.powerups[powerupData.type] || sharedMaterials.powerups.default)?.clone();
+
+    if (!material) {
+        console.warn(`Missing material for powerup type: ${powerupData.type}`);
+        return null; // Cannot create mesh without material
+    }
 
     const iconMesh = new THREE.Mesh(geometry, material);
     iconMesh.castShadow = true;
@@ -550,725 +562,332 @@ function _createPowerupGroup(powerupData) {
     return group;
 }
 
-// --- Update Functions ---
 
-/** Generic sync function, replacing the old updateMeshes */
+// --- Update Functions --- (Implementations moved below init for clarity)
+
+/** Generic sync function */
 function _syncSceneObjects(state, objectMap, createFn, updateFn, isSelfFn = null) {
     const activeIds = new Set();
     if (state) {
         for (const id in state) {
             const data = state[id];
-            // Basic validation: ensure position exists if expected
-            if (typeof data?.x !== 'number' || typeof data?.y !== 'number') {
-                // console.warn(`Skipping entity ${id}: Invalid position data`, data);
-                continue;
-            }
+            if (typeof data?.x !== 'number' || typeof data?.y !== 'number') continue;
             activeIds.add(id);
-
             let obj = objectMap[id];
             if (!obj) {
-                // Create new object
                 const isSelf = isSelfFn ? isSelfFn(id) : false;
-                obj = createFn(data, isSelf); // Pass isSelf flag if needed
+                obj = createFn(data, isSelf);
                 if (obj) {
                     objectMap[id] = obj;
                     scene.add(obj);
                     updateFn(obj, data, 0, isSelf, true); // Initial update
-                } else {
-                    console.warn(`Failed to create object for ${id}`);
-                    continue; // Skip if creation failed
-                }
+                } else continue;
             } else {
-                // Update existing object
                 const isSelf = obj.userData?.isSelf ?? (isSelfFn ? isSelfFn(id) : false);
-                // Reset fade state if object reappears and was marked for fading
                 if (obj.userData?.dyingStartTime) {
-                    // console.log(`Object ${id} reappeared, resetting fade.`);
-                    obj.userData.dyingStartTime = null;
-                    obj.visible = true;
-                    obj.traverse(child => {
-                        if (child.material) {
-                            child.material.opacity = 1.0;
-                            child.material.transparent = false; // May need adjustment based on base material
-                            child.material.needsUpdate = true;
-                        }
-                    });
+                    obj.userData.dyingStartTime = null; obj.visible = true;
+                    obj.traverse(child => { if (child.material) { child.material.opacity = 1.0; child.material.transparent = false; child.material.needsUpdate = true; } });
                 }
-                updateFn(obj, data, clock.deltaTime, isSelf, false); // Pass deltaTime
+                updateFn(obj, data, clock.deltaTime, isSelf, false);
             }
         }
     }
-
-    // Cleanup stale objects
-    for (const id in objectMap) {
-        if (!activeIds.has(id)) {
-            _handleObjectRemoval(objectMap[id], id, objectMap);
-        }
-    }
+    for (const id in objectMap) { if (!activeIds.has(id)) _handleObjectRemoval(objectMap[id], id, objectMap); }
 }
 
-/** Handles removal logic, including fading for enemies */
+/** Handles removal logic */
 function _handleObjectRemoval(obj, id, objectMap) {
     if (!obj) return;
-
     const isEnemy = obj.userData?.isEnemy;
-    const wasAlive = obj.userData?.health > 0 || obj.userData?.dyingStartTime === null; // Check if it was alive before this removal check
-
+    const wasAlive = !obj.userData?.dyingStartTime && (obj.userData?.health === undefined || obj.userData?.health > 0);
     if (isEnemy && wasAlive && !obj.userData.dyingStartTime) {
-        // Start fading out enemy that just disappeared but wasn't marked dead yet
-        obj.userData.dyingStartTime = clock.elapsedTime;
-        obj.userData.health = 0; // Mark as dead locally
-         obj.traverse(child => {
-             if (child.material) {
-                 child.material.transparent = true; // Ensure transparency is enabled
-             }
-         });
-        // Keep in map until fade completes
+        obj.userData.dyingStartTime = clock.elapsedTime; obj.userData.health = 0;
+        obj.traverse(child => { if (child.material) child.material.transparent = true; });
     } else if (isEnemy && obj.userData.dyingStartTime) {
-        // Continue fading enemy
         const timeElapsed = clock.elapsedTime - obj.userData.dyingStartTime;
         const fadeProgress = Math.min(1.0, timeElapsed / FADE_OUT_DURATION);
         const opacity = 1.0 - fadeProgress;
-
-        obj.traverse(child => {
-            if (child.material) {
-                child.material.opacity = opacity;
-            }
-        });
-
-        if (fadeProgress >= 1.0) {
-            // Fade complete, remove fully
-            _disposeAndRemoveObject(obj, id, objectMap);
-        }
-        // Otherwise, keep in map while fading
-    } else {
-        // Remove non-enemies or already faded enemies immediately
-        _disposeAndRemoveObject(obj, id, objectMap);
-    }
+        obj.traverse(child => { if (child.material) child.material.opacity = opacity; });
+        if (fadeProgress >= 1.0) _disposeAndRemoveObject(obj, id, objectMap);
+    } else { _disposeAndRemoveObject(obj, id, objectMap); }
 }
 
-/** Performs the actual disposal and removal from scene/map */
+/** Performs disposal and removal */
 function _disposeAndRemoveObject(obj, id, objectMap) {
-    if (!obj) return;
+    if (!obj || !scene) return;
     scene.remove(obj);
-    // More careful disposal
     obj.traverse(child => {
         if (child instanceof THREE.Mesh) {
             child.geometry?.dispose();
-            // Dispose materials only if they were cloned unique instances
             if (child.material) {
-                 if (Array.isArray(child.material)) {
-                     child.material.forEach(m => { if(m && !Object.values(sharedMaterials).includes(m) && !Object.values(sharedMaterials.powerups).includes(m)) m.dispose();});
-                 } else if (!Object.values(sharedMaterials).includes(child.material) && !Object.values(sharedMaterials.powerups).includes(child.material)) {
-                     child.material.dispose();
-                 }
+                 const materials = Array.isArray(child.material) ? child.material : [child.material];
+                 materials.forEach(m => {
+                     // Check if it's a shared material before disposing
+                     let isShared = Object.values(sharedMaterials).includes(m) || Object.values(sharedMaterials.powerups).includes(m);
+                     if (m && !isShared) m.dispose();
+                 });
             }
         }
     });
     delete objectMap[id];
 }
 
-
+/** Updates player visuals */
 function _updatePlayerGroup(group, playerData, deltaTime, isSelf, isInitial) {
+    if (!group?.userData) return;
     group.position.x = playerData.x;
     group.position.z = playerData.y; // Game Y is 3D Z
-
     const bodyMesh = group.userData.bodyMesh;
-    const headMesh = group.userData.headMesh;
-    const gunMesh = group.userData.gunMesh;
     let targetMat = isSelf ? sharedMaterials.playerSelfBody : sharedMaterials.playerBody;
-
-    // Status Effects / Material Changes
-    if (playerData.player_status === PLAYER_STATUS_DOWN) {
-        targetMat = sharedMaterials.playerDown;
-        group.visible = true; // Ensure visible when down
-    } else if (playerData.player_status === PLAYER_STATUS_DEAD) {
-        targetMat = sharedMaterials.playerDead;
-        group.visible = false; // Hide immediately when dead
-        group.userData.dyingStartTime = null; // Ensure no fade attempt
-        return; // No further updates needed
-    } else {
-         group.visible = true;
-    }
-
-    // Apply material if changed
-    if (group.userData.currentMat !== targetMat) {
-        group.userData.currentMat = targetMat;
-        if (bodyMesh) bodyMesh.material = targetMat.clone(); // Clone if applying effects potentially
-    }
-
-    // Player Aiming Rotation (only for local player)
-    if (isSelf && window.appState?.localPlayerAimState) { // Access global cautiously
-        const aimDx = window.appState.localPlayerAimState.lastAimDx;
-        const aimDy = window.appState.localPlayerAimState.lastAimDy;
-        group.rotation.y = Math.atan2(aimDx, aimDy); // Y rotation for XZ plane aiming
-    }
-
-     // TODO: Add visual effect updates (speed boost particles, etc.)
+    if (playerData.player_status === PLAYER_STATUS_DOWN) targetMat = sharedMaterials.playerDown;
+    else if (playerData.player_status === PLAYER_STATUS_DEAD) { group.visible = false; group.userData.dyingStartTime = null; return; }
+    else group.visible = true;
+    if (group.userData.currentMat !== targetMat) { group.userData.currentMat = targetMat; if (bodyMesh) bodyMesh.material = targetMat.clone(); }
+    if (isSelf && window.appState?.localPlayerAimState) { const {lastAimDx, lastAimDy} = window.appState.localPlayerAimState; group.rotation.y = Math.atan2(lastAimDx, lastAimDy); }
+    // Add effect updates here
 }
 
+/** Updates enemy visuals */
 function _updateEnemyGroup(group, enemyData, deltaTime, isSelf, isInitial) {
-    group.position.x = enemyData.x;
-    group.position.z = enemyData.y;
-    group.userData.health = enemyData.health; // Update health for fade check
-
-    // Check if needs fading (logic now in _handleObjectRemoval)
-    if (group.userData.dyingStartTime) return; // Skip updates if fading out
-
-    // Aiming Rotation (Shooters)
+    if (!group?.userData || group.userData.dyingStartTime) return; // Skip if fading
+    group.position.x = enemyData.x; group.position.z = enemyData.y;
+    group.userData.health = enemyData.health; // Needed for fade check
     const gunMesh = group.userData.gunMesh;
-    if (enemyData.type === 'shooter' && window.appState?.serverState?.players) { // Access global cautiously
+    if (enemyData.type === 'shooter' && window.appState?.serverState?.players) {
         const targetPlayer = window.appState.serverState.players[enemyData.target_player_id];
-        if (targetPlayer) {
-            const aimTargetX = targetPlayer.x;
-            const aimTargetZ = targetPlayer.y;
-            group.rotation.y = Math.atan2(aimTargetX - enemyData.x, aimTargetZ - enemyData.y);
-        }
+        if (targetPlayer) group.rotation.y = Math.atan2(targetPlayer.x - enemyData.x, targetPlayer.y - enemyData.y);
     }
-
-    // Giant Windup Effect
     const bodyMesh = group.userData.bodyMesh;
     if (bodyMesh && enemyData.type === 'giant') {
-        if (enemyData.attack_state === 'winding_up') {
-            const pulse = 1.0 + Math.sin(clock.elapsedTime * 10) * 0.05; // Subtle pulse
-            bodyMesh.scale.set(pulse, pulse, pulse);
-        } else if (bodyMesh.scale.x !== 1.0) {
-            bodyMesh.scale.set(1, 1, 1); // Reset scale
-        }
+        const scaleTarget = (enemyData.attack_state === 'winding_up') ? 1.0 + Math.sin(clock.elapsedTime * 10) * 0.05 : 1.0;
+        bodyMesh.scale.lerp(_vector3.set(scaleTarget, scaleTarget, scaleTarget), 0.2); // Smooth scale change
     }
-
-    // TODO: Snake bite visual effect? (Green tint/particles?)
+     // Add effect updates here
 }
 
+/** Updates powerup visuals */
 function _updatePowerupGroup(group, powerupData, deltaTime, isSelf, isInitial) {
-    group.position.x = powerupData.x;
-    group.position.z = powerupData.y;
-
-    const iconMesh = group.userData.iconMesh;
-    if (iconMesh) {
-        // Bobbing and Rotating animation
-        iconMesh.position.y = Y_OFFSET_POWERUP + Math.sin(clock.elapsedTime * 2.5 + group.id * 0.5) * 4; // Bobbing
-        iconMesh.rotation.y += 0.015; // Slow rotation
-        iconMesh.rotation.x += 0.005;
-        iconMesh.rotation.z += 0.003;
-    }
+     if (!group?.userData) return;
+     group.position.x = powerupData.x; group.position.z = powerupData.y;
+     const iconMesh = group.userData.iconMesh;
+     if (iconMesh) {
+         iconMesh.position.y = Y_OFFSET_POWERUP + Math.sin(clock.elapsedTime * 2.5 + group.id * 0.5) * 4;
+         iconMesh.rotation.y += 0.015; iconMesh.rotation.x += 0.005; iconMesh.rotation.z += 0.003;
+     }
 }
 
-function _updateInstancedMesh(mesh, matrices, count, state, yOffset, isBullet = false) {
-    if (!mesh || !state) {
-        if (mesh) mesh.count = 0;
-        return;
-    }
-
-    let visibleCount = 0;
-    const maxCount = matrices.length / 16; // Size of Matrix4
-
+/** Updates instanced mesh based on state */
+function _updateInstancedMesh(mesh, matrices, state, yOffset, isBullet = false) {
+    if (!mesh || !state) { if (mesh) mesh.count = 0; return; }
+    let visibleCount = 0; const maxCount = matrices.length / 16;
     for (const id in state) {
         if (visibleCount >= maxCount) break;
         const data = state[id];
         if (typeof data?.x !== 'number' || typeof data?.y !== 'number') continue;
-
-        // TODO: Add culling if needed (check if position is within camera frustum)
-
         _position.set(data.x, yOffset, data.y);
-        _quaternion.identity(); // Simple alignment for bullets/casings
-        _scale.set(1, 1, 1);
-
-        // Specific logic for bullets vs casings if needed (e.g., rotation)
-        if (!isBullet) { // Assume casing
-            _quaternion.setFromEuler(new THREE.Euler(Math.PI / 2, data.rotation || 0, 0)); // Rotate casing
-        }
-
+        _quaternion.identity(); _scale.set(1, 1, 1);
+        if (!isBullet) _quaternion.setFromEuler(new THREE.Euler(Math.PI / 2, data.rotation || 0, 0));
         _matrix.compose(_position, _quaternion, _scale);
         _matrix.toArray(matrices, visibleCount * 16);
         visibleCount++;
     }
-
-    mesh.count = visibleCount;
-    mesh.instanceMatrix.needsUpdate = true;
+    mesh.count = visibleCount; mesh.instanceMatrix.needsUpdate = true;
 }
 
+/** Updates active ammo casing physics and instanced mesh */
 function _updateActiveCasings(deltaTime) {
-    const now = clock.elapsedTime; // Use consistent time
-
+    if (!ammoCasingMesh) return;
+    const now = clock.elapsedTime;
     activeAmmoCasings = activeAmmoCasings.filter(casing => {
         if (now > casing.endTime) return false;
-
-        // Physics Update
         casing.velocity.y -= AMMO_CASING_GRAVITY * deltaTime;
         casing.position.addScaledVector(casing.velocity, deltaTime);
         casing.rotation += casing.rotationSpeed * deltaTime;
-
-        // Ground Collision / Bounce
         if (casing.position.y <= Y_OFFSET_CASING) {
-            casing.position.y = Y_OFFSET_CASING;
-            casing.velocity.y *= -AMMO_CASING_BOUNCE;
-            // Dampen horizontal velocity and rotation on bounce
-            casing.velocity.x *= (1.0 - AMMO_CASING_DRAG);
-            casing.velocity.z *= (1.0 - AMMO_CASING_DRAG);
-            casing.rotationSpeed *= (1.0 - AMMO_CASING_DRAG * 2.0); // More rotation dampening
-            // Stop tiny bounces
-            if (Math.abs(casing.velocity.y) < 5) {
-                casing.velocity.y = 0;
-            }
-             // Stop tiny rotation
-             if(Math.abs(casing.rotationSpeed) < 0.1) {
-                 casing.rotationSpeed = 0;
-             }
+            casing.position.y = Y_OFFSET_CASING; casing.velocity.y *= -AMMO_CASING_BOUNCE;
+            casing.velocity.x *= (1.0 - AMMO_CASING_DRAG); casing.velocity.z *= (1.0 - AMMO_CASING_DRAG);
+            casing.rotationSpeed *= (1.0 - AMMO_CASING_DRAG * 2.0);
+            if (Math.abs(casing.velocity.y) < 5) casing.velocity.y = 0;
+            if(Math.abs(casing.rotationSpeed) < 0.1) casing.rotationSpeed = 0;
         }
         return true;
     });
-
-    // Update Instanced Mesh
     let visibleCount = 0;
     for (let i = 0; i < activeAmmoCasings.length && i < MAX_AMMO_CASINGS; i++) {
         const casing = activeAmmoCasings[i];
-        _quaternion.setFromEuler(new THREE.Euler(Math.PI / 2, casing.rotation, 0)); // Lay flat, rotate around Y
+        _quaternion.setFromEuler(new THREE.Euler(Math.PI / 2, casing.rotation, 0));
         _matrix.compose(casing.position, _quaternion, _scale);
-        ammoCasingMesh.setMatrixAt(i, _matrix);
-        visibleCount++;
+        ammoCasingMesh.setMatrixAt(i, _matrix); visibleCount++;
     }
-    ammoCasingMesh.count = visibleCount;
-    ammoCasingMesh.instanceMatrix.needsUpdate = true;
+    ammoCasingMesh.count = visibleCount; ammoCasingMesh.instanceMatrix.needsUpdate = true;
 }
 
+/** Spawns a new ammo casing */
 function _spawnAmmoCasing(spawnPos, ejectVec) {
-    if (!ammoCasingMesh || activeAmmoCasings.length >= MAX_AMMO_CASINGS) return;
-
-    const now = clock.elapsedTime;
-    const life = 1.5 + Math.random() * 1.0; // Casings last 1.5-2.5 seconds
-
-    // Eject sideways and slightly up/back relative to ejectVec (which is usually aim direction)
-    const ejectAngle = Math.atan2(ejectVec.z, ejectVec.x) + Math.PI / 2 + (Math.random() - 0.5) * 0.5; // Eject ~90deg right
-    const ejectSpeed = 150 + Math.random() * 80;
-    const upSpeed = 50 + Math.random() * 40;
+    if (!ammoCasingMesh || activeAmmoCasings.length >= MAX_AMMO_CASINGS || !clock) return;
+    const now = clock.elapsedTime; const life = 1.5 + Math.random() * 1.0;
+    const ejectAngle = Math.atan2(ejectVec.z, ejectVec.x) + Math.PI / 2 + (Math.random() - 0.5) * 0.5;
+    const ejectSpeed = 150 + Math.random() * 80; const upSpeed = 50 + Math.random() * 40;
     const rotationSpeed = (Math.random() - 0.5) * 20;
-
     activeAmmoCasings.push({
-        position: new THREE.Vector3(
-            spawnPos.x + Math.cos(ejectAngle) * 5,
-            spawnPos.y + PLAYER_TOTAL_HEIGHT * 0.6, // Eject from near gun height
-            spawnPos.z + Math.sin(ejectAngle) * 5
-        ),
-        velocity: new THREE.Vector3(
-            Math.cos(ejectAngle) * ejectSpeed,
-            upSpeed,
-            Math.sin(ejectAngle) * ejectSpeed
-        ),
-        rotation: Math.random() * Math.PI * 2,
-        rotationSpeed: rotationSpeed,
-        startTime: now,
-        endTime: now + life
+        position: new THREE.Vector3(spawnPos.x + Math.cos(ejectAngle) * 5, spawnPos.y + PLAYER_TOTAL_HEIGHT * 0.6, spawnPos.z + Math.sin(ejectAngle) * 5),
+        velocity: new THREE.Vector3(Math.cos(ejectAngle) * ejectSpeed, upSpeed, Math.sin(ejectAngle) * ejectSpeed),
+        rotation: Math.random() * Math.PI * 2, rotationSpeed: rotationSpeed, startTime: now, endTime: now + life
     });
 }
 
+/** Updates hit spark particle system */
 function _updateHitSparks(deltaTime) {
-    if (!hitSparkSystem) return;
-
+    if (!hitSparkSystem || !clock) return;
     const positions = hitSparkSystem.geometry.attributes.position.array;
     const colors = hitSparkSystem.geometry.attributes.color.array;
     const alphas = hitSparkSystem.geometry.attributes.alpha.array;
-    const data = hitSparkSystem.data;
-    let needsUpdate = false;
-    let activeCount = 0;
-
+    const data = hitSparkSystem.data; let needsUpdate = false; let activeCount = 0;
     for (let i = 0; i < MAX_HIT_SPARKS; i++) {
-        const p = data[i];
-        if (p.life > 0) {
-            p.life -= deltaTime;
-            if (p.life <= 0) {
-                alphas[i] = 0.0;
-                positions[i * 3 + 1] = -10000; // Move offscreen
-            } else {
-                p.velocity.y -= HIT_SPARK_GRAVITY * deltaTime;
-                p.position.addScaledVector(p.velocity, deltaTime);
-
-                // Fade out based on life
-                p.alpha = Math.max(0, (p.life / (HIT_SPARK_BASE_LIFE + HIT_SPARK_RAND_LIFE)) * 1.5); // Slightly brighter fade
-                p.alpha = Math.min(1.0, p.alpha); // Clamp alpha
-
-                alphas[i] = p.alpha;
-                positions[i * 3 + 0] = p.position.x;
-                positions[i * 3 + 1] = p.position.y;
-                positions[i * 3 + 2] = p.position.z;
-                colors[i * 3 + 0] = p.color.r;
-                colors[i * 3 + 1] = p.color.g;
-                colors[i * 3 + 2] = p.color.b;
-                activeCount++;
-            }
-            needsUpdate = true;
-        } else if (alphas[i] > 0) { // Ensure already dead sparks are fully hidden
-            alphas[i] = 0.0;
-            positions[i * 3 + 1] = -10000;
-            needsUpdate = true;
-        }
+        const p = data[i]; if (p.life > 0) {
+            p.life -= deltaTime; if (p.life <= 0) { alphas[i] = 0.0; positions[i * 3 + 1] = -10000; }
+            else {
+                p.velocity.y -= HIT_SPARK_GRAVITY * deltaTime; p.position.addScaledVector(p.velocity, deltaTime);
+                p.alpha = Math.min(1.0, Math.max(0, (p.life / (HIT_SPARK_BASE_LIFE + HIT_SPARK_RAND_LIFE)) * 1.5));
+                alphas[i] = p.alpha; positions[i * 3 + 0] = p.position.x; positions[i * 3 + 1] = p.position.y; positions[i * 3 + 2] = p.position.z;
+                colors[i * 3 + 0] = p.color.r; colors[i * 3 + 1] = p.color.g; colors[i * 3 + 2] = p.color.b; activeCount++;
+            } needsUpdate = true;
+        } else if (alphas[i] > 0) { alphas[i] = 0.0; positions[i * 3 + 1] = -10000; needsUpdate = true; }
     }
-
-    if (needsUpdate) {
-        hitSparkSystem.geometry.attributes.position.needsUpdate = true;
-        hitSparkSystem.geometry.attributes.color.needsUpdate = true;
-        hitSparkSystem.geometry.attributes.alpha.needsUpdate = true;
-        // hitSparkSystem.geometry.attributes.size.needsUpdate = true; // If using size attribute
-        hitSparkSystem.particles.visible = activeCount > 0;
-    }
+    if (needsUpdate) { hitSparkSystem.geometry.attributes.position.needsUpdate = true; hitSparkSystem.geometry.attributes.color.needsUpdate = true; hitSparkSystem.geometry.attributes.alpha.needsUpdate = true; hitSparkSystem.particles.visible = activeCount > 0; }
 }
 
-
+/** Spawns multiple hit sparks */
 function _triggerHitSparks(position, count = 5) {
-    if (!hitSparkSystem) return;
-    const data = hitSparkSystem.data;
-    let spawned = 0;
-    // Find inactive slots to reuse
+    if (!hitSparkSystem || !clock) return; const data = hitSparkSystem.data; let spawned = 0;
     for (let i = 0; i < MAX_HIT_SPARKS && spawned < count; i++) {
         if (data[i].life <= 0) {
-            const p = data[i];
-            p.position.copy(position);
-            // Random velocity outward and slightly up
-            const angle = Math.random() * Math.PI * 2;
-            const spreadAngle = (Math.random() - 0.5) * Math.PI * 0.6; // Spread up/down a bit
+            const p = data[i]; p.position.copy(position);
+            const angle = Math.random() * Math.PI * 2; const spreadAngle = (Math.random() - 0.5) * Math.PI * 0.6;
             const speed = HIT_SPARK_INITIAL_VEL + Math.random() * HIT_SPARK_SPREAD;
-
-            p.velocity.set(
-                Math.cos(angle) * Math.cos(spreadAngle) * speed,
-                Math.sin(spreadAngle) * speed * 1.5 + 30, // More upward bias
-                Math.sin(angle) * Math.cos(spreadAngle) * speed
-            );
-            p.color.setRGB(1, 0.2 + Math.random() * 0.3, 0); // Orange-red sparks
-            p.alpha = 1.0;
-            p.life = HIT_SPARK_BASE_LIFE + Math.random() * HIT_SPARK_RAND_LIFE;
-            p.size = sharedMaterials.hitSpark.size * (0.8 + Math.random() * 0.4); // Vary size slightly
+            p.velocity.set(Math.cos(angle) * Math.cos(spreadAngle) * speed, Math.sin(spreadAngle) * speed * 1.5 + 30, Math.sin(angle) * Math.cos(spreadAngle) * speed);
+            p.color.setRGB(1, 0.2 + Math.random() * 0.3, 0); p.alpha = 1.0; p.life = HIT_SPARK_BASE_LIFE + Math.random() * HIT_SPARK_RAND_LIFE;
             spawned++;
         }
     }
 }
 
+/** Updates rain line system */
 function _updateRain(deltaTime) {
     if (!rainSystem || !rainSystem.lines.visible) return;
-
-    const positions = rainSystem.geometry.attributes.position.array;
-    const data = rainSystem.data;
-    let needsUpdate = false;
-
+    const positions = rainSystem.geometry.attributes.position.array; const data = rainSystem.data; let needsUpdate = false;
     for (let i = 0; i < MAX_RAIN_DROPS; i++) {
-        const p = data[i];
-        p.y += p.speed * deltaTime;
-
-        // Reset if below ground
-        if (p.y < -50) {
-            p.x = Math.random() * gameWidth * GROUND_MARGIN - (gameWidth * (GROUND_MARGIN - 1) / 2);
-            p.y = Math.random() * 500 + 1000; // Reset high
-            p.z = Math.random() * gameHeight * GROUND_MARGIN - (gameHeight * (GROUND_MARGIN - 1) / 2);
-            p.speed = RAIN_SPEED_Y + Math.random() * RAIN_SPEED_Y_RAND;
-        }
-
-        const idx = i * 6;
-        positions[idx + 0] = p.x; positions[idx + 1] = p.y; positions[idx + 2] = p.z;
-        positions[idx + 3] = p.x; positions[idx + 4] = p.y - RAIN_STREAK_LENGTH; positions[idx + 5] = p.z; // End point below start point
-        needsUpdate = true;
-    }
-
-    if (needsUpdate) {
-        rainSystem.geometry.attributes.position.needsUpdate = true;
-    }
+        const p = data[i]; p.y += p.speed * deltaTime;
+        if (p.y < -50) { p.x = Math.random() * gameWidth * GROUND_MARGIN - (gameWidth * (GROUND_MARGIN - 1) / 2); p.y = Math.random() * 500 + 1000; p.z = Math.random() * gameHeight * GROUND_MARGIN - (gameHeight * (GROUND_MARGIN - 1) / 2); p.speed = RAIN_SPEED_Y + Math.random() * RAIN_SPEED_Y_RAND; }
+        const idx = i * 6; positions[idx + 0] = p.x; positions[idx + 1] = p.y; positions[idx + 2] = p.z; positions[idx + 3] = p.x; positions[idx + 4] = p.y - RAIN_STREAK_LENGTH; positions[idx + 5] = p.z; needsUpdate = true;
+    } if (needsUpdate) rainSystem.geometry.attributes.position.needsUpdate = true;
 }
 
+/** Updates dust particle system */
 function _updateDust(deltaTime) {
-     if (!dustSystem || !dustSystem.particles.visible) return;
-
-     const positions = dustSystem.geometry.attributes.position.array;
-     const alphas = dustSystem.geometry.attributes.alpha.array; // Assuming using alpha attribute
-     const data = dustSystem.data;
-     let needsUpdate = false;
-
-     const cameraPos = camera.position;
-     const maxDistSq = 1200 * 1200; // Fade dust further away
-
+     if (!dustSystem || !dustSystem.particles.visible || !camera) return;
+     const positions = dustSystem.geometry.attributes.position.array; const data = dustSystem.data; let needsUpdate = false;
+     const camPos = camera.position; const maxDistSq = 1200 * 1200;
      for (let i = 0; i < MAX_DUST_MOTES; i++) {
-         const p = data[i];
-         p.position.addScaledVector(p.velocity, deltaTime);
-
-         // Wrap around edges
-         const halfW = gameWidth / 2; const halfH = gameHeight / 2;
-         const marginW = gameWidth * (GROUND_MARGIN - 1) / 2;
-         const marginH = gameHeight * (GROUND_MARGIN - 1) / 2;
-         const worldWidth = gameWidth * GROUND_MARGIN;
-         const worldHeight = gameHeight * GROUND_MARGIN;
-
-         if (p.position.x < halfW - marginW) p.position.x += worldWidth;
-         if (p.position.x > halfW + worldWidth - marginW) p.position.x -= worldWidth;
-         if (p.position.z < halfH - marginH) p.position.z += worldHeight;
-         if (p.position.z > halfH + worldHeight - marginH) p.position.z -= worldHeight;
-         // Keep Y within bounds
-         p.position.y += (Math.random() - 0.5) * DUST_SPEED_Y * deltaTime;
-         p.position.y = Math.max(5, Math.min(80, p.position.y));
-
-         // Fade based on distance to camera (optional, for performance/visuals)
-         const distSq = cameraPos.distanceToSquared(p.position);
-         const fadeFactor = Math.max(0, 1.0 - distSq / maxDistSq);
-
-         p.alpha = p.baseAlpha * fadeFactor;
-         alphas[i] = p.alpha;
-
-         positions[i * 3 + 0] = p.position.x;
-         positions[i * 3 + 1] = p.position.y;
-         positions[i * 3 + 2] = p.position.z;
-         needsUpdate = true;
-     }
-
-     if (needsUpdate) {
-         dustSystem.geometry.attributes.position.needsUpdate = true;
-         dustSystem.geometry.attributes.alpha.needsUpdate = true;
-         dustSystem.material.opacity = DUST_OPACITY; // Ensure base opacity is set
-     }
+         const p = data[i]; p.position.addScaledVector(p.velocity, deltaTime);
+         const halfW = gameWidth / 2; const halfH = gameHeight / 2; const marginW = gameWidth * (GROUND_MARGIN - 1) / 2; const marginH = gameHeight * (GROUND_MARGIN - 1) / 2; const worldWidth = gameWidth * GROUND_MARGIN; const worldHeight = gameHeight * GROUND_MARGIN;
+         if (p.position.x < halfW - marginW) p.position.x += worldWidth; else if (p.position.x > halfW + worldWidth - marginW) p.position.x -= worldWidth;
+         if (p.position.z < halfH - marginH) p.position.z += worldHeight; else if (p.position.z > halfH + worldHeight - marginH) p.position.z -= worldHeight;
+         p.position.y += (Math.random() - 0.5) * DUST_SPEED_Y * deltaTime; p.position.y = Math.max(5, Math.min(80, p.position.y));
+         positions[i * 3 + 0] = p.position.x; positions[i * 3 + 1] = p.position.y; positions[i * 3 + 2] = p.position.z; needsUpdate = true;
+     } if (needsUpdate) dustSystem.geometry.attributes.position.needsUpdate = true;
 }
 
+/** Updates campfire flame particles */
 function _updateCampfire(deltaTime) {
-    if (!campfireSystem || !campfireSystem.group.visible) return;
-
-    const positions = campfireSystem.geometry.attributes.position.array;
-    const colors = campfireSystem.geometry.attributes.color.array;
-    const alphas = campfireSystem.geometry.attributes.alpha.array;
-    const data = campfireSystem.data;
-    let needsUpdate = false;
-    let activeCount = 0;
-
-    // Spawn new particles
-    const spawnRate = 150; // Particles per second
-    const numToSpawn = Math.floor(spawnRate * deltaTime * (0.5 + Math.random()));
-
-    let spawned = 0;
+    if (!campfireSystem || !campfireSystem.group.visible || !clock) return;
+    const positions = campfireSystem.geometry.attributes.position.array; const colors = campfireSystem.geometry.attributes.color.array; const alphas = campfireSystem.geometry.attributes.alpha.array; const data = campfireSystem.data; let needsUpdate = false; let activeCount = 0;
+    const spawnRate = 150; const numToSpawn = Math.floor(spawnRate * deltaTime * (0.5 + Math.random())); let spawned = 0;
     for (let i = 0; i < MAX_FLAME_PARTICLES && spawned < numToSpawn; i++) {
         if (data[i].life <= 0) {
-            const p = data[i];
-            const angle = Math.random() * Math.PI * 2;
-            const radius = Math.random() * CAMPFIRE_BASE_RADIUS;
-            p.position.set(
-                Math.cos(angle) * radius,
-                Y_OFFSET_CAMPFIRE + 2, // Start just above logs
-                Math.sin(angle) * radius
-            );
-            p.velocity.set(
-                (Math.random() - 0.5) * FLAME_VEL_SPREAD,
-                FLAME_VEL_Y + Math.random() * 30,
-                (Math.random() - 0.5) * FLAME_VEL_SPREAD
-            );
-            p.life = p.baseLife;
-            p.alpha = 0.7 + Math.random() * 0.3;
-            p.color.setHSL(0.07 + Math.random() * 0.06, 1.0, 0.6 + Math.random() * 0.1); // Orange/Yellow
-            spawned++;
+            const p = data[i]; const angle = Math.random() * Math.PI * 2; const radius = Math.random() * CAMPFIRE_BASE_RADIUS;
+            p.position.set(Math.cos(angle) * radius, Y_OFFSET_CAMPFIRE + 2, Math.sin(angle) * radius);
+            p.velocity.set((Math.random() - 0.5) * FLAME_VEL_SPREAD, FLAME_VEL_Y + Math.random() * 30, (Math.random() - 0.5) * FLAME_VEL_SPREAD);
+            p.life = p.baseLife; p.alpha = 0.7 + Math.random() * 0.3; p.color.setHSL(0.07 + Math.random() * 0.06, 1.0, 0.6 + Math.random() * 0.1); spawned++;
         }
     }
-
-    // Update existing particles
     for (let i = 0; i < MAX_FLAME_PARTICLES; i++) {
-        const p = data[i];
-        if (p.life > 0) {
-            p.life -= deltaTime;
-            if (p.life <= 0) {
-                alphas[i] = 0.0;
-                positions[i * 3 + 1] = -10000; // Move offscreen
-            } else {
-                p.velocity.y += (Math.random() - 0.4) * 20 * deltaTime; // Slight upward drift variation
-                p.velocity.x *= 0.97; // Dampen horizontal movement
-                p.velocity.z *= 0.97;
-                p.position.addScaledVector(p.velocity, deltaTime);
-
-                p.alpha = Math.max(0, (p.life / p.baseLife) * 1.2); // Fade out
-                p.color.lerp(_color.setRGB(1.0, 0.1, 0.0), deltaTime * 1.5); // Lerp towards red/embers
-
-                alphas[i] = p.alpha;
-                positions[i * 3 + 0] = p.position.x;
-                positions[i * 3 + 1] = p.position.y;
-                positions[i * 3 + 2] = p.position.z;
-                colors[i * 3 + 0] = p.color.r;
-                colors[i * 3 + 1] = p.color.g;
-                colors[i * 3 + 2] = p.color.b;
-                activeCount++;
-            }
-            needsUpdate = true;
-        } else if (alphas[i] > 0) { // Ensure dead are hidden
-             alphas[i] = 0.0;
-             positions[i * 3 + 1] = -10000;
-             needsUpdate = true;
-        }
+        const p = data[i]; if (p.life > 0) {
+            p.life -= deltaTime; if (p.life <= 0) { alphas[i] = 0.0; positions[i * 3 + 1] = -10000; }
+            else {
+                p.velocity.y += (Math.random() - 0.4) * 20 * deltaTime; p.velocity.x *= 0.97; p.velocity.z *= 0.97; p.position.addScaledVector(p.velocity, deltaTime);
+                p.alpha = Math.max(0, (p.life / p.baseLife) * 1.2); p.color.lerp(_color.setRGB(1.0, 0.1, 0.0), deltaTime * 1.5);
+                alphas[i] = p.alpha; positions[i * 3 + 0] = p.position.x; positions[i * 3 + 1] = p.position.y; positions[i * 3 + 2] = p.position.z;
+                colors[i * 3 + 0] = p.color.r; colors[i * 3 + 1] = p.color.g; colors[i * 3 + 2] = p.color.b; activeCount++;
+            } needsUpdate = true;
+        } else if (alphas[i] > 0) { alphas[i] = 0.0; positions[i * 3 + 1] = -10000; needsUpdate = true; }
     }
-
-    if (needsUpdate) {
-        campfireSystem.geometry.attributes.position.needsUpdate = true;
-        campfireSystem.geometry.attributes.color.needsUpdate = true;
-        campfireSystem.geometry.attributes.alpha.needsUpdate = true;
-    }
-
-    // Update glow light intensity
-    if (campfireSystem.glowLight) {
-        campfireSystem.glowLight.intensity = 2.5 + Math.sin(clock.elapsedTime * 3.0) * 0.8; // Flicker
-    }
+    if (needsUpdate) { campfireSystem.geometry.attributes.position.needsUpdate = true; campfireSystem.geometry.attributes.color.needsUpdate = true; campfireSystem.geometry.attributes.alpha.needsUpdate = true; }
+    if (campfireSystem.glowLight) campfireSystem.glowLight.intensity = 2.5 + Math.sin(clock.elapsedTime * 3.0) * 0.8;
 }
 
+/** Updates the snake tube geometry */
 function _updateSnake(snakeData) {
-    if (!snakeMesh) return;
-
-    const isActive = snakeData?.isActiveFromServer ?? false;
-    snakeMesh.visible = isActive;
-
+    if (!snakeMesh || !snakeData) { if(snakeMesh) snakeMesh.visible = false; return; }
+    const isActive = snakeData?.isActiveFromServer ?? false; snakeMesh.visible = isActive;
     if (isActive && snakeData.segments && snakeData.segments.length > 1) {
-        // Use CatmullRomCurve3 for smoother interpolation between server points
         const points = snakeData.segments.map(seg => _vector3.set(seg.x, Y_OFFSET_SNAKE, seg.y));
-
         if (points.length >= 2) {
             try {
-                 const curve = new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.1); // Adjust tension if needed
-                 // Use the curve points, potentially getting more points than segments for smoothness
+                 const curve = new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.1);
                  const tubePoints = curve.getPoints(SNAKE_VISUAL_SEGMENTS * 2);
                  if(tubePoints.length >= 2) {
-                    const newGeometry = new THREE.TubeGeometry(
-                        new THREE.CatmullRomCurve3(tubePoints), // Create curve from more points
-                        tubePoints.length - 1, // Segments based on points
-                        SNAKE_RADIUS,
-                        6,  // Radial segments
-                        false // Closed
-                    );
-                    snakeMesh.geometry.dispose(); // Dispose old geometry
-                    snakeMesh.geometry = newGeometry;
-                 } else {
-                     snakeMesh.visible = false; // Not enough points for a curve
-                 }
-            } catch(e) {
-                console.error("Error updating snake geometry:", e);
-                snakeMesh.visible = false; // Hide if geometry creation fails
-            }
-        } else {
-            snakeMesh.visible = false; // Not enough points for a curve
-        }
+                    const newGeometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(tubePoints), tubePoints.length - 1, SNAKE_RADIUS, 6, false);
+                    snakeMesh.geometry.dispose(); snakeMesh.geometry = newGeometry; snakeMesh.visible = true;
+                 } else snakeMesh.visible = false;
+            } catch(e) { console.error("Error updating snake geometry:", e); snakeMesh.visible = false; }
+        } else snakeMesh.visible = false;
     }
 }
 
+/** Updates camera position and shake */
 function _updateCamera(deltaTime) {
-    if (!camera) return;
-
-    // Smoothly follow the target position
-    const targetX = cameraTargetPos.x;
-    const targetZ = cameraTargetPos.z;
-
-    _vector3.set(targetX, CAMERA_BASE_Y, targetZ); // Base position above target
+    if (!camera || !clock) return;
+    const targetX = cameraTargetPos.x; const targetZ = cameraTargetPos.z;
+    _vector3.set(targetX, CAMERA_BASE_Y, targetZ);
     camera.position.lerp(_vector3, CAMERA_LERP_FACTOR);
-
-    // Apply screen shake offset relative to the smoothed position
     if (shakeMagnitude > 0 && clock.elapsedTime < shakeEndTime) {
         const timeRemaining = shakeEndTime - clock.elapsedTime;
-        // Use a non-linear decay for better feel
-        const decayFactor = Math.pow(Math.max(0, timeRemaining / (shakeEndTime - (clock.elapsedTime-deltaTime))), 2); // Quadratic decay
+        const decayFactor = Math.pow(Math.max(0, timeRemaining / (shakeEndTime - (clock.elapsedTime-deltaTime))), 2);
         const currentMag = shakeMagnitude * decayFactor;
-
-        const shakeAngle = Math.random() * Math.PI * 2; // Random direction each frame
-        screenShakeOffset.set(
-            Math.cos(shakeAngle) * currentMag,
-            (Math.random() - 0.5) * currentMag * 0.5, // Subtle vertical shake
-            Math.sin(shakeAngle) * currentMag
-        );
+        const shakeAngle = Math.random() * Math.PI * 2;
+        screenShakeOffset.set(Math.cos(shakeAngle)*currentMag, (Math.random()-0.5)*currentMag*0.5, Math.sin(shakeAngle)*currentMag);
         camera.position.add(screenShakeOffset);
-    } else {
-        shakeMagnitude = 0; // Reset shake when done
-    }
-
-    // Ensure camera always looks down at the target point on the ground
-    _vector3.set(targetX, 0, targetZ); // Look at point on ground
-    camera.lookAt(_vector3);
+    } else shakeMagnitude = 0;
+    _vector3.set(targetX, 0, targetZ); camera.lookAt(_vector3);
 }
 
+/** Updates environment lighting, fog, etc. */
 function _updateEnvironment(isNight, isRaining, isDustStorm) {
      if (!scene || !ambientLight || !directionalLight || !groundPlane) return;
-
-     // --- Target Values --- (Keep these as before)
-     const dayAmbientIntensity = 0.7; const nightAmbientIntensity = 0.45;
-     const dayDirIntensity = 1.2; const nightDirIntensity = 0.7;
-     const dayAmbientColor = 0xffffff; const nightAmbientColor = 0x7080a0; // Cooler night ambient
-     const dayDirColor = 0xffffff; const nightDirColor = 0xa0b0ff; // Bluish moon light
-
-     const dayFogColor = 0xc0d0e0; const dayFogDensity = 0.0003; // Light haze day
-     const nightFogColor = 0x04060a; const nightFogDensity = 0.0008; // Darker, denser night fog
-     const dustFogColor = 0xb09070; const dustFogDensity = 0.0015; // Brownish, very dense dust
-
-     // --- Determine Targets based on State ---
-     const targetAmbientIntensity = isNight ? nightAmbientIntensity : dayAmbientIntensity;
-     const targetDirIntensity = isNight ? nightDirIntensity : dayDirIntensity;
-     _color.setHex(isNight ? nightAmbientColor : dayAmbientColor); // Use temp color object for target ambient
-     const targetAmbientColor = _color.clone();
-     _color.setHex(isNight ? nightDirColor : dayDirColor); // Use temp color object for target directional
-     const targetDirColor = _color.clone();
-     const targetGroundMaterial = isNight ? sharedMaterials.groundNight : sharedMaterials.groundDay;
-
-     let targetFogDensityValue, targetFogColorHex;
-     if(isDustStorm) {
-         targetFogDensityValue = dustFogDensity;
-         targetFogColorHex = dustFogColor;
-     } else if (isNight) {
-         targetFogDensityValue = nightFogDensity;
-         targetFogColorHex = nightFogColor;
-     } else {
-         targetFogDensityValue = dayFogDensity;
-         targetFogColorHex = dayFogColor;
-     }
-     _color.setHex(targetFogColorHex); // Use temp color object for target fog
-     const targetFogColor = _color.clone();
-
-
-     // --- Apply Lerp ---
-     const lerpAlpha = 0.05; // Smoothing factor
-
-     // Use the scalar 'lerp' function for intensity
-     ambientLight.intensity = lerp(ambientLight.intensity, targetAmbientIntensity, lerpAlpha);
-     directionalLight.intensity = lerp(directionalLight.intensity, targetDirIntensity, lerpAlpha);
-
-     // Use THREE.Color.lerp() for colors
-     ambientLight.color.lerp(targetAmbientColor, lerpAlpha);
-     directionalLight.color.lerp(targetDirColor, lerpAlpha);
-
-     // Set ground material directly
-     if (groundPlane.material !== targetGroundMaterial) {
-         groundPlane.material = targetGroundMaterial;
-     }
-
-     // Update Fog
-     if (!scene.fog) {
-         scene.fog = new THREE.FogExp2(targetFogColor.getHex(), targetFogDensityValue);
-     } else {
-         // Use THREE.Color.lerp() for fog color
-         scene.fog.color.lerp(targetFogColor, lerpAlpha);
-         // Use the scalar 'lerp' function for density
-         scene.fog.density = lerp(scene.fog.density, targetFogDensityValue, lerpAlpha);
-     }
-
-     // Match background to fog color using Color.lerp()
-     if(!scene.background || !(scene.background instanceof THREE.Color)) {
-          scene.background = new THREE.Color(); // Ensure background is a Color object
-     }
-     scene.background.lerp(targetFogColor, lerpAlpha); // Lerp towards the target fog color
-
-     // Update particle system visibility (Keep as before)
-     if (rainSystem) rainSystem.lines.visible = isRaining;
-     if (dustSystem) dustSystem.particles.visible = isDustStorm;
+     const dayAI=0.7, nightAI=0.45; const dayDI=1.2, nightDI=0.7; const dayAC=0xffffff, nightAC=0x7080a0; const dayDC=0xffffff, nightDC=0xa0b0ff;
+     const dayFogC=0xc0d0e0, dayFogD=0.0003; const nightFogC=0x04060a, nightFogD=0.0008; const dustFogC=0xb09070, dustFogD=0.0015;
+     const targetAI = isNight?nightAI:dayAI; const targetDI = isNight?nightDI:dayDI; const targetAC = isNight?nightAC:dayAC; const targetDC = isNight?nightDC:dayDC; const targetGM = isNight?sharedMaterials.groundNight:sharedMaterials.groundDay;
+     let targetFD, targetFC; if(isDustStorm){targetFD=dustFogD;targetFC=dustFogC;}else if(isNight){targetFD=nightFogD;targetFC=nightFogC;}else{targetFD=dayFogD;targetFC=dayFogC;}
+     const lerpA = 0.05; ambientLight.intensity = lerp(ambientLight.intensity, targetAI, lerpA); directionalLight.intensity = lerp(directionalLight.intensity, targetDI, lerpA);
+     ambientLight.color.lerp(_color.setHex(targetAC), lerpA); directionalLight.color.lerp(_color.setHex(targetDC), lerpA);
+     if (groundPlane.material !== targetGM) groundPlane.material = targetGM;
+     if (!scene.fog) scene.fog = new THREE.FogExp2(targetFC, targetFD); else { scene.fog.color.lerp(_color.setHex(targetFC), lerpA); scene.fog.density = lerp(scene.fog.density, targetFD, lerpA); }
+     if(!scene.background || !(scene.background instanceof THREE.Color)) scene.background = new THREE.Color(); scene.background.lerp(_color.setHex(targetFC), lerpA);
+     if (rainSystem) rainSystem.lines.visible = isRaining; if (dustSystem) dustSystem.particles.visible = isDustStorm;
 }
 
+/** Updates muzzle flash light effect */
 function _updateMuzzleFlash(localEffects, playerGroup) {
-    if (!muzzleFlashLight) return;
-    const flashState = localEffects?.muzzleFlash;
-    const now = performance.now();
-
+    if (!muzzleFlashLight || !clock) return;
+    const flashState = localEffects?.muzzleFlash; const now = clock.elapsedTime * 1000; // Use ms consistent with effect endTime
     if (flashState?.active && now < flashState.endTime && playerGroup && playerGroup.userData.gunMesh) {
-        muzzleFlashLight.intensity = 5.0 + Math.random() * 4.0; // Intensity flicker
-
-        // Position at the tip of the gun mesh
+        muzzleFlashLight.intensity = 5.0 + Math.random() * 4.0;
         const gunMesh = playerGroup.userData.gunMesh;
-        _vector3.set(0, PLAYER_GUN_LENGTH / 2 + 5, 0); // Position at tip in local space (Y is forward for cylinder)
-        gunMesh.localToWorld(_vector3); // Convert to world space
-        muzzleFlashLight.position.copy(_vector3);
-
-    } else {
-        muzzleFlashLight.intensity = 0;
-        if (flashState) flashState.active = false; // Reset flag if expired
-    }
+        _vector3.set(0, PLAYER_GUN_LENGTH / 2 + 5, 0); gunMesh.localToWorld(_vector3); muzzleFlashLight.position.copy(_vector3);
+    } else { muzzleFlashLight.intensity = 0; if (flashState) flashState.active = false; }
 }
+
 
 // --- Public API ---
 
@@ -1276,346 +895,173 @@ const Renderer3D = {
     /** Initializes the THREE.js renderer, scene, camera, and essential elements. */
     init: (containerElement, initialWidth, initialHeight) => {
         console.log("--- Renderer3D.init() ---");
-        if (!containerElement) {
-            console.error("Renderer Init Failed: Container element is required.");
-            return false;
-        }
-
-        gameWidth = initialWidth || DEFAULT_GAME_WIDTH;
-        gameHeight = initialHeight || DEFAULT_GAME_HEIGHT;
+        if (!containerElement) { console.error("Renderer Init Failed: Container element is required."); return false; }
+        domContainer = containerElement; // Store container reference
+        gameWidth = initialWidth || DEFAULT_GAME_WIDTH; gameHeight = initialHeight || DEFAULT_GAME_HEIGHT;
         cameraTargetPos.set(gameWidth / 2, 0, gameHeight / 2);
-
         try {
-            // 1. Renderer Setup
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false }); // Opaque bg is faster
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.setSize(gameWidth, gameHeight);
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Good quality/perf balance
-            renderer.outputColorSpace = THREE.SRGBColorSpace; // Correct colors
-            // Optional: Tone mapping for nicer lighting
-            // renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            // renderer.toneMappingExposure = 1.0;
-            containerElement.appendChild(renderer.domElement);
-
-            // 2. Scene Setup
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x1a2a28); // Initial dark background
-            // Fog is initialized/updated in _updateEnvironment
-
-            // 3. Camera Setup (Perspective)
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            renderer.setPixelRatio(window.devicePixelRatio); renderer.setSize(gameWidth, gameHeight);
+            renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.outputColorSpace = THREE.SRGBColorSpace;
+            domContainer.appendChild(renderer.domElement);
+            scene = new THREE.Scene(); scene.background = new THREE.Color(0x1a2a28);
             camera = new THREE.PerspectiveCamera(CAMERA_FOV, gameWidth / gameHeight, CAMERA_NEAR, CAMERA_FAR);
-            camera.position.set(gameWidth / 2, CAMERA_BASE_Y, gameHeight / 2 + 300); // Position slightly back for perspective
-            camera.rotation.x = CAMERA_ANGLE;
-            scene.add(camera);
-
-            // 4. Lighting Setup
-            ambientLight = new THREE.AmbientLight(0xffffff, 0.7); // Start with decent ambient
-            scene.add(ambientLight);
-
-            directionalLight = new THREE.DirectionalLight(0xffffff, 1.0); // Main sun/moon light
-            directionalLight.position.set(gameWidth * 0.3, 400, gameHeight * 0.4); // Angled light source
-            directionalLight.castShadow = true;
-            directionalLight.shadow.mapSize.width = 2048;
-            directionalLight.shadow.mapSize.height = 2048;
-            // Adjust shadow camera frustum to tightly fit the game area + margin
-            const shadowCamSizeX = gameWidth * GROUND_MARGIN * 0.55;
-            const shadowCamSizeZ = gameHeight * GROUND_MARGIN * 0.55;
-            directionalLight.shadow.camera.left = -shadowCamSizeX;
-            directionalLight.shadow.camera.right = shadowCamSizeX;
-            directionalLight.shadow.camera.top = shadowCamSizeZ;
-            directionalLight.shadow.camera.bottom = -shadowCamSizeZ;
-            directionalLight.shadow.camera.near = 50;
-            directionalLight.shadow.camera.far = 1000;
-            directionalLight.shadow.bias = -0.002; // Fine-tune shadow bias
-            directionalLight.target.position.set(gameWidth / 2, 0, gameHeight / 2); // Target center
-            scene.add(directionalLight);
-            scene.add(directionalLight.target);
-
-            muzzleFlashLight = new THREE.PointLight(0xffcc66, 0, 150, 1.8); // Orange, intensity 0, range 150, decay 1.8
-            muzzleFlashLight.castShadow = false; // Muzzle flash shouldn't cast shadows
-            scene.add(muzzleFlashLight);
-
-            // 5. Ground Plane
-            _createAssets(); // Create textures first
-            _createGeometries();
-            _createMaterials();
-
+            camera.position.set(gameWidth / 2, CAMERA_BASE_Y, gameHeight / 2 + 300); camera.rotation.x = CAMERA_ANGLE; scene.add(camera);
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.7); scene.add(ambientLight);
+            directionalLight = new THREE.DirectionalLight(0xffffff, 1.0); directionalLight.position.set(gameWidth * 0.3, 400, gameHeight * 0.4); directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048; directionalLight.shadow.mapSize.height = 2048;
+            const shadowCamSizeX = gameWidth * GROUND_MARGIN * 0.55; const shadowCamSizeZ = gameHeight * GROUND_MARGIN * 0.55;
+            directionalLight.shadow.camera.left = -shadowCamSizeX; directionalLight.shadow.camera.right = shadowCamSizeX; directionalLight.shadow.camera.top = shadowCamSizeZ; directionalLight.shadow.camera.bottom = -shadowCamSizeZ;
+            directionalLight.shadow.camera.near = 50; directionalLight.shadow.camera.far = 1000; directionalLight.shadow.bias = -0.002;
+            directionalLight.target.position.set(gameWidth / 2, 0, gameHeight / 2); scene.add(directionalLight); scene.add(directionalLight.target);
+            muzzleFlashLight = new THREE.PointLight(0xffcc66, 0, 150, 1.8); muzzleFlashLight.castShadow = false; scene.add(muzzleFlashLight);
+            _createAssets(); _createGeometries(); _createMaterials();
             groundPlane = new THREE.Mesh(sharedGeometries.groundPlane, sharedMaterials.groundDay);
-            groundPlane.scale.set(gameWidth * GROUND_MARGIN, gameHeight * GROUND_MARGIN, 1);
-            groundPlane.rotation.x = -Math.PI / 2;
-            groundPlane.position.set(gameWidth / 2, 0, gameHeight / 2); // Centered at Y=0
-            groundPlane.receiveShadow = true;
-            groundPlane.name = "GroundPlane";
-            scene.add(groundPlane);
-
-            // 6. Initialize Systems
-            _initParticlesAndInstances();
-            _initCampfire();
-            _initSnake();
-
-            // 7. Clock & Resize Listener
+            groundPlane.scale.set(gameWidth * GROUND_MARGIN, gameHeight * GROUND_MARGIN, 1); groundPlane.rotation.x = -Math.PI / 2; groundPlane.position.set(gameWidth / 2, 0, gameHeight / 2);
+            groundPlane.receiveShadow = true; groundPlane.name = "GroundPlane"; scene.add(groundPlane);
+            _initParticlesAndInstances(); _initCampfire(); _initSnake();
             clock = new THREE.Clock();
-            window.addEventListener('resize', () => {
-                if (!renderer || !camera || !containerElement) return;
-                gameWidth = containerElement.clientWidth;
-                gameHeight = containerElement.clientHeight;
-                renderer.setSize(gameWidth, gameHeight);
-                camera.aspect = gameWidth / gameHeight;
-                camera.updateProjectionMatrix();
-            });
+            // Add resize listener using the stored container reference
+             window.addEventListener('resize', () => {
+                 if (!renderer || !camera || !domContainer) return;
+                 const newWidth = domContainer.clientWidth;
+                 const newHeight = domContainer.clientHeight;
+                 // Update internal dimensions *if* they differ significantly (optional threshold)
+                 // This is primarily for visual resize, logical size comes from appState
+                 if (Math.abs(newWidth - gameWidth) > 1 || Math.abs(newHeight - gameHeight) > 1) {
+                      // Update renderer size based on DOM element, but keep logical gameWidth/Height
+                      renderer.setSize(newWidth, newHeight);
+                      camera.aspect = newWidth / newHeight;
+                      camera.updateProjectionMatrix();
+                      console.log(`Visual resize detected: ${newWidth}x${newHeight}`);
+                 }
+             });
 
-        } catch (error) {
-            console.error("Renderer Init Error:", error);
-            Renderer3D.cleanup(); // Attempt cleanup if init fails
-            return false;
-        }
-        console.log("--- Renderer3D initialization complete ---");
-        return true;
+        } catch (error) { console.error("Renderer Init Error:", error); Renderer3D.cleanup(); return false; }
+        console.log("--- Renderer3D initialization complete ---"); return true;
     },
 
     /** Renders the scene based on the provided game state. */
     renderScene: (stateToRender, appState, localEffects) => {
-        if (!renderer || !scene || !camera || !stateToRender || !appState || !localEffects || !clock) {
-            // console.warn("Renderer not ready or missing state for render.");
-            return;
-        }
+        if (!renderer || !scene || !camera || !stateToRender || !appState || !localEffects || !clock) return;
+        const deltaTime = clock.getDelta();
 
-        const deltaTime = clock.getDelta(); // Time since last frame
-
-        // Ensure dimensions match appState (in case of late resize)
+        // --- Update game world size and camera aspect if changed from appState ---
+        let dimensionsChanged = false;
         if (appState.canvasWidth && appState.canvasHeight && (gameWidth !== appState.canvasWidth || gameHeight !== appState.canvasHeight)) {
-            gameWidth = appState.canvasWidth;
-            gameHeight = appState.canvasHeight;
-            if (renderer) renderer.setSize(gameWidth, gameHeight);
-            if (camera) {
-                camera.aspect = gameWidth / gameHeight;
-                camera.updateProjectionMatrix();
-            }
-            // Update ground scale if needed
-             if (groundPlane) groundPlane.scale.set(gameWidth * GROUND_MARGIN, gameHeight * GROUND_MARGIN, 1);
-            // Update camera target base
-            cameraTargetPos.x = gameWidth / 2;
-            cameraTargetPos.z = gameHeight / 2;
+            gameWidth = appState.canvasWidth; gameHeight = appState.canvasHeight; dimensionsChanged = true;
+            cameraTargetPos.x = gameWidth / 2; cameraTargetPos.z = gameHeight / 2; // Recenter target
+            if (groundPlane) groundPlane.scale.set(gameWidth * GROUND_MARGIN, gameHeight * GROUND_MARGIN, 1); // Rescale ground
+            console.log(`Logical dimensions updated: ${gameWidth}x${gameHeight}`);
         }
+        // --- Update Renderer and Camera based on DOM size ---
+        // This ensures the output matches the visual container size
+        const currentDomWidth = domContainer?.clientWidth ?? gameWidth;
+        const currentDomHeight = domContainer?.clientHeight ?? gameHeight;
+        if (renderer.domElement.width !== currentDomWidth || renderer.domElement.height !== currentDomHeight) {
+             renderer.setSize(currentDomWidth, currentDomHeight);
+             camera.aspect = currentDomWidth / currentDomHeight;
+             camera.updateProjectionMatrix();
+             // console.log(`Renderer resized to DOM: ${currentDomWidth}x${currentDomHeight}`);
+        }
+
 
         // --- Update Phase ---
-
-        // 1. Update Camera (Smooth follow, shake)
         _updateCamera(deltaTime);
-
-        // 2. Update Environment (Lighting, Fog, Ground, Weather Visibility)
         _updateEnvironment(stateToRender.is_night, stateToRender.is_raining, stateToRender.is_dust_storm);
-
-        // 3. Sync Game Objects (Players, Enemies, Powerups)
         _syncSceneObjects(stateToRender.players, playerGroupMap, _createPlayerGroup, _updatePlayerGroup, (id) => id === appState.localPlayerId);
         _syncSceneObjects(stateToRender.enemies, enemyGroupMap, _createEnemyGroup, _updateEnemyGroup);
         _syncSceneObjects(stateToRender.powerups, powerupGroupMap, _createPowerupGroup, _updatePowerupGroup);
-
-        // 4. Update Instanced Meshes (Bullets)
-        _updateInstancedMesh(playerBulletMesh, playerBulletMatrices, playerBulletCount, stateToRender.bullets, Y_OFFSET_BULLET, true);
-        _updateInstancedMesh(enemyBulletMesh, enemyBulletMatrices, enemyBulletCount, stateToRender.bullets, Y_OFFSET_BULLET, true);
-
-        // 5. Update Particle Systems & Dynamic Effects
-        _updateActiveCasings(deltaTime); // Includes updating InstancedMesh
+        _updateInstancedMesh(playerBulletMesh, playerBulletMatrices, stateToRender.bullets, Y_OFFSET_BULLET, true); // Pass only bullets
+        _updateInstancedMesh(enemyBulletMesh, enemyBulletMatrices, stateToRender.bullets, Y_OFFSET_BULLET, true); // Pass only bullets
+        _updateActiveCasings(deltaTime);
         _updateHitSparks(deltaTime);
         _updateRain(deltaTime);
         _updateDust(deltaTime);
-        _updateCampfire(deltaTime); // Includes updating particles
-        _updateSnake(localEffects.snake); // Update based on local copy driven by server state
+        _updateCampfire(deltaTime);
+        _updateSnake(localEffects.snake); // Drive snake visual from local state
         _updateMuzzleFlash(localEffects, playerGroupMap[appState.localPlayerId]);
 
-
-        // 6. Project UI Positions (after all objects are positioned)
+        // Project UI Positions
         const uiPositions = {};
-        const projectEntity = (objMap, stateMap, yOffsetFn) => {
-            for (const id in objMap) {
-                 const obj = objMap[id];
-                 const data = stateMap?.[id];
-                 if (obj && obj.visible && data) { // Project only visible objects with state data
-                     // Use the main object's position, but calculate offset based on data/type
-                     const worldPos = obj.position.clone();
-                     worldPos.y = yOffsetFn(data, obj); // Use specific Y for UI projection point
-                     const screenPos = Renderer3D.projectToScreen(worldPos);
-                     if(screenPos) uiPositions[id] = screenPos;
-                 }
-            }
-        };
-        const getPlayerHeadY = (d,g) => g.userData?.headMesh?.position.y + PLAYER_HEAD_RADIUS * 1.5 || PLAYER_TOTAL_HEIGHT;
-        const getEnemyHeadY = (d,g) => g.userData?.headMesh?.position.y + (d.type==='giant' ? ENEMY_HEAD_RADIUS*ENEMY_GIANT_MULTIPLIER : ENEMY_HEAD_RADIUS)*1.2 || ENEMY_CHASER_HEIGHT;
-        const getPowerupTopY = (d,g) => g.userData?.iconMesh?.position.y + POWERUP_BASE_SIZE * 0.5 || Y_OFFSET_POWERUP;
-
-        projectEntity(playerGroupMap, stateToRender.players, getPlayerHeadY);
-        projectEntity(enemyGroupMap, stateToRender.enemies, getEnemyHeadY);
-        projectEntity(powerupGroupMap, stateToRender.powerups, getPowerupTopY);
-
-        // Damage texts use their own state position
-        if (stateToRender.damage_texts) {
-            for (const id in stateToRender.damage_texts) {
-                const dt = stateToRender.damage_texts[id];
-                const worldPos = _vector3.set(dt.x, PLAYER_TOTAL_HEIGHT * 0.8, dt.y); // Project from approx player height
-                const screenPos = Renderer3D.projectToScreen(worldPos);
-                 if(screenPos) uiPositions[id] = screenPos;
-            }
-        }
-        appState.uiPositions = uiPositions; // Update global appState for main.js
+        const projectEntity = (objMap, stateMap, yOffsetFn) => { for (const id in objMap) { const obj = objMap[id]; const data = stateMap?.[id]; if (obj?.visible && data) { const worldPos = obj.position.clone(); worldPos.y = yOffsetFn(data, obj); const screenPos = Renderer3D.projectToScreen(worldPos); if(screenPos) uiPositions[id] = screenPos; } } };
+        const getPlayerHeadY = (d,g) => g.userData?.headMesh?.position.y + PLAYER_HEAD_RADIUS * 1.5 || PLAYER_TOTAL_HEIGHT; const getEnemyHeadY = (d,g) => g.userData?.headMesh?.position.y + (d.type==='giant' ? ENEMY_HEAD_RADIUS*ENEMY_GIANT_MULTIPLIER : ENEMY_HEAD_RADIUS)*1.2 || ENEMY_CHASER_HEIGHT; const getPowerupTopY = (d,g) => g.userData?.iconMesh?.position.y + POWERUP_BASE_SIZE * 0.5 || Y_OFFSET_POWERUP;
+        projectEntity(playerGroupMap, stateToRender.players, getPlayerHeadY); projectEntity(enemyGroupMap, stateToRender.enemies, getEnemyHeadY); projectEntity(powerupGroupMap, stateToRender.powerups, getPowerupTopY);
+        if (stateToRender.damage_texts) { for (const id in stateToRender.damage_texts) { const dt = stateToRender.damage_texts[id]; const worldPos = _vector3.set(dt.x, PLAYER_TOTAL_HEIGHT * 0.8, dt.y); const screenPos = Renderer3D.projectToScreen(worldPos); if(screenPos) uiPositions[id] = screenPos; } }
+        appState.uiPositions = uiPositions;
 
         // --- Render Phase ---
-        try {
-            renderer.render(scene, camera);
-        } catch (e) {
-            console.error("!!! RENDER ERROR !!!", e);
-            // Consider stopping the loop or showing an error overlay
-            if (window.appState && window.appState.animationFrameId) {
-                 cancelAnimationFrame(window.appState.animationFrameId);
-                 window.appState.animationFrameId = null;
-                 console.error("!!! Animation loop stopped due to render error. !!!");
-                 // Optionally, try to cleanup
-                 // Renderer3D.cleanup();
-            }
-        }
+        try { renderer.render(scene, camera); } catch (e) { console.error("!!! RENDER ERROR !!!", e); if (window.appState?.animationFrameId) { cancelAnimationFrame(window.appState.animationFrameId); window.appState.animationFrameId = null; console.error("!!! Animation loop stopped due to render error. !!!"); } }
     },
 
-    /** Triggers a camera shake effect. */
-    triggerShake: (magnitude, durationMs) => {
-        if (!clock) return; // Guard against calls before init
-        const now = clock.elapsedTime * 1000; // Use clock time in ms
-        const newEndTime = now + durationMs;
-        // Apply new shake if stronger or lasts longer
-        if (magnitude >= shakeMagnitude || newEndTime > shakeEndTime) {
-            shakeMagnitude = Math.max(0.1, magnitude); // Ensure some minimum shake
-            shakeEndTime = Math.max(newEndTime, shakeEndTime); // Extend duration if needed
-            // console.log(`Trigger shake mag: ${shakeMagnitude.toFixed(1)}, end: ${shakeEndTime.toFixed(0)}`);
-        }
-    },
-
-    /** Spawns a visual ammo casing effect. */
-    spawnVisualAmmoCasing: (position, ejectVector) => {
-        if (!clock) return; // Guard
-         _spawnAmmoCasing(position, ejectVector);
-    },
-
-     /** Triggers a cluster of visual hit sparks */
-    triggerVisualHitSparks: (position, count = 5) => {
-         if (!clock) return; // Guard
-         _triggerHitSparks(position, count);
-    },
-
-
-    /** Projects a 3D world position to 2D screen coordinates. */
-    projectToScreen: (worldPosition) => {
-        if (!camera || !renderer || !renderer.domElement) return null;
-        try {
-            _vector3.copy(worldPosition);
-            _vector3.project(camera); // Project into NDC (-1 to 1)
-
-            const widthHalf = renderer.domElement.width / 2;
-            const heightHalf = renderer.domElement.height / 2;
-
-            const screenX = Math.round((_vector3.x * widthHalf) + widthHalf);
-            const screenY = Math.round(-(_vector3.y * heightHalf) + heightHalf); // Y is inverted
-
-            // Check if behind camera (z > 1 in NDC)
-            if (_vector3.z > 1.0) {
-                return null; // Don't return positions behind the camera
-            }
-
-            return { screenX, screenY };
-        } catch (e) {
-            // console.error("Error projecting to screen:", e);
-            return null;
-        }
-    },
+    triggerShake: (magnitude, durationMs) => { if (!clock) return; const now = clock.elapsedTime * 1000; const newEndTime = now + durationMs; if (magnitude >= shakeMagnitude || newEndTime > shakeEndTime) { shakeMagnitude = Math.max(0.1, magnitude); shakeEndTime = Math.max(newEndTime, shakeEndTime); } },
+    spawnVisualAmmoCasing: (position, ejectVector) => { if (!clock) return; _spawnAmmoCasing(position, ejectVector); },
+    triggerVisualHitSparks: (position, count = 5) => { if (!clock) return; _triggerHitSparks(position, count); },
+    projectToScreen: (worldPosition) => { if (!camera || !renderer?.domElement) return null; try { _vector3.copy(worldPosition); _vector3.project(camera); const widthHalf = renderer.domElement.width / 2; const heightHalf = renderer.domElement.height / 2; const screenX = Math.round((_vector3.x * widthHalf) + widthHalf); const screenY = Math.round(-(_vector3.y * heightHalf) + heightHalf); if (_vector3.z > 1.0) return null; return { screenX, screenY }; } catch (e) { return null; } },
 
     /** Cleans up all THREE.js resources. */
     cleanup: () => {
         console.log("--- Renderer3D Cleanup ---");
-        window.removeEventListener('resize', () => {/* reference removal */}); // Might need named function or AbortController
+        // Remove event listeners safely if added with named functions or AbortController
+        // window.removeEventListener('resize', ...);
 
         // Dispose systems first
         [hitSparkSystem, rainSystem, dustSystem, campfireSystem].forEach(system => {
-            if (system) {
-                 if(system.particles) scene?.remove(system.particles);
-                 if(system.lines) scene?.remove(system.lines);
-                 if(system.group) scene?.remove(system.group);
-                 system.geometry?.dispose();
-                 system.material?.dispose();
-            }
-        });
-        hitSparkSystem = null; rainSystem = null; dustSystem = null; campfireSystem = null;
+            if (system) { if(system.particles) scene?.remove(system.particles); if(system.lines) scene?.remove(system.lines); if(system.group) scene?.remove(system.group); system.geometry?.dispose(); system.material?.dispose(); }
+        }); hitSparkSystem = null; rainSystem = null; dustSystem = null; campfireSystem = null;
 
         // Dispose instanced meshes
-         [playerBulletMesh, enemyBulletMesh, ammoCasingMesh].forEach(mesh => {
-             if (mesh) {
-                 scene?.remove(mesh);
-                 mesh.geometry?.dispose();
-                 mesh.material?.dispose();
-             }
-         });
-         playerBulletMesh = null; enemyBulletMesh = null; ammoCasingMesh = null;
+        [playerBulletMesh, enemyBulletMesh, ammoCasingMesh].forEach(mesh => { if (mesh) { scene?.remove(mesh); mesh.geometry?.dispose(); mesh.material?.dispose(); } }); playerBulletMesh = null; enemyBulletMesh = null; ammoCasingMesh = null;
 
-         // Dispose snake
-         if (snakeMesh) {
-             scene?.remove(snakeMesh);
-             snakeMesh.geometry?.dispose();
-             // Snake material is shared, disposed below
-             snakeMesh = null;
-         }
+        // Dispose snake
+        if (snakeMesh) { scene?.remove(snakeMesh); snakeMesh.geometry?.dispose(); snakeMesh = null; }
 
         // Dispose managed object groups
-        [playerGroupMap, enemyGroupMap, powerupGroupMap].forEach(objectMap => {
-             for (const id in objectMap) {
-                 _disposeAndRemoveObject(objectMap[id], id, objectMap); // Use the safer disposal
-             }
-        });
+        [playerGroupMap, enemyGroupMap, powerupGroupMap].forEach(objectMap => { for (const id in objectMap) _disposeAndRemoveObject(objectMap[id], id, objectMap); });
 
-        // Dispose shared resources
+        // Dispose shared resources - Iterate carefully
         Object.values(sharedGeometries).forEach(geo => geo?.dispose());
-        Object.values(sharedMaterials).forEach(mat => mat?.dispose());
+        Object.values(sharedMaterials).forEach(mat => { // Dispose top-level materials
+             if (mat instanceof THREE.Material) mat.dispose();
+        });
+        // Dispose materials nested inside sharedMaterials.powerups
+        if (sharedMaterials.powerups) {
+             Object.values(sharedMaterials.powerups).forEach(mat => {
+                  if (mat instanceof THREE.Material) mat.dispose();
+             });
+        }
         Object.values(powerupGeometries).forEach(geo => geo?.dispose());
-        Object.values(sharedMaterials.powerups).forEach(mat => mat?.dispose());
-        Object.values(loadedAssets).forEach(asset => asset?.dispose()); // Dispose textures
+        Object.values(loadedAssets).forEach(asset => asset?.dispose());
 
-        sharedGeometries = {}; sharedMaterials = {}; powerupGeometries = {}; loadedAssets = {};
+        // Clear resource objects AFTER disposal
+        Object.keys(sharedGeometries).forEach(key => delete sharedGeometries[key]);
+        Object.keys(sharedMaterials).forEach(key => delete sharedMaterials[key]); // Includes nested 'powerups' object
+        Object.keys(powerupGeometries).forEach(key => delete powerupGeometries[key]);
+        Object.keys(loadedAssets).forEach(key => delete loadedAssets[key]);
+
 
         // Dispose ground plane
-        if (groundPlane) {
-             scene?.remove(groundPlane);
-             // Ground geo/mat are shared, disposed above
-             groundPlane = null;
-        }
+        if (groundPlane) { scene?.remove(groundPlane); groundPlane = null; } // Geo/mat are shared
 
-        // Dispose lights (no dispose needed, just remove from scene)
-        if(scene) {
-            if(ambientLight) scene.remove(ambientLight);
-            if(directionalLight) scene.remove(directionalLight);
-            if(directionalLight?.target) scene.remove(directionalLight.target);
-            if(muzzleFlashLight) scene.remove(muzzleFlashLight);
-        }
-         ambientLight = null; directionalLight = null; muzzleFlashLight = null;
+        // Remove lights
+        if(scene) { if(ambientLight) scene.remove(ambientLight); if(directionalLight) scene.remove(directionalLight); if(directionalLight?.target) scene.remove(directionalLight.target); if(muzzleFlashLight) scene.remove(muzzleFlashLight); }
+        ambientLight = null; directionalLight = null; muzzleFlashLight = null;
 
-        // Dispose renderer and remove canvas
+        // Dispose renderer
         if (renderer) {
-            renderer.dispose();
-            renderer.forceContextLoss(); // Aggressively release context
-            if (renderer.domElement?.parentNode) {
-                renderer.domElement.parentNode.removeChild(renderer.domElement);
-            }
-            renderer = null;
-            console.log("Renderer disposed.");
+            renderer.dispose(); renderer.forceContextLoss();
+            if (renderer.domElement?.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
+            renderer = null; console.log("Renderer disposed.");
         }
 
         // Nullify core variables
-        scene = null; camera = null; clock = null;
+        scene = null; camera = null; clock = null; domContainer = null;
         playerBulletMatrices = []; enemyBulletMatrices = []; activeAmmoCasings = [];
         shakeMagnitude = 0; shakeEndTime = 0;
-
         console.log("Renderer3D resources released.");
     },
-
-    // --- Getters (for external use if needed) ---
     getCamera: () => camera,
-    getGroundPlane: () => groundPlane, // Needed for raycasting mouse position
+    getGroundPlane: () => groundPlane,
 };
 
 export default Renderer3D;
