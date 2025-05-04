@@ -416,7 +416,8 @@ const InputManager = (() => {
          if (keys[' ']) handleShooting(); // Handle continuous shooting if space is held
          if (isMouseDown) handleShooting(); // Handle continuous shooting if mouse is held
     }
-    return { setup, cleanup, update }; // Expose update
+    return { setup, cleanup, update, getMovementInputVector };
+
 })();
 
 // --- Game Manager Module ---
