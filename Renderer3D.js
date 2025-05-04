@@ -471,7 +471,15 @@ function _disposeObject3D(obj) {
             materials.forEach(m => {
                 if (m) {
                     // Check if it's one of OUR shared materials before disposing
-                    let isShared = Object.values(sharedMaterials).includes(m) || Object.values(sharedMaterials.powerups).includes(m);
+                    let isShared = Object.values(sharedMaterials).includes(m);
+
+                    // --- MODIFICATION START ---
+                    // Check powerups ONLY if it wasn't found in the main list AND sharedMaterials.powerups exists
+                    if (!isShared && sharedMaterials.powerups) {
+                       isShared = Object.values(sharedMaterials.powerups).includes(m);
+                    }
+                    // --- MODIFICATION END ---
+
                     if (!isShared) {
                         // console.debug(`Disposing material: ${m.name || 'unnamed'} (and its textures)`);
                         _disposeMaterialTextures(m);
