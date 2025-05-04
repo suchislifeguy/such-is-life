@@ -76,12 +76,14 @@ body {
 
 #loading-screen { position: fixed; inset: 0; background-color: var(--color-dark-bg); display: flex; justify-content: center; align-items: center; z-index: 1000; opacity: 0; visibility: hidden; transition: opacity var(--transition-medium), visibility var(--transition-medium); pointer-events: none; }
 #loading-screen.active { opacity: 1; visibility: visible; pointer-events: auto; }
+/* ... loading screen styles ... */
 .loading-content { text-align: center; }
 .loading-title { font-size: 2.2em; margin-bottom: 5px; color: var(--color-accent); text-shadow: 2px 2px 4px #333; }
 .loading-subtitle { font-size: 0.9em; margin-bottom: 20px; color: var(--color-primary); }
 .loader-spinner { border: 4px solid rgba(255, 255, 255, 0.2); border-left-color: var(--color-primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 20px auto; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-text { font-size: 1.1em; margin-top: 10px; }
+
 
 #game-container {
     background-color: var(--color-container-bg);
@@ -98,8 +100,6 @@ body {
     transition: opacity var(--transition-medium) 0.2s;
     display: flex; /* Use flexbox */
     flex-direction: column; /* Stack children vertically */
-    /* Height can be determined by content or screen size */
-    /* min-height might be needed if content is small */
     min-height: 500px; /* Example minimum height */
 }
 #game-container.loaded { opacity: 1; visibility: visible; }
@@ -129,6 +129,7 @@ body {
     padding: 0 var(--padding-base);
     flex-shrink: 0; /* Prevent menu area from shrinking */
 }
+/* ... menu section styles ... */
 .menu-section { display: none; padding: var(--padding-large) var(--padding-base); text-align: center; animation: fadeIn 0.3s ease forwards; }
 .menu-section.active { display: block; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -139,7 +140,9 @@ body {
 #waiting-message { margin-top: 15px; font-style: italic; color: var(--color-text-muted); }
 .input-code { padding: 10px; margin: 10px 5px; font-family: var(--font-family-main); font-size: 1rem; border: 2px solid var(--color-primary); border-radius: var(--border-radius-base); background-color: var(--color-input-bg); color: var(--color-input-text); text-transform: uppercase; text-align: center; letter-spacing: 2px; width: auto; min-width: 180px; }
 .input-code::placeholder { color: var(--color-placeholder-text); text-transform: none; }
+hr.menu-divider { border: none; border-top: 1px solid var(--color-primary); margin: var(--padding-large) auto; width: 80%; }
 
+/* ... button styles ... */
 .button { display: inline-block; background-color: var(--color-primary); color: var(--color-text-light); border: 2px solid var(--color-container-border); padding: 10px 20px; margin: 10px 5px; cursor: pointer; font-family: var(--font-family-main); font-size: var(--font-size-medium); transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast); border-radius: var(--border-radius-base); font-weight: bold; text-align: center; user-select: none; }
 .button:hover:not(:disabled) { background-color: var(--color-text-muted); color: var(--color-dark-bg); border-color: #000; }
 .button:disabled { background-color: #555; color: #aaa; cursor: not-allowed; border-color: #444; }
@@ -162,8 +165,8 @@ body {
     gap: 10px;
     flex-grow: 1; /* Allow this area to take remaining vertical space in #game-container */
     min-height: 300px; /* Prevent collapsing too small */
-    /* DEBUGGING */
-    /* background-color: rgba(255, 255, 0, 0.1); /* Light Yellow */
+    /* Prevent horizontal overflow within the game area itself */
+    overflow: hidden;
 }
 #game-area.active {
     display: flex; /* Show when active */
@@ -180,16 +183,15 @@ body {
     font-size: var(--font-size-small);
     border: 1px solid var(--color-primary);
     border-radius: var(--border-radius-base);
-    overflow: hidden; /* Hide overflow within panel */
-    /* DEBUGGING */
-    /* background-color: rgba(0, 255, 0, 0.1); /* Light Green */
+    overflow: hidden; /* ADDED: Prevent internal content like long chat lines from affecting layout */
 }
 
 #canvas-container {
     position: relative; /* For absolute positioning of overlays */
-    /* REMOVED explicit width/height */
+    /* NO explicit width/height */
     flex-grow: 1; /* IMPORTANT: Take up all remaining horizontal space */
     min-width: 0; /* IMPORTANT: Allow shrinking below intrinsic size */
+    min-height: 150px; /* Prevent collapsing too small vertically */
     display: flex; /* Center the canvas element inside */
     justify-content: center;
     align-items: center;
@@ -197,8 +199,6 @@ body {
     background-color: #111; /* Background for empty space if canvas aspect ratio differs */
     border: 3px solid var(--color-primary);
     border-radius: var(--border-radius-base);
-    /* DEBUGGING */
-    /* background-color: rgba(255, 0, 0, 0.1); /* Light Red */
 }
 
 #gameCanvas {
@@ -206,8 +206,6 @@ body {
     max-width: 100%; /* Fit element within parent width */
     max-height: 100%; /* Fit element within parent height */
     /* The actual drawing resolution is set by renderer.setSize() in JS */
-    /* DEBUGGING */
-    /* border: 1px dashed cyan; /* See canvas element boundary */
 }
 /* --- END CRITICAL LAYOUT AREA --- */
 
@@ -215,33 +213,62 @@ body {
 .panel-group-top { flex-grow: 1; min-height: 0; overflow-y: auto; } /* Allow top to scroll */
 .panel-group-bottom { flex-shrink: 0; padding-top: 10px; } /* Bottom stays fixed */
 #player-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; width: 100%; margin-bottom: var(--padding-base); }
+/* ... stats-box styles ... */
 .stats-box { color: var(--color-text-light); font-size: 14px; background: rgba(10, 20, 25, 0.6); padding: 8px 10px; border-radius: var(--border-radius-base); border: 1px solid var(--color-primary); box-shadow: inset 0 0 4px rgba(0,0,0,0.4); overflow: hidden; }
 .stats-box .stats-header { font-size: 15px; font-weight: bold; color: var(--color-accent); text-align: center; padding-bottom: 4px; margin-bottom: 5px; border-bottom: 1px dashed var(--color-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stats-box .stats-content { line-height: 1.5; word-wrap: break-word; }
 .stats-box .stats-content span { display: inline-block; min-width: 50px; font-weight: bold; color: var(--color-text-muted); vertical-align: top; }
 .stats-box.placeholder { text-align: center; padding: 20px; color: var(--color-text-muted); }
+
 #environment-info { display: flex; justify-content: space-around; margin-bottom: 10px; }
 #day-night-indicator, #temperature-indicator { padding: 4px 8px; background: rgba(0, 0, 0, 0.4); border-radius: var(--border-radius-base); font-size: 0.9em; }
 #chat-area { margin-bottom: 10px; }
 #chat-log { height: 150px; overflow-y: scroll; border: 1px solid var(--color-primary); margin-bottom: 8px; padding: 5px; background: rgba(10, 20, 25, 0.5); border-radius: var(--border-radius-base); transition: background-color var(--transition-medium), border-color var(--transition-medium); }
+/* ... chat log message styles ... */
 #chat-log div { margin-bottom: 3px; word-wrap: break-word; }
 .chat-message.my-message { color: var(--color-chat-self); font-weight: bold; }
 .chat-message.other-message { color: var(--color-chat-other); }
 .chat-message.system-message { color: var(--color-system-message); font-style: italic; }
-.night-mode #chat-log { background-color: rgba(10, 20, 25, 0.7); border-color: var(--color-accent); }
-.night-mode .chat-message.my-message { color: #FFFF99; }
-.night-mode .chat-message.other-message { color: #C0C0FF; }
-.chat-input-area { display: flex; gap: 5px; }
-.chat-input-area input[type="text"] { flex-grow: 1; padding: 8px; font-size: 0.9rem; border: 1px solid var(--color-primary); border-radius: var(--border-radius-base); background-color: var(--color-input-bg); color: var(--color-input-text); }
+
+.chat-input-area {
+    display: flex;
+    gap: 5px;
+    width: 100%; /* Ensure it doesn't exceed parent width */
+}
+.chat-input-area input[type="text"] {
+    flex-grow: 1; /* Allow input to grow */
+    min-width: 0; /* Allow input to shrink */
+    padding: 8px;
+    font-size: 0.9rem;
+    border: 1px solid var(--color-primary);
+    border-radius: var(--border-radius-base);
+    background-color: var(--color-input-bg);
+    color: var(--color-input-text);
+}
 .chat-input-area input[type="text"]::placeholder { color: var(--color-placeholder-text); }
-.chat-input-area .button { padding: 8px 10px; font-size: 0.9rem; flex-shrink: 0; margin: 0; }
-.game-controls { display: flex; gap: 10px; margin-top: auto; }
-.game-controls .button { flex-grow: 1; width: auto; margin: 0; }
+.chat-input-area .button {
+    padding: 8px 10px;
+    font-size: 0.9rem;
+    flex-shrink: 0; /* Prevent button from shrinking */
+    margin: 0;
+}
+.game-controls {
+    display: flex;
+    gap: 10px;
+    margin-top: auto; /* Pushes to bottom if left-panel has extra space */
+    width: 100%; /* Ensure it doesn't exceed parent width */
+}
+.game-controls .button {
+    flex-grow: 1; /* Allow buttons to share space */
+    width: auto; /* Override any fixed width */
+    margin: 0;
+}
 
 #countdown-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 72px; color: var(--color-danger); text-shadow: 3px 3px 6px black; z-index: 10; pointer-events: none; display: none; }
 #countdown-overlay.active { display: block; }
 
 #html-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; z-index: 5; font-family: var(--font-family-main); }
+/* ... overlay element styles ... */
 .overlay-element { position: absolute; white-space: nowrap; pointer-events: none; transform: translateX(-50%); transition: opacity var(--transition-fast), top 0.05s linear; }
 .damage-text-overlay { font-size: 14px; font-weight: bold; color: var(--color-damage-text); text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8); user-select: none; opacity: 1; }
 .damage-text-overlay.crit { font-size: 18px; color: var(--color-damage-text-crit); }
@@ -250,12 +277,14 @@ body {
 
 #game-over-screen { display: none; flex-direction: column; align-items: center; justify-content: center; position: absolute; inset: 0; background-color: rgba(0, 0, 0, 0.85); padding: var(--padding-large); z-index: 500; text-align: center; animation: fadeIn 0.5s ease forwards; }
 #game-over-screen.active { display: flex; }
+/* ... game over styles ... */
 #game-over-screen h2 { color: var(--color-danger); margin-top: 0; margin-bottom: 25px; font-size: 1.8em; }
 #final-stats { color: var(--color-text-light); font-size: 1.3em; line-height: 1.6; margin-bottom: 30px; width: 90%; max-width: 300px; }
 #final-stats .final-stat-item { margin-bottom: 5px; }
 #final-stats .final-stat-item strong { color: var(--color-accent); margin-right: 8px; display: inline-block; min-width: 70px; text-align: right; }
 #game-over-screen .button { padding: 12px 25px; font-size: 1.1rem; margin-top: 10px; }
 
+/* Night mode adjustments */
 .night-mode #day-night-indicator { background-color: rgba(50, 50, 100, 0.6); color: var(--color-accent); }
 .night-mode #chat-log { background-color: rgba(10, 20, 25, 0.7); border-color: var(--color-accent); }
 .night-mode .chat-message.my-message { color: #FFFF99; }
