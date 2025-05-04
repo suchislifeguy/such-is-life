@@ -13,8 +13,8 @@ function lerp(start, end, amount) {
 }
 
 // --- Constants ---
-const DEFAULT_GAME_WIDTH = 3200; // Default, will be updated from init/appState
-const DEFAULT_GAME_HEIGHT = 1600;
+const DEFAULT_GAME_WIDTH = 1600; // Default, will be updated from init/appState
+const DEFAULT_GAME_HEIGHT = 900;
 const CAMERA_FOV = 60;
 const CAMERA_NEAR = 10;
 const CAMERA_FAR = 2500;
