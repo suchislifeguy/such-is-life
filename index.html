@@ -5,12 +5,12 @@
     <title>SUCH IS L1FE - Kelly Gang Survival</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="style.css">
+    <!-- Consider adding a favicon link -->
     <!-- <link rel="icon" type="image/x-icon" href="/favicon.ico"> -->
 </head>
 <body>
-    <!-- Loading Screen (No changes) -->
+    <!-- Loading Screen: Shown initially until game assets are ready -->
     <div id="loading-screen" class="active">
-        <!-- ... loading content ... -->
         <div class="loading-content">
             <h1 class="loading-title">KELLY GANG</h1>
             <p class="loading-subtitle">AUSTRALIA, 1878</p>
@@ -19,24 +19,27 @@
         </div>
     </div>
 
-    <!-- Main Game Container (No changes) -->
+    <!-- Main Game Container: Wraps the entire application interface -->
     <div id="game-container">
-        <!-- Top Bar (No changes) -->
+        <!-- Top Header Bar -->
         <header id="top-bar">
              <h1>SUCH IS LIFE</h1>
         </header>
 
-        <!-- Status Message Area (No changes) -->
-        <div id="game-status" role="status">Initializing...</div>
+        <!-- Status Message Area: Displays connection status, errors, or brief game info -->
+        <div id="game-status" role="status" aria-live="polite">Initializing...</div>
 
-        <!-- Menu Area (No changes structure, JS hides/shows this) -->
+        <!-- Menu Area: Contains all pre-game screens (main menu, multiplayer options, etc.) -->
+        <!-- This area is hidden via CSS/JS when the game itself is active -->
         <main id="menu-area">
-            <!-- ... All menu sections remain here ... -->
-             <section id="main-menu-section" class="menu-section active">
+            <!-- Main Menu Section -->
+            <section id="main-menu-section" class="menu-section active">
                 <h2>Main Menu</h2>
                 <button id="singlePlayerBtn" class="button button-primary">Single Player</button>
                 <button id="multiplayerBtn" class="button button-primary">Multiplayer</button>
             </section>
+
+            <!-- Multiplayer Options Section -->
             <section id="multiplayer-menu-section" class="menu-section">
                 <h2>Multiplayer</h2>
                 <p>Choose number of players:</p>
@@ -45,66 +48,81 @@
                 <button id="hostGameBtn4" class="button">Host 4 Player Game</button>
                 <hr class="menu-divider">
                 <button id="showJoinUIBtn" class="button">Join Game (Enter Code)</button>
-                <button class="button button-back" data-target="main-menu-section">Back</button>
+                <button class="button button-back" data-target="main-menu-section">Back</button> <!-- JS uses data-target to navigate back -->
             </section>
+
+            <!-- Host Waiting Screen -->
             <section id="host-wait-section" class="menu-section">
                 <h2>Hosting Game</h2>
                 <p>Share this code with your mate:</p>
-                <div id="game-code-display" class="code-display">------</div>
-                <p id="waiting-message">Waiting for players...</p>
+                <div id="game-code-display" class="code-display" aria-live="polite">------</div> <!-- Populated by JS -->
+                <p id="waiting-message">Waiting for players...</p> <!-- Updated by JS -->
                 <button id="cancelHostBtn" class="button button-danger">Cancel Hosting</button>
             </section>
+
+            <!-- Join Game Screen -->
             <section id="join-code-section" class="menu-section">
                 <h2>Join Game</h2>
                 <p>Enter the 6-character game code:</p>
-                <input type="text" id="gameIdInput" class="input-code" placeholder="ABCDEF" maxlength="6">
+                <input type="text" id="gameIdInput" class="input-code" placeholder="ABCDEF" maxlength="6" aria-label="Game Code Input">
                 <button id="joinGameSubmitBtn" class="button button-primary">Join Game</button>
-                <button class="button button-back" data-target="multiplayer-menu-section">Back</button>
+                <button class="button button-back" data-target="multiplayer-menu-section">Back</button> <!-- JS uses data-target to navigate back -->
             </section>
         </main>
 
         <!-- ======================================= -->
-        <!-- == RESTRUCTURED GAME AREA (3 COLUMNS) == -->
+        <!-- == ACTIVE GAME AREA (3 COLUMNS)      == -->
+        <!-- This area is hidden until a game starts -->
         <!-- ======================================= -->
         <div id="game-area">
 
-            <!-- NEW: Left Column for Stats -->
-            <aside id="stats-panel" class="game-column">
-                <div class="panel-content-scrollable"> <!-- Added for potential scrolling -->
-                    <div id="player-stats-grid">
-                        <div class="stats-box placeholder">Loading Stats...</div>
-                        <!-- Stats will be added here dynamically -->
+            <!-- Left Column: Player Stats & Environment -->
+            <aside id="stats-panel" class="game-column" aria-labelledby="stats-heading">
+                <h2 id="stats-heading" class="visually-hidden">Player and Environment Status</h2> <!-- Hidden heading for screen readers -->
+                <div class="panel-content-scrollable">
+                    <!-- Player Stats Grid: Populated dynamically by JavaScript -->
+                    <div id="player-stats-grid" aria-live="polite">
+                        <!-- Example structure (JS will replace this): -->
+                        <!-- <div class="stats-box placeholder">Waiting for player data...</div> -->
                     </div>
-                    <div id="environment-info">
-                      <div id="day-night-indicator">Day</div>
-                      <div id="temperature-indicator">--°C</div>
+                    <!-- Environment Info: Temperature, Day/Night Cycle -->
+                    <div id="environment-info" aria-live="polite">
+                      <div id="day-night-indicator">Day</div> <!-- Updated by JS -->
+                      <div id="temperature-indicator">--°C</div> <!-- Updated by JS -->
                     </div>
                 </div>
             </aside>
 
-            <!-- Middle Column for Canvas -->
-            <div id="canvas-container" class="game-column">
-                <canvas id="gameCanvas"></canvas>
-                 <!-- Overlays remain inside canvas-container -->
-                <div id="countdown-overlay"></div>
-                <div id="html-overlay"></div>
+            <!-- Middle Column: The main 3D Game Canvas -->
+            <div id="canvas-container" class="game-column" role="application" aria-label="Main Game View">
+                <canvas id="gameCanvas">
+                    Your browser does not support the HTML5 canvas element. <!-- Fallback message -->
+                </canvas>
+                 <!-- Overlays positioned relative to the canvas container -->
+                <div id="countdown-overlay" aria-live="assertive"></div> <!-- Countdown text appears here -->
+                <div id="html-overlay" aria-hidden="true"></div> <!-- Container for floating damage numbers, speech bubbles etc. -->
             </div>
 
-            <!-- NEW: Right Column for Chat and Controls -->
-            <aside id="chat-panel" class="game-column">
-                 <!-- Organize content vertically within this panel -->
+            <!-- Right Column: Chat and Game Controls -->
+            <aside id="chat-panel" class="game-column" aria-labelledby="chat-heading">
+                 <h2 id="chat-heading" class="visually-hidden">Chat and Game Controls</h2> <!-- Hidden heading for screen readers -->
                  <div class="panel-content-fixed">
+                     <!-- Chat Area: Log and Input -->
                      <div id="chat-area">
-                         <div id="chat-log" role="log">
-                             <!-- Chat messages appear here -->
+                         <!-- Chat Log: Messages dynamically added by JS -->
+                         <div id="chat-log" role="log" aria-live="polite">
+                            <div class="system-message">Welcome! Chat started.</div> <!-- Initial message example -->
                          </div>
-                         <div class="chat-input-area">
+                         <!-- Chat Input Form -->
+                         <div class="chat-input-area" role="form" aria-labelledby="chat-input-label">
+                             <label id="chat-input-label" for="chatInput" class="visually-hidden">Chat Message</label>
                              <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="100">
                              <button id="sendChatBtn" class="button">Send</button>
                          </div>
                      </div>
-                     <div class="game-controls">
-                         <button id="muteBtn" class="button button-secondary">Mute</button>
+                     <!-- Game Controls -->
+                     <div class="game-controls" role="toolbar" aria-label="Game Actions">
+                         <button id="muteBtn" class="button button-secondary" aria-pressed="false">Mute</button> <!-- JS toggles aria-pressed -->
                          <button id="leaveGameBtn" class="button button-danger">Leave Game</button>
                      </div>
                  </div>
@@ -112,24 +130,34 @@
 
         </div>
         <!-- ======================================= -->
-        <!-- == END RESTRUCTURED GAME AREA == -->
+        <!-- == END ACTIVE GAME AREA              == -->
         <!-- ======================================= -->
 
 
-        <!-- Game Over Screen (No changes) -->
-        <div id="game-over-screen">
-            <!-- ... game over content ... -->
-             <h2>Game Over, Mate!</h2>
+        <!-- Game Over Screen: Overlays everything when game ends -->
+        <div id="game-over-screen" role="dialog" aria-modal="true" aria-labelledby="game-over-heading">
+            <h2 id="game-over-heading">Game Over, Mate!</h2>
             <div id="final-stats">
+                <!-- Final statistics populated by JavaScript -->
+                <p>Calculating results...</p>
             </div>
             <button id="gameOverBackBtn" class="button button-primary">Back to Menu</button>
         </div>
 
     </div> <!-- End game-container -->
 
-    <!-- Scripts (No changes) -->
-    <script type="importmap">{...}</script>
+    <!-- JavaScript Modules & Initialization -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.166.1/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.166.1/examples/jsm/"
+            }
+        }
+    </script>
+    <!-- Core 3D rendering logic -->
     <script type="module" src="Renderer3D.js"></script>
+    <!-- Main application logic: handles UI switching, game state, networking -->
     <script type="module" src="main.js"></script>
 
 </body>
