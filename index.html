@@ -5,89 +5,101 @@
     <title>SUCH IS L1FE - Kelly Gang Survival</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="style.css">
-    <!-- Favicon links (optional) -->
-    <!-- <link rel="icon" href="/favicon.ico" sizes="any"> -->
-    <!-- <link rel="icon" href="/favicon.svg" type="image/svg+xml"> -->
 </head>
 <body>
-    <div id="loading-screen">
+    <div id="loading-screen" class="active">
         <div class="loading-content">
-            <div class="loading-title">KELLY GANG</div>
-            <div class="loading-subtitle">AUSTRALIA, 1878</div>
+            <h1 class="loading-title">KELLY GANG</h1>
+            <p class="loading-subtitle">AUSTRALIA, 1878</p>
             <div class="loader-spinner"></div>
-            <div class="loading-text">Loading... Such is Life.</div>
+            <p class="loading-text">Loading... Such is Life.</p>
         </div>
     </div>
 
     <div id="game-container">
-        <div id="top-bar"><h1>SUCH IS LIFE</h1></div>
+        <header id="top-bar">
+            <h1>SUCH IS LIFE</h1>
+        </header>
+
         <div id="game-status" role="status">Initializing...</div>
 
-        <div id="menu-container">
-            <div id="main-menu-section" class="menu-section active">
+        <main id="menu-area">
+            <section id="main-menu-section" class="menu-section active">
                 <h2>Main Menu</h2>
-                <button id="singlePlayerBtn">Single Player</button>
-                <button id="multiplayerBtn">Multiplayer</button>
-            </div>
-            <div id="multiplayer-menu-section" class="menu-section">
+                <button id="singlePlayerBtn" class="button button-primary">Single Player</button>
+                <button id="multiplayerBtn" class="button button-primary">Multiplayer</button>
+            </section>
+
+            <section id="multiplayer-menu-section" class="menu-section">
                 <h2>Multiplayer</h2>
                 <p>Choose number of players:</p>
-                <button id="hostGameBtn2">Host 2 Player Game</button>
-                <button id="hostGameBtn3">Host 3 Player Game</button>
-                <button id="hostGameBtn4">Host 4 Player Game</button>
-                <hr>
-                <button id="showJoinUIBtn">Join Game (Enter Code)</button>
-                <button class="back-button" data-target="main-menu-section">Back</button>
-            </div>
-            <div id="host-wait-section" class="menu-section">
-                 <h2>Hosting Game</h2>
-                 <p>Share this code with your mate:</p>
-                 <div id="game-code-display">------</div>
-                 <p id="waiting-message">Waiting for opponent...</p>
-                 <button id="cancelHostBtn">Cancel Hosting</button>
-            </div>
-            <div id="join-code-section" class="menu-section">
-                 <h2>Join Game</h2>
-                 <p>Enter the 6-character game code:</p>
-                 <input type="text" id="gameIdInput" placeholder="ABCDEF" maxlength="6">
-                 <button id="joinGameSubmitBtn">Join Game</button>
-                 <button class="back-button" data-target="multiplayer-menu-section">Back</button>
-            </div>
-        </div>
+                <button id="hostGameBtn2" class="button">Host 2 Player Game</button>
+                <button id="hostGameBtn3" class="button">Host 3 Player Game</button>
+                <button id="hostGameBtn4" class="button">Host 4 Player Game</button>
+                <hr class="menu-divider">
+                <button id="showJoinUIBtn" class="button">Join Game (Enter Code)</button>
+                <button class="button button-back" data-target="main-menu-section">Back</button>
+            </section>
+
+            <section id="host-wait-section" class="menu-section">
+                <h2>Hosting Game</h2>
+                <p>Share this code with your mate:</p>
+                <div id="game-code-display" class="code-display">------</div>
+                <p id="waiting-message">Waiting for players...</p>
+                <button id="cancelHostBtn" class="button button-danger">Cancel Hosting</button>
+            </section>
+
+            <section id="join-code-section" class="menu-section">
+                <h2>Join Game</h2>
+                <p>Enter the 6-character game code:</p>
+                <input type="text" id="gameIdInput" class="input-code" placeholder="ABCDEF" maxlength="6">
+                <button id="joinGameSubmitBtn" class="button button-primary">Join Game</button>
+                <button class="button button-back" data-target="multiplayer-menu-section">Back</button>
+            </section>
+        </main>
 
         <div id="game-area">
-            <div id="left-panel">
-                 <div class="left-panel-top-group">
-                    <div id="player-stats-grid">Loading Stats...</div>
+            <aside id="left-panel">
+                <div class="panel-group panel-group-top">
+                    <div id="player-stats-grid">
+                        <div class="stats-box placeholder">Loading Stats...</div>
+                    </div>
                     <div id="environment-info">
-                        <div id="day-night-indicator">Day --:--</div>
-                        <div id="temperature-indicator">--°C</div>
+                      <div id="day-night-indicator">Day</div>
+                      <div id="temperature-indicator">--°C</div>
                     </div>
-                 </div>
-                 <div class="left-panel-bottom-group">
-                    <button id="muteBtn">Mute</button>
-                    <button id="leaveGameBtn">Leave Game</button>
-                    <div id="chat-log" role="log"></div>
-                    <div class="chat-input-container">
+                </div>
+                <div class="panel-group panel-group-bottom">
+                    <div id="chat-area">
+                      <div id="chat-log" role="log">
+                      </div>
+                      <div class="chat-input-area">
                         <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="100">
-                        <button id="sendChatBtn">Send</button>
+                        <button id="sendChatBtn" class="button">Send</button>
+                      </div>
                     </div>
-                 </div>
-            </div>
-            <div id="canvas-container">
-                 <div id="countdown"></div>
-                 <div id="html-overlay">
-                     <!-- Health/Armor bars are now rendered in 3D -->
-                     <!-- Damage text and speech bubbles will still be added here by JS -->
-                 </div>
+                    <div class="game-controls">
+                      <button id="muteBtn" class="button button-secondary">Mute</button>
+                      <button id="leaveGameBtn" class="button button-danger">Leave Game</button>
+                    </div>
+                </div>
+            </aside>
+
+            <div id="canvas-wrapper">
+                <canvas id="gameCanvas"></canvas>
+                 <div id="countdown-overlay"></div>
+                <div id="html-overlay">
+                </div>
             </div>
         </div>
 
         <div id="game-over-screen">
             <h2>Game Over, Mate!</h2>
-            <div id="final-stats"></div>
-            <button id="gameOverBackBtn">Back to Menu</button>
+            <div id="final-stats">
+            </div>
+            <button id="gameOverBackBtn" class="button button-primary">Back to Menu</button>
         </div>
+
     </div>
 
     <script type="importmap">
