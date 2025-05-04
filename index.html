@@ -10,7 +10,7 @@
     <!-- <link rel="icon" type="image/x-icon" href="/favicon.ico"> -->
 </head>
 <body>
-    <!-- Loading Screen -->
+    <!-- Loading Screen (Keep as is) -->
     <div id="loading-screen" class="active">
         <div class="loading-content">
             <h1 class="loading-title">KELLY GANG</h1>
@@ -20,24 +20,24 @@
         </div>
     </div>
 
-    <!-- Main Game Container -->
+    <!-- Main Game Container (Keep as is) -->
     <div id="game-container">
-        <!-- Top Bar -->
+        <!-- Top Bar (Keep as is) -->
         <header id="top-bar">
             <h1>SUCH IS LIFE</h1>
         </header>
 
-        <!-- Status Message Area -->
+        <!-- Status Message Area (Keep as is) -->
         <div id="game-status" role="status">Initializing...</div>
 
-        <!-- Menu Area (Initially Visible) -->
+        <!-- Menu Area (Keep as is) -->
         <main id="menu-area">
             <section id="main-menu-section" class="menu-section active">
                 <h2>Main Menu</h2>
                 <button id="singlePlayerBtn" class="button button-primary">Single Player</button>
                 <button id="multiplayerBtn" class="button button-primary">Multiplayer</button>
             </section>
-
+            <!-- Other menu sections remain unchanged -->
             <section id="multiplayer-menu-section" class="menu-section">
                 <h2>Multiplayer</h2>
                 <p>Choose number of players:</p>
@@ -48,7 +48,6 @@
                 <button id="showJoinUIBtn" class="button">Join Game (Enter Code)</button>
                 <button class="button button-back" data-target="main-menu-section">Back</button>
             </section>
-
             <section id="host-wait-section" class="menu-section">
                 <h2>Hosting Game</h2>
                 <p>Share this code with your mate:</p>
@@ -56,7 +55,6 @@
                 <p id="waiting-message">Waiting for players...</p>
                 <button id="cancelHostBtn" class="button button-danger">Cancel Hosting</button>
             </section>
-
             <section id="join-code-section" class="menu-section">
                 <h2>Join Game</h2>
                 <p>Enter the 6-character game code:</p>
@@ -66,13 +64,15 @@
             </section>
         </main>
 
-        <!-- Game Area (Initially Hidden) -->
+        <!-- Game Area (This is where the two-column layout applies) -->
+        <!-- The structure below is ALREADY CORRECT for a 2-column layout -->
         <div id="game-area">
-            <!-- Left Panel -->
+            <!-- Left Column -->
             <aside id="left-panel">
                 <div class="panel-group panel-group-top">
                     <div id="player-stats-grid">
                         <div class="stats-box placeholder">Loading Stats...</div>
+                        <!-- Stats will be added here dynamically -->
                     </div>
                     <div id="environment-info">
                       <div id="day-night-indicator">Day</div>
@@ -82,6 +82,7 @@
                 <div class="panel-group panel-group-bottom">
                     <div id="chat-area">
                       <div id="chat-log" role="log">
+                        <!-- Chat messages appear here -->
                       </div>
                       <div class="chat-input-area">
                         <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="100">
@@ -95,26 +96,27 @@
                 </div>
             </aside>
 
-            <!-- Canvas Container -->
+            <!-- Right Column (Canvas Area) -->
             <div id="canvas-container">
                 <canvas id="gameCanvas"></canvas>
-                 <!-- Overlays remain inside canvas-container -->
+                 <!-- Overlays remain inside canvas-container for correct positioning -->
                 <div id="countdown-overlay"></div>
                 <div id="html-overlay"></div>
             </div>
         </div>
 
-        <!-- Game Over Screen -->
+        <!-- Game Over Screen (Keep as is) -->
         <div id="game-over-screen">
             <h2>Game Over, Mate!</h2>
             <div id="final-stats">
+                <!-- Final stats populated by JS -->
             </div>
             <button id="gameOverBackBtn" class="button button-primary">Back to Menu</button>
         </div>
 
     </div> <!-- End game-container -->
 
-    <!-- Scripts -->
+    <!-- Scripts (Keep as is) -->
     <script type="importmap">
         {
             "imports": {
