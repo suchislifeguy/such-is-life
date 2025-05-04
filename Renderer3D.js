@@ -2,6 +2,7 @@
 // Rewritten Version: Advanced renderer for Kelly Gang Survival.
 // Focus on robust resizing, camera alignment, and resource management.
 // Includes: Instancing, Particle Effects, Detailed Models, Environment Effects.
+// HashCode Fix Applied. Added Dimension Logging + clearViewOffset.
 
 import * as THREE from 'three';
 
@@ -482,7 +483,7 @@ function _disposeObject3D(obj) {
             });
         } else if (child instanceof THREE.PointLight && child !== muzzleFlashLight && child !== campfireSystem?.glowLight) {
             // Dispose non-global lights if any were added dynamically
-            child.dispose?.(); // PointLight doesn't have a dispose method in older versions, check existence
+            // child.dispose?.(); // PointLight doesn't have a dispose method
         }
     });
      // console.debug(`Finished dispose traverse for ${obj.name}`);
@@ -689,25 +690,14 @@ function _updatePowerupGroup(group, powerupData, deltaTime) {
      // Add simple animation (bobbing and rotating)
      const iconMesh = group.userData.iconMesh;
      if (iconMesh) {
-         // Bobbing effect based on time and unique ID
-         iconMesh.position.y = Y_OFFSET_POWERUP + Math.sin(clock.elapsedTime * 2.5 + group.id.hashCode()) * 4;
+         // Bobbing effect based on time and unique object ID (use the number directly)
+         iconMesh.position.y = Y_OFFSET_POWERUP + Math.sin(clock.elapsedTime * 2.5 + group.id) * 4; // CORRECTED: Use numeric ID
          // Slow rotation
          iconMesh.rotation.y += 0.015;
          iconMesh.rotation.x += 0.005;
          iconMesh.rotation.z += 0.003;
      }
 }
-// Helper for string hashing for simple variation
-String.prototype.hashCode = function() {
-  var hash = 0, i, chr;
-  if (this.length === 0) return hash;
-  for (i = 0; i < this.length; i++) {
-    chr   = this.charCodeAt(i);
-    hash  = ((hash << 5) - hash) + chr;
-    hash |= 0; // Convert to 32bit integer
-  }
-  return hash;
-};
 
 // Updates an InstancedMesh based on game state data
 function _updateInstancedMesh(mesh, matrices, state, yOffset, isBullet = false) {
@@ -1168,6 +1158,9 @@ function _updateCamera(deltaTime) {
     const targetX = cameraTargetPos.x;
     const targetZ = cameraTargetPos.z;
 
+    // --- DEBUG LOG ---
+    // console.log(`UpdateCamera Using - Width: ${gameWidth.toFixed(0)}, Height: ${gameHeight.toFixed(0)}, TargetPos: (${targetX.toFixed(0)}, ${targetZ.toFixed(0)})`);
+
     // Smoothly interpolate camera position towards the target
     // Target Y (CAMERA_BASE_Y) and Z offset remain constant relative to target X/Z
     _vector3.set(targetX, CAMERA_BASE_Y, targetZ + 300); // Camera follows target XZ, fixed height/offset
@@ -1196,8 +1189,12 @@ function _updateCamera(deltaTime) {
     }
 
     // Always look at the center of the logical game area on the ground plane
-    _vector3.set(targetX, 0, targetZ); // Look at target XZ on the ground (Y=0)
-    camera.lookAt(_vector3);
+    const lookAtTarget = _vector3.set(targetX, 0, targetZ); // Look at target XZ on the ground (Y=0)
+    camera.lookAt(lookAtTarget);
+
+    // --- DEBUG LOG ---
+    // console.log(`UpdateCamera Result - Cam Pos: (${camera.position.x.toFixed(0)}, ${camera.position.y.toFixed(0)}, ${camera.position.z.toFixed(0)}), LookAt: (${lookAtTarget.x.toFixed(0)}, ${lookAtTarget.z.toFixed(0)})`);
+
 }
 
 // Updates environment lighting, fog, and background based on game state
@@ -1438,7 +1435,7 @@ const Renderer3D = {
 
         // Prevent zero dimensions which cause errors
         if (newWidth <= 0 || newHeight <= 0) {
-             // console.warn("handleContainerResize: Invalid dimensions (<=0). Skipping update.");
+             console.warn("handleContainerResize: Invalid dimensions (<=0). Skipping update.");
              return;
         }
 
@@ -1448,6 +1445,7 @@ const Renderer3D = {
         // --- 2. Update Camera Projection ---
         camera.aspect = newWidth / newHeight;
         camera.updateProjectionMatrix(); // Essential after changing aspect
+        camera.clearViewOffset();         // <<< --- ADDED: Explicitly clear any view offset
 
         // --- 3. Update Viewport & Scissor ---
         // Ensure drawing occurs only within the canvas bounds
@@ -1461,7 +1459,9 @@ const Renderer3D = {
         gameHeight = newHeight;
         cameraTargetPos.x = gameWidth / 2;
         cameraTargetPos.z = gameHeight / 2; // Game Y maps to World Z
-         // console.log(`Renderer Resized: Actual=${newWidth}x${newHeight}, Logical Set To Match.`);
+        // --- DEBUG LOG ---
+        console.log(`>>> Resize Set - Width: ${gameWidth.toFixed(0)}, Height: ${gameHeight.toFixed(0)}, TargetPos: (${cameraTargetPos.x.toFixed(0)}, ${cameraTargetPos.z.toFixed(0)})`);
+
 
         // --- 5. Update World Elements Dependent on Logical Dimensions ---
         if (groundPlane) {
