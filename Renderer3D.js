@@ -63,9 +63,9 @@ const _dummyObject = new THREE.Object3D(); const _matrix = new THREE.Matrix4(); 
 const _quaternion = new THREE.Quaternion(); const _scale = new THREE.Vector3(1, 1, 1); const _color = new THREE.Color();
 const _vector3 = new THREE.Vector3();
 
-// --- Initialization Functions ---
+// --- Internal Helper Functions Defined First ---
 
-function _createAssets() { /* ...  ... */
+function _createAssets() {
     try {
         const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64;
         const context = canvas.getContext('2d'); if (!context) throw new Error("Failed context");
@@ -74,8 +74,9 @@ function _createAssets() { /* ...  ... */
         context.fillStyle = gradient; context.fillRect(0, 0, 64, 64);
         loadedAssets.flameTexture = new THREE.CanvasTexture(canvas); loadedAssets.flameTexture.name = "FlameTexture";
     } catch (error) { console.error("Error creating flame texture:", error); }
- }
-function _createGeometries() { /* ...  ... */
+}
+
+function _createGeometries() {
     sharedGeometries.playerBody = new THREE.CapsuleGeometry(PLAYER_CAPSULE_RADIUS, PLAYER_CAPSULE_HEIGHT, 4, 12);
     sharedGeometries.head = new THREE.SphereGeometry(1, 12, 8);
     sharedGeometries.playerGun = new THREE.CylinderGeometry(PLAYER_GUN_RADIUS, PLAYER_GUN_RADIUS * 0.8, PLAYER_GUN_LENGTH, 8);
@@ -94,8 +95,9 @@ function _createGeometries() { /* ...  ... */
     powerupGeometries.default=new THREE.BoxGeometry(ps*0.9,ps*0.9,ps*0.9);
     sharedGeometries.log = new THREE.CylinderGeometry(CAMPFIRE_LOG_RADIUS, CAMPFIRE_LOG_RADIUS, CAMPFIRE_LOG_LENGTH, 6);
     sharedGeometries.groundPlane = new THREE.PlaneGeometry(1, 1);
- }
-function _createMaterials() { /* ...  ... */
+}
+
+function _createMaterials() {
     sharedMaterials.playerBody = new THREE.MeshStandardMaterial({color:0xDC143C, roughness:0.5, metalness:0.2, name:"PlayerBody"});
     sharedMaterials.playerHead = new THREE.MeshStandardMaterial({color:0xD2B48C, roughness:0.7, name:"PlayerHead"});
     sharedMaterials.playerGun = new THREE.MeshStandardMaterial({color:0x444444, roughness:0.5, metalness:0.7, name:"PlayerGun"});
@@ -128,7 +130,8 @@ function _createMaterials() { /* ...  ... */
     sharedMaterials.dustMote = new THREE.PointsMaterial({size:50, color:0xd2b48c, transparent:true, opacity:DUST_OPACITY, sizeAttenuation:true, depthWrite:false, name:"DustMote"});
     sharedMaterials.flame = new THREE.PointsMaterial({size:18, vertexColors:true, map:loadedAssets.flameTexture, transparent:true, sizeAttenuation:true, depthWrite:false, blending:THREE.AdditiveBlending, name:"Flame"});
 }
-function _initParticlesAndInstances() { /* ...  ... */
+
+function _initParticlesAndInstances() {
     if (!scene) return;
     playerBulletMesh = new THREE.InstancedMesh(sharedGeometries.bullet, sharedMaterials.playerBullet, MAX_PLAYER_BULLETS); playerBulletMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); playerBulletMesh.count = 0; playerBulletMesh.name = "PlayerBullets"; scene.add(playerBulletMesh); playerBulletMatrices = playerBulletMesh.instanceMatrix.array;
     enemyBulletMesh = new THREE.InstancedMesh(sharedGeometries.bullet, sharedMaterials.enemyBullet, MAX_ENEMY_BULLETS); enemyBulletMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); enemyBulletMesh.count = 0; enemyBulletMesh.name = "EnemyBullets"; scene.add(enemyBulletMesh); enemyBulletMatrices = enemyBulletMesh.instanceMatrix.array;
@@ -137,7 +140,8 @@ function _initParticlesAndInstances() { /* ...  ... */
     const rainGeo = new THREE.BufferGeometry(); const rainP = new Float32Array(MAX_RAIN_DROPS * 6); const rainData = []; for (let i = 0; i < MAX_RAIN_DROPS; i++) { const x = Math.random()*gameWidth*GROUND_MARGIN - (gameWidth*(GROUND_MARGIN-1)/2); const y = Math.random()*1000+800; const z = Math.random()*gameHeight*GROUND_MARGIN - (gameHeight*(GROUND_MARGIN-1)/2); rainP[i*6+1] = -1e4; rainP[i*6+4] = -1e4; rainData.push({ x:x, y:y, z:z, s: RAIN_SPEED_Y + Math.random()*RAIN_SPEED_Y_RAND }); } rainGeo.setAttribute('position', new THREE.BufferAttribute(rainP, 3).setUsage(THREE.DynamicDrawUsage)); rainSystem = { lines: new THREE.LineSegments(rainGeo, sharedMaterials.rainLine), geometry: rainGeo, material: sharedMaterials.rainLine, data: rainData }; rainSystem.lines.visible = false; rainSystem.lines.name = "RainLines"; scene.add(rainSystem.lines);
     const dustGeo = new THREE.BufferGeometry(); const dustP = new Float32Array(MAX_DUST_MOTES * 3); const dustData = []; for (let i = 0; i < MAX_DUST_MOTES; i++) { dustP[i * 3 + 1] = -1e4; dustData.push({ p: new THREE.Vector3(Math.random()*gameWidth, Math.random()*80+5, Math.random()*gameHeight), v: new THREE.Vector3((Math.random()-0.5)*DUST_SPEED_XZ, (Math.random()-0.5)*DUST_SPEED_Y, (Math.random()-0.5)*DUST_SPEED_XZ) }); } dustGeo.setAttribute('position', new THREE.BufferAttribute(dustP, 3).setUsage(THREE.DynamicDrawUsage)); dustSystem = { particles: new THREE.Points(dustGeo, sharedMaterials.dustMote), geometry: dustGeo, material: sharedMaterials.dustMote, data: dustData }; dustSystem.particles.visible = false; dustSystem.particles.name = "DustParticles"; scene.add(dustSystem.particles);
 }
-function _initCampfire() { /* ...  ... */
+
+function _initCampfire() {
     if (!scene) return; campfireSystem = {}; const group = new THREE.Group(); group.name = "CampfireGroup";
     const log1 = new THREE.Mesh(sharedGeometries.log, sharedMaterials.log); log1.rotation.set(0, Math.PI/10, Math.PI/6); log1.castShadow = true; log1.position.set(-CAMPFIRE_LOG_LENGTH*0.1, Y_OFFSET_CAMPFIRE, -CAMPFIRE_LOG_LENGTH*0.2);
     const log2 = new THREE.Mesh(sharedGeometries.log, sharedMaterials.log); log2.rotation.set(0, -Math.PI/8, -Math.PI/5); log2.castShadow = true; log2.position.set(CAMPFIRE_LOG_LENGTH*0.15, Y_OFFSET_CAMPFIRE, CAMPFIRE_LOG_LENGTH*0.1);
@@ -148,8 +152,9 @@ function _initCampfire() { /* ...  ... */
     const flameParticles = new THREE.Points(flameGeo, sharedMaterials.flame); flameParticles.name = "CampfireFlames"; group.add(flameParticles); group.visible = false;
     campfireSystem = { group: group, particles: flameParticles, geometry: flameGeo, material: sharedMaterials.flame, glowLight: glowLight, data: flameData };
     scene.add(group);
- }
-function _initSnake() { /* ...  ... */
+}
+
+function _initSnake() {
     if (!scene) return; const dummyCurve = new THREE.LineCurve3(new THREE.Vector3(0, Y_OFFSET_SNAKE, 0), new THREE.Vector3(1, Y_OFFSET_SNAKE, 0)); const tubeGeo = new THREE.TubeGeometry(dummyCurve, 1, SNAKE_RADIUS, 6, false);
     snakeMesh = new THREE.Mesh(tubeGeo, sharedMaterials.snake); snakeMesh.castShadow = true; snakeMesh.visible = false; snakeMesh.name = "Snake"; scene.add(snakeMesh);
 }
@@ -273,9 +278,8 @@ function _updateInstancedMesh(mesh, matrices, state, yOffset, isBullet = false) 
         if (mesh === enemyBulletMesh && isPlayerBullet) continue;
         if (typeof data?.x !== 'number' || typeof data?.y !== 'number') continue;
         _position.set(data.x, yOffset, data.y);
-        if (isBullet && data.vx !== undefined && data.vy !== undefined && (data.vx !== 0 || data.vy !== 0)) {
-            const angle = Math.atan2(data.vx, data.vy); _quaternion.setFromEuler(new THREE.Euler(0, angle, 0));
-        } else { _quaternion.identity(); }
+        if (isBullet && data.vx !== undefined && data.vy !== undefined && (data.vx !== 0 || data.vy !== 0)) { const angle = Math.atan2(data.vx, data.vy); _quaternion.setFromEuler(new THREE.Euler(0, angle, 0)); }
+        else { _quaternion.identity(); }
          _scale.set(1, 1, 1); _matrix.compose(_position, _quaternion, _scale); _matrix.toArray(matrices, visibleCount * 16); visibleCount++;
     }
     mesh.count = visibleCount; mesh.instanceMatrix.needsUpdate = true;
@@ -333,29 +337,16 @@ function _updateCamera(deltaTime) {
     if (shakeMagnitude > 0 && clock.elapsedTime < shakeEndTime) { const timeRemaining = shakeEndTime - clock.elapsedTime; const decayFactor = Math.pow(Math.max(0, timeRemaining / (shakeEndTime - (clock.elapsedTime-deltaTime))), 2); const currentMag = shakeMagnitude * decayFactor; const shakeAngle = Math.random() * Math.PI * 2; screenShakeOffset.set(Math.cos(shakeAngle)*currentMag, (Math.random()-0.5)*currentMag*0.5, Math.sin(shakeAngle)*currentMag); camera.position.add(screenShakeOffset); } else shakeMagnitude = 0;
     _vector3.set(targetX, 0, targetZ); camera.lookAt(_vector3);
 }
-/** Updates environment lighting, fog, etc. */
 function _updateEnvironment(isNight, isRaining, isDustStorm) {
-     // Guard clause
      if (!scene || !ambientLight || !directionalLight || !groundPlane || !clock) return;
-
-     // Define target values (same as before)
-     const dayAI=0.7, nightAI=0.45; const dayDI=1.2, nightDI=0.7; const dayAC=0xffffff, nightAC=0x7080a0; const dayDC=0xffffff, nightDC=0xa0b0ff;
-     const dayFogC=0xc0d0e0, dayFogD=0.0003; const nightFogC=0x04060a, nightFogD=0.0008; const dustFogC=0xb09070, dustFogD=0.0015;
-
-     // Determine targets based on state (same as before)
+     const dayAI=0.7, nightAI=0.45; const dayDI=1.2, nightDI=0.7; const dayAC=0xffffff, nightAC=0x7080a0; const dayDC=0xffffff, nightDC=0xa0b0ff; const dayFogC=0xc0d0e0, dayFogD=0.0003; const nightFogC=0x04060a, nightFogD=0.0008; const dustFogC=0xb09070, dustFogD=0.0015;
      const targetAI=isNight?nightAI:dayAI; const targetDI=isNight?nightDI:dayDI; const targetAC=isNight?nightAC:dayAC; const targetDC=isNight?nightDC:dayDC; const targetGM=isNight?sharedMaterials.groundNight:sharedMaterials.groundDay;
      let targetFD, targetFC; if(isDustStorm){targetFD=dustFogD;targetFC=dustFogC;}else if(isNight){targetFD=nightFogD;targetFC=nightFogC;}else{targetFD=dayFogD;targetFC=dayFogC;}
-
-     // Apply lerp (same as before)
-     const lerpA=0.05; ambientLight.intensity=lerp(ambientLight.intensity, targetAI, lerpA); directionalLight.intensity=lerp(directionalLight.intensity, targetDI, lerpA);
-     ambientLight.color.lerp(_color.setHex(targetAC), lerpA); directionalLight.color.lerp(_color.setHex(targetDC), lerpA);
+     const lerpA=0.05; ambientLight.intensity=lerp(ambientLight.intensity, targetAI, lerpA); directionalLight.intensity=lerp(directionalLight.intensity, targetDI, lerpA); ambientLight.color.lerp(_color.setHex(targetAC), lerpA); directionalLight.color.lerp(_color.setHex(targetDC), lerpA);
      if (groundPlane.material !== targetGM) groundPlane.material = targetGM;
      if (!scene.fog) scene.fog = new THREE.FogExp2(targetFC, targetFD); else { scene.fog.color.lerp(_color.setHex(targetFC), lerpA); scene.fog.density = lerp(scene.fog.density, targetFD, lerpA); }
      if(!scene.background || !(scene.background instanceof THREE.Color)) scene.background = new THREE.Color(); scene.background.lerp(_color.setHex(targetFC), lerpA);
-
-     // *** CORRECTED VISIBILITY SETTING ***
-     if (rainSystem?.lines) rainSystem.lines.visible = isRaining; // Use ?.lines
-     if (dustSystem?.particles) dustSystem.particles.visible = isDustStorm; // Use ?.particles
+     if (rainSystem?.lines) rainSystem.lines.visible = isRaining; if (dustSystem?.particles) dustSystem.particles.visible = isDustStorm; // Corrected property access
 }
 function _updateMuzzleFlash(localEffects, playerGroup) {
     if (!muzzleFlashLight || !clock) return; const flashState = localEffects?.muzzleFlash; const now = clock.elapsedTime * 1000;
@@ -364,22 +355,22 @@ function _updateMuzzleFlash(localEffects, playerGroup) {
 }
 
 /** Projects a 3D world position to 2D screen coordinates. */
-function _projectToScreen(worldPosition) { // Internal helper defined before public API
+function _projectToScreen(worldPosition) {
     if (!camera || !renderer?.domElement) return null;
     try {
         _vector3.copy(worldPosition);
-        _vector3.project(camera); // Project into NDC (-1 to 1)
+        _vector3.project(camera);
         const widthHalf = renderer.domElement.width / 2;
         const heightHalf = renderer.domElement.height / 2;
         const screenX = Math.round((_vector3.x * widthHalf) + widthHalf);
-        const screenY = Math.round(-(_vector3.y * heightHalf) + heightHalf); // Y is inverted
-        if (_vector3.z > 1.0) return null; // Check if behind camera
+        const screenY = Math.round(-(_vector3.y * heightHalf) + heightHalf);
+        if (_vector3.z > 1.0) return null;
         return { screenX, screenY };
     } catch (e) { return null; }
 }
 
 
-// --- Public API --- (Defined AFTER all helper functions)
+// --- Public API ---
 const Renderer3D = {
     init: (containerElement, initialWidth, initialHeight) => {
         console.log("--- Renderer3D.init() ---");
@@ -436,19 +427,17 @@ const Renderer3D = {
         _updateSnake(localEffects.snake);
         _updateMuzzleFlash(localEffects, playerGroupMap[appState.localPlayerId]);
         const uiPositions = {};
-        const projectEntity = (objMap, stateMap, yOffsetFn) => { for (const id in objMap) { const obj = objMap[id]; const data = stateMap?.[id]; if (obj?.visible && data) { const worldPos = obj.position.clone(); worldPos.y = yOffsetFn(data, obj); const screenPos = _projectToScreen(worldPos); if(screenPos) uiPositions[id] = screenPos; } } }; // Use internal helper
+        const projectEntity = (objMap, stateMap, yOffsetFn) => { for (const id in objMap) { const obj = objMap[id]; const data = stateMap?.[id]; if (obj?.visible && data) { const worldPos = obj.position.clone(); worldPos.y = yOffsetFn(data, obj); const screenPos = _projectToScreen(worldPos); if(screenPos) uiPositions[id] = screenPos; } } };
         const getPlayerHeadY = (d,g) => g.userData?.headMesh?.position.y + PLAYER_HEAD_RADIUS * 1.5 || PLAYER_TOTAL_HEIGHT; const getEnemyHeadY = (d,g) => g.userData?.headMesh?.position.y + (d.type==='giant' ? ENEMY_HEAD_RADIUS*ENEMY_GIANT_MULTIPLIER : ENEMY_HEAD_RADIUS)*1.2 || ENEMY_CHASER_HEIGHT; const getPowerupTopY = (d,g) => g.userData?.iconMesh?.position.y + POWERUP_BASE_SIZE * 0.5 || Y_OFFSET_POWERUP;
         projectEntity(playerGroupMap, stateToRender.players, getPlayerHeadY); projectEntity(enemyGroupMap, stateToRender.enemies, getEnemyHeadY); projectEntity(powerupGroupMap, stateToRender.powerups, getPowerupTopY);
-        if (stateToRender.damage_texts) { for (const id in stateToRender.damage_texts) { const dt = stateToRender.damage_texts[id]; const worldPos = _vector3.set(dt.x, PLAYER_TOTAL_HEIGHT * 0.8, dt.y); const screenPos = _projectToScreen(worldPos); if(screenPos) uiPositions[id] = screenPos; } } // Use internal helper
+        if (stateToRender.damage_texts) { for (const id in stateToRender.damage_texts) { const dt = stateToRender.damage_texts[id]; const worldPos = _vector3.set(dt.x, PLAYER_TOTAL_HEIGHT * 0.8, dt.y); const screenPos = _projectToScreen(worldPos); if(screenPos) uiPositions[id] = screenPos; } }
         appState.uiPositions = uiPositions;
         try { renderer.render(scene, camera); } catch (e) { console.error("!!! RENDER ERROR !!!", e); if (window.appState?.animationFrameId) { cancelAnimationFrame(window.appState.animationFrameId); window.appState.animationFrameId = null; console.error("!!! Animation loop stopped due to render error. !!!"); } }
     },
     triggerShake: (magnitude, durationMs) => { if (!clock) return; const now = clock.elapsedTime * 1000; const newEndTime = now + durationMs; if (magnitude >= shakeMagnitude || newEndTime > shakeEndTime) { shakeMagnitude = Math.max(0.1, magnitude); shakeEndTime = Math.max(newEndTime, shakeEndTime); } },
     spawnVisualAmmoCasing: (position, ejectVector) => { if (!clock) return; _spawnAmmoCasing(position, ejectVector); },
     triggerVisualHitSparks: (position, count = 5) => { if (!clock) return; _triggerHitSparks(position, count); },
-    projectToScreen: (worldPosition) => { // Public method calls internal helper
-        return _projectToScreen(worldPosition);
-    },
+    projectToScreen: (worldPosition) => { return _projectToScreen(worldPosition); },
     cleanup: () => {
         console.log("--- Renderer3D Cleanup ---");
         [hitSparkSystem, rainSystem, dustSystem, campfireSystem].forEach(system => { if (system) { if(system.particles) scene?.remove(system.particles); if(system.lines) scene?.remove(system.lines); if(system.group) scene?.remove(system.group); system.geometry?.dispose(); system.material?.dispose(); }});
@@ -473,6 +462,5 @@ const Renderer3D = {
     getCamera: () => camera,
     getGroundPlane: () => groundPlane,
 };
-
 
 export default Renderer3D;
