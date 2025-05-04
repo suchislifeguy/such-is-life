@@ -1,194 +1,908 @@
-import * as THREE from 'three';
+// Renderer3D.js
+// Manages the Three.js scene, objects, and rendering for Kelly Gang Survival.
 
-function lerp(start, end, amount) {
-    return start + (end - start) * amount;
+import * as THREE from 'three';
+// Optional: Import controls for debugging if needed (uncomment)
+// import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// --- Constants ---
+const MESH_Y_OFFSET = 5; // Base Y position offset for meshes on the ground plane
+const FADE_OUT_DURATION = 0.3; // Matches server ENEMY_FADE_DURATION
+const AMMO_CASING_INSTANCES = 100; // Max casings rendered at once
+const BLOOD_SPARK_INSTANCES = 150; // Max sparks rendered at once
+const SNAKE_SEGMENTS_VISUAL = 40; // How many segments to draw for the snake tube
+const SNAKE_RADIUS = 8; // Visual radius of the snake tube
+
+// --- Module Scope Variables ---
+let renderer, scene, camera, ambientLight, directionalLight, clock, controls; // Added controls
+let container, canvas, width, height;
+let groundPlane, campfireLogs, campfireLight;
+
+// Object Maps (GameID -> THREE.Object3D)
+const objectMaps = {
+    playerMeshes: {},
+    enemyMeshes: {},
+    bulletMeshes: {},
+    powerupMeshes: {},
+    effectMeshes: {}, // For things like pushback rings
+    ammoCasingMesh: null, // InstancedMesh
+    bloodSparkMesh: null, // InstancedMesh
+    snakeMesh: null,
+};
+
+// Shared Resources (Geometries, Materials)
+const sharedResources = {
+    materials: {},
+    geometries: {},
+};
+
+// Camera Shake State
+let shakeIntensity = 0;
+let shakeEndTime = 0;
+const originalCameraPos = new THREE.Vector3();
+
+// --- Internal Functions ---
+
+function _createSharedResources() {
+    // Player
+    sharedResources.geometries.playerCapsule = new THREE.CapsuleGeometry(12, 24, 4, 12); // Radius, height, cap segments, radial segments
+    sharedResources.materials.playerBase = new THREE.MeshStandardMaterial({ color: 0x7a8c79, roughness: 0.6, metalness: 0.2 });
+    sharedResources.materials.playerDown = new THREE.MeshStandardMaterial({ color: 0xFFD700, roughness: 0.7, metalness: 0.1 });
+    sharedResources.materials.playerDead = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.8, metalness: 0.0 });
+    sharedResources.materials.playerSelf = new THREE.MeshStandardMaterial({ color: 0xa0bd9a, roughness: 0.6, metalness: 0.2, emissive: 0x113311, emissiveIntensity: 0.4 }); // Slight glow for local player
+
+    // Enemies
+    sharedResources.geometries.enemyChaser = new THREE.BoxGeometry(20, 40, 20);
+    sharedResources.materials.enemyChaser = new THREE.MeshStandardMaterial({ color: 0x9e2b2f, roughness: 0.7 });
+    sharedResources.geometries.enemyShooter = new THREE.CylinderGeometry(12, 12, 45, 16);
+    sharedResources.materials.enemyShooter = new THREE.MeshStandardMaterial({ color: 0x364f6b, roughness: 0.6 });
+    sharedResources.geometries.enemyGiant = new THREE.BoxGeometry(50, 100, 50); // Scaled by constants
+    sharedResources.materials.enemyGiant = new THREE.MeshStandardMaterial({ color: 0x6f4e37, roughness: 0.8 });
+
+    // Bullets
+    sharedResources.geometries.bulletStandard = new THREE.SphereGeometry(4, 8, 6);
+    sharedResources.materials.bulletStandard = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xaaaaaa, emissiveIntensity: 0.5, roughness: 0.2 });
+    sharedResources.materials.bulletShotgun = new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0xcc8800, emissiveIntensity: 0.6 }); // Smaller radius handled in creation
+    sharedResources.materials.bulletHeavySlug = new THREE.MeshStandardMaterial({ color: 0xeeeeff, emissive: 0xccccff, emissiveIntensity: 0.7 }); // Larger radius handled in creation
+    sharedResources.materials.bulletRapid = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0xeeee00, emissiveIntensity: 0.8 });
+    sharedResources.materials.bulletEnemy = new THREE.MeshStandardMaterial({ color: 0xff6666, emissive: 0xcc4444, emissiveIntensity: 0.5 }); // Smaller radius handled in creation
+
+    // Powerups (Using simple boxes with emissive colors for glow)
+    sharedResources.geometries.powerupBox = new THREE.BoxGeometry(20, 20, 20);
+    sharedResources.materials.powerupHealth = new THREE.MeshStandardMaterial({ color: 0x66bb6a, emissive: 0x449944, emissiveIntensity: 0.6 });
+    sharedResources.materials.powerupGun = new THREE.MeshStandardMaterial({ color: 0x6a0dad, emissive: 0x48098a, emissiveIntensity: 0.6 });
+    sharedResources.materials.powerupSpeed = new THREE.MeshStandardMaterial({ color: 0x3edef3, emissive: 0x2eadda, emissiveIntensity: 0.6 });
+    sharedResources.materials.powerupArmor = new THREE.MeshStandardMaterial({ color: 0x9e9e9e, emissive: 0x7c7c7c, emissiveIntensity: 0.6 });
+    sharedResources.materials.powerupShotgun = new THREE.MeshStandardMaterial({ color: 0xffa500, emissive: 0xcc8400, emissiveIntensity: 0.6 });
+    sharedResources.materials.powerupSlug = new THREE.MeshStandardMaterial({ color: 0xa0522d, emissive: 0x803a1a, emissiveIntensity: 0.6 });
+    sharedResources.materials.powerupRapid = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0xeeee00, emissiveIntensity: 0.6 });
+    sharedResources.materials.powerupScore = new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0xccab00, emissiveIntensity: 0.6 });
+
+    // Effects
+    sharedResources.geometries.muzzleFlash = new THREE.PlaneGeometry(30, 30);
+    sharedResources.materials.muzzleFlash = new THREE.SpriteMaterial({ color: 0xffffee, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.9 }); // Simple sprite, could use texture later
+    sharedResources.geometries.pushbackRing = new THREE.RingGeometry(90, 100, 32);
+    sharedResources.materials.pushbackRing = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+    sharedResources.geometries.ammoCasing = new THREE.BoxGeometry(6, 2, 3); // Width, height, depth
+    sharedResources.materials.ammoCasing = new THREE.MeshStandardMaterial({ color: 0xdaa520, roughness: 0.4, metalness: 0.7 });
+    sharedResources.geometries.bloodSpark = new THREE.SphereGeometry(2.5, 5, 4);
+    sharedResources.materials.bloodSpark = new THREE.MeshBasicMaterial({ color: 0xff2200 }); // Basic bright red
+
+    // Snake
+    sharedResources.materials.snake = new THREE.MeshStandardMaterial({ color: 0x228B22, roughness: 0.8, metalness: 0.1 }); // Forest green
 }
 
-const Renderer3D = (() => {
-    console.log("--- Renderer3D.js Rewrite v8 (FINAL): Initializing ---");
+function _createInstancedMeshes() {
+    // Ammo Casings
+    objectMaps.ammoCasingMesh = new THREE.InstancedMesh(
+        sharedResources.geometries.ammoCasing,
+        sharedResources.materials.ammoCasing,
+        AMMO_CASING_INSTANCES
+    );
+    objectMaps.ammoCasingMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); // Important for performance
+    objectMaps.ammoCasingMesh.castShadow = true;
+    scene.add(objectMaps.ammoCasingMesh);
 
-    let scene, camera, renderer;
-    let ambientLight, directionalLight, muzzleFlashLight;
-    let gameWidth = 3200;
-    let gameHeight = 1800;
+    // Blood Sparks
+    objectMaps.bloodSparkMesh = new THREE.InstancedMesh(
+        sharedResources.geometries.bloodSpark,
+        sharedResources.materials.bloodSpark,
+        BLOOD_SPARK_INSTANCES
+    );
+    objectMaps.bloodSparkMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    // Sparks probably don't need shadows
+    scene.add(objectMaps.bloodSparkMesh);
+}
 
-    const playerMeshes = {};
-    const enemyMeshes = {};
-    const powerupMeshes = {};
-    let groundPlane = null;
-    let campfireGroup = null;
-    let snakeMesh = null;
-    let snakeCurvePoints = [];
 
-    let hitSparkParticles = null; let hitSparkGeometry = null; let sparkData = [];
-    let rainLines = null; let rainGeometry = null; let rainData = [];
-    let dustParticles = null; let dustGeometry = null; let dustData = [];
-    let flameParticles = null; let flameGeometry = null; let flameData = [];
-    let ammoCasingMesh = null;
-    let playerBulletMesh = null;
-    let enemyBulletMesh = null;
-    let dummyObject = new THREE.Object3D();
+function _handleResize() {
+    if (!container || !renderer || !camera) return;
 
-    const MAX_SPARKS = 150; const MAX_RAIN_DROPS = 800; const MAX_DUST_MOTES = 500;
-    const MAX_CASINGS = 75; const MAX_FLAMES = 60;
-    const MAX_BULLETS = 500;
+    width = container.clientWidth;
+    height = container.clientHeight;
 
-    let screenShakeOffset = new THREE.Vector3(0, 0, 0);
-    let shakeMagnitude = 0; let shakeEndTime = 0;
-    let cameraTargetPos = new THREE.Vector3(gameWidth / 2, 0, gameHeight / 2);
-    const cameraLerpFactor = 0.08;
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
 
-    const loadedAssets = { flameTexture: createFlameTexture(), };
+    renderer.setSize(width, height);
+    // console.log(`Renderer resized to ${width}x${height}`);
+}
 
-    const DEF_PLAYER_WIDTH = 25; const DEF_PLAYER_HEIGHT = 48; const DEF_PLAYER_HEAD_RADIUS = 8;
-    const DEF_ENEMY_WIDTH = 20; const DEF_ENEMY_HEIGHT = 40; const DEF_ENEMY_HEAD_RADIUS = 6;
-    const DEF_GIANT_MULTIPLIER = 2.5; const DEF_BULLET_RADIUS = 4;
-    const DEF_POWERUP_SIZE = 15; const DEF_SNAKE_SEGMENTS = 30;
-    const DEF_SNAKE_RADIUS = 4; const DEF_LOG_RADIUS = 4; const DEF_LOG_LENGTH = 35;
-    const DEF_CASING_RADIUS = 0.5; const DEF_CASING_LENGTH = 3; const DEF_GUN_LENGTH = 20; const DEF_GUN_RADIUS = 1.5;
-    const SPARK_BASE_LIFE = 0.18; const SPARK_RAND_LIFE = 0.15;
-    const HEALTHBAR_WIDTH_FACTOR = 0.8; const HEALTHBAR_MIN_WIDTH = 30; const HEALTHBAR_HEIGHT = 3; const ARMORBAR_HEIGHT = 2; const BAR_OFFSET_Y = 12; const BAR_SPACING = 1;
+// Generic function to sync state entities with THREE meshes
+function _syncObjects(stateEntities, meshMap, createFn, updateFn, activeIdsSet) {
+    if (!stateEntities) return;
+    const now = clock.elapsedTime;
 
-    const PLAYER_STATUS_ALIVE = 'alive';
-    const PLAYER_STATUS_DOWN = 'down';
-    const PLAYER_STATUS_DEAD = 'dead';
+    for (const id in stateEntities) {
+        const entityData = stateEntities[id];
+        activeIdsSet.add(id);
 
-    const playerMaterial = new THREE.MeshStandardMaterial({ color: 0xDC143C, roughness: 0.5, metalness: 0.2 });
-    const headMaterial = new THREE.MeshStandardMaterial({ color: 0xD2B48C, roughness: 0.7 });
-    const enemySharedProps = { roughness: 0.7, metalness: 0.1, transparent: true, opacity: 1.0 };
-    const enemyChaserMaterial = new THREE.MeshStandardMaterial({ color: 0x18315f, ...enemySharedProps });
-    const enemyShooterMaterial = new THREE.MeshStandardMaterial({ color: 0x556B2F, ...enemySharedProps });
-    const enemyGiantMaterial = new THREE.MeshStandardMaterial({ color: 0x8B0000, roughness: 0.6, metalness: 0.2, transparent: true, opacity: 1.0 });
-    const bulletPlayerMaterial = new THREE.MeshBasicMaterial({ color: 0xffed4a });
-    const bulletEnemyMaterial = new THREE.MeshBasicMaterial({ color: 0xff4500 });
-    const powerupMaterials = { default: new THREE.MeshStandardMaterial({ color: 0x888888 }), health: new THREE.MeshStandardMaterial({ color: 0x81c784 }), gun_upgrade: new THREE.MeshStandardMaterial({ color: 0x6a0dad, emissive: 0x110011 }), speed_boost: new THREE.MeshStandardMaterial({ color: 0x3edef3 }), armor: new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.7 }), ammo_shotgun: new THREE.MeshStandardMaterial({ color: 0xFFa500 }), ammo_heavy_slug: new THREE.MeshStandardMaterial({ color: 0xA0522D }), ammo_rapid_fire: new THREE.MeshStandardMaterial({ color: 0xFFFF00, emissive: 0x333300 }), bonus_score: new THREE.MeshStandardMaterial({ color: 0xFFD700, metalness: 0.6 }), };
-    const groundDayMaterial = new THREE.MeshStandardMaterial({ color: 0x697a68, roughness: 0.9, metalness: 0.05 });
-    const groundNightMaterial = new THREE.MeshStandardMaterial({ color: 0x4E342E, roughness: 0.85, metalness: 0.1 });
-    const snakeMaterial = new THREE.MeshStandardMaterial({ color: 0x3a5311, roughness: 0.4, metalness: 0.1, side: THREE.DoubleSide });
-    const logMaterial = new THREE.MeshStandardMaterial({ color: 0x5a3a1e, roughness: 0.9 });
-    const sparkMaterial = new THREE.PointsMaterial({ size: 9, vertexColors: true, transparent: true, sizeAttenuation: true, depthWrite: false, blending: THREE.AdditiveBlending });
-    const rainMaterial = new THREE.LineBasicMaterial({ color: 0x88aaff, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending });
-    const dustMaterial = new THREE.PointsMaterial({ size: 45, color: 0xd2b48c, transparent: true, opacity: 0.1, sizeAttenuation: true, depthWrite: false });
-    const casingMaterial = new THREE.MeshStandardMaterial({ color: 0xdaa520, roughness: 0.4, metalness: 0.6 });
-    const flameMaterial = new THREE.PointsMaterial({ size: 15, vertexColors: true, map: loadedAssets.flameTexture, transparent: true, sizeAttenuation: true, depthWrite: false, blending: THREE.AdditiveBlending });
-    const gunMaterial = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.5, metalness: 0.7 });
-    const healthBarBgMaterial = new THREE.MeshBasicMaterial({color: 0x444444, depthTest: false, depthWrite: false, transparent: true, opacity: 0.8});
-    const healthBarFgMaterial = new THREE.MeshBasicMaterial({color: 0xDC143C, depthTest: false, depthWrite: false, transparent: true, opacity: 0.9});
-    const armorBarFgMaterial = new THREE.MeshBasicMaterial({color: 0x9e9e9e, depthTest: false, depthWrite: false, transparent: true, opacity: 0.9});
+        let mesh = meshMap[id];
+        if (mesh) {
+            // Reset fade state if entity is alive again (e.g., revived enemy - unlikely server logic, but safe)
+            if (mesh.userData.dyingStartTime && (entityData.health === undefined || entityData.health > 0)) {
+                 delete mesh.userData.dyingStartTime;
+                 mesh.material.opacity = 1.0; // Ensure visible
+                 mesh.visible = true;
+            }
+            updateFn(mesh, entityData, now);
+        } else {
+            // Only create if entity is not already dead/faded on arrival
+             if (entityData.health === undefined || entityData.health > 0 || entityData.type) { // Check type for powerups etc.
+                mesh = createFn(entityData);
+                if (mesh) {
+                    meshMap[id] = mesh;
+                    scene.add(mesh);
+                    // Initial update call might be needed if createFn doesn't fully position/orient
+                    updateFn(mesh, entityData, now);
+                }
+             }
+        }
+    }
+}
 
-    const playerBodyGeometry = new THREE.CapsuleGeometry(DEF_PLAYER_WIDTH / 2, DEF_PLAYER_HEIGHT - DEF_PLAYER_WIDTH, 4, 8);
-    const headGeometry = new THREE.SphereGeometry(1, 12, 8);
-    const enemyChaserGeometry = new THREE.BoxGeometry(DEF_ENEMY_WIDTH, DEF_ENEMY_HEIGHT, DEF_ENEMY_WIDTH * 0.7);
-    const enemyShooterGeometry = new THREE.CylinderGeometry(DEF_ENEMY_WIDTH*0.6, DEF_ENEMY_WIDTH*0.6, DEF_ENEMY_HEIGHT, 8);
-    const enemyGunGeometry = new THREE.BoxGeometry(DEF_ENEMY_WIDTH * 0.3, DEF_ENEMY_WIDTH * 0.3, DEF_ENEMY_WIDTH * 1.5);
-    const enemyGiantGeometry = new THREE.BoxGeometry(DEF_ENEMY_WIDTH * DEF_GIANT_MULTIPLIER, DEF_ENEMY_HEIGHT * DEF_GIANT_MULTIPLIER, DEF_ENEMY_WIDTH * 0.7 * DEF_GIANT_MULTIPLIER);
-    const bulletGeometry = new THREE.SphereGeometry(DEF_BULLET_RADIUS, 6, 6);
-    const powerupBoxGeometry = new THREE.BoxGeometry(DEF_POWERUP_SIZE, DEF_POWERUP_SIZE, DEF_POWERUP_SIZE);
-    const powerupHealthGeo = new THREE.TorusGeometry(DEF_POWERUP_SIZE * 0.4, DEF_POWERUP_SIZE * 0.15, 8, 16);
-    const powerupGunGeo = new THREE.ConeGeometry(DEF_POWERUP_SIZE * 0.5, DEF_POWERUP_SIZE, 4);
-    const powerupSpeedGeo = new THREE.CylinderGeometry(DEF_POWERUP_SIZE*0.7, DEF_POWERUP_SIZE*0.7, DEF_POWERUP_SIZE*0.3, 16);
-    const powerupArmorGeo = new THREE.OctahedronGeometry(DEF_POWERUP_SIZE * 0.6, 0);
-    const powerupShotgunGeo = new THREE.BoxGeometry(DEF_POWERUP_SIZE*0.8, DEF_POWERUP_SIZE*0.8, DEF_POWERUP_SIZE*0.8);
-    const powerupSlugGeo = new THREE.SphereGeometry(DEF_POWERUP_SIZE * 0.6, 12, 8);
-    const powerupRapidGeo = new THREE.TorusGeometry(DEF_POWERUP_SIZE * 0.4, DEF_POWERUP_SIZE * 0.1, 6, 12);
-    const powerupScoreGeo = new THREE.CylinderGeometry(DEF_POWERUP_SIZE*0.4, DEF_POWERUP_SIZE*0.4, DEF_POWERUP_SIZE*0.5, 12);
-    const logGeometry = new THREE.CylinderGeometry(DEF_LOG_RADIUS, DEF_LOG_RADIUS, DEF_LOG_LENGTH, 6);
-    const casingGeometry = new THREE.CylinderGeometry(DEF_CASING_RADIUS, DEF_CASING_RADIUS, DEF_CASING_LENGTH, 6);
-    const groundGeometryPlane = new THREE.PlaneGeometry(1, 1);
-    const gunGeometry = new THREE.CylinderGeometry(DEF_GUN_RADIUS, DEF_GUN_RADIUS * 0.8, DEF_GUN_LENGTH, 8);
-    const healthBarGeometry = new THREE.PlaneGeometry(1, HEALTHBAR_HEIGHT);
-    const armorBarGeometry = new THREE.PlaneGeometry(1, ARMORBAR_HEIGHT);
+// Generic function to clean up stale THREE meshes
+function _cleanupStaleObjects(meshMap, activeIdsSet, handleFade = false) {
+    const now = clock.elapsedTime;
+    for (const id in meshMap) {
+        if (!activeIdsSet.has(id)) {
+            const mesh = meshMap[id];
+            if (handleFade && mesh.userData.health > 0) { // Check if it *was* alive before disappearing from state
+                 // Start fading out
+                 mesh.userData.dyingStartTime = now;
+                 mesh.userData.wasAlive = true; // Mark that it needs fading
+                 mesh.userData.health = 0; // Mark as dead locally for next check
+                 mesh.material.transparent = true; // Need transparency for fade
+                 // console.log(`Starting fade for ${id}`);
+            } else if (handleFade && mesh.userData.wasAlive && mesh.userData.dyingStartTime) {
+                 // Continue fading
+                 const timeElapsed = now - mesh.userData.dyingStartTime;
+                 const fadeProgress = Math.min(1.0, timeElapsed / FADE_OUT_DURATION);
+                 mesh.material.opacity = 1.0 - fadeProgress;
+                 // Optional: Add scaling down effect
+                 // mesh.scale.setScalar(1.0 - fadeProgress);
 
-    const PLAYER_Y_OFFSET = 0; const PLAYER_BODY_Y_OFFSET = DEF_PLAYER_HEIGHT / 2;
-    const ENEMY_Y_OFFSET = DEF_ENEMY_HEIGHT / 2; const GIANT_Y_OFFSET = (DEF_ENEMY_HEIGHT * DEF_GIANT_MULTIPLIER) / 2;
-    const BULLET_Y_OFFSET = DEF_BULLET_RADIUS; const POWERUP_Y_OFFSET = DEF_POWERUP_SIZE * 0.8;
-    const CAMPFIRE_LOG_Y_OFFSET = DEF_LOG_RADIUS; const FLAME_PARTICLE_Y_OFFSET = DEF_LOG_RADIUS + 2;
+                 if (fadeProgress >= 1.0) {
+                    // console.log(`Fade complete for ${id}`);
+                    _removeMesh(mesh, id, meshMap);
+                 }
+            } else {
+                // Not handling fade or fade already finished / wasn't alive
+                _removeMesh(mesh, id, meshMap);
+            }
+        }
+         // Additional check: if an object is marked dead by the server immediately ('health' <= 0 from state)
+         // but we weren't fading it yet, start the fade now.
+        else if(handleFade && meshMap[id]) {
+             const mesh = meshMap[id];
+             // Check against internal userData health state
+             if (mesh.userData.health <= 0 && !mesh.userData.dyingStartTime && mesh.userData.wasAlive !== false) {
+                mesh.userData.dyingStartTime = now;
+                mesh.userData.wasAlive = true; // Mark that it needs fading
+                mesh.material.transparent = true;
+                // console.log(`Starting fade for already dead ${id}`);
+            }
+        }
+    }
+}
 
-    function createFlameTexture() { const c=document.createElement('canvas');c.width=64;c.height=64;const x=c.getContext('2d');const g=x.createRadialGradient(32,32,0,32,32,32);g.addColorStop(0,'rgba(255,220,150,1)');g.addColorStop(0.4,'rgba(255,150,0,0.8)');g.addColorStop(1,'rgba(200,0,0,0)');x.fillStyle=g;x.fillRect(0,0,64,64);const t=new THREE.CanvasTexture(c);t.name="FlameTexture";return t; }
 
-    function init(containerElement, initialWidth, initialHeight) {
-        console.log("--- Renderer3D.init() ---");
-        if (!containerElement) { return false; }
-        gameWidth = initialWidth || gameWidth; gameHeight = initialHeight || gameHeight;
-        cameraTargetPos.set(gameWidth / 2, 0, gameHeight / 2);
+function _removeMesh(mesh, id, meshMap) {
+    if (!mesh) return;
+    scene.remove(mesh);
+    // Dispose geometry/material ONLY if they are unique to this mesh
+    // Currently, most resources are shared, so disposal happens in Renderer3D.cleanup()
+    // If you create unique geometry/material per object, dispose here:
+    // mesh.geometry?.dispose();
+    // mesh.material?.dispose();
+    delete meshMap[id];
+}
+
+// --- Player Object Functions ---
+function _createPlayerMesh(playerData) {
+    const isSelf = playerData.id === (window.appState ? window.appState.localPlayerId : null); // Access global appState cautiously
+    const material = isSelf
+        ? sharedResources.materials.playerSelf.clone() // Clone for potential modification
+        : sharedResources.materials.playerBase.clone();
+
+    const mesh = new THREE.Mesh(sharedResources.geometries.playerCapsule, material);
+    mesh.castShadow = true;
+    mesh.userData.gameId = playerData.id;
+    mesh.userData.isPlayer = true;
+    mesh.userData.health = playerData.health;
+    mesh.userData.status = playerData.player_status;
+    mesh.userData.isSelf = isSelf;
+    // Rotate capsule to stand upright (it's created along Y)
+    // No rotation needed if Y is up
+    return mesh;
+}
+
+function _updatePlayerMesh(mesh, playerData, now) {
+    mesh.position.set(playerData.x, MESH_Y_OFFSET + 24, playerData.y); // Adjust Y based on capsule height/2
+    mesh.userData.health = playerData.health;
+    mesh.userData.status = playerData.player_status;
+
+    // Rotation (Aiming) - Only rotate local player based on aim state
+    if (mesh.userData.isSelf && window.appState?.localPlayerAimState) {
+        const aimDx = window.appState.localPlayerAimState.lastAimDx;
+        const aimDy = window.appState.localPlayerAimState.lastAimDy;
+        const targetAngle = Math.atan2(aimDx, aimDy); // atan2 takes (x, z) for Y-up rotation
+        mesh.rotation.y = targetAngle;
+    }
+    // else { // Optionally rotate remote players based on velocity or server direction?
+    //     // Needs direction vector from server state if desired.
+    // }
+
+
+    // Update material based on status
+    let targetMaterial = sharedResources.materials.playerBase;
+    if (mesh.userData.isSelf) targetMaterial = sharedResources.materials.playerSelf;
+    if (playerData.player_status === 'down') targetMaterial = sharedResources.materials.playerDown;
+    else if (playerData.player_status === 'dead' || playerData.health <= 0) targetMaterial = sharedResources.materials.playerDead;
+
+    if (mesh.material !== targetMaterial) {
+        mesh.material = targetMaterial.clone(); // Use clone if you might modify properties later
+    }
+
+    // Visual cues for effects (Example: Speed Boost)
+    if (playerData.effects?.speed_boost && now < playerData.effects.speed_boost.expires_at) {
+        // Simple glow example - could add particles later
+        mesh.material.emissive.setHex(0x3edef3);
+        mesh.material.emissiveIntensity = Math.sin(now * 5) * 0.3 + 0.4; // Pulsing effect
+    } else if (mesh.material.emissive) { // Reset emissive if effect ended
+         const baseEmissive = mesh.userData.isSelf ? 0x113311 : 0x000000;
+         const baseIntensity = mesh.userData.isSelf ? 0.4 : 0;
+         if(mesh.material.emissive.getHex() !== baseEmissive || mesh.material.emissiveIntensity !== baseIntensity) {
+            mesh.material.emissive.setHex(baseEmissive);
+            mesh.material.emissiveIntensity = baseIntensity;
+         }
+    }
+
+     // Hide mesh immediately if status is DEAD and not fading
+    if(playerData.player_status === 'dead' && !mesh.userData.dyingStartTime) {
+        mesh.visible = false;
+        mesh.userData.wasAlive = false; // Prevent cleanup trying to fade it
+    } else {
+        mesh.visible = true;
+    }
+}
+
+// --- Enemy Object Functions ---
+function _createEnemyMesh(enemyData) {
+    let geometry, material;
+    switch (enemyData.type) {
+        case 'shooter':
+            geometry = sharedResources.geometries.enemyShooter;
+            material = sharedResources.materials.enemyShooter.clone();
+            break;
+        case 'giant':
+            geometry = sharedResources.geometries.enemyGiant;
+            material = sharedResources.materials.enemyGiant.clone();
+            break;
+        case 'chaser':
+        default:
+            geometry = sharedResources.geometries.enemyChaser;
+            material = sharedResources.materials.enemyChaser.clone();
+            break;
+    }
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = true;
+    mesh.userData.gameId = enemyData.id;
+    mesh.userData.type = enemyData.type;
+    mesh.userData.isEnemy = true;
+    mesh.userData.health = enemyData.health;
+    mesh.userData.wasAlive = true; // Assume alive on creation
+    return mesh;
+}
+
+function _updateEnemyMesh(mesh, enemyData, now) {
+    const yPos = (enemyData.type === 'giant' ? 50 : (enemyData.type === 'shooter' ? 22.5 : 20)); // half height offset
+    mesh.position.set(enemyData.x, MESH_Y_OFFSET + yPos, enemyData.y);
+    mesh.userData.health = enemyData.health; // Keep track for fading logic
+
+    // Rotation (Targeting) - Needs target info from server if implemented
+    // Example: if (enemyData.target_player_id && objectMaps.playerMeshes[enemyData.target_player_id]) {
+    //    const targetMesh = objectMaps.playerMeshes[enemyData.target_player_id];
+    //    mesh.lookAt(targetMesh.position.x, mesh.position.y, targetMesh.position.z); // LookAt in XZ plane
+    //}
+
+    // Giant windup effect (Example: slight scale pulse)
+    if (enemyData.type === 'giant' && enemyData.attack_state === 'winding_up') {
+        const pulse = Math.sin((now - (enemyData.windup_ends_at - 0.6)) * Math.PI / 0.6) * 0.1 + 1.0; // Simple sine pulse during windup
+        mesh.scale.set(pulse, pulse, pulse);
+    } else {
+        mesh.scale.set(1, 1, 1); // Reset scale
+    }
+}
+
+// --- Bullet Object Functions ---
+function _createBulletMesh(bulletData) {
+    let geometry, material;
+    let radius = 4;
+    switch (bulletData.bullet_type) {
+        case 'ammo_shotgun':
+            radius = 4 * 0.75; // SHOTGUN_PELLET_RADIUS_FACTOR
+            geometry = new THREE.SphereGeometry(radius, 6, 4); // Unique geo for size
+            material = sharedResources.materials.bulletShotgun;
+            break;
+        case 'ammo_heavy_slug':
+            radius = 4 * 1.5; // HEAVY_SLUG_RADIUS_MULTIPLIER
+            geometry = new THREE.SphereGeometry(radius, 10, 8); // Unique geo for size
+            material = sharedResources.materials.bulletHeavySlug;
+            break;
+        case 'ammo_rapid_fire':
+            geometry = sharedResources.geometries.bulletStandard;
+            material = sharedResources.materials.bulletRapid;
+            break;
+        case 'standard_enemy':
+            radius = 3;
+            geometry = new THREE.SphereGeometry(radius, 6, 4); // Unique geo for size
+            material = sharedResources.materials.bulletEnemy;
+            break;
+        case 'standard':
+        default:
+            geometry = sharedResources.geometries.bulletStandard;
+            material = sharedResources.materials.bulletStandard;
+            break;
+    }
+    const mesh = new THREE.Mesh(geometry, material);
+    // Bullets usually don't cast shadows unless they are very large
+    // mesh.castShadow = true;
+    mesh.userData.gameId = bulletData.id;
+    mesh.userData.isBullet = true;
+    return mesh;
+}
+
+function _updateBulletMesh(mesh, bulletData, now) {
+    // Bullets are often high off the ground
+    mesh.position.set(bulletData.x, MESH_Y_OFFSET + 15, bulletData.y);
+}
+
+// --- Powerup Object Functions ---
+function _createPowerupMesh(powerupData) {
+    let material;
+    switch (powerupData.type) {
+        case 'health': material = sharedResources.materials.powerupHealth; break;
+        case 'gun_upgrade': material = sharedResources.materials.powerupGun; break;
+        case 'speed_boost': material = sharedResources.materials.powerupSpeed; break;
+        case 'armor': material = sharedResources.materials.powerupArmor; break;
+        case 'ammo_shotgun': material = sharedResources.materials.powerupShotgun; break;
+        case 'ammo_heavy_slug': material = sharedResources.materials.powerupSlug; break;
+        case 'ammo_rapid_fire': material = sharedResources.materials.powerupRapid; break;
+        case 'bonus_score': material = sharedResources.materials.powerupScore; break;
+        default: material = new THREE.MeshStandardMaterial({ color: 0xcccccc }); // Default fallback
+    }
+    const mesh = new THREE.Mesh(sharedResources.geometries.powerupBox, material.clone()); // Clone material for effects
+    mesh.castShadow = true;
+    mesh.userData.gameId = powerupData.id;
+    mesh.userData.isPowerup = true;
+    mesh.userData.type = powerupData.type;
+    return mesh;
+}
+
+function _updatePowerupMesh(mesh, powerupData, now) {
+    mesh.position.set(powerupData.x, MESH_Y_OFFSET + 10, powerupData.y); // Box half-height offset
+    // Add simple bobbing/rotation animation
+    mesh.position.y += Math.sin(now * 2 + mesh.id * 0.5) * 3; // Bobbing
+    mesh.rotation.y = (now * 0.5 + mesh.id * 0.3) % (Math.PI * 2); // Slow rotation
+}
+
+
+// --- Effects ---
+
+function _updateMuzzleFlash(flashData, playerPos, aimState) {
+    let flashMesh = objectMaps.effectMeshes['muzzleFlash'];
+    if (flashData.active) {
+        if (!flashMesh) {
+            flashMesh = new THREE.Sprite(sharedResources.materials.muzzleFlash);
+            flashMesh.scale.set(50, 50, 1); // Adjust scale as needed
+            objectMaps.effectMeshes['muzzleFlash'] = flashMesh;
+            scene.add(flashMesh);
+        }
+        // Position slightly ahead of player along aim direction
+        const forwardOffset = 30;
+        const sideOffset = 0; // Can adjust if gun is held to side
+        const angle = Math.atan2(aimState.lastAimDx, aimState.lastAimDy);
+        const muzzleX = playerPos.x + Math.sin(angle) * forwardOffset - Math.cos(angle) * sideOffset;
+        const muzzleZ = playerPos.y + Math.cos(angle) * forwardOffset + Math.sin(angle) * sideOffset;
+
+        flashMesh.position.set(muzzleX, MESH_Y_OFFSET + 25, muzzleZ); // Position at ~barrel height
+        flashMesh.visible = true;
+    } else if (flashMesh) {
+        flashMesh.visible = false;
+    }
+}
+
+function _updatePushbackEffect(pushbackData, playerPos) {
+    let ringMesh = objectMaps.effectMeshes['pushbackRing'];
+    if (pushbackData.active) {
+        if (!ringMesh) {
+            ringMesh = new THREE.Mesh(sharedResources.geometries.pushbackRing, sharedResources.materials.pushbackRing.clone());
+            ringMesh.rotation.x = -Math.PI / 2; // Rotate ring to be flat on ground
+            objectMaps.effectMeshes['pushbackRing'] = ringMesh;
+            scene.add(ringMesh);
+        }
+
+        const timeElapsed = performance.now() - (pushbackData.endTime - pushbackData.duration);
+        const progress = Math.min(1.0, timeElapsed / pushbackData.duration);
+
+        const currentScale = 1.0 + progress * 1.5; // Ring expands outwards
+        const currentOpacity = 0.6 * (1.0 - progress); // Ring fades out
+
+        ringMesh.scale.set(currentScale, currentScale, currentScale);
+        ringMesh.material.opacity = currentOpacity;
+        ringMesh.position.set(playerPos.x, MESH_Y_OFFSET + 1, playerPos.y); // Slightly above ground
+        ringMesh.visible = true;
+
+    } else if (ringMesh) {
+        ringMesh.visible = false;
+    }
+}
+
+function _updateAmmoCasings(activeCasings, deltaTime) {
+    const mesh = objectMaps.ammoCasingMesh;
+    if (!mesh || !activeCasings) return;
+
+    const matrix = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3(1, 1, 1);
+    let visibleInstances = 0;
+
+    for (let i = 0; i < activeCasings.length && visibleInstances < AMMO_CASING_INSTANCES; i++) {
+        const casing = activeCasings[i];
+
+        // Use physics state calculated in main.js
+        position.set(casing.x, MESH_Y_OFFSET + 5 + casing.vy * 0.01, casing.y); // Approx Y based on velocity? Or add height state? Let's keep it simple.
+        quaternion.setFromEuler(new THREE.Euler(Math.random()*Math.PI*2, casing.rotation, Math.random()*Math.PI*2)); // Add tumble
+
+        matrix.compose(position, quaternion, scale);
+        mesh.setMatrixAt(visibleInstances, matrix);
+        visibleInstances++;
+    }
+
+    mesh.count = visibleInstances;
+    mesh.instanceMatrix.needsUpdate = true;
+}
+
+function _updateBloodSparks(activeSparkEffects, enemyMeshMap, deltaTime) {
+    const mesh = objectMaps.bloodSparkMesh;
+    if (!mesh || !activeSparkEffects) return;
+
+    const matrix = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion().identity(); // Sparks don't need rotation
+    const scale = new THREE.Vector3(1, 1, 1);
+    let visibleInstances = 0;
+
+    const gravity = 350;
+    const initialVelY = 80;
+    const initialVelSpread = 100;
+
+    for (const enemyId in activeSparkEffects) {
+         if (visibleInstances >= BLOOD_SPARK_INSTANCES) break;
+
+         const enemyMesh = enemyMeshMap[enemyId];
+         if (!enemyMesh) continue; // Enemy might have been removed
+
+         const endTime = activeSparkEffects[enemyId];
+         const spawnTime = endTime - 300; // SPARK_DURATION_MS
+         const timeElapsed = performance.now() - spawnTime;
+         const lifeProgress = Math.min(1.0, timeElapsed / 300);
+
+         // Simple projectile motion per spark (let's spawn a few per hit)
+         const numSparksPerHit = 3;
+         for (let i = 0; i < numSparksPerHit && visibleInstances < BLOOD_SPARK_INSTANCES; i++) {
+             // Calculate physics based on timeElapsed
+             const angleXY = Math.random() * Math.PI * 2;
+             const angleZ = (Math.random() - 0.5) * Math.PI * 0.8; // Spread upwards/downwards
+             const speed = initialVelSpread * (1 + Math.random());
+
+             const vx = Math.cos(angleXY) * Math.cos(angleZ) * speed;
+             const vy = Math.sin(angleZ) * speed + initialVelY; // Initial upward component
+             const vz = Math.sin(angleXY) * Math.cos(angleZ) * speed;
+
+             const dt = timeElapsed / 1000;
+             const currentX = enemyMesh.position.x + vx * dt;
+             const currentY = enemyMesh.position.y + vy * dt - 0.5 * gravity * dt * dt;
+             const currentZ = enemyMesh.position.z + vz * dt;
+
+             if (currentY < MESH_Y_OFFSET) continue; // Skip sparks below ground
+
+             position.set(currentX, currentY, currentZ);
+             const currentScale = 1.0 - lifeProgress; // Shrink as they fade
+             scale.set(currentScale, currentScale, currentScale);
+
+             matrix.compose(position, quaternion, scale);
+             mesh.setMatrixAt(visibleInstances, matrix);
+             visibleInstances++;
+         }
+    }
+
+    mesh.count = visibleInstances;
+    mesh.instanceMatrix.needsUpdate = true;
+}
+
+
+// --- Snake Visual ---
+function _updateSnakeVisual(snakeState, deltaTime) {
+     if (snakeState?.isActiveFromServer) {
+         const points = [];
+         const headX = snakeState.serverHeadX;
+         const baseY = snakeState.serverBaseY;
+         const direction = snakeState.direction;
+         const waveTimeFactor = clock.elapsedTime * 0.5; // Match server calculation if possible
+         const frequency = 0.03; // SNAKE_FREQUENCY
+         const amplitude = 5.0; // SNAKE_AMPLITUDE
+         const segmentLength = 10.0; // SNAKE_SEGMENT_LENGTH
+
+         for (let i = 0; i < SNAKE_SEGMENTS_VISUAL; i++) {
+            const currentX = headX - direction * i * segmentLength;
+            // Recalculate Y based on the server's wave function
+            const currentY = baseY + Math.sin(currentX * frequency + waveTimeFactor) * amplitude;
+            points.push(new THREE.Vector3(currentX, MESH_Y_OFFSET + SNAKE_RADIUS, currentY));
+         }
+
+         if (points.length < 2) { // Need at least 2 points for a tube
+             if (objectMaps.snakeMesh) {
+                 _removeMesh(objectMaps.snakeMesh, 'snake', objectMaps); // Use generic remover
+                 objectMaps.snakeMesh = null;
+             }
+             return;
+         }
+
+         const curve = new THREE.CatmullRomCurve3(points);
+         const tubeGeo = new THREE.TubeGeometry(curve, SNAKE_SEGMENTS_VISUAL - 1, SNAKE_RADIUS, 8, false);
+
+         if (!objectMaps.snakeMesh) {
+            objectMaps.snakeMesh = new THREE.Mesh(tubeGeo, sharedResources.materials.snake);
+            objectMaps.snakeMesh.castShadow = true;
+            scene.add(objectMaps.snakeMesh);
+         } else {
+             objectMaps.snakeMesh.geometry.dispose(); // Dispose old geometry
+             objectMaps.snakeMesh.geometry = tubeGeo;
+         }
+     } else if (objectMaps.snakeMesh) {
+         _removeMesh(objectMaps.snakeMesh, 'snake', objectMaps); // Use generic remover
+         objectMaps.snakeMesh = null;
+     }
+}
+
+// --- Weather Effects (Placeholders - Requires more complex implementation) ---
+function _updateWeatherEffects(isRaining, isDustStorm, deltaTime) {
+    // TODO: Implement particle systems for rain
+    // TODO: Implement shader/overlay for dust storm
+    if (isRaining) {
+        // Update rain particle positions
+    }
+    if (isDustStorm) {
+        // Update dust storm shader uniforms or overlay opacity/scroll
+    }
+}
+
+// --- Camera Shake ---
+function _updateCameraShake(deltaTime) {
+    if (shakeIntensity > 0 && clock.elapsedTime < shakeEndTime) {
+        const timeRemaining = shakeEndTime - clock.elapsedTime;
+        const decayFactor = Math.max(0, timeRemaining / (shakeEndTime - (shakeEndTime - 0.250))); // Approx decay over 250ms duration used in main.js
+        const currentIntensity = shakeIntensity * decayFactor * decayFactor; // Exponential decay
+
+        const shakeX = (Math.random() - 0.5) * currentIntensity * 1.5;
+        const shakeY = (Math.random() - 0.5) * currentIntensity * 1.5;
+        // Apply shake relative to original position
+        camera.position.x = originalCameraPos.x + shakeX;
+        camera.position.y = originalCameraPos.y + shakeY;
+        // Optional: Add slight rotation shake
+        // camera.rotation.z += (Math.random() - 0.5) * currentIntensity * 0.001;
+    } else {
+        if (shakeIntensity > 0) { // Reset when shake ends
+             camera.position.copy(originalCameraPos);
+             // camera.rotation.z = 0; // Reset rotation if applied
+             shakeIntensity = 0;
+        }
+    }
+}
+
+
+// --- Exported Renderer3D Object ---
+
+const Renderer3D = {
+    init: (containerElement, initialWidth, initialHeight) => {
         try {
-            renderer = new THREE.WebGLRenderer({ antialias: true });
+            if (!containerElement) throw new Error("Container element is required.");
+            container = containerElement;
+            width = initialWidth;
+            height = initialHeight;
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false }); // Use alpha false for potentially better perf if bg is opaque
             renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.setSize(gameWidth, gameHeight);
+            renderer.setSize(width, height);
             renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            renderer.outputColorSpace = THREE.SRGBColorSpace;
-            containerElement.appendChild(renderer.domElement);
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
+            renderer.outputColorSpace = THREE.SRGBColorSpace; // Correct color space
+            // renderer.toneMapping = THREE.ACESFilmicToneMapping; // Optional: nice tone mapping
+            // renderer.toneMappingExposure = 1.0;
+            container.appendChild(renderer.domElement);
+            canvas = renderer.domElement; // Store reference to the canvas
+
+            // Scene
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x1a2a28);
-            const aspect = gameWidth / gameHeight; const frustumSize = gameHeight;
-            camera = new THREE.OrthographicCamera(frustumSize * aspect / -2, frustumSize * aspect / 2, frustumSize / 2, frustumSize / -2, 1, 2000);
-            camera.position.set(gameWidth / 2, 1000, gameHeight / 2); camera.rotation.x = -Math.PI / 2; scene.add(camera);
-            ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight);
-            directionalLight = new THREE.DirectionalLight(0xffffff, 1.0); directionalLight.position.set(gameWidth * 0.2, 300, gameHeight * 0.3); directionalLight.castShadow = true;
-            directionalLight.shadow.mapSize.width = 2048; directionalLight.shadow.mapSize.height = 2048; directionalLight.shadow.camera.near = 50; directionalLight.shadow.camera.far = 1200;
-            directionalLight.shadow.camera.left = -gameWidth * 0.8; directionalLight.shadow.camera.right = gameWidth * 0.8; directionalLight.shadow.camera.top = gameHeight * 0.8; directionalLight.shadow.camera.bottom = -gameHeight * 0.8; scene.add(directionalLight); scene.add(directionalLight.target);
-            muzzleFlashLight = new THREE.PointLight(0xffcc66, 0, 150, 1.5); muzzleFlashLight.castShadow = false; scene.add(muzzleFlashLight);
-            groundPlane = new THREE.Mesh(groundGeometryPlane, groundDayMaterial); groundPlane.scale.set(gameWidth * 1.1, gameHeight * 1.1, 1); groundPlane.rotation.x = -Math.PI / 2; groundPlane.position.set(gameWidth / 2, 0, gameHeight / 2); groundPlane.receiveShadow = true; groundPlane.name = "GroundPlane"; scene.add(groundPlane);
-            initParticlesAndInstances(); initCampfire(); initSnake();
-            window.addEventListener('resize', handleResize); handleResize();
-        } catch (error) { console.error("Renderer Init Error", error); return false; }
-        console.log("--- Renderer3D initialization complete ---"); return true;
+            scene.background = new THREE.Color(0x1a2a28); // Match CSS --color-dark-bg
+            scene.fog = new THREE.FogExp2(0x1a2a28, 0.0015); // Start with matching fog
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(60, width / height, 1, 2000);
+            camera.position.set(0, 700, 500); // Adjusted position for better view angle
+            camera.lookAt(scene.position);
+            originalCameraPos.copy(camera.position); // Store initial pos for shake reset
+
+            // Lights
+            ambientLight = new THREE.AmbientLight(0x607080, 0.8); // Dim ambient light
+            scene.add(ambientLight);
+
+            directionalLight = new THREE.DirectionalLight(0xffffff, 2.0); // Brighter directional
+            directionalLight.position.set(150, 300, 200);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048; // Higher res shadows
+            directionalLight.shadow.mapSize.height = 2048;
+            directionalLight.shadow.camera.left = -800; // Adjust bounds to cover game area
+            directionalLight.shadow.camera.right = 800;
+            directionalLight.shadow.camera.top = 800;
+            directionalLight.shadow.camera.bottom = -800;
+            directionalLight.shadow.camera.near = 10;
+            directionalLight.shadow.camera.far = 1000;
+            directionalLight.shadow.bias = -0.001; // Adjust bias to prevent shadow acne
+            scene.add(directionalLight);
+            scene.add(directionalLight.target); // Target defaults to 0,0,0
+
+             // Optional: Controls for Debugging (Uncomment to use)
+            // controls = new OrbitControls(camera, renderer.domElement);
+            // controls.target.set(0, 0, 0);
+            // controls.enablePan = true;
+            // controls.enableZoom = true;
+            // controls.update();
+
+            // Ground
+            const groundGeo = new THREE.PlaneGeometry(initialWidth * 1.5, initialHeight * 1.5, 10, 10); // Larger ground
+            const groundMat = new THREE.MeshStandardMaterial({ color: 0x4a5d65, roughness: 0.8, metalness: 0.1 }); // Match --color-secondary approx
+            groundPlane = new THREE.Mesh(groundGeo, groundMat);
+            groundPlane.rotation.x = -Math.PI / 2; // Rotate flat
+            groundPlane.receiveShadow = true;
+            scene.add(groundPlane);
+
+             // Campfire Visual Placeholder
+            const logGeo = new THREE.CylinderGeometry(15, 15, 40, 8);
+            const logMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.9 });
+            campfireLogs = new THREE.Mesh(logGeo, logMat);
+            campfireLogs.position.set(initialWidth / 2, MESH_Y_OFFSET + 20, initialHeight / 2); // Position in center
+            campfireLogs.castShadow = true;
+            scene.add(campfireLogs);
+
+            campfireLight = new THREE.PointLight(0xffa500, 0, 150); // Start intensity 0 (off during day)
+            campfireLight.position.set(initialWidth / 2, MESH_Y_OFFSET + 35, initialHeight / 2);
+            campfireLight.castShadow = true; // Campfire can cast shadows
+            campfireLight.shadow.bias = -0.005;
+            scene.add(campfireLight);
+
+            // Initialize Resources & Meshes
+            _createSharedResources();
+            _createInstancedMeshes(); // Create instanced meshes after scene is ready
+
+            // Clock
+            clock = new THREE.Clock();
+
+            // Resize Listener
+            window.addEventListener('resize', _handleResize);
+            _handleResize(); // Initial call
+
+            console.log("Renderer3D Initialized Successfully.");
+            return true;
+
+        } catch (error) {
+            console.error("Renderer3D Initialization Failed:", error);
+            // Cleanup potentially partially initialized state
+            Renderer3D.cleanup();
+            return false;
+        }
+    },
+
+    renderScene: (stateToRender, appState, localEffects) => {
+        if (!renderer || !scene || !camera || !stateToRender || !appState || !localEffects) return;
+
+        const deltaTime = clock.getDelta();
+        const now = clock.elapsedTime; // Use internal clock for animations
+
+        // 1. Update World Environment
+        const isNight = stateToRender.is_night;
+        const isDust = stateToRender.is_dust_storm;
+        const targetAmbient = isNight ? 0.3 : 0.8;
+        const targetDirectional = isNight ? 0.4 : 2.0;
+        const targetFogDensity = isDust ? 0.0035 : (isNight ? 0.0025 : 0.0015);
+        const targetFogColor = isDust ? 0xcdab8f : (isNight ? 0x050a10 : 0x1a2a28);
+        const targetCampfireIntensity = isNight ? 3.0 : 0; // Intensity units for point light
+
+        ambientLight.intensity = THREE.MathUtils.lerp(ambientLight.intensity, targetAmbient, 0.05);
+        directionalLight.intensity = THREE.MathUtils.lerp(directionalLight.intensity, targetDirectional, 0.05);
+        // Optional: Slightly shift light direction for night
+        directionalLight.position.y = THREE.MathUtils.lerp(directionalLight.position.y, isNight ? 250 : 300, 0.05);
+        directionalLight.target.updateMatrixWorld(); // Update target if light moves
+
+        scene.fog.density = THREE.MathUtils.lerp(scene.fog.density, targetFogDensity, 0.05);
+        scene.fog.color.lerp(new THREE.Color(targetFogColor), 0.05);
+        scene.background.lerp(new THREE.Color(targetFogColor), 0.05); // Match background to fog
+
+        campfireLight.intensity = THREE.MathUtils.lerp(campfireLight.intensity, targetCampfireIntensity, 0.1);
+
+        _updateWeatherEffects(stateToRender.is_raining, isDust, deltaTime);
+        _updateSnakeVisual(stateToRender.snake_state, deltaTime);
+
+        // 2. Sync Game State to 3D Objects
+        const activeIds = { players: new Set(), enemies: new Set(), bullets: new Set(), powerups: new Set() };
+
+        _syncObjects(stateToRender.players, objectMaps.playerMeshes, _createPlayerMesh, _updatePlayerMesh, activeIds.players);
+        _syncObjects(stateToRender.enemies, objectMaps.enemyMeshes, _createEnemyMesh, _updateEnemyMesh, activeIds.enemies);
+        _syncObjects(stateToRender.bullets, objectMaps.bulletMeshes, _createBulletMesh, _updateBulletMesh, activeIds.bullets);
+        _syncObjects(stateToRender.powerups, objectMaps.powerupMeshes, _createPowerupMesh, _updatePowerupMesh, activeIds.powerups);
+
+        // 3. Cleanup Stale Objects
+        _cleanupStaleObjects(objectMaps.playerMeshes, activeIds.players);
+        _cleanupStaleObjects(objectMaps.enemyMeshes, activeIds.enemies, true); // Handle enemy fade
+        _cleanupStaleObjects(objectMaps.bulletMeshes, activeIds.bullets);
+        _cleanupStaleObjects(objectMaps.powerups, activeIds.powerups);
+
+        // 4. Update Local Effects
+        _updateMuzzleFlash(localEffects.muzzleFlash, appState.renderedPlayerPos, appState.localPlayerAimState);
+        _updatePushbackEffect(localEffects.pushbackAnim, appState.renderedPlayerPos);
+        _updateAmmoCasings(localEffects.activeAmmoCasings, deltaTime);
+        _updateBloodSparks(localEffects.activeBloodSparkEffects, objectMaps.enemyMeshes, deltaTime); // Pass enemy map for positioning
+
+        // 5. Project World Positions to Screen for UI Overlays
+        appState.uiPositions = {}; // Clear previous positions
+        const projectableEntities = [
+            { map: objectMaps.playerMeshes, state: stateToRender.players },
+            { map: objectMaps.enemyMeshes, state: stateToRender.enemies },
+            // Damage texts are handled differently as their state includes x,y already
+        ];
+        projectableEntities.forEach(({ map, state }) => {
+            if (!state) return;
+            for (const id in state) {
+                const mesh = map[id];
+                if (mesh && mesh.visible) { // Only project visible meshes
+                     try {
+                        const worldPos = new THREE.Vector3();
+                        mesh.getWorldPosition(worldPos);
+                        // Offset slightly upwards for better UI placement above the mesh center
+                        worldPos.y += (mesh.geometry.boundingBox?.max.y || 10) * mesh.scale.y; // Use bounding box or estimate
+                        appState.uiPositions[id] = Renderer3D.projectToScreen(worldPos);
+                     } catch(e) {
+                         console.error(`Error projecting mesh ${id}:`, e);
+                     }
+                }
+            }
+        });
+         // Project damage text positions (use their state x/y directly)
+        if (stateToRender.damage_texts) {
+            for (const id in stateToRender.damage_texts) {
+                const dt = stateToRender.damage_texts[id];
+                // Use damage text's world coords directly, assume Y=0 for projection unless state provides it
+                const dtWorldPos = new THREE.Vector3(dt.x, MESH_Y_OFFSET + 20, dt.y); // Assume a sensible Y offset
+                appState.uiPositions[id] = Renderer3D.projectToScreen(dtWorldPos);
+            }
+        }
+
+        // 6. Update Camera Shake
+         _updateCameraShake(deltaTime);
+
+         // Optional: Update Debug Controls
+         // if (controls) controls.update();
+
+        // 7. Render the Scene
+        renderer.render(scene, camera);
+    },
+
+    // --- Utilities ---
+
+    getCamera: () => camera,
+    getGroundPlane: () => groundPlane, // For mouse raycasting in main.js
+
+    projectToScreen: (worldPosition) => {
+        if (!camera || !width || !height) return { screenX: -1, screenY: -1 };
+        const vector = worldPosition.clone();
+        vector.project(camera);
+        const screenX = Math.round(((vector.x + 1) * width) / 2);
+        const screenY = Math.round(((-vector.y + 1) * height) / 2);
+        return { screenX, screenY };
+    },
+
+     triggerShake: (intensity, durationMs) => {
+        if (intensity > shakeIntensity) { // Only apply stronger shake
+             shakeIntensity = Math.max(0.1, intensity); // Clamp min intensity
+             shakeEndTime = clock.elapsedTime + durationMs / 1000.0;
+             originalCameraPos.copy(camera.position); // Store current pre-shake position
+             // console.log(`Triggering shake: ${intensity} for ${durationMs}ms`);
+        }
+    },
+
+    cleanup: () => {
+        console.log("Cleaning up Renderer3D...");
+        window.removeEventListener('resize', _handleResize);
+
+        // Cancel any running animations managed by external loops if necessary (main.js handles this)
+
+        // Remove all objects from scene and dispose resources
+        const mapsToClean = [
+            objectMaps.playerMeshes, objectMaps.enemyMeshes,
+            objectMaps.bulletMeshes, objectMaps.powerupsMeshes,
+            objectMaps.effectMeshes // Add other maps if created
+        ];
+        mapsToClean.forEach(map => {
+            if(map) {
+                Object.keys(map).forEach(id => _removeMesh(map[id], id, map));
+            }
+        });
+
+         // Remove snake mesh explicitly if it exists
+        if (objectMaps.snakeMesh) _removeMesh(objectMaps.snakeMesh, 'snake', objectMaps);
+
+         // Remove instanced meshes
+        if(objectMaps.ammoCasingMesh) scene.remove(objectMaps.ammoCasingMesh);
+        if(objectMaps.bloodSparkMesh) scene.remove(objectMaps.bloodSparkMesh);
+
+        // Dispose shared resources
+        Object.values(sharedResources.geometries).forEach(geo => geo?.dispose());
+        Object.values(sharedResources.materials).forEach(mat => mat?.dispose());
+        sharedResources.geometries = {};
+        sharedResources.materials = {};
+
+        // Dispose ground plane, campfire etc.
+        groundPlane?.geometry?.dispose();
+        groundPlane?.material?.dispose();
+        campfireLogs?.geometry?.dispose();
+        campfireLogs?.material?.dispose();
+        scene.remove(groundPlane);
+        scene.remove(campfireLogs);
+        scene.remove(campfireLight); // Lights don't need disposal
+
+        // Dispose renderer
+        renderer?.dispose();
+        if (renderer?.domElement) {
+             container?.removeChild(renderer.domElement);
+        }
+
+        // Clear variables
+        renderer = null; scene = null; camera = null; ambientLight = null; directionalLight = null;
+        clock = null; container = null; canvas = null; groundPlane = null; campfireLogs = null; campfireLight = null; controls = null;
+        objectMaps.playerMeshes = {}; objectMaps.enemyMeshes = {}; objectMaps.bulletMeshes = {};
+        objectMaps.powerupMeshes = {}; objectMaps.effectMeshes = {}; objectMaps.ammoCasingMesh = null; objectMaps.bloodSparkMesh = null; objectMaps.snakeMesh = null;
+        shakeIntensity = 0; shakeEndTime = 0;
+
+        console.log("Renderer3D Cleanup Complete.");
     }
+};
 
-    function initParticlesAndInstances() {
-        hitSparkGeometry = new THREE.BufferGeometry(); const sp = new Float32Array(MAX_SPARKS*3); const sc = new Float32Array(MAX_SPARKS*3); const sa = new Float32Array(MAX_SPARKS); sparkData = []; for(let i=0;i<MAX_SPARKS;i++){sparkData.push({position:new THREE.Vector3(0,-1e3,0),velocity:new THREE.Vector3(),color:new THREE.Color(1,1,1),alpha:0.0,life:0});sa[i]=0.0;sp[i*3+1]=-1e3;} hitSparkGeometry.setAttribute('position',new THREE.BufferAttribute(sp,3)); hitSparkGeometry.setAttribute('color',new THREE.BufferAttribute(sc,3)); hitSparkGeometry.setAttribute('alpha',new THREE.BufferAttribute(sa,1)); hitSparkParticles = new THREE.Points(hitSparkGeometry, sparkMaterial); scene.add(hitSparkParticles);
-        rainGeometry = new THREE.BufferGeometry(); const rp = new Float32Array(MAX_RAIN_DROPS*6); rainData = []; for (let i=0;i<MAX_RAIN_DROPS;i++){rainData.push({position:new THREE.Vector3(Math.random()*gameWidth*1.2-gameWidth*0.1,gameHeight*1.5,Math.random()*gameHeight*1.2-gameHeight*0.1), velocityY: -400 - Math.random()*150 }); } rainGeometry.setAttribute('position',new THREE.BufferAttribute(rp,3)); rainLines = new THREE.LineSegments(rainGeometry, rainMaterial); rainLines.visible = false; scene.add(rainLines);
-        dustGeometry = new THREE.BufferGeometry(); const dp = new Float32Array(MAX_DUST_MOTES*3); dustData = []; for (let i=0;i<MAX_DUST_MOTES;i++){dustData.push({position:new THREE.Vector3(Math.random()*gameWidth*1.2-gameWidth*0.1,Math.random()*50+5,Math.random()*gameHeight*1.2-gameHeight*0.1),velocity:new THREE.Vector3((Math.random()-.5)*50,Math.random()*5,(Math.random()-.5)*50),rotation:Math.random()*Math.PI*2}); dp[i*3+1]=-1e3;} dustGeometry.setAttribute('position',new THREE.BufferAttribute(dp,3)); dustParticles = new THREE.Points(dustGeometry, dustMaterial); dustParticles.visible = false; scene.add(dustParticles);
-        ammoCasingMesh = new THREE.InstancedMesh(casingGeometry, casingMaterial, MAX_CASINGS); ammoCasingMesh.castShadow = true; ammoCasingMesh.count = 0; scene.add(ammoCasingMesh);
-        playerBulletMesh = new THREE.InstancedMesh(bulletGeometry, bulletPlayerMaterial, MAX_BULLETS); playerBulletMesh.count = 0; scene.add(playerBulletMesh);
-        enemyBulletMesh = new THREE.InstancedMesh(bulletGeometry, bulletEnemyMaterial, MAX_BULLETS); enemyBulletMesh.count = 0; scene.add(enemyBulletMesh);
-    }
-
-    function initCampfire() { campfireGroup = new THREE.Group(); const l1=new THREE.Mesh(logGeometry,logMaterial);l1.rotation.set(0,Math.PI/10,Math.PI/6);l1.castShadow=true;l1.position.set(-DEF_LOG_LENGTH*.1,CAMPFIRE_LOG_Y_OFFSET,-DEF_LOG_LENGTH*.2); const l2=new THREE.Mesh(logGeometry,logMaterial);l2.rotation.set(0,-Math.PI/8,-Math.PI/5);l2.castShadow=true;l2.position.set(DEF_LOG_LENGTH*.15,CAMPFIRE_LOG_Y_OFFSET,DEF_LOG_LENGTH*.1); campfireGroup.add(l1);campfireGroup.add(l2); const g=new THREE.PointLight(0xffa500,0,180,1.9);g.position.y=FLAME_PARTICLE_Y_OFFSET+5;campfireGroup.add(g);campfireGroup.userData.glowLight=g; flameGeometry=new THREE.BufferGeometry();const fp=new Float32Array(MAX_FLAMES*3);const fc=new Float32Array(MAX_FLAMES*3);const fa=new Float32Array(MAX_FLAMES);flameData=[];for(let i=0;i<MAX_FLAMES;i++){flameData.push({position:new THREE.Vector3(0,-1e3,0),velocity:new THREE.Vector3(),color:new THREE.Color(1,1,1),alpha:0.0,life:0,baseLife:.5+Math.random()*.4});fp[i*3+1]=-1e3;fa[i]=0.0;}flameGeometry.setAttribute('position',new THREE.BufferAttribute(fp,3));flameGeometry.setAttribute('color',new THREE.BufferAttribute(fc,3));flameGeometry.setAttribute('alpha',new THREE.BufferAttribute(fa,1));flameParticles=new THREE.Points(flameGeometry,flameMaterial);campfireGroup.add(flameParticles);campfireGroup.userData.flameParticles=flameParticles;campfireGroup.visible=false;scene.add(campfireGroup); }
-    function initSnake() { const c = new THREE.LineCurve3(new THREE.Vector3(0, DEF_SNAKE_RADIUS, 0), new THREE.Vector3(1, DEF_SNAKE_RADIUS, 0)); const g = new THREE.TubeGeometry(c, 10, DEF_SNAKE_RADIUS, 5, false); snakeMesh = new THREE.Mesh(g, snakeMaterial); snakeMesh.castShadow = true; snakeMesh.visible = false; scene.add(snakeMesh); }
-    function handleResize() { if (!renderer || !camera) return; renderer.setSize(gameWidth, gameHeight); const aspect = gameWidth / gameHeight; const frustumSize = gameHeight; camera.left = frustumSize*aspect/-2; camera.right = frustumSize*aspect/2; camera.top = frustumSize/2; camera.bottom = frustumSize/-2; camera.position.set(cameraTargetPos.x, 1000, cameraTargetPos.z); camera.lookAt(cameraTargetPos.x, 0, cameraTargetPos.z); camera.updateProjectionMatrix(); }
-    function createPlayerMesh(d) { const g=new THREE.Group();const bm=new THREE.Mesh(playerBodyGeometry,playerMaterial.clone());bm.castShadow=true;bm.position.y=PLAYER_BODY_Y_OFFSET;g.add(bm);const hm=new THREE.Mesh(headGeometry,headMaterial.clone());hm.scale.setScalar(DEF_PLAYER_HEAD_RADIUS);hm.position.y=PLAYER_BODY_Y_OFFSET+(DEF_PLAYER_HEIGHT-DEF_PLAYER_WIDTH)/2+DEF_PLAYER_HEAD_RADIUS*.8;hm.castShadow=true;g.add(hm);const gm=new THREE.Mesh(gunGeometry,gunMaterial.clone());gm.position.set(0,PLAYER_BODY_Y_OFFSET*.8,DEF_PLAYER_WIDTH*.5);gm.rotation.x=Math.PI/2;gm.castShadow=true;g.add(gm); const barW = Math.max(HEALTHBAR_MIN_WIDTH, (d.width || DEF_PLAYER_WIDTH) * HEALTHBAR_WIDTH_FACTOR); const hbarBG = new THREE.Mesh(healthBarGeometry, healthBarBgMaterial.clone()); hbarBG.scale.x = barW; hbarBG.renderOrder = 1; const hbarFG = new THREE.Mesh(healthBarGeometry, healthBarFgMaterial.clone()); hbarFG.scale.x = barW; hbarFG.position.z = 0.1; hbarFG.renderOrder = 2; const abarBG = new THREE.Mesh(armorBarGeometry, healthBarBgMaterial.clone()); abarBG.scale.x = barW; abarBG.position.y = -(HEALTHBAR_HEIGHT + BAR_SPACING); abarBG.renderOrder = 1; const abarFG = new THREE.Mesh(armorBarGeometry, armorBarFgMaterial.clone()); abarFG.scale.x = barW; abarFG.position.set(0, -(HEALTHBAR_HEIGHT + BAR_SPACING), 0.1); abarFG.renderOrder = 2; const barGroup = new THREE.Group(); barGroup.add(hbarBG); barGroup.add(hbarFG); barGroup.add(abarBG); barGroup.add(abarFG); barGroup.position.set(0, PLAYER_BODY_Y_OFFSET + DEF_PLAYER_HEAD_RADIUS + BAR_OFFSET_Y, 0); g.add(barGroup); g.position.set(d.x,PLAYER_Y_OFFSET,d.y);g.userData={gameId:d.id,bodyMesh:bm,headMesh:hm,gunMesh:gm,healthBarGroup:barGroup,healthBarFgMesh:hbarFG,armorBarGroup:abarBG,armorBarFgMesh:abarFG};return g;}
-    function createEnemyMesh(d){ const g=new THREE.Group();let bm,hm,yOff=ENEMY_Y_OFFSET,bMat,hScl=DEF_ENEMY_HEAD_RADIUS; const ehMat=headMaterial.clone(); if(d.type==='giant'){bMat=enemyGiantMaterial.clone();bm=new THREE.Mesh(enemyGiantGeometry,bMat);yOff=GIANT_Y_OFFSET;hScl=DEF_ENEMY_HEAD_RADIUS*DEF_GIANT_MULTIPLIER*.8;}else if(d.type==='shooter'){bMat=enemyShooterMaterial.clone();bm=new THREE.Mesh(enemyShooterGeometry,bMat);const eg=new THREE.Mesh(enemyGunGeometry,gunMaterial.clone());eg.position.set(0,yOff*.6,DEF_ENEMY_WIDTH*.6);eg.rotation.x=Math.PI/2;eg.castShadow=true;g.add(eg);}else{bMat=enemyChaserMaterial.clone();bm=new THREE.Mesh(enemyChaserGeometry,bMat);} bm.castShadow=true;bm.receiveShadow=true;bm.position.y=yOff;hm=new THREE.Mesh(headGeometry,ehMat);hm.scale.setScalar(hScl);hm.castShadow=true;hm.position.y=yOff+(bm.geometry.parameters.height||DEF_ENEMY_HEIGHT)/2+hScl*.7; g.add(bm);g.add(hm); const barW = Math.max(HEALTHBAR_MIN_WIDTH, (d.width || DEF_ENEMY_WIDTH) * HEALTHBAR_WIDTH_FACTOR); const hbarBG = new THREE.Mesh(healthBarGeometry, healthBarBgMaterial.clone()); hbarBG.scale.x = barW; hbarBG.renderOrder = 1; const hbarFG = new THREE.Mesh(healthBarGeometry, healthBarFgMaterial.clone()); hbarFG.scale.x = barW; hbarFG.position.z = 0.1; hbarFG.renderOrder = 2; const abarBG = new THREE.Mesh(armorBarGeometry, healthBarBgMaterial.clone()); abarBG.scale.x = barW; abarBG.position.y = -(HEALTHBAR_HEIGHT + BAR_SPACING); abarBG.renderOrder = 1; const abarFG = new THREE.Mesh(armorBarGeometry, armorBarFgMaterial.clone()); abarFG.scale.x = barW; abarFG.position.set(0, -(HEALTHBAR_HEIGHT + BAR_SPACING), 0.1); abarFG.renderOrder = 2; const barGroup = new THREE.Group(); barGroup.add(hbarBG); barGroup.add(hbarFG); barGroup.add(abarBG); barGroup.add(abarFG); barGroup.position.set(0, hm.position.y + hScl + BAR_OFFSET_Y, 0); g.add(barGroup); g.position.set(d.x,0,d.y);g.userData={gameId:d.id,type:d.type,bodyMesh:bm,healthBarGroup:barGroup,healthBarFgMesh:hbarFG,armorBarGroup:abarBG,armorBarFgMesh:abarFG};return g;}
-    function createPowerupMesh(d){ const g=new THREE.Group();const mat=(powerupMaterials[d.type]||powerupMaterials.default).clone();let iGeo;switch(d.type){case'health':iGeo=powerupHealthGeo;break;case'gun_upgrade':iGeo=powerupGunGeo;break;case'speed_boost':iGeo=powerupSpeedGeo;break;case'armor':iGeo=powerupArmorGeo;break;case'ammo_shotgun':iGeo=powerupShotgunGeo;break;case'ammo_heavy_slug':iGeo=powerupSlugGeo;break;case'ammo_rapid_fire':iGeo=powerupRapidGeo;break;case'bonus_score':iGeo=powerupScoreGeo;break;default:iGeo=powerupBoxGeometry;}const iM=new THREE.Mesh(iGeo,mat);iM.castShadow=true;iM.receiveShadow=true;iM.position.y=POWERUP_Y_OFFSET;iM.rotation.set(Math.PI/6,0,Math.PI/6);g.add(iM);g.position.set(d.x,0,d.y);g.userData={gameId:d.id,isPowerup:true,iconMesh:iM};return g;}
-
-    function updateMeshes(state, meshDict, createFn, defaultYPosFn, localEffects, appState) { const activeIds = new Set(); if (state) { for (const id in state) { const data = state[id]; if (typeof data.x !== 'number' || typeof data.y !== 'number') continue; activeIds.add(id); let obj = meshDict[id]; let isNew = false; if (!obj) { obj = createFn(data); if (obj) { meshDict[id] = obj; scene.add(obj); isNew = true; } else { continue; } } const yOffset = defaultYPosFn(data); obj.position.set(data.x, yOffset, data.y); const bodyMesh = obj.userData?.bodyMesh; const iconMesh = obj.userData?.isPowerup ? obj.userData.iconMesh : null; const healthBarGroup = obj.userData?.healthBarGroup; const healthBarFgMesh = obj.userData?.healthBarFgMesh; const armorBarGroup = obj.userData?.armorBarGroup; const armorBarFgMesh = obj.userData?.armorBarFgMesh; if (bodyMesh && bodyMesh.material && !isNew) { const fadeDuration = 0.4; const now = performance.now(); if (meshDict === enemyMeshes && data.health <= 0 && data.death_timestamp) { const timeSinceDeath = (now/1000) - data.death_timestamp; const opacity = Math.max(0, 1.0 - (timeSinceDeath / fadeDuration)); const isVisible = opacity > 0.01; obj.visible = isVisible; obj.children.forEach(c => { if(c.material) { c.material.opacity = opacity; c.material.needsUpdate = true; } c.visible = isVisible; }); if(healthBarGroup) healthBarGroup.visible = false; } else { if(obj.visible === false || (bodyMesh.material.opacity < 1.0 && bodyMesh.material.opacity > 0)) { obj.visible = true; obj.children.forEach(c => { if(c.material) { c.material.opacity = 1.0; c.material.needsUpdate = true; } c.visible = true; }); } const snakeEffect = data.effects?.snake_bite_slow; const isBitten = snakeEffect && now < snakeEffect.expires_at * 1000; const isPushback = meshDict === playerMeshes && id === appState?.localPlayerId && localEffects?.pushbackAnim?.active; let emissiveColor = 0x000000; let emissiveIntensity = 0; if(isPushback) { const pushbackProgress = Math.max(0,(localEffects.pushbackAnim.endTime-now)/localEffects.pushbackAnim.duration); emissiveIntensity = Math.sin(pushbackProgress*Math.PI)*0.8; emissiveColor = 0x66ccff; } else if (isBitten) { emissiveIntensity = 0.4 + Math.sin(now * 0.005) * 0.3; emissiveColor = 0x00ff00; } if(bodyMesh.material.emissive) { bodyMesh.material.emissive.setHex(emissiveColor); bodyMesh.material.emissiveIntensity = emissiveIntensity; } } } if (iconMesh) { iconMesh.rotation.y += 0.02; iconMesh.position.y = POWERUP_Y_OFFSET + Math.sin(performance.now() * 0.002) * 3; } if (healthBarGroup && healthBarFgMesh && armorBarGroup && armorBarFgMesh) { if (data.health <= 0 || data.player_status === PLAYER_STATUS_DEAD || data.player_status === PLAYER_STATUS_DOWN) { healthBarGroup.visible = false; } else { healthBarGroup.visible = true; const maxHealth = data.max_health || 100; const healthPercent = Math.max(0, Math.min(1, data.health / maxHealth)); healthBarFgMesh.scale.x = healthPercent; if (healthPercent > 0.66) healthBarFgMesh.material.color.setHex(0x66bb6a); else if (healthPercent > 0.33) healthBarFgMesh.material.color.setHex(0xFFD700); else healthBarFgMesh.material.color.setHex(0xDC143C); const showArmor = data.armor > 0; armorBarGroup.visible = showArmor; armorBarFgMesh.visible = showArmor; if (showArmor) { const armorPercent = Math.max(0, Math.min(1, data.armor / 100)); armorBarFgMesh.scale.x = armorPercent; } healthBarGroup.quaternion.copy(camera.quaternion); } } if (meshDict === playerMeshes && obj.userData?.gunMesh) { const aimDx = data.id === appState?.localPlayerId ? appState.localPlayerAimState.lastAimDx : 0; const aimDy = data.id === appState?.localPlayerId ? appState.localPlayerAimState.lastAimDy : -1; obj.rotation.y = Math.atan2(aimDx, aimDy); } else if (meshDict === enemyMeshes && obj.userData?.type === 'shooter') { const targetPlayer = appState?.serverState?.players?.[data.target_player_id]; if (targetPlayer) { const aimTargetX = targetPlayer.x; const aimTargetZ = targetPlayer.y; obj.rotation.y = Math.atan2(aimTargetX - data.x, aimTargetZ - data.y); } } } } for (const id in meshDict) { if (!activeIds.has(id)) { const objToRemove = meshDict[id]; if (objToRemove) { scene.remove(objToRemove); disposeObject3D(objToRemove); } delete meshDict[id]; } } }
-    function updateBulletInstances(bulletsState) { let pCount = 0; let eCount = 0; if (playerBulletMesh && enemyBulletMesh && bulletsState) { const camX = cameraTargetPos.x; const camZ = cameraTargetPos.z; const viewWidthHalf = (camera.right - camera.left) / 2 * 1.1; const viewHeightHalf = (camera.top - camera.bottom) / 2 * 1.1; for(const id in bulletsState) { const bullet = bulletsState[id]; if (!bullet || typeof bullet.x !== 'number' || typeof bullet.y !== 'number') continue; const bx = bullet.x; const by = bullet.y; if (bx < camX - viewWidthHalf || bx > camX + viewWidthHalf || by < camZ - viewHeightHalf || by > camZ + viewHeightHalf) continue; const isPlayer = bullet.owner_type === 'player'; const targetMesh = isPlayer ? playerBulletMesh : enemyBulletMesh; let countRef = isPlayer ? pCount : eCount; if (countRef < MAX_BULLETS) { dummyObject.position.set(bx, BULLET_Y_OFFSET, by); dummyObject.rotation.set(0,0,0); dummyObject.scale.set(1,1,1); dummyObject.updateMatrix(); targetMesh.setMatrixAt(countRef, dummyObject.matrix); if (isPlayer) pCount++; else eCount++; } } playerBulletMesh.count = pCount; enemyBulletMesh.count = eCount; playerBulletMesh.instanceMatrix.needsUpdate = true; enemyBulletMesh.instanceMatrix.needsUpdate = true; } }
-    function disposeObject3D(obj) { if (!obj) return; if (obj instanceof THREE.Mesh || obj instanceof THREE.Points || obj instanceof THREE.LineSegments || obj instanceof THREE.InstancedMesh) { if (obj.geometry) obj.geometry.dispose(); if (obj.material) { if (Array.isArray(obj.material)) obj.material.forEach(m => m?.dispose()); else if (obj.material.dispose) obj.material.dispose(); } } while(obj.children.length > 0) { disposeObject3D(obj.children[0]); obj.remove(obj.children[0]); } }
-    function updateEnvironment(isNight) { const dayLI=1.0, nightLI=0.65; const dayAI=0.6, nightAI=0.55; const dayDC=0xffffff, nightDC=0xd0e0ff; const dayAC=0xffffff, nightAC=0x8090c0; ambientLight.intensity=isNight?nightAI:dayAI; ambientLight.color.setHex(isNight?nightAC:dayAC); directionalLight.intensity=isNight?nightLI:dayLI; directionalLight.color.setHex(isNight?nightDC:dayDC); groundPlane.material=isNight?groundNightMaterial:groundDayMaterial; scene.fog = isNight?new THREE.FogExp2(0x050814, 0.0006):null; }
-    function updateMuzzleFlash(appState, flashState) { if (!muzzleFlashLight || !appState?.localPlayerId) return; const playerGroup = playerMeshes[appState.localPlayerId]; if (!playerGroup || !playerGroup.userData.gunMesh) return; const now = performance.now(); if (flashState.active && now < flashState.endTime) { muzzleFlashLight.intensity = 4.0 + Math.random() * 3.0; const offsetDistance = DEF_GUN_LENGTH * 0.7; const gunMesh = playerGroup.userData.gunMesh; const worldPos = new THREE.Vector3(); gunMesh.getWorldPosition(worldPos); const aimDirection = new THREE.Vector3(appState.localPlayerAimState.lastAimDx, 0, appState.localPlayerAimState.lastAimDy); worldPos.addScaledVector(aimDirection, offsetDistance); muzzleFlashLight.position.copy(worldPos); } else { muzzleFlashLight.intensity = 0; if (flashState.active) flashState.active = false; } }
-    function updateHitSparks(activeSparkEffects, deltaTime) { if (!hitSparkParticles || !hitSparkGeometry) return; const positions = hitSparkGeometry.attributes.position.array; const colors = hitSparkGeometry.attributes.color.array; const alphas = hitSparkGeometry.attributes.alpha.array; let needsUpdate = false; let firstInactiveIndex = 0; const now = performance.now(); for (const enemyId in activeSparkEffects) { const effectEndTime = activeSparkEffects[enemyId]; const enemyMesh = enemyMeshes[enemyId]; if (now < effectEndTime && enemyMesh) { const sparksToSpawn = 4 + Math.floor(Math.random() * 5); const enemyPos = enemyMesh.position; const enemyYOffset = (enemyMesh.userData?.type === 'giant' ? GIANT_Y_OFFSET : ENEMY_Y_OFFSET); for (let i = 0; i < sparksToSpawn; i++) { let foundSlot = false; for (let j = firstInactiveIndex; j < MAX_SPARKS; j++) { const p = sparkData[j]; if (p.life <= 0) { p.position.copy(enemyPos); p.position.y = enemyYOffset * (0.2 + Math.random() * 0.8); const angle = Math.random() * Math.PI * 2; const speed = 120 + Math.random() * 90; p.velocity.set(Math.cos(angle)*speed, (Math.random()-0.3)*speed*0.6, Math.sin(angle)*speed); p.color.setRGB(1, Math.random()*0.4, 0); p.alpha = 1.0; p.life = SPARK_BASE_LIFE + Math.random() * SPARK_RAND_LIFE; firstInactiveIndex = j + 1; foundSlot = true; break; } } if (!foundSlot) break; } delete activeSparkEffects[enemyId]; } else if (now >= effectEndTime) { delete activeSparkEffects[enemyId]; } } for (let i = 0; i < MAX_SPARKS; i++) { const p = sparkData[i]; if (p.life > 0) { p.life -= deltaTime; if (p.life <= 0) { p.alpha = 0.0; alphas[i] = 0.0; positions[i * 3 + 1] = -1000; } else { p.position.addScaledVector(p.velocity, deltaTime); p.velocity.y -= 250 * deltaTime; p.alpha = Math.max(0, (p.life / (SPARK_BASE_LIFE + SPARK_RAND_LIFE)) * 1.2); alphas[i] = p.alpha; positions[i*3] = p.position.x; positions[i*3+1] = p.position.y; positions[i*3+2] = p.position.z; colors[i*3] = p.color.r; colors[i*3+1] = p.color.g; colors[i*3+2] = p.color.b; } needsUpdate = true; } else if (alphas[i] > 0) { alphas[i] = 0; positions[i * 3 + 1] = -1000; needsUpdate = true; } } if (needsUpdate) { hitSparkGeometry.attributes.position.needsUpdate = true; hitSparkGeometry.attributes.color.needsUpdate = true; hitSparkGeometry.attributes.alpha.needsUpdate = true; } hitSparkParticles.visible = needsUpdate; }
-    function updateAmmoCasings(activeCasings) { if (!ammoCasingMesh) return; let visibleCount = 0; for(let i=0; i<activeCasings.length && i<MAX_CASINGS; i++){ const casing = activeCasings[i]; dummyObject.position.set(casing.x, DEF_CASING_LENGTH/2 + 0.5, casing.y); dummyObject.rotation.set(Math.PI/2 + (Math.random()-0.5)*0.4, casing.rotation, (Math.random()-0.5)*0.4); dummyObject.updateMatrix(); ammoCasingMesh.setMatrixAt(i, dummyObject.matrix); visibleCount++; } ammoCasingMesh.count = visibleCount; ammoCasingMesh.instanceMatrix.needsUpdate = true; }
-    function updateWeatherParticles(appState, deltaTime) { if (!appState) return; if (rainLines && rainGeometry) { rainLines.visible = appState.isRaining; if (appState.isRaining) { const positions = rainGeometry.attributes.position.array; const rainSpeed = 450; const streakLengthFactor = 0.04; for (let i = 0; i < MAX_RAIN_DROPS; i++) { const p = rainData[i]; p.position.y -= (p.velocityY || rainSpeed) * deltaTime; if (p.position.y < -20) { p.position.x = Math.random()*gameWidth*1.2 - gameWidth*0.1; p.position.y = gameHeight*1.2 + Math.random() * 100; p.position.z = Math.random()*gameHeight*1.2 - gameHeight*0.1; } const endY = p.position.y - (p.velocityY || rainSpeed) * streakLengthFactor; const idx = i * 6; positions[idx + 0] = p.position.x; positions[idx + 1] = p.position.y; positions[idx + 2] = p.position.z; positions[idx + 3] = p.position.x; positions[idx + 4] = endY; positions[idx + 5] = p.position.z; } rainGeometry.attributes.position.needsUpdate = true; } } if (dustParticles && dustGeometry) { dustParticles.visible = appState.isDustStorm; if (appState.isDustStorm) { const positions = dustGeometry.attributes.position.array; for (let i = 0; i < MAX_DUST_MOTES; i++) { const p = dustData[i]; if (!p.velocity) continue; p.position.addScaledVector(p.velocity, deltaTime); p.velocity.x += (Math.random()-0.5)*50*deltaTime; p.velocity.z += (Math.random()-0.5)*50*deltaTime; p.position.y = Math.max(1, Math.min(50, p.position.y + (Math.random()-0.5)*10*deltaTime)); if(p.position.x<-gameWidth*0.1) p.position.x += gameWidth*1.2; if(p.position.x>gameWidth*1.1) p.position.x -= gameWidth*1.2; if(p.position.z<-gameHeight*0.1) p.position.z += gameHeight*1.2; if(p.position.z>gameHeight*1.1) p.position.z -= gameHeight*1.2; positions[i*3]=p.position.x; positions[i*3+1]=p.position.y; positions[i*3+2]=p.position.z; } dustGeometry.attributes.position.needsUpdate = true; } } }
-    function updateSnake(snakeData) { if (!snakeMesh || !snakeData) return; snakeMesh.visible = snakeData.isActiveFromServer; if(snakeData.isActiveFromServer && snakeData.segments && snakeData.segments.length > 1){ snakeCurvePoints = snakeData.segments.map(seg => new THREE.Vector3(seg.x, DEF_SNAKE_RADIUS, seg.y)); if (snakeCurvePoints.length >= 2) { const curve = new THREE.CatmullRomCurve3(snakeCurvePoints); const newGeometry = new THREE.TubeGeometry(curve, DEF_SNAKE_SEGMENTS, DEF_SNAKE_RADIUS, 5, false); if (snakeMesh.geometry) snakeMesh.geometry.dispose(); snakeMesh.geometry = newGeometry; snakeMesh.visible = true; } else { snakeMesh.visible = false; } } else { snakeMesh.visible = false; } }
-    function updateCampfire(campfireData, deltaTime) { if (!campfireGroup || !campfireData) return; campfireGroup.visible = campfireData.active; if (campfireData.active) { campfireGroup.position.set(campfireData.x, 0, campfireData.y); const glowLight = campfireGroup.userData.glowLight; if (glowLight) glowLight.intensity = 1.8 + Math.sin(performance.now() * 0.0025) * 0.6; if (flameParticles && flameGeometry) { const positions = flameGeometry.attributes.position.array; const colors = flameGeometry.attributes.color.array; const alphas = flameGeometry.attributes.alpha.array; let needsUpdate = false; let firstInactiveFlame = 0; for(let i=0; i < MAX_FLAMES; i++) { const p = flameData[i]; if (p.life <= 0 && Math.random() < 0.2 && i >= firstInactiveFlame) { p.position.set((Math.random()-0.5)*15, FLAME_PARTICLE_Y_OFFSET, (Math.random()-0.5)*15); p.velocity.set((Math.random()-0.5)*18, 50 + Math.random()*30, (Math.random()-0.5)*18); p.life = p.baseLife; p.alpha = 0.8 + Math.random()*0.2; p.color.setHSL(0.08 + Math.random()*0.04, 1.0, 0.6 + Math.random()*0.1); firstInactiveFlame = i + 1; } if (p.life > 0) { p.life -= deltaTime; if (p.life <= 0) { p.alpha=0; alphas[i] = 0.0; positions[i*3+1]=-1000;} else { p.position.addScaledVector(p.velocity, deltaTime); p.velocity.y += (Math.random()-0.45)*60*deltaTime; p.velocity.x *= 0.96; p.velocity.z *= 0.96; p.alpha = Math.max(0, (p.life / p.baseLife) * 1.1); p.color.lerp(new THREE.Color(1.0, 0.1, 0), deltaTime * 1.3); alphas[i]=p.alpha; positions[i*3]=p.position.x; positions[i*3+1]=p.position.y; positions[i*3+2]=p.position.z; colors[i*3]=p.color.r; colors[i*3+1]=p.color.g; colors[i*3+2]=p.color.b; } needsUpdate = true; } else if (alphas[i] > 0) { alphas[i] = 0.0; positions[i*3+1]=-1000; needsUpdate = true; } } if (needsUpdate) { flameGeometry.attributes.position.needsUpdate=true; flameGeometry.attributes.color.needsUpdate=true; flameGeometry.attributes.alpha.needsUpdate=true; } } } }
-    function getScreenPosition(worldPosition, cameraRef, rendererRef) { try { const vector = worldPosition.clone(); vector.project(cameraRef); if (!rendererRef || !rendererRef.domElement) return { x: 0, y: 0 }; const widthHalf = rendererRef.domElement.width / 2; const heightHalf = rendererRef.domElement.height / 2; const screenX = Math.round((vector.x * widthHalf) + widthHalf); const screenY = Math.round(-(vector.y * heightHalf) + heightHalf); return{ x: screenX, y: screenY }; } catch (e) { console.error("Error getScreenPosition:", e); return { x: 0, y: 0 }; } }
-
-    function renderScene(stateToRender, appState, localEffects, deltaTime = 0.016) { if (!renderer || !scene || !camera || !stateToRender || !appState || !localEffects) return; let dimensionsChanged = false; if (appState.canvasWidth && appState.canvasHeight && (gameWidth !== appState.canvasWidth || gameHeight !== appState.canvasHeight)) { gameWidth = appState.canvasWidth; gameHeight = appState.canvasHeight; dimensionsChanged = true; cameraTargetPos.x = gameWidth / 2; cameraTargetPos.z = gameHeight / 2; } if (dimensionsChanged) handleResize(); const now = performance.now(); if (appState.localPlayerId && playerMeshes[appState.localPlayerId]) { cameraTargetPos.x = lerp(cameraTargetPos.x, appState.renderedPlayerPos.x, cameraLerpFactor); cameraTargetPos.z = lerp(cameraTargetPos.z, appState.renderedPlayerPos.y, cameraLerpFactor); } if (shakeMagnitude > 0 && now < shakeEndTime) { const timeRemaining = shakeEndTime - now; const initialDurationEst = Math.max(1, shakeEndTime - (now - timeRemaining)); const currentMag = shakeMagnitude * Math.max(0, timeRemaining / initialDurationEst); const shakeAngle = Math.random() * Math.PI * 2; screenShakeOffset.x = Math.cos(shakeAngle) * currentMag; screenShakeOffset.z = Math.sin(shakeAngle) * currentMag; } else { shakeMagnitude = 0; screenShakeOffset.set(0, 0, 0); } const finalCamX = cameraTargetPos.x + screenShakeOffset.x; const finalCamZ = cameraTargetPos.z + screenShakeOffset.z; camera.position.set(finalCamX, 1000, finalCamZ); camera.lookAt(finalCamX, 0, finalCamZ); updateEnvironment(stateToRender.is_night); updateMuzzleFlash(appState, localEffects.muzzleFlash); updateHitSparks(localEffects.activeBloodSparkEffects, deltaTime); updateAmmoCasings(localEffects.activeAmmoCasings); updateWeatherParticles(appState, deltaTime); updateSnake(localEffects.snake); updateCampfire(stateToRender.campfire, deltaTime); updateMeshes(stateToRender.players, playerMeshes, createPlayerMesh, (d) => PLAYER_Y_OFFSET, localEffects, appState); updateMeshes(stateToRender.enemies, enemyMeshes, createEnemyMesh, (d) => (d.type === 'giant' ? GIANT_Y_OFFSET : ENEMY_Y_OFFSET), localEffects, appState); updateBulletInstances(stateToRender.bullets); updateMeshes(stateToRender.powerups, powerupMeshes, createPowerupMesh, (d) => 0, localEffects, appState); const uiPositions = {}; const calculateUIPos = (meshDict, stateDict, yOffsetValFn) => { for (const id in meshDict) { const obj = meshDict[id]; const data = stateDict?.[id]; if (obj && data && obj.visible !== false) { const actualMesh = (obj instanceof THREE.Group) ? obj.userData.bodyMesh || obj.userData.iconMesh : obj; if (!actualMesh) continue; const worldPos = obj.position.clone(); worldPos.y = yOffsetValFn(data, actualMesh); const screenPos = getScreenPosition(worldPos, camera, renderer); uiPositions[id] = { screenX: screenPos.x, screenY: screenPos.y }; } } }; const getPlayerHeadY = (d,m) => PLAYER_BODY_Y_OFFSET + DEF_PLAYER_HEAD_RADIUS*1.5; const getEnemyHeadY = (d,m) => (d.type === 'giant' ? GIANT_Y_OFFSET : ENEMY_Y_OFFSET) + (d.type === 'giant' ? DEF_ENEMY_HEAD_RADIUS * DEF_GIANT_MULTIPLIER : DEF_ENEMY_HEAD_RADIUS)*1.5; const getPowerupTopY = (d,m) => POWERUP_Y_OFFSET + DEF_POWERUP_SIZE * 0.5; calculateUIPos(playerMeshes, stateToRender.players, getPlayerHeadY); calculateUIPos(enemyMeshes, stateToRender.enemies, getEnemyHeadY); calculateUIPos(powerupMeshes, stateToRender.powerups, getPowerupTopY); if (stateToRender.damage_texts) { for (const id in stateToRender.damage_texts) { const dt = stateToRender.damage_texts[id]; const worldPos = new THREE.Vector3(dt.x, PLAYER_BODY_Y_OFFSET, dt.y); const screenPos = getScreenPosition(worldPos, camera, renderer); uiPositions[id] = { screenX: screenPos.x, screenY: screenPos.y }; } } appState.uiPositions = uiPositions; try { renderer.render(scene, camera); } catch (e) { console.error("RENDER ERROR", e); if (appState.animationFrameId) { cancelAnimationFrame(appState.animationFrameId); appState.animationFrameId = null; console.error("Stopped loop due to render error.");} } }
-    function triggerShake(magnitude, durationMs) { const now = performance.now(); const newEndTime = now + durationMs; if (magnitude >= shakeMagnitude || newEndTime > shakeEndTime) { shakeMagnitude = Math.max(magnitude, shakeMagnitude); shakeEndTime = Math.max(newEndTime, shakeEndTime); } }
-
-    function cleanup() {
-        console.log("--- Renderer3D Cleanup ---"); window.removeEventListener('resize', handleResize);
-        if(hitSparkGeometry) hitSparkGeometry.dispose(); if(rainGeometry) rainGeometry.dispose(); if(dustGeometry) dustGeometry.dispose(); if(flameGeometry) flameGeometry.dispose(); if(bulletGeometry) bulletGeometry.dispose(); if(healthBarGeometry) healthBarGeometry.dispose(); if(armorBarGeometry) armorBarGeometry.dispose();
-        if(sparkMaterial) sparkMaterial.dispose(); if(rainMaterial) rainMaterial.dispose(); if(dustMaterial) dustMaterial.dispose(); if(flameMaterial) { flameMaterial.map?.dispose(); flameMaterial.dispose(); } if(casingMaterial) casingMaterial.dispose(); if(bulletPlayerMaterial) bulletPlayerMaterial.dispose(); if(bulletEnemyMaterial) bulletEnemyMaterial.dispose(); if(healthBarBgMaterial) healthBarBgMaterial.dispose(); if(healthBarFgMaterial) healthBarFgMaterial.dispose(); if(armorBarFgMaterial) armorBarFgMaterial.dispose();
-        scene?.remove(ammoCasingMesh); scene?.remove(playerBulletMesh); scene?.remove(enemyBulletMesh); scene?.remove(snakeMesh); scene?.remove(campfireGroup); scene?.remove(hitSparkParticles); scene?.remove(rainLines); scene?.remove(dustParticles);
-        if(snakeMesh?.geometry) snakeMesh.geometry.dispose(); ammoCasingMesh = null; playerBulletMesh = null; enemyBulletMesh = null; snakeMesh = null;
-        while(scene?.children.length > 0) { const child = scene.children[0]; scene.remove(child); disposeObject3D(child); }
-        playerBodyGeometry.dispose(); headGeometry.dispose(); enemyChaserGeometry.dispose(); enemyShooterGeometry.dispose(); enemyGiantGeometry.dispose(); enemyGunGeometry.dispose(); powerupBoxGeometry.dispose(); powerupHealthGeo.dispose(); powerupGunGeo.dispose(); powerupSpeedGeo.dispose(); powerupArmorGeo.dispose(); powerupShotgunGeo.dispose(); powerupSlugGeo.dispose(); powerupRapidGeo.dispose(); powerupScoreGeo.dispose(); logGeometry.dispose(); casingGeometry.dispose(); groundGeometryPlane.dispose(); gunGeometry.dispose();
-        Object.values(powerupMaterials).forEach(m => m.dispose()); playerMaterial.dispose(); enemyChaserMaterial.dispose(); enemyShooterMaterial.dispose(); enemyGiantMaterial.dispose(); snakeMaterial.dispose(); logMaterial.dispose(); gunMaterial.dispose(); headMaterial.dispose();
-        groundDayMaterial.dispose(); groundNightMaterial.dispose(); loadedAssets.flameTexture?.dispose();
-        if (renderer) { renderer.dispose(); renderer.forceContextLoss(); if (renderer.domElement?.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement); renderer = null; console.log("Renderer disposed.");}
-        scene = null; camera = null; groundPlane = null; ambientLight = null; directionalLight = null; muzzleFlashLight = null; campfireGroup = null; flameParticles = null; hitSparkParticles = null; rainLines = null; dustParticles = null;
-        Object.keys(playerMeshes).forEach(id => delete playerMeshes[id]); Object.keys(enemyMeshes).forEach(id => delete enemyMeshes[id]); Object.keys(powerupMeshes).forEach(id => delete powerupMeshes[id]);
-        sparkData = []; rainData = []; dustData = []; flameData = []; snakeCurvePoints = [];
-        console.log("Renderer3D resources released.");
-    }
-
-    function getCamera() { return camera; }
-    function getGroundPlane() { return groundPlane; }
-
-    return { init, renderScene, triggerShake, cleanup, getCamera, getGroundPlane };
-
-})();
+// Make appState accessible globally (use with caution - better dependency injection is preferred in larger apps)
+// This is needed for _updatePlayerMesh and potentially others to access localPlayerId/aimState.
+window.appState = window.appState || {}; // Ensure it exists
 
 export default Renderer3D;
