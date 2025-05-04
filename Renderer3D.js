@@ -550,6 +550,64 @@ function _projectToScreen(worldPosition) {
     } catch (e) { return null; }
 }
 
+/**
+ * Updates camera position to follow the target (player or map center)
+ * and applies screen shake.
+ * @param {number} deltaTime Time since last frame.
+ * @param {THREE.Group | null} localPlayerGroup The group object of the local player, or null.
+ */
+function _updateCamera(deltaTime, localPlayerGroup) {
+    if (!camera || !clock) return;
+
+    // 1. Determine Target Position
+    let targetX, targetZ;
+    if (localPlayerGroup && localPlayerGroup.visible) {
+        // Follow player if available and visible
+        targetX = localPlayerGroup.position.x;
+        targetZ = localPlayerGroup.position.z;
+    } else {
+        // Fallback: Center on the middle of the current canvas dimensions
+        targetX = currentCanvasWidth / 2;
+        targetZ = currentCanvasHeight / 2;
+    }
+    _cameraTargetWorldPos.set(targetX, 0, targetZ); // Target is on the ground plane
+
+    // 2. Calculate Desired Camera Position (Above and behind target)
+    _cameraDesiredPos.set(
+        targetX,
+        CAMERA_HEIGHT_OFFSET,
+        targetZ + CAMERA_DISTANCE_OFFSET
+    );
+
+    // 3. Smoothly Interpolate Camera Position
+    camera.position.lerp(_cameraDesiredPos, CAMERA_LERP_FACTOR);
+
+    // 4. Apply Screen Shake (if active)
+    const nowMs = clock.elapsedTime * 1000;
+    if (shakeMagnitude > 0 && nowMs < shakeEndTime) {
+        const timeRemaining = shakeEndTime - nowMs;
+        // Calculate decay factor (e.g., quadratic decay)
+        const totalDuration = shakeEndTime - (nowMs - deltaTime * 1000);
+        const decayFactor = totalDuration > 0 ? Math.pow(Math.max(0, timeRemaining / totalDuration), 2) : 0;
+        const currentMag = shakeMagnitude * decayFactor;
+        const shakeAngle = Math.random() * Math.PI * 2;
+        screenShakeOffset.set(
+            Math.cos(shakeAngle) * currentMag,
+            (Math.random() - 0.5) * currentMag * 0.5,
+            Math.sin(shakeAngle) * currentMag
+        );
+        camera.position.add(screenShakeOffset); // Add temporary offset
+    } else {
+        shakeMagnitude = 0; // Reset shake
+    }
+
+    // 5. Set LookAt Target
+    camera.lookAt(_cameraTargetWorldPos); // Always look at the target ground position
+
+    // --- DEBUG LOG ---
+    // console.log(`UpdateCamera - Target: (${targetX.toFixed(0)}, ${targetZ.toFixed(0)}), DesiredCam: (${_cameraDesiredPos.x.toFixed(0)}, ${_cameraDesiredPos.z.toFixed(0)}), ActualCam: (${camera.position.x.toFixed(0)}, ${camera.position.z.toFixed(0)})`);
+}
+
 // --- Public API ---
 const Renderer3D = {
     init: (containerElement, initialWidth, initialHeight) => {
