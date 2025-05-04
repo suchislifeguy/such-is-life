@@ -1,7 +1,7 @@
-// main.js - FINAL VERSION
+// main.js - FINAL CORRECTED VERSION
 import Renderer3D from './Renderer3D.js';
 
-console.log("--- main.js: Starting execution Final ---");
+console.log("--- main.js: Starting execution Final Corrected ---");
 
 // --- Constants ---
 const WEBSOCKET_URL = 'wss://such-is-life.glitch.me/ws';
@@ -9,7 +9,7 @@ const SHOOT_COOLDOWN = 750; const RAPID_FIRE_COOLDOWN_MULTIPLIER = 0.4;
 const INPUT_SEND_INTERVAL = 33; const RECONNECT_DELAY = 3000;
 const PLAYER_DEFAULTS = { width: 25, height: 48, max_health: 100, base_speed: 150 };
 const PLAYER_STATUS_ALIVE = 'alive'; const PLAYER_STATUS_DOWN = 'down'; const PLAYER_STATUS_DEAD = 'dead';
-const SNAKE_BITE_DURATION = 8.0; // Example, ensure consistency if needed
+const SNAKE_BITE_DURATION = 8.0;
 
 // --- Utility Functions ---
 function getCssVar(varName) { return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || ''; }
@@ -39,12 +39,11 @@ const DOM = {
 let appState = {
     mode: 'menu', localPlayerId: null, maxPlayersInGame: null, currentGameId: null,
     serverState: null, animationFrameId: null, isConnected: false,
-    renderedPlayerPos: { x: 800, y: 450 }, // Default center
-    predictedPlayerPos: { x: 800, y: 450 }, // Default center
+    renderedPlayerPos: { x: 800, y: 450 }, predictedPlayerPos: { x: 800, y: 450 },
     lastServerState: null, previousServerState: null, lastLoopTime: null,
     lastStateReceiveTime: performance.now(), currentTemp: 18.0, isRaining: false,
     isDustStorm: false, targetTint: null, targetTintAlpha: 0.0,
-    canvasWidth: 1600, canvasHeight: 900, // Will be updated by server state
+    canvasWidth: 1600, canvasHeight: 900,
     uiPositions: {}, localPlayerAimState: { lastAimDx: 0, lastAimDy: -1 },
 };
 
@@ -59,8 +58,6 @@ let snake = {
     lineWidth: 3, serverHeadX: 0, serverHeadY: 0, serverBaseY: 0, isActiveFromServer: false,
     update: function(currentTime) { if (!this.isActiveFromServer) this.segments = []; }
 };
-
-// Combine states needed by Renderer3D
 let localEffects = {
     muzzleFlash: localPlayerMuzzleFlash, pushbackAnim: localPlayerPushbackAnim,
     activeBloodSparkEffects: activeBloodSparkEffects, activeAmmoCasings: activeAmmoCasings,
@@ -132,26 +129,25 @@ const Input = (() => {
 
 // --- Game Logic & Flow Module ---
 const Game = (() => {
-    function startSinglePlayer() { log("Requesting SP game..."); resetClientState(false); appState.mode = 'singleplayer'; UI.updateStatus("Starting..."); Network.sendMessage({ type: 'start_single_player' }); }
-    function joinMultiplayer() { const gameId = DOM.gameIdInput.value.trim().toUpperCase(); if (!gameId || gameId.length !== 6) { UI.updateStatus('Invalid Game ID.', true); return; } log(`Joining game: ${gameId}`); resetClientState(false); appState.mode = 'multiplayer-client'; UI.updateStatus(`Joining ${gameId}...`); Network.sendMessage({ type: 'join_game', game_id: gameId }); }
-    function hostMultiplayer(maxPlayers) { log(`Hosting MP game (${maxPlayers}p)...`); if (![2, 3, 4].includes(maxPlayers)) { error("Invalid max players:", maxPlayers); UI.updateStatus("Invalid count.", true); return; } resetClientState(false); appState.mode = 'multiplayer-host'; UI.updateStatus(`Creating ${maxPlayers}p game...`); Network.sendMessage({ type: 'create_game', max_players: maxPlayers }); }
+    function startSinglePlayer() { log("Requesting SP game..."); appState.mode = 'singleplayer'; UI.updateStatus("Starting..."); Network.sendMessage({ type: 'start_single_player' }); }
+    function joinMultiplayer() { const gameId = DOM.gameIdInput.value.trim().toUpperCase(); if (!gameId || gameId.length !== 6) { UI.updateStatus('Invalid Game ID.', true); return; } log(`Joining game: ${gameId}`); appState.mode = 'multiplayer-client'; UI.updateStatus(`Joining ${gameId}...`); Network.sendMessage({ type: 'join_game', game_id: gameId }); }
+    function hostMultiplayer(maxPlayers) { log(`Hosting MP game (${maxPlayers}p)...`); if (![2, 3, 4].includes(maxPlayers)) { error("Invalid max players:", maxPlayers); UI.updateStatus("Invalid count.", true); return; } appState.mode = 'multiplayer-host'; UI.updateStatus(`Creating ${maxPlayers}p game...`); Network.sendMessage({ type: 'create_game', max_players: maxPlayers }); }
     function leaveGame() { log("Leaving game..."); if (appState.isConnected && appState.currentGameId && appState.localPlayerId) { Network.sendMessage({ type: 'leave_game' }); } resetClientState(true); }
     function sendChatMessage() { const message = DOM.chatInput.value.trim(); if (message && appState.isConnected && appState.currentGameId && appState.localPlayerId) { Network.sendMessage({ type: 'player_chat', message: message }); DOM.chatInput.value = ''; } }
 
     function resetClientState(showMenu = true) {
         log(`Resetting client state. Show Menu: ${showMenu}`); cleanupLoop();
-        appState = { mode: 'menu', localPlayerId: null, maxPlayersInGame: null, currentGameId: null, serverState: null, animationFrameId: null, isConnected: appState.isConnected, renderedPlayerPos: { x: 800, y: 450 }, predictedPlayerPos: { x: 800, y: 450 }, lastServerState: null, previousServerState: null, lastLoopTime: null, lastStateReceiveTime: performance.now(), currentTemp: 18.0, isRaining: false, isDustStorm: false, targetTint: null, targetTintAlpha: 0.0, canvasWidth: 1600, canvasHeight: 900, uiPositions: {}, localPlayerAimState: { lastAimDx: 0, lastAimDy: -1 }, };
+        if (DOM.htmlOverlay) DOM.htmlOverlay.innerHTML = ''; Object.keys(damageTextElements).forEach(id => delete damageTextElements[id]); inactiveDamageTextElements.length = 0; Object.keys(healthBarElements).forEach(id => delete healthBarElements[id]); inactiveHealthBarElements.length = 0; Object.keys(speechBubbleElements).forEach(id => delete speechBubbleElements[id]); inactiveSpeechBubbleElements.length = 0;
+        if (typeof Renderer3D !== 'undefined') Renderer3D.cleanup();
+        appState = { mode: 'menu', localPlayerId: null, maxPlayersInGame: null, currentGameId: null, serverState: null, animationFrameId: null, isConnected: appState.isConnected, renderedPlayerPos: { x: appState.canvasWidth/2 || 800, y: appState.canvasHeight/2 || 450 }, predictedPlayerPos: { x: appState.canvasWidth/2 || 800, y: appState.canvasHeight/2 || 450 }, lastServerState: null, previousServerState: null, lastLoopTime: null, lastStateReceiveTime: performance.now(), currentTemp: 18.0, isRaining: false, isDustStorm: false, targetTint: null, targetTintAlpha: 0.0, canvasWidth: appState.canvasWidth || 1600, canvasHeight: appState.canvasHeight || 900, uiPositions: {}, localPlayerAimState: { lastAimDx: 0, lastAimDy: -1 }, };
         localPlayerMuzzleFlash = { active: false, endTime: 0, aimDx: 0, aimDy: 0 }; localPlayerPushbackAnim = { active: false, endTime: 0, duration: 250 };
         activeSpeechBubbles = {}; activeEnemyBubbles = {}; activeAmmoCasings = []; activeBloodSparkEffects = {};
         if(typeof snake !== 'undefined'){ snake.isActiveFromServer = false; snake.segments = []; }
         DOM.chatLog.innerHTML = ''; DOM.gameCodeDisplay.textContent = '------'; DOM.gameIdInput.value = ''; if(DOM.countdownDiv) DOM.countdownDiv.style.display = 'none'; if(DOM.dayNightIndicator) DOM.dayNightIndicator.style.display = 'none'; if(DOM.gameOverScreen) DOM.gameOverScreen.style.display = 'none';
         const gridContainer = document.getElementById('player-stats-grid'); if (gridContainer) gridContainer.innerHTML = '';
-        if (DOM.htmlOverlay) DOM.htmlOverlay.innerHTML = ''; Object.keys(damageTextElements).forEach(id => delete damageTextElements[id]); inactiveDamageTextElements.length = 0; Object.keys(healthBarElements).forEach(id => delete healthBarElements[id]); inactiveHealthBarElements.length = 0; Object.keys(speechBubbleElements).forEach(id => delete speechBubbleElements[id]); inactiveSpeechBubbleElements.length = 0;
-        if (typeof Renderer3D !== 'undefined') Renderer3D.cleanup();
         if (showMenu) { appState.mode = 'menu'; UI.updateStatus(appState.isConnected ? "Connected." : "Disconnected."); UI.showSection('main-menu-section'); }
     }
 
-    // --- HTML Overlay Update Function ---
     function updateHtmlOverlays(stateToRender, appState) {
         if (!DOM.htmlOverlay || !stateToRender || !appState.uiPositions) return;
         const overlay = DOM.htmlOverlay; const now = performance.now();
@@ -160,78 +156,24 @@ const Game = (() => {
         const allBubbles = { ...activeSpeechBubbles, ...activeEnemyBubbles };
 
         const activeDamageIds = new Set(Object.keys(damageTexts));
-        const activeHealthBarIds = new Set(); // Populate below
+        const activeHealthBarIds = new Set();
         const activeBubbleIds = new Set(); for (const id in allBubbles) { if (now < allBubbles[id].endTime) activeBubbleIds.add(id); }
 
-        // --- Damage Text ---
-        for (const id in damageTexts) {
-             const dtData = damageTexts[id]; const posData = appState.uiPositions[id]; if (!posData) continue;
-             let element = damageTextElements[id]; if (!element) { element = inactiveDamageTextElements.pop() || document.createElement('div'); element.className = 'overlay-element damage-text-overlay'; element.style.position = 'absolute'; element.style.display = 'block'; overlay.appendChild(element); damageTextElements[id] = element; }
-             element.textContent = dtData.text; element.classList.toggle('crit', dtData.is_crit || false);
-             const lifeTime = (dtData.lifetime || 0.75) * 1000; const spawnTime = dtData.spawn_time * 1000; const timeElapsed = now - spawnTime; const lifeProgress = Math.min(1, timeElapsed / lifeTime); const verticalOffset = - (lifeProgress * 50);
-             element.style.left = `${posData.screenX}px`; element.style.top = `${posData.screenY + verticalOffset}px`; element.style.opacity = 1.0 - (lifeProgress * 0.8);
-        }
+        // Damage Text
+        for (const id in damageTexts) { const dtData = damageTexts[id]; const posData = appState.uiPositions[id]; if (!posData) continue; let element = damageTextElements[id]; if (!element) { element = inactiveDamageTextElements.pop() || document.createElement('div'); element.className = 'overlay-element damage-text-overlay'; element.style.position = 'absolute'; element.style.display = 'block'; overlay.appendChild(element); damageTextElements[id] = element; } element.textContent = dtData.text; element.classList.toggle('crit', dtData.is_crit || false); const lifeTime = (dtData.lifetime || 0.75) * 1000; const spawnTime = dtData.spawn_time * 1000; const timeElapsed = now - spawnTime; const lifeProgress = Math.min(1, timeElapsed / lifeTime); const verticalOffset = - (lifeProgress * 50); element.style.left = `${posData.screenX}px`; element.style.top = `${posData.screenY + verticalOffset}px`; element.style.opacity = 1.0 - (lifeProgress * 0.8); }
         for (const id in damageTextElements) { if (!activeDamageIds.has(id)) { const elementToPool = damageTextElements[id]; elementToPool.style.display = 'none'; inactiveDamageTextElements.push(elementToPool); delete damageTextElements[id]; } }
 
-        // --- Health/Armor Bars ---
-        const healthBarOffsetY = -35; const healthBarHeight = 7; const armorBarHeight = 4; const barSpacing = 2; const healthBarWidthFactor = 0.8; const minBarWidth = 30;
-        const healthBarHighColor = getCssVar('--health-bar-high') || '#66bb6a'; const healthBarMediumColor = getCssVar('--health-bar-medium') || '#FFD700';
-        const healthBarLowColor = getCssVar('--health-bar-low') || '#DC143C'; const armorBarColor = getCssVar('--powerup-armor') || '#9e9e9e'; const healthBarBgColor = getCssVar('--health-bar-bg') || '#444';
-
-        const processEntityForHealthBar = (id, entityData) => {
-            if (!entityData || entityData.health <= 0 || entityData.player_status === PLAYER_STATUS_DOWN || entityData.player_status === PLAYER_STATUS_DEAD) return; // Skip dead/down
-            const posData = appState.uiPositions[id]; if (!posData) return; // Skip if no position data
-            activeHealthBarIds.add(id); // Mark as active
-
-            const entityWidth = entityData.width || (id in players ? PLAYER_DEFAULTS.width : 20); const barWidth = Math.max(minBarWidth, entityWidth * healthBarWidthFactor);
-            const maxHealth = entityData.max_health || 100; const healthPercent = Math.max(0, Math.min(1, entityData.health / maxHealth));
-            const currentHealthWidth = barWidth * healthPercent; const armorPercent = Math.max(0, Math.min(1, (entityData.armor || 0) / 100));
-            const currentArmorWidth = barWidth * armorPercent; const showArmor = entityData.armor > 0;
-
-            let barContainer = healthBarElements[id];
-            if (!barContainer) {
-                 barContainer = inactiveHealthBarElements.pop();
-                 if (!barContainer) {
-                     barContainer = document.createElement('div'); barContainer.className = 'overlay-element health-bar-container'; barContainer.style.position = 'absolute';
-                     const healthBg = document.createElement('div'); healthBg.className = 'health-bar-bg'; healthBg.style.height = `${healthBarHeight}px`; healthBg.style.backgroundColor = healthBarBgColor; barContainer.appendChild(healthBg);
-                     const healthFg = document.createElement('div'); healthFg.className = 'health-bar-fg'; healthFg.style.height = `${healthBarHeight}px`; healthFg.style.position = 'absolute'; healthFg.style.top = '0'; healthFg.style.left = '0'; barContainer.appendChild(healthFg);
-                     const armorBg = document.createElement('div'); armorBg.className = 'armor-bar-bg'; armorBg.style.height = `${armorBarHeight}px`; armorBg.style.position = 'absolute'; armorBg.style.top = `${healthBarHeight + barSpacing}px`; armorBg.style.left = '0'; armorBg.style.backgroundColor = healthBarBgColor; barContainer.appendChild(armorBg);
-                     const armorFg = document.createElement('div'); armorFg.className = 'armor-bar-fg'; armorFg.style.height = `${armorBarHeight}px`; armorFg.style.position = 'absolute'; armorFg.style.top = `${healthBarHeight + barSpacing}px`; armorFg.style.left = '0'; armorFg.style.backgroundColor = armorBarColor; barContainer.appendChild(armorFg);
-                     overlay.appendChild(barContainer);
-                 } else { barContainer.style.display = 'block'; }
-                 healthBarElements[id] = barContainer;
-            }
-             barContainer.style.left = `${posData.screenX}px`; barContainer.style.top = `${posData.screenY + healthBarOffsetY}px`; barContainer.style.width = `${barWidth}px`; barContainer.style.transform = 'translateX(-50%)';
-             const healthBgEl = barContainer.children[0]; const healthFgEl = barContainer.children[1]; const armorBgEl = barContainer.children[2]; const armorFgEl = barContainer.children[3];
-             healthBgEl.style.width = `${barWidth}px`; healthFgEl.style.width = `${currentHealthWidth}px`;
-             if (healthPercent > 0.66) healthFgEl.style.backgroundColor = healthBarHighColor; else if (healthPercent > 0.33) healthFgEl.style.backgroundColor = healthBarMediumColor; else healthFgEl.style.backgroundColor = healthBarLowColor;
-             armorBgEl.style.display = showArmor ? 'block' : 'none'; armorFgEl.style.display = showArmor ? 'block' : 'none';
-             if(showArmor) { armorBgEl.style.width = `${barWidth}px`; armorFgEl.style.width = `${currentArmorWidth}px`; }
-        };
-
-        Object.entries(players).forEach(([id, data]) => processEntityForHealthBar(id, data));
-        Object.entries(enemies).forEach(([id, data]) => processEntityForHealthBar(id, data));
-
+        // Health/Armor Bars
+        const healthBarOffsetY = -35; const healthBarHeight = 7; const armorBarHeight = 4; const barSpacing = 2; const healthBarWidthFactor = 0.8; const minBarWidth = 30; const healthBarHighColor = getCssVar('--health-bar-high') || '#66bb6a'; const healthBarMediumColor = getCssVar('--health-bar-medium') || '#FFD700'; const healthBarLowColor = getCssVar('--health-bar-low') || '#DC143C'; const armorBarColor = getCssVar('--powerup-armor') || '#9e9e9e'; const healthBarBgColor = getCssVar('--health-bar-bg') || '#444';
+        const processEntityForHealthBar = (id, entityData) => { if (!entityData || entityData.health <= 0 || entityData.player_status === PLAYER_STATUS_DOWN || entityData.player_status === PLAYER_STATUS_DEAD) return; const posData = appState.uiPositions[id]; if (!posData) return; activeHealthBarIds.add(id); const entityWidth = entityData.width || (id in players ? PLAYER_DEFAULTS.width : 20); const barWidth = Math.max(minBarWidth, entityWidth * healthBarWidthFactor); const maxHealth = entityData.max_health || 100; const healthPercent = Math.max(0, Math.min(1, entityData.health / maxHealth)); const currentHealthWidth = barWidth * healthPercent; const armorPercent = Math.max(0, Math.min(1, (entityData.armor || 0) / 100)); const currentArmorWidth = barWidth * armorPercent; const showArmor = entityData.armor > 0; let barContainer = healthBarElements[id]; if (!barContainer) { barContainer = inactiveHealthBarElements.pop(); if (!barContainer) { barContainer = document.createElement('div'); barContainer.className = 'overlay-element health-bar-container'; barContainer.style.position = 'absolute'; const healthBg = document.createElement('div'); healthBg.className = 'health-bar-bg'; healthBg.style.height = `${healthBarHeight}px`; healthBg.style.backgroundColor = healthBarBgColor; barContainer.appendChild(healthBg); const healthFg = document.createElement('div'); healthFg.className = 'health-bar-fg'; healthFg.style.height = `${healthBarHeight}px`; healthFg.style.position = 'absolute'; healthFg.style.top = '0'; healthFg.style.left = '0'; barContainer.appendChild(healthFg); const armorBg = document.createElement('div'); armorBg.className = 'armor-bar-bg'; armorBg.style.height = `${armorBarHeight}px`; armorBg.style.position = 'absolute'; armorBg.style.top = `${healthBarHeight + barSpacing}px`; armorBg.style.left = '0'; armorBg.style.backgroundColor = healthBarBgColor; barContainer.appendChild(armorBg); const armorFg = document.createElement('div'); armorFg.className = 'armor-bar-fg'; armorFg.style.height = `${armorBarHeight}px`; armorFg.style.position = 'absolute'; armorFg.style.top = `${healthBarHeight + barSpacing}px`; armorFg.style.left = '0'; armorFg.style.backgroundColor = armorBarColor; barContainer.appendChild(armorFg); overlay.appendChild(barContainer); } else { barContainer.style.display = 'block'; } healthBarElements[id] = barContainer; } barContainer.style.left = `${posData.screenX}px`; barContainer.style.top = `${posData.screenY + healthBarOffsetY}px`; barContainer.style.width = `${barWidth}px`; barContainer.style.transform = 'translateX(-50%)'; const healthBgEl = barContainer.children[0]; const healthFgEl = barContainer.children[1]; const armorBgEl = barContainer.children[2]; const armorFgEl = barContainer.children[3]; healthBgEl.style.width = `${barWidth}px`; healthFgEl.style.width = `${currentHealthWidth}px`; if (healthPercent > 0.66) healthFgEl.style.backgroundColor = healthBarHighColor; else if (healthPercent > 0.33) healthFgEl.style.backgroundColor = healthBarMediumColor; else healthFgEl.style.backgroundColor = healthBarLowColor; armorBgEl.style.display = showArmor ? 'block' : 'none'; armorFgEl.style.display = showArmor ? 'block' : 'none'; if(showArmor) { armorBgEl.style.width = `${barWidth}px`; armorFgEl.style.width = `${currentArmorWidth}px`; } };
+        Object.entries(players).forEach(([id, data]) => processEntityForHealthBar(id, data)); Object.entries(enemies).forEach(([id, data]) => processEntityForHealthBar(id, data));
         for (const id in healthBarElements) { if (!activeHealthBarIds.has(id)) { const elementToPool = healthBarElements[id]; elementToPool.style.display = 'none'; inactiveHealthBarElements.push(elementToPool); delete healthBarElements[id]; } }
 
-        // --- Speech Bubbles ---
-        const playerSpeechBubbleBg = "rgba(0, 0, 0, 0.7)"; const playerSpeechBubbleColor = "#d0d8d7";
-        const enemySpeechBubbleBg = "rgba(70, 0, 0, 0.7)"; const enemySpeechBubbleColor = "#FFAAAA";
-        for (const id in allBubbles) {
-            const bubbleData = allBubbles[id]; if (now >= bubbleData.endTime || !activeBubbleIds.has(id)) continue; const posData = appState.uiPositions[id]; if (!posData) continue;
-            let element = speechBubbleElements[id]; if (!element) { element = inactiveSpeechBubbleElements.pop() || document.createElement('div'); element.style.position='absolute'; element.style.padding='5px 8px'; element.style.borderRadius='5px'; element.style.fontSize='13px'; element.style.textAlign='center'; element.style.maxWidth='150px'; element.style.wordWrap='break-word'; element.className='overlay-element speech-bubble'; overlay.appendChild(element); speechBubbleElements[id] = element; }
-            element.textContent = bubbleData.text; element.style.display = 'block';
-            const isPlayer = !!stateToRender.players[id]; element.style.backgroundColor = isPlayer ? playerSpeechBubbleBg : enemySpeechBubbleBg; element.style.color = isPlayer ? playerSpeechBubbleColor : enemySpeechBubbleColor;
-            const healthBarExists = activeHealthBarIds.has(id);
-            const armorVisible = healthBarExists && (players[id]?.armor > 0 || enemies[id]?.armor > 0); // Simplified check
-            const baseOffsetY = -45;
-            const healthBarTotalHeight = healthBarExists ? (healthBarHeight + (armorVisible ? armorBarHeight + barSpacing : 0) + barSpacing) : 0;
-            const bubbleOffsetY = baseOffsetY - healthBarTotalHeight;
-            element.style.left = `${posData.screenX}px`; element.style.top = `${posData.screenY + bubbleOffsetY}px`; element.style.transform = 'translateX(-50%)';
-        }
+        // Speech Bubbles
+        const playerSpeechBubbleBg = "rgba(0, 0, 0, 0.7)"; const playerSpeechBubbleColor = "#d0d8d7"; const enemySpeechBubbleBg = "rgba(70, 0, 0, 0.7)"; const enemySpeechBubbleColor = "#FFAAAA";
+        for (const id in allBubbles) { const bubbleData = allBubbles[id]; if (!activeBubbleIds.has(id)) continue; const posData = appState.uiPositions[id]; if (!posData) continue; let element = speechBubbleElements[id]; if (!element) { element = inactiveSpeechBubbleElements.pop() || document.createElement('div'); element.style.position='absolute'; element.style.padding='5px 8px'; element.style.borderRadius='5px'; element.style.fontSize='13px'; element.style.textAlign='center'; element.style.maxWidth='150px'; element.style.wordWrap='break-word'; element.className='overlay-element speech-bubble'; overlay.appendChild(element); speechBubbleElements[id] = element; } element.textContent = bubbleData.text; element.style.display = 'block'; const isPlayer = !!stateToRender.players[id]; element.style.backgroundColor = isPlayer ? playerSpeechBubbleBg : enemySpeechBubbleBg; element.style.color = isPlayer ? playerSpeechBubbleColor : enemySpeechBubbleColor; const healthBarExists = activeHealthBarIds.has(id); const armorVisible = healthBarExists && (players[id]?.armor > 0 || enemies[id]?.armor > 0); const baseOffsetY = -45; const healthBarTotalHeight = healthBarExists ? (healthBarHeight + (armorVisible ? armorBarHeight + barSpacing : 0) + barSpacing) : 0; const bubbleOffsetY = baseOffsetY - healthBarTotalHeight; element.style.left = `${posData.screenX}px`; element.style.top = `${posData.screenY + bubbleOffsetY}px`; element.style.transform = 'translateX(-50%)'; }
         for (const id in speechBubbleElements) { if (!activeBubbleIds.has(id)) { const elementToPool = speechBubbleElements[id]; elementToPool.style.display = 'none'; inactiveSpeechBubbleElements.push(elementToPool); delete speechBubbleElements[id]; } }
     }
-
 
     // --- Game Loop ---
     function gameLoop(currentTime) {
@@ -251,7 +193,7 @@ const Game = (() => {
         activeAmmoCasings.forEach(c => { c.vy += c.gravity * deltaTime; c.x += c.vx * deltaTime; c.y += c.vy * deltaTime; c.rotation += c.rotationSpeed * deltaTime; });
 
         if (appState.serverState?.status === 'active') {
-            if (appState.mode === 'singleplayer') { const pState = appState.serverState?.players?.[appState.localPlayerId]; if (pState) { appState.renderedPlayerPos.x = pState.x; appState.renderedPlayerPos.y = pState.y; } }
+            if (appState.mode === 'singleplayer') { const pState = appState.serverState?.players?.[appState.localPlayerId]; if (pState && typeof pState.x === 'number') { appState.renderedPlayerPos.x = pState.x; appState.renderedPlayerPos.y = pState.y; }} // Added checks
             else { updatePredictedPosition(deltaTime); reconcileWithServer(); }
         }
 
@@ -272,86 +214,26 @@ const Game = (() => {
 
     function startGameLoop() { if (appState.mode === 'menu' || appState.animationFrameId) return; if (!appState.serverState && appState.mode !== 'singleplayer') { log("Delaying loop: Waiting for state."); return; } Input.setup(); log("Starting game loop..."); appState.lastLoopTime = null; appState.animationFrameId = requestAnimationFrame(gameLoop); }
     function getInterpolatedState(renderTime) {
-        const INTERPOLATION_BUFFER_MS = 100;
-        const serverState = appState.serverState;
-        const lastServerState = appState.lastServerState;
-
-        if (!serverState || !lastServerState || !serverState.timestamp || !lastServerState.timestamp) {
-            return serverState; // Return latest known state if interpolation isn't possible
-        }
-
-        const serverTime = serverState.timestamp * 1000;
-        const lastServerTime = lastServerState.timestamp * 1000;
-
-        if (serverTime <= lastServerTime) {
-            return serverState; // New state isn't newer, return it directly
-        }
-
-        const renderTargetTime = renderTime - INTERPOLATION_BUFFER_MS;
-        const timeBetweenStates = serverTime - lastServerTime;
-        const timeSinceLastState = renderTargetTime - lastServerTime;
-        let t = Math.max(0, Math.min(1, timeSinceLastState / timeBetweenStates));
-
-        // Create a deep copy to avoid modifying the original state objects
+        const INTERPOLATION_BUFFER_MS = 100; const serverState = appState.serverState; const lastServerState = appState.lastServerState;
+        if (!serverState || !lastServerState || !serverState.timestamp || !lastServerState.timestamp) return serverState;
+        const serverTime = serverState.timestamp * 1000; const lastServerTime = lastServerState.timestamp * 1000;
+        if (serverTime <= lastServerTime) return serverState;
+        const renderTargetTime = renderTime - INTERPOLATION_BUFFER_MS; const timeBetweenStates = serverTime - lastServerTime;
+        const timeSinceLastState = renderTargetTime - lastServerTime; let t = Math.max(0, Math.min(1, timeSinceLastState / timeBetweenStates));
         let interpolatedState = JSON.parse(JSON.stringify(serverState));
-
-        // Interpolate Players
-        if (interpolatedState.players) {
-            for (const pId in interpolatedState.players) {
-                const currentP = serverState.players[pId];
-                const lastP = lastServerState.players?.[pId];
-                if (pId === appState.localPlayerId && appState.mode !== 'singleplayer') {
-                    interpolatedState.players[pId].x = appState.renderedPlayerPos.x;
-                    interpolatedState.players[pId].y = appState.renderedPlayerPos.y;
-                } else if (lastP && typeof currentP.x === 'number' && typeof lastP.x === 'number') {
-                    interpolatedState.players[pId].x = lerp(lastP.x, currentP.x, t);
-                    interpolatedState.players[pId].y = lerp(lastP.y, currentP.y, t);
-                }
-            }
-        }
-
-        // Interpolate Enemies
-        if (interpolatedState.enemies) {
-            for (const eId in interpolatedState.enemies) {
-                const currentE = serverState.enemies[eId];
-                const lastE = lastServerState.enemies?.[eId];
-                // Corrected Condition: Check lastE, types, AND current health before interpolating
-                if (lastE && typeof currentE.x === 'number' && typeof lastE.x === 'number' && currentE.health > 0) {
-                    interpolatedState.enemies[eId].x = lerp(lastE.x, currentE.x, t);
-                    interpolatedState.enemies[eId].y = lerp(lastE.y, currentE.y, t);
-                }
-            }
-        }
-
-        // Interpolate Bullets
-        if (interpolatedState.bullets) {
-            for (const bId in interpolatedState.bullets) {
-                const currentB = serverState.bullets[bId];
-                const lastB = lastServerState.bullets?.[bId];
-                if (lastB && typeof currentB.x === 'number' && typeof lastB.x === 'number') {
-                    interpolatedState.bullets[bId].x = lerp(lastB.x, currentB.x, t);
-                    interpolatedState.bullets[bId].y = lerp(lastB.y, currentB.y, t);
-                }
-            }
-        }
-
-        // Non-interpolated data
-        interpolatedState.powerups = serverState.powerups;
-        interpolatedState.damage_texts = serverState.damage_texts;
+        if (interpolatedState.players) { for (const pId in interpolatedState.players) { const currentP = serverState.players[pId]; const lastP = lastServerState.players?.[pId]; if (pId === appState.localPlayerId && appState.mode !== 'singleplayer') { interpolatedState.players[pId].x = appState.renderedPlayerPos.x; interpolatedState.players[pId].y = appState.renderedPlayerPos.y; } else if (lastP && typeof currentP.x === 'number' && typeof lastP.x === 'number' && typeof currentP.y === 'number' && typeof lastP.y === 'number') { interpolatedState.players[pId].x = lerp(lastP.x, currentP.x, t); interpolatedState.players[pId].y = lerp(lastP.y, currentP.y, t); } } } // Added y check
+        if (interpolatedState.enemies) { for (const eId in interpolatedState.enemies) { const currentE = serverState.enemies[eId]; const lastE = lastServerState.enemies?.[eId]; if (lastE && typeof currentE.x === 'number' && typeof lastE.x === 'number' && typeof currentE.y === 'number' && typeof lastE.y === 'number' && currentE.health > 0) { interpolatedState.enemies[eId].x = lerp(lastE.x, currentE.x, t); interpolatedState.enemies[eId].y = lerp(lastE.y, currentE.y, t); } } } // Fixed typo & added y check
+        if (interpolatedState.bullets) { for (const bId in interpolatedState.bullets) { const currentB = serverState.bullets[bId]; const lastB = lastServerState.bullets?.[bId]; if (lastB && typeof currentB.x === 'number' && typeof lastB.x === 'number' && typeof currentB.y === 'number' && typeof lastB.y === 'number') { interpolatedState.bullets[bId].x = lerp(lastB.x, currentB.x, t); interpolatedState.bullets[bId].y = lerp(lastB.y, currentB.y, t); } } } // Added y check
+        interpolatedState.powerups = serverState.powerups; interpolatedState.damage_texts = serverState.damage_texts;
         return interpolatedState;
-    }
+     }
     function cleanupLoop() { if (appState.animationFrameId) { cancelAnimationFrame(appState.animationFrameId); appState.animationFrameId = null; log("Game loop stopped."); } Input.cleanup(); appState.lastLoopTime = null; }
     function updatePredictedPosition(deltaTime) { if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return; const moveVector = Input.getMovementInputVector(); const playerState = appState.serverState.players[appState.localPlayerId]; const playerSpeed = playerState?.speed ?? PLAYER_DEFAULTS.base_speed; if (moveVector.dx !== 0 || moveVector.dy !== 0) { appState.predictedPlayerPos.x += moveVector.dx * playerSpeed * deltaTime; appState.predictedPlayerPos.y += moveVector.dy * playerSpeed * deltaTime; } const w_half = (playerState?.width ?? PLAYER_DEFAULTS.width) / 2; const h_half = (playerState?.height ?? PLAYER_DEFAULTS.height) / 2; appState.predictedPlayerPos.x = Math.max(w_half, Math.min(appState.canvasWidth - w_half, appState.predictedPlayerPos.x)); appState.predictedPlayerPos.y = Math.max(h_half, Math.min(appState.canvasHeight - h_half, appState.predictedPlayerPos.y)); }
     function reconcileWithServer() { if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return; const serverPos = appState.serverState.players[appState.localPlayerId]; if (typeof serverPos.x !== 'number' || typeof serverPos.y !== 'number') return; const predictedPos = appState.predictedPlayerPos; const renderedPos = appState.renderedPlayerPos; const dist = distance(predictedPos.x, predictedPos.y, serverPos.x, serverPos.y); const snapThreshold = parseFloat(getCssVar('--reconciliation-threshold')) || 35; const renderLerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.15; if (dist > snapThreshold) { predictedPos.x = serverPos.x; predictedPos.y = serverPos.y; renderedPos.x = serverPos.x; renderedPos.y = serverPos.y; } else { renderedPos.x = lerp(renderedPos.x, predictedPos.x, renderLerpFactor); renderedPos.y = lerp(renderedPos.y, predictedPos.y, renderLerpFactor); } }
 
-    function initListeners() { log("Initializing button listeners..."); if (DOM.singlePlayerBtn) DOM.singlePlayerBtn.onclick = () => { SoundManager.init(); startSinglePlayer(); }; const hostHandler = (maxPlayers) => { SoundManager.init(); hostMultiplayer(maxPlayers); }; if (DOM.hostGameBtn2) DOM.hostGameBtn2.onclick = () => hostHandler(2); if (DOM.hostGameBtn3) DOM.hostGameBtn3.onclick = () => hostHandler(3); if (DOM.hostGameBtn4) DOM.hostGameBtn4.onclick = () => hostHandler(4); if (DOM.joinGameSubmitBtn) DOM.joinGameSubmitBtn.onclick = () => { SoundManager.init(); joinMultiplayer(); }; if (DOM.multiplayerBtn) DOM.multiplayerBtn.onclick = () => UI.showSection('multiplayer-menu-section'); if (DOM.showJoinUIBtn) DOM.showJoinUIBtn.onclick = () => UI.showSection('join-code-section'); if (DOM.cancelHostBtn) DOM.cancelHostBtn.onclick = leaveGame; if (DOM.sendChatBtn) DOM.sendChatBtn.onclick = sendChatMessage; if (DOM.leaveGameBtn) DOM.leaveGameBtn.onclick = leaveGame; if (DOM.gameOverBackBtn) DOM.gameOverBackBtn.onclick = () => resetClientState(true); DOM.gameContainer.querySelectorAll('.back-button').forEach(btn => { const onclickAttr = btn.getAttribute('onclick'); if (onclickAttr && onclickAttr.startsWith("UI.showSection")) { const targetMatch = onclickAttr.match(/'([^']+)'/); if (targetMatch && targetMatch[1]) { const targetId = targetMatch[1]; btn.onclick = (e) => { e.preventDefault(); UI.showSection(targetId); }; } else { log(`Warn: Could not parse target from back button: ${onclickAttr}`); } } else { log("Warn: Back button missing standard onclick:", btn); } }); log("Finished initializing button listeners."); }
+    function initListeners() { log("Initializing button listeners..."); if (DOM.singlePlayerBtn) DOM.singlePlayerBtn.onclick = () => { SoundManager.init(); startSinglePlayer(); }; const hostHandler = (maxPlayers) => { SoundManager.init(); hostMultiplayer(maxPlayers); }; if (DOM.hostGameBtn2) DOM.hostGameBtn2.onclick = () => hostHandler(2); if (DOM.hostGameBtn3) DOM.hostGameBtn3.onclick = () => hostHandler(3); if (DOM.hostGameBtn4) DOM.hostGameBtn4.onclick = () => hostHandler(4); if (DOM.joinGameSubmitBtn) DOM.joinGameSubmitBtn.onclick = () => { SoundManager.init(); joinMultiplayer(); }; if (DOM.multiplayerBtn) DOM.multiplayerBtn.onclick = () => UI.showSection('multiplayer-menu-section'); if (DOM.showJoinUIBtn) DOM.showJoinUIBtn.onclick = () => UI.showSection('join-code-section'); if (DOM.cancelHostBtn) DOM.cancelHostBtn.onclick = leaveGame; if (DOM.sendChatBtn) DOM.sendChatBtn.onclick = sendChatMessage; if (DOM.leaveGameBtn) DOM.leaveGameBtn.onclick = leaveGame; if (DOM.gameOverBackBtn) DOM.gameOverBackBtn.onclick = () => resetClientState(true); DOM.gameContainer.querySelectorAll('.back-button').forEach(btn => { const targetId = btn.dataset.target; if (targetId && (DOM[targetId] || document.getElementById(targetId))) { btn.onclick = (e) => { e.preventDefault(); UI.showSection(targetId); }; } else { log(`Warn: Back button missing or invalid data-target: ${targetId}`, btn); } }); log("Finished initializing button listeners."); }
 
-    // --- Export necessary functions from Game module ---
-    return {
-        startSinglePlayer, joinMultiplayer, hostMultiplayer, leaveGame, sendChatMessage,
-        resetClientState, startGameLoop, // Ensure startGameLoop is exported
-        cleanupLoop, getInterpolatedState, initListeners
-    };
+    return { startSinglePlayer, joinMultiplayer, hostMultiplayer, leaveGame, sendChatMessage, resetClientState, startGameLoop, cleanupLoop, getInterpolatedState, initListeners };
 })();
 
 // --- Global Server Message Handler ---
@@ -363,21 +245,21 @@ function handleServerMessage(event) {
             case 'game_created': case 'game_joined': case 'sp_game_started':
                 log(`Received '${data.type}'`); appState.localPlayerId = data.player_id; appState.currentGameId = data.game_id; appState.serverState = data.initial_state; appState.maxPlayersInGame = data.max_players || appState.serverState?.max_players || (data.type === 'sp_game_started' ? 1 : '?');
                 if (data.initial_state && typeof data.initial_state.canvas_width === 'number') { appState.canvasWidth = data.initial_state.canvas_width; appState.canvasHeight = data.initial_state.canvas_height; } else { error(`Initial state ('${data.type}') missing canvas dimensions!`); }
-                const initialPlayer = appState.serverState?.players[appState.localPlayerId]; if (initialPlayer) { appState.predictedPlayerPos = { x: initialPlayer.x, y: initialPlayer.y }; appState.renderedPlayerPos = { x: initialPlayer.x, y: initialPlayer.y }; } else { appState.predictedPlayerPos = { x: appState.canvasWidth / 2, y: appState.canvasHeight / 2 }; appState.renderedPlayerPos = { x: appState.canvasWidth / 2, y: appState.canvasHeight / 2 }; } appState.localPlayerAimState = { lastAimDx: 0, lastAimDy: -1 };
+                const initialPlayer = appState.serverState?.players[appState.localPlayerId]; if (initialPlayer && typeof initialPlayer.x === 'number') { appState.predictedPlayerPos = { x: initialPlayer.x, y: initialPlayer.y }; appState.renderedPlayerPos = { x: initialPlayer.x, y: initialPlayer.y }; } else { appState.predictedPlayerPos = { x: appState.canvasWidth / 2, y: appState.canvasHeight / 2 }; appState.renderedPlayerPos = { x: appState.canvasWidth / 2, y: appState.canvasHeight / 2 }; } appState.localPlayerAimState = { lastAimDx: 0, lastAimDy: -1 };
                 if (data.type === 'game_created') { DOM.gameCodeDisplay.textContent = appState.currentGameId || 'ERROR'; const currentP = Object.keys(appState.serverState?.players || {}).length; DOM.waitingMessage.textContent = `Waiting... (${currentP}/${appState.maxPlayersInGame})`; UI.updateStatus(`Hosted: ${appState.currentGameId}`); UI.showSection('host-wait-section'); }
-                else { UI.updateStatus(data.type === 'game_joined' ? `Joined ${appState.currentGameId}.` : "SP Started!"); UI.showSection('game-area'); if (appState.serverState) { UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState); UI.updateDayNight(appState.serverState); UI.updateEnvironmentDisplay(); } Game.startGameLoop(); } // Use exported function
+                else { UI.updateStatus(data.type === 'game_joined' ? `Joined ${appState.currentGameId}.` : "SP Started!"); UI.showSection('game-area'); if (appState.serverState) { UI.updateHUD(appState.serverState); UI.updateCountdown(appState.serverState); UI.updateDayNight(appState.serverState); UI.updateEnvironmentDisplay(); } Game.startGameLoop(); }
                 break;
             case 'game_state':
                 if (appState.mode === 'menu') return;
                 const previousStatus = appState.serverState?.status; const previousPlayerState = appState.serverState?.players?.[appState.localPlayerId];
                 appState.previousServerState = appState.lastServerState; appState.lastServerState = appState.serverState; appState.serverState = data.state;
                 const newState = appState.serverState; const currentPlayerState = newState?.players?.[appState.localPlayerId]; appState.lastStateReceiveTime = performance.now();
-                if (newState && typeof newState.canvas_width === 'number' && (appState.canvasWidth !== newState.canvas_width || appState.canvasHeight !== newState.canvas_height)) { appState.canvasWidth = newState.canvas_width; appState.canvasHeight = newState.canvas_height; /* Renderer handles resize internally */ }
+                if (newState && typeof newState.canvas_width === 'number' && (appState.canvasWidth !== newState.canvas_width || appState.canvasHeight !== newState.canvas_height)) { appState.canvasWidth = newState.canvas_width; appState.canvasHeight = newState.canvas_height; }
                 appState.currentTemp = newState.current_temperature ?? 18.0; appState.isRaining = newState.is_raining ?? false; appState.isDustStorm = newState.is_dust_storm ?? false;
                 const serverSnakeState = newState.snake_state; if (serverSnakeState && typeof snake !== 'undefined') { snake.isActiveFromServer = serverSnakeState.active; snake.serverHeadX = serverSnakeState.head_x; snake.serverHeadY = serverSnakeState.head_y; snake.serverBaseY = serverSnakeState.base_y; if (snake.isActiveFromServer && snake.segments.length === 0) { snake.segments = [{ x: snake.serverHeadX, y: snake.serverHeadY, time: performance.now() }]; } else if (!snake.isActiveFromServer) { snake.segments = []; } } else if (typeof snake !== 'undefined') { snake.isActiveFromServer = false; snake.segments = []; }
                 if (newState.enemies) { const now = performance.now(); const sparkDuration = 300; for (const enemyId in newState.enemies) { const enemy = newState.enemies[enemyId]; const previousEnemy = appState.lastServerState?.enemies?.[enemyId]; if (enemy && enemy.last_damage_time && (!previousEnemy || enemy.last_damage_time > (previousEnemy.last_damage_time || 0))) { const serverHitTimeMs = enemy.last_damage_time * 1000; if (now - serverHitTimeMs < 250) activeBloodSparkEffects[enemyId] = now + sparkDuration; } } for (const enemyId in activeBloodSparkEffects) { if (now >= activeBloodSparkEffects[enemyId]) delete activeBloodSparkEffects[enemyId]; } }
-                let localPlayerDamagedThisTick = false; if (previousPlayerState && currentPlayerState && typeof currentPlayerState.health === 'number' && typeof previousPlayerState.health === 'number' && currentPlayerState.health < previousPlayerState.health) { const damageTaken = previousPlayerState.health - currentPlayerState.health; const baseMag = 5; const dmgScale = 0.18; const maxMag = 18; const shakeMagnitude = Math.min(maxMag, baseMag + damageTaken * dmgScale); if (typeof Renderer3D !== 'undefined') Renderer3D.triggerShake(shakeMagnitude, 250); localPlayerDamagedThisTick = true; } if (localPlayerDamagedThisTick) SoundManager.playSound('damage');
-                if (currentPlayerState?.trigger_snake_bite_shake_this_tick) { const shakeMag = 15.0; const shakeDur = 400.0; if(typeof Renderer3D !== 'undefined') Renderer3D.triggerShake(shakeMag, shakeDur); }
+                let localPlayerDamagedThisTick = false; if (previousPlayerState && currentPlayerState && typeof currentPlayerState.health === 'number' && typeof previousPlayerState.health === 'number' && currentPlayerState.health < previousPlayerState.health) { const damageTaken = previousPlayerState.health - currentPlayerState.health; const baseMag = 5; const dmgScale = 0.18; const maxMag = 18; const shakeMagnitude = Math.min(maxMag, baseMag + damageTaken * dmgScale); if (Renderer3D?.triggerShake) Renderer3D.triggerShake(shakeMagnitude, 250); else console.warn("Renderer3D or triggerShake missing on damage"); localPlayerDamagedThisTick = true; } if (localPlayerDamagedThisTick) SoundManager.playSound('damage');
+                if (currentPlayerState?.trigger_snake_bite_shake_this_tick) { const shakeMag = 15.0; const shakeDur = 400.0; if(Renderer3D?.triggerShake) Renderer3D.triggerShake(shakeMag, shakeDur); else console.warn("Renderer3D or triggerShake missing on snake bite"); }
                 if (newState.status !== previousStatus) { log(`[Client State Change] ${previousStatus || 'null'} -> ${newState.status}`); if ((newState.status === 'countdown' || newState.status === 'active') && previousStatus !== 'active' && previousStatus !== 'countdown') { UI.updateStatus(newState.status === 'countdown' ? "Countdown..." : "Active!"); UI.showSection('game-area'); if (!appState.animationFrameId) Game.startGameLoop(); } else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host' && previousStatus !== 'waiting') { UI.updateStatus("Waiting lobby.", true); UI.showSection('host-wait-section'); const pCountWaiting = Object.keys(newState.players || {}).length; DOM.waitingMessage.textContent = `Waiting... (${pCountWaiting}/${appState.maxPlayersInGame || '?'})`; Game.cleanupLoop(); } else if (newState.status === 'finished' && previousStatus !== 'finished') { log("-> Game Over via 'finished' status."); Game.cleanupLoop(); UI.showGameOver(newState); } }
                 if (appState.animationFrameId && (newState.status === 'countdown' || newState.status === 'active')) { UI.updateHUD(newState); UI.updateCountdown(newState); UI.updateDayNight(newState); UI.updateEnvironmentDisplay(); } else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') { const pCount = Object.keys(newState.players || {}).length; DOM.waitingMessage.textContent = `Waiting... (${pCount}/${appState.maxPlayersInGame || '?'})`; }
                 const speakerId = newState.enemy_speaker_id; const speechText = newState.enemy_speech_text; if (speakerId && speechText) activeEnemyBubbles[speakerId] = { text: speechText.substring(0, 50), endTime: performance.now() + 3000 };
@@ -394,7 +276,7 @@ function handleServerMessage(event) {
 document.addEventListener('DOMContentLoaded', () => {
     log("DOM loaded.");
     if (typeof Renderer3D === 'undefined') { error("CRITICAL: Renderer3D not defined!"); UI.updateStatus("Init Error: Renderer failed.", true); return; }
-    if (DOM.canvasContainer) { if (!Renderer3D.init(DOM.canvasContainer)) { error("Renderer3D initialization failed!"); UI.updateStatus("Init Error: Graphics failed.", true); return; } log("Renderer3D initialized."); }
+    if (DOM.canvasContainer) { if (!Renderer3D.init(DOM.canvasContainer, appState.canvasWidth, appState.canvasHeight)) { error("Renderer3D initialization failed!"); UI.updateStatus("Init Error: Graphics failed.", true); return; } log("Renderer3D initialized."); }
     else { error("Canvas container not found!"); UI.updateStatus("Init Error: UI missing.", true); return; }
     try { Game.initListeners(); log("Button listeners initialized."); }
     catch(listenerError) { error("Error initializing listeners:", listenerError); UI.updateStatus("Init Error: Controls failed.", true); return; }
