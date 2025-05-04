@@ -2,57 +2,129 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SUCH IS L1FE - Kelly Gang Survival</title>
-    <link rel="preload" href="css/style.css" as="style">
-    <link rel="stylesheet" href="css/style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Link to the NEW style.css -->
+    <link rel="stylesheet" href="style.css">
+    <!-- Favicon link (optional, prevents 404 error if you have one) -->
+    <!-- <link rel="icon" type="image/x-icon" href="/favicon.ico"> -->
 </head>
 <body>
-    <div id="loading-screen" class="active animate-fade-in">
-        <h1>KELLY GANG</h1>
-        <h2>AUSTRALIA, 1878</h2>
-        <div class="loader-spinner"></div>
-        <p>Loading... Such is Life.</p>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="active">
+        <div class="loading-content">
+            <h1 class="loading-title">KELLY GANG</h1>
+            <p class="loading-subtitle">AUSTRALIA, 1878</p>
+            <div class="loader-spinner"></div>
+            <p class="loading-text">Loading... Such is Life.</p>
+        </div>
     </div>
+
+    <!-- Main Game Container -->
     <div id="game-container">
-        <header id="top-bar">SUCH IS LIFE</header>
-        <div id="game-status" role="status" aria-live="polite">Initializing...</div>
-        <nav id="menu-area">
-            <section id="main-menu-section" class="active animate-slide-in">
-                <button class="button" aria-label="Start Single Player Game" tabindex="0">Single Player</button>
-                <button class="button" aria-label="Start Multiplayer Game" tabindex="0">Multiplayer</button>
+        <!-- Top Bar -->
+        <header id="top-bar">
+            <h1>SUCH IS LIFE</h1>
+        </header>
+
+        <!-- Status Message Area -->
+        <div id="game-status" role="status">Initializing...</div>
+
+        <!-- Menu Area (Initially Visible) -->
+        <main id="menu-area">
+            <section id="main-menu-section" class="menu-section active">
+                <h2>Main Menu</h2>
+                <button id="singlePlayerBtn" class="button button-primary">Single Player</button>
+                <button id="multiplayerBtn" class="button button-primary">Multiplayer</button>
             </section>
-        </nav>
-        <main id="game-area" hidden>
+
+            <section id="multiplayer-menu-section" class="menu-section">
+                <h2>Multiplayer</h2>
+                <p>Choose number of players:</p>
+                <button id="hostGameBtn2" class="button">Host 2 Player Game</button>
+                <button id="hostGameBtn3" class="button">Host 3 Player Game</button>
+                <button id="hostGameBtn4" class="button">Host 4 Player Game</button>
+                <hr class="menu-divider">
+                <button id="showJoinUIBtn" class="button">Join Game (Enter Code)</button>
+                <button class="button button-back" data-target="main-menu-section">Back</button>
+            </section>
+
+            <section id="host-wait-section" class="menu-section">
+                <h2>Hosting Game</h2>
+                <p>Share this code with your mate:</p>
+                <div id="game-code-display" class="code-display">------</div>
+                <p id="waiting-message">Waiting for players...</p>
+                <button id="cancelHostBtn" class="button button-danger">Cancel Hosting</button>
+            </section>
+
+            <section id="join-code-section" class="menu-section">
+                <h2>Join Game</h2>
+                <p>Enter the 6-character game code:</p>
+                <input type="text" id="gameIdInput" class="input-code" placeholder="ABCDEF" maxlength="6">
+                <button id="joinGameSubmitBtn" class="button button-primary">Join Game</button>
+                <button class="button button-back" data-target="multiplayer-menu-section">Back</button>
+            </section>
+        </main>
+
+        <!-- Game Area (Initially Hidden) -->
+        <div id="game-area">
+            <!-- Left Panel -->
             <aside id="left-panel">
-                <div id="player-stats-grid" class="animate-fade-in"></div>
-                <div id="environment-info"></div>
-                <div id="chat-area">
-                    <div id="chat-log" aria-live="polite"></div>
-                    <input id="chat-input" type="text" aria-label="Chat message input" tabindex="0">
-                    <button id="chat-send" aria-label="Send chat message" tabindex="0">Send</button>
+                <div class="panel-group panel-group-top">
+                    <div id="player-stats-grid">
+                        <div class="stats-box placeholder">Loading Stats...</div>
+                    </div>
+                    <div id="environment-info">
+                      <div id="day-night-indicator">Day</div>
+                      <div id="temperature-indicator">--°C</div>
+                    </div>
+                </div>
+                <div class="panel-group panel-group-bottom">
+                    <div id="chat-area">
+                      <div id="chat-log" role="log">
+                      </div>
+                      <div class="chat-input-area">
+                        <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="100">
+                        <button id="sendChatBtn" class="button">Send</button>
+                      </div>
+                    </div>
+                    <div class="game-controls">
+                      <button id="muteBtn" class="button button-secondary">Mute</button>
+                      <button id="leaveGameBtn" class="button button-danger">Leave Game</button>
+                    </div>
                 </div>
             </aside>
+
+            <!-- Canvas Container -->
             <div id="canvas-container">
-                <canvas id="gameCanvas" aria-label="Game canvas displaying Kelly Gang Survival"></canvas>
+                <canvas id="gameCanvas"></canvas>
+                 <!-- Overlays remain inside canvas-container -->
                 <div id="countdown-overlay"></div>
                 <div id="html-overlay"></div>
             </div>
-        </main>
-        <div id="game-over-screen" hidden class="animate-slide-in">
-            <h1>Game Over, Mate!</h1>
-            <div id="final-stats"></div>
-            <button class="button-back" aria-label="Back to Main Menu" tabindex="0">Back to Menu</button>
         </div>
-    </div>
+
+        <!-- Game Over Screen -->
+        <div id="game-over-screen">
+            <h2>Game Over, Mate!</h2>
+            <div id="final-stats">
+            </div>
+            <button id="gameOverBackBtn" class="button button-primary">Back to Menu</button>
+        </div>
+
+    </div> <!-- End game-container -->
+
+    <!-- Scripts -->
     <script type="importmap">
         {
             "imports": {
-                "three": "https://cdn.jsdelivr.net/npm/three@0.166.1/build/three.module.js"
+                "three": "https://cdn.jsdelivr.net/npm/three@0.166.1/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.166.1/examples/jsm/"
             }
         }
     </script>
-    <script type="module" src="js/Renderer3D.js"></script>
-    <script type="module" src="js/main.js"></script>
+    <script type="module" src="Renderer3D.js"></script>
+    <script type="module" src="main.js"></script>
+
 </body>
 </html>
