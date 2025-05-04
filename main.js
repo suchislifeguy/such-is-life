@@ -7,7 +7,7 @@ import Renderer3D from './Renderer3D.js';
 console.log("--- main.js v2: Initializing ---");
 
 // --- Constants ---
-const WEBSOCKET_URL = determineWebSocketUrl(); // Use helper function
+const WEBSOCKET_URL = 'wss://such-is-life.glitch.me/ws';
 const SHOOT_COOLDOWN = 100; // Base cooldown in ms for standard shots
 const RAPID_FIRE_COOLDOWN_MULTIPLIER = 0.4; // Faster shooting
 const INPUT_SEND_INTERVAL = 33; // ~30 times per second
