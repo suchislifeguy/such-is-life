@@ -65,7 +65,7 @@ const _vector3 = new THREE.Vector3();
 
 // --- Initialization Functions ---
 
-function _createAssets() { /* ... same as before ... */
+function _createAssets() { /* ...  ... */
     try {
         const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64;
         const context = canvas.getContext('2d'); if (!context) throw new Error("Failed context");
@@ -75,7 +75,7 @@ function _createAssets() { /* ... same as before ... */
         loadedAssets.flameTexture = new THREE.CanvasTexture(canvas); loadedAssets.flameTexture.name = "FlameTexture";
     } catch (error) { console.error("Error creating flame texture:", error); }
  }
-function _createGeometries() { /* ... same as before ... */
+function _createGeometries() { /* ...  ... */
     sharedGeometries.playerBody = new THREE.CapsuleGeometry(PLAYER_CAPSULE_RADIUS, PLAYER_CAPSULE_HEIGHT, 4, 12);
     sharedGeometries.head = new THREE.SphereGeometry(1, 12, 8);
     sharedGeometries.playerGun = new THREE.CylinderGeometry(PLAYER_GUN_RADIUS, PLAYER_GUN_RADIUS * 0.8, PLAYER_GUN_LENGTH, 8);
@@ -95,7 +95,7 @@ function _createGeometries() { /* ... same as before ... */
     sharedGeometries.log = new THREE.CylinderGeometry(CAMPFIRE_LOG_RADIUS, CAMPFIRE_LOG_RADIUS, CAMPFIRE_LOG_LENGTH, 6);
     sharedGeometries.groundPlane = new THREE.PlaneGeometry(1, 1);
  }
-function _createMaterials() { /* ... same as before ... */
+function _createMaterials() { /* ...  ... */
     sharedMaterials.playerBody = new THREE.MeshStandardMaterial({color:0xDC143C, roughness:0.5, metalness:0.2, name:"PlayerBody"});
     sharedMaterials.playerHead = new THREE.MeshStandardMaterial({color:0xD2B48C, roughness:0.7, name:"PlayerHead"});
     sharedMaterials.playerGun = new THREE.MeshStandardMaterial({color:0x444444, roughness:0.5, metalness:0.7, name:"PlayerGun"});
@@ -128,7 +128,7 @@ function _createMaterials() { /* ... same as before ... */
     sharedMaterials.dustMote = new THREE.PointsMaterial({size:50, color:0xd2b48c, transparent:true, opacity:DUST_OPACITY, sizeAttenuation:true, depthWrite:false, name:"DustMote"});
     sharedMaterials.flame = new THREE.PointsMaterial({size:18, vertexColors:true, map:loadedAssets.flameTexture, transparent:true, sizeAttenuation:true, depthWrite:false, blending:THREE.AdditiveBlending, name:"Flame"});
 }
-function _initParticlesAndInstances() { /* ... same as before ... */
+function _initParticlesAndInstances() { /* ...  ... */
     if (!scene) return;
     playerBulletMesh = new THREE.InstancedMesh(sharedGeometries.bullet, sharedMaterials.playerBullet, MAX_PLAYER_BULLETS); playerBulletMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); playerBulletMesh.count = 0; playerBulletMesh.name = "PlayerBullets"; scene.add(playerBulletMesh); playerBulletMatrices = playerBulletMesh.instanceMatrix.array;
     enemyBulletMesh = new THREE.InstancedMesh(sharedGeometries.bullet, sharedMaterials.enemyBullet, MAX_ENEMY_BULLETS); enemyBulletMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); enemyBulletMesh.count = 0; enemyBulletMesh.name = "EnemyBullets"; scene.add(enemyBulletMesh); enemyBulletMatrices = enemyBulletMesh.instanceMatrix.array;
@@ -137,7 +137,7 @@ function _initParticlesAndInstances() { /* ... same as before ... */
     const rainGeo = new THREE.BufferGeometry(); const rainP = new Float32Array(MAX_RAIN_DROPS * 6); const rainData = []; for (let i = 0; i < MAX_RAIN_DROPS; i++) { const x = Math.random()*gameWidth*GROUND_MARGIN - (gameWidth*(GROUND_MARGIN-1)/2); const y = Math.random()*1000+800; const z = Math.random()*gameHeight*GROUND_MARGIN - (gameHeight*(GROUND_MARGIN-1)/2); rainP[i*6+1] = -1e4; rainP[i*6+4] = -1e4; rainData.push({ x:x, y:y, z:z, s: RAIN_SPEED_Y + Math.random()*RAIN_SPEED_Y_RAND }); } rainGeo.setAttribute('position', new THREE.BufferAttribute(rainP, 3).setUsage(THREE.DynamicDrawUsage)); rainSystem = { lines: new THREE.LineSegments(rainGeo, sharedMaterials.rainLine), geometry: rainGeo, material: sharedMaterials.rainLine, data: rainData }; rainSystem.lines.visible = false; rainSystem.lines.name = "RainLines"; scene.add(rainSystem.lines);
     const dustGeo = new THREE.BufferGeometry(); const dustP = new Float32Array(MAX_DUST_MOTES * 3); const dustData = []; for (let i = 0; i < MAX_DUST_MOTES; i++) { dustP[i * 3 + 1] = -1e4; dustData.push({ p: new THREE.Vector3(Math.random()*gameWidth, Math.random()*80+5, Math.random()*gameHeight), v: new THREE.Vector3((Math.random()-0.5)*DUST_SPEED_XZ, (Math.random()-0.5)*DUST_SPEED_Y, (Math.random()-0.5)*DUST_SPEED_XZ) }); } dustGeo.setAttribute('position', new THREE.BufferAttribute(dustP, 3).setUsage(THREE.DynamicDrawUsage)); dustSystem = { particles: new THREE.Points(dustGeo, sharedMaterials.dustMote), geometry: dustGeo, material: sharedMaterials.dustMote, data: dustData }; dustSystem.particles.visible = false; dustSystem.particles.name = "DustParticles"; scene.add(dustSystem.particles);
 }
-function _initCampfire() { /* ... same as before ... */
+function _initCampfire() { /* ...  ... */
     if (!scene) return; campfireSystem = {}; const group = new THREE.Group(); group.name = "CampfireGroup";
     const log1 = new THREE.Mesh(sharedGeometries.log, sharedMaterials.log); log1.rotation.set(0, Math.PI/10, Math.PI/6); log1.castShadow = true; log1.position.set(-CAMPFIRE_LOG_LENGTH*0.1, Y_OFFSET_CAMPFIRE, -CAMPFIRE_LOG_LENGTH*0.2);
     const log2 = new THREE.Mesh(sharedGeometries.log, sharedMaterials.log); log2.rotation.set(0, -Math.PI/8, -Math.PI/5); log2.castShadow = true; log2.position.set(CAMPFIRE_LOG_LENGTH*0.15, Y_OFFSET_CAMPFIRE, CAMPFIRE_LOG_LENGTH*0.1);
@@ -149,7 +149,7 @@ function _initCampfire() { /* ... same as before ... */
     campfireSystem = { group: group, particles: flameParticles, geometry: flameGeo, material: sharedMaterials.flame, glowLight: glowLight, data: flameData };
     scene.add(group);
  }
-function _initSnake() { /* ... same as before ... */
+function _initSnake() { /* ...  ... */
     if (!scene) return; const dummyCurve = new THREE.LineCurve3(new THREE.Vector3(0, Y_OFFSET_SNAKE, 0), new THREE.Vector3(1, Y_OFFSET_SNAKE, 0)); const tubeGeo = new THREE.TubeGeometry(dummyCurve, 1, SNAKE_RADIUS, 6, false);
     snakeMesh = new THREE.Mesh(tubeGeo, sharedMaterials.snake); snakeMesh.castShadow = true; snakeMesh.visible = false; snakeMesh.name = "Snake"; scene.add(snakeMesh);
 }
