@@ -2,7 +2,7 @@
 // Client-side logic for Kelly Gang Survival
 // Incorporates Phase 1 fixes, boundary awareness, aiming fix, refined renderer interaction, more sounds.
 
-import * K THREE from 'three'; // Used for Vector3
+import * as THREE from 'three'; // Used for Vector3
 import Renderer3D from './Renderer3D.js';
 
 console.log("--- main.js v3: Initializing ---");
