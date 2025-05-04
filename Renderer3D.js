@@ -1,8 +1,8 @@
-// Renderer3D.js - FINAL CORRECTED (Definitions Fixed)
+// Renderer3D.js - FINAL CORRECTED (Definitions & Spark Fix)
 import * as THREE from 'three';
 
 const Renderer3D = (() => {
-    console.log("--- Renderer3D.js: Initializing Final Corrected ---");
+    console.log("--- Renderer3D.js: Initializing Final Corrected (Defs & Sparks) ---");
 
     // --- Core THREE.js Components ---
     let scene, camera, renderer, ambientLight, directionalLight;
@@ -21,7 +21,7 @@ const Renderer3D = (() => {
 
     // --- Particles & Instancing ---
     let hitSparkParticles = null; let hitSparkGeometry = null;
-    let rainLines = null; let rainGeometry = null; // Rain uses lines
+    let rainLines = null; let rainGeometry = null;
     let dustParticles = null; let dustGeometry = null;
     let ammoCasingMesh = null; let flameGeometry = null;
 
@@ -36,6 +36,8 @@ const Renderer3D = (() => {
     const DEF_SNAKE_RADIUS = 4; const DEF_LOG_RADIUS = 4; const DEF_LOG_LENGTH = 35;
     const DEF_CASING_RADIUS = 0.5; const DEF_CASING_LENGTH = 3;
     const DEF_GUN_LENGTH = 20; const DEF_GUN_RADIUS = 1.5;
+    const SPARK_BASE_LIFE = 0.15; // Reduced spark lifetime
+    const SPARK_RAND_LIFE = 0.2;  // Reduced spark lifetime variance
 
     // --- Materials ---
     const playerMaterialBase = new THREE.MeshStandardMaterial({ color: 0xDC143C, roughness: 0.5, metalness: 0.3, name: 'PlayerMatBase' });
@@ -46,7 +48,7 @@ const Renderer3D = (() => {
     const enemyGiantMaterialBase = new THREE.MeshStandardMaterial({ color: 0xa00000, roughness: 0.5, metalness: 0.3, transparent: true, opacity: 1.0, name: 'EnemyGiantMatBase' });
     const bulletPlayerMaterial = new THREE.MeshBasicMaterial({ color: 0xffed4a, name: 'BulletPlayerMat' });
     const bulletEnemyMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, name: 'BulletEnemyMat' });
-    const powerupMaterials = { /* Cloned on use */
+    const powerupMaterials = {
         default: new THREE.MeshStandardMaterial({ color: 0x888888, name: 'PowerupDefaultMat' }), health: new THREE.MeshStandardMaterial({ color: 0x81c784, name: 'PowerupHealthMat' }),
         gun_upgrade: new THREE.MeshStandardMaterial({ color: 0x6a0dad, emissive: 0x110011, name: 'PowerupGunMat' }),
         speed_boost: new THREE.MeshStandardMaterial({ color: 0x3edef3, name: 'PowerupSpeedMat' }),
@@ -68,22 +70,22 @@ const Renderer3D = (() => {
     const flameMaterial = new THREE.PointsMaterial({ size: 15, vertexColors: true, map: flameTexture, transparent: true, sizeAttenuation: true, depthWrite: false, blending: THREE.AdditiveBlending, name: 'FlameMat' });
     const gunMaterial = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.5, metalness: 0.7, name: 'GunMat' });
 
-    // --- Geometries (DEFINED AT MODULE SCOPE) ---
+    // --- Geometries ---
     const playerBodyGeometry = new THREE.CapsuleGeometry(DEF_PLAYER_WIDTH / 2, DEF_PLAYER_HEIGHT - DEF_PLAYER_WIDTH, 4, 8); playerBodyGeometry.name = "PlayerBodyGeo";
-    const headGeometry = new THREE.SphereGeometry(1, 12, 8); headGeometry.name = "HeadGeo"; // Scaled per use
+    const headGeometry = new THREE.SphereGeometry(1, 12, 8); headGeometry.name = "HeadGeo";
     const enemyChaserGeometry = new THREE.BoxGeometry(DEF_ENEMY_WIDTH, DEF_ENEMY_HEIGHT, DEF_ENEMY_WIDTH * 0.7); enemyChaserGeometry.name = "EnemyChaserGeo";
     const enemyShooterGeometry = new THREE.CylinderGeometry(DEF_ENEMY_WIDTH*0.6, DEF_ENEMY_WIDTH*0.6, DEF_ENEMY_HEIGHT, 8); enemyShooterGeometry.name = "EnemyShooterGeo";
     const enemyGunGeometry = new THREE.BoxGeometry(DEF_ENEMY_WIDTH * 0.3, DEF_ENEMY_WIDTH * 0.3, DEF_ENEMY_WIDTH * 1.5); enemyGunGeometry.name = "EnemyGunGeo";
     const enemyGiantGeometry = new THREE.BoxGeometry(DEF_ENEMY_WIDTH * DEF_GIANT_MULTIPLIER, DEF_ENEMY_HEIGHT * DEF_GIANT_MULTIPLIER, DEF_ENEMY_WIDTH * 0.7 * DEF_GIANT_MULTIPLIER); enemyGiantGeometry.name = "EnemyGiantGeo";
     const bulletGeometry = new THREE.SphereGeometry(DEF_BULLET_RADIUS, 6, 6); bulletGeometry.name = "BulletGeo";
-    // Powerup Geometries (Defined here!)
+    // Powerup Geometries
     const powerupBoxGeometry = new THREE.BoxGeometry(DEF_POWERUP_SIZE, DEF_POWERUP_SIZE, DEF_POWERUP_SIZE); powerupBoxGeometry.name = "PowerupBoxGeo";
     const powerupHealthGeo = new THREE.TorusGeometry(DEF_POWERUP_SIZE * 0.4, DEF_POWERUP_SIZE * 0.15, 8, 16); powerupHealthGeo.name = "PowerupHealthGeo";
     const powerupGunGeo = new THREE.ConeGeometry(DEF_POWERUP_SIZE * 0.5, DEF_POWERUP_SIZE, 4); powerupGunGeo.name = "PowerupGunGeo";
-    const powerupSpeedGeo = new THREE.CylinderGeometry(DEF_POWERUP_SIZE*0.7, DEF_POWERUP_SIZE*0.7, DEF_POWERUP_SIZE*0.3, 16); powerupSpeedGeo.name = "PowerupSpeedGeo"; // Changed to Disk
+    const powerupSpeedGeo = new THREE.CylinderGeometry(DEF_POWERUP_SIZE*0.7, DEF_POWERUP_SIZE*0.7, DEF_POWERUP_SIZE*0.3, 16); powerupSpeedGeo.name = "PowerupSpeedGeo";
     const powerupArmorGeo = new THREE.OctahedronGeometry(DEF_POWERUP_SIZE * 0.6, 0); powerupArmorGeo.name = "PowerupArmorGeo";
-    const powerupShotgunGeo = new THREE.BoxGeometry(DEF_POWERUP_SIZE*0.8, DEF_POWERUP_SIZE*0.8, DEF_POWERUP_SIZE*0.8); powerupShotgunGeo.name = "PowerupShotgunGeo"; // Keep as box for now
-    const powerupSlugGeo = new THREE.SphereGeometry(DEF_POWERUP_SIZE * 0.6, 12, 8); powerupSlugGeo.name = "PowerupSlugGeo";
+    const powerupShotgunGeo = new THREE.BoxGeometry(DEF_POWERUP_SIZE*0.8, DEF_POWERUP_SIZE*0.8, DEF_POWERUP_SIZE*0.8); powerupShotgunGeo.name = "PowerupShotgunGeo";
+    const powerupSlugGeo = new THREE.SphereGeometry(DEF_POWERUP_SIZE * 0.6, 12, 8); powerupSlugGeo.name = "PowerupSlugGeo"; // <<< DEFINED HERE
     const powerupRapidGeo = new THREE.TorusGeometry(DEF_POWERUP_SIZE * 0.4, DEF_POWERUP_SIZE * 0.1, 6, 12); powerupRapidGeo.name = "PowerupRapidGeo";
     const powerupScoreGeo = new THREE.CylinderGeometry(DEF_POWERUP_SIZE*0.4, DEF_POWERUP_SIZE*0.4, DEF_POWERUP_SIZE*0.5, 12); powerupScoreGeo.name = "PowerupScoreGeo";
     // Other Geometries
@@ -93,10 +95,8 @@ const Renderer3D = (() => {
     const gunGeometry = new THREE.CylinderGeometry(DEF_GUN_RADIUS, DEF_GUN_RADIUS * 0.8, DEF_GUN_LENGTH, 8); gunGeometry.name = "GunGeo";
 
     // --- Mesh Positioning Offsets ---
-    const PLAYER_Y_OFFSET = 0; // Group at Y=0, body positioned inside
-    const PLAYER_BODY_Y_OFFSET = DEF_PLAYER_HEIGHT / 2; // Body relative to group
-    const ENEMY_Y_OFFSET = DEF_ENEMY_HEIGHT / 2; // Enemy mesh pivot at base
-    const GIANT_Y_OFFSET = (DEF_ENEMY_HEIGHT * DEF_GIANT_MULTIPLIER) / 2;
+    const PLAYER_Y_OFFSET = 0; const PLAYER_BODY_Y_OFFSET = DEF_PLAYER_HEIGHT / 2;
+    const ENEMY_Y_OFFSET = DEF_ENEMY_HEIGHT / 2; const GIANT_Y_OFFSET = (DEF_ENEMY_HEIGHT * DEF_GIANT_MULTIPLIER) / 2;
     const BULLET_Y_OFFSET = DEF_BULLET_RADIUS; const POWERUP_Y_OFFSET = DEF_POWERUP_SIZE * 0.8;
     const CAMPFIRE_LOG_Y_OFFSET = DEF_LOG_RADIUS; const FLAME_PARTICLE_Y_OFFSET = DEF_LOG_RADIUS + 2;
 
@@ -133,7 +133,7 @@ const Renderer3D = (() => {
     }
     function initWeatherParticles() {
         rainGeometry = new THREE.BufferGeometry(); rainGeometry.name = "RainGeo"; const rainPositions = new Float32Array(MAX_RAIN_DROPS * 6); rainData.length = 0;
-        for (let i = 0; i < MAX_RAIN_DROPS; i++) { rainData.push({ position: new THREE.Vector3(Math.random()*gameWidth*1.2-gameWidth*0.1, gameHeight*1.5 , Math.random()*gameHeight*1.2-gameHeight*0.1), velocity: new THREE.Vector3(15 + Math.random()*8, -400 - Math.random()*150, 0) }); } // Init offscreen Y handled later
+        for (let i = 0; i < MAX_RAIN_DROPS; i++) { rainData.push({ position: new THREE.Vector3(Math.random()*gameWidth*1.2-gameWidth*0.1, gameHeight*1.5 , Math.random()*gameHeight*1.2-gameHeight*0.1), velocity: new THREE.Vector3(15 + Math.random()*8, -400 - Math.random()*150, 0) }); } // Initial Y offscreen
         rainGeometry.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3)); rainLines = new THREE.LineSegments(rainGeometry, rainMaterial); rainLines.name = "Rain"; rainLines.visible = false; scene.add(rainLines);
         dustGeometry = new THREE.BufferGeometry(); dustGeometry.name = "DustGeo"; const dustPositions = new Float32Array(MAX_DUST_MOTES * 3); dustData.length = 0;
         for (let i = 0; i < MAX_DUST_MOTES; i++) { dustData.push({ position: new THREE.Vector3(Math.random()*gameWidth*1.2-gameWidth*0.1, Math.random()*50 + 5 , Math.random()*gameHeight*1.2-gameHeight*0.1), velocity: new THREE.Vector3((Math.random()-0.5)*50, Math.random()*5, (Math.random()-0.5)*50), rotation: Math.random() * Math.PI * 2 }); dustPositions[i*3+1] = -1000; }
@@ -161,22 +161,21 @@ const Renderer3D = (() => {
         const bodyMat = playerMaterialBase.clone(); bodyMat.name = `PlayerMat_${playerData.id.substring(0,4)}`;
         const bodyMesh = new THREE.Mesh(playerBodyGeometry, bodyMat); bodyMesh.castShadow = true; bodyMesh.receiveShadow = true; bodyMesh.position.y = PLAYER_BODY_Y_OFFSET; bodyMesh.name = "PlayerBody"; playerGroup.add(bodyMesh);
         const headMesh = new THREE.Mesh(headGeometry, headMaterial.clone()); headMesh.scale.setScalar(DEF_PLAYER_HEAD_RADIUS); headMesh.position.y = DEF_PLAYER_HEIGHT * 0.95; headMesh.castShadow = true; headMesh.name = "PlayerHead"; playerGroup.add(headMesh);
-        const gunMesh = new THREE.Mesh(gunGeometry, gunMaterial); gunMesh.position.set(0, PLAYER_BODY_Y_OFFSET * 0.8, DEF_PLAYER_WIDTH * 0.5); gunMesh.rotation.x = Math.PI / 2; gunMesh.castShadow = true; gunMesh.name = "PlayerGun"; playerGroup.add(gunMesh);
-        playerGroup.position.set(playerData.x, PLAYER_Y_OFFSET, playerData.y); // Set group base position
-        playerGroup.userData.gameId = playerData.id; playerGroup.userData.bodyMesh = bodyMesh; playerGroup.userData.headMesh = headMesh; playerGroup.userData.gunMesh = gunMesh;
+        const gunMesh = new THREE.Mesh(gunGeometry, gunMaterial); gunMesh.position.set(0, PLAYER_BODY_Y_OFFSET * 0.8, DEF_PLAYER_WIDTH * 0.4); gunMesh.rotation.x = Math.PI / 2; gunMesh.castShadow = true; gunMesh.name = "PlayerGun"; playerGroup.add(gunMesh);
+        playerGroup.position.set(playerData.x, PLAYER_Y_OFFSET, playerData.y); playerGroup.userData.gameId = playerData.id; playerGroup.userData.bodyMesh = bodyMesh; playerGroup.userData.headMesh = headMesh; playerGroup.userData.gunMesh = gunMesh;
         return playerGroup;
     }
     function createEnemyMesh(enemyData){
         const enemyGroup = new THREE.Group(); enemyGroup.name = `EnemyGroup_${enemyData.type}_${enemyData.id.substring(0,4)}`;
-        let bodyMesh, yOffset=ENEMY_Y_OFFSET, bodyMat;
+        let bodyMesh, headMesh, yOffset=ENEMY_Y_OFFSET, bodyMat;
         const headScale = (enemyData.type === 'giant') ? DEF_ENEMY_HEAD_RADIUS * DEF_GIANT_MULTIPLIER * 0.8 : DEF_ENEMY_HEAD_RADIUS;
-        const headMesh = new THREE.Mesh(headGeometry, headMaterial.clone()); headMesh.scale.setScalar(headScale); headMesh.castShadow = true; headMesh.name = "EnemyHead";
+        headMesh = new THREE.Mesh(headGeometry, headMaterial.clone()); headMesh.scale.setScalar(headScale); headMesh.castShadow = true; headMesh.name = "EnemyHead";
 
         if(enemyData.type==='giant'){ bodyMat=enemyGiantMaterialBase.clone(); bodyMesh=new THREE.Mesh(enemyGiantGeometry,bodyMat); yOffset=GIANT_Y_OFFSET; }
         else if(enemyData.type==='shooter'){ bodyMat=enemyShooterMaterialBase.clone(); bodyMesh=new THREE.Mesh(enemyShooterGeometry,bodyMat); const enemyGun = new THREE.Mesh(enemyGunGeometry, gunMaterial); enemyGun.position.set(0, yOffset * 0.6, DEF_ENEMY_WIDTH * 0.6); enemyGun.rotation.x = Math.PI / 2; enemyGun.castShadow = true; enemyGun.name="EnemyGun"; enemyGroup.add(enemyGun); }
         else{ bodyMat=enemyChaserMaterialBase.clone(); bodyMesh=new THREE.Mesh(enemyChaserGeometry,bodyMat); }
         bodyMesh.castShadow=true; bodyMesh.receiveShadow=true; bodyMesh.position.y = yOffset; bodyMesh.name = "EnemyBody";
-        headMesh.position.y = yOffset * 1.8 + (enemyData.type === 'giant' ? 10 : 0); // Position head relative to body top, higher for giant
+        headMesh.position.y = yOffset + (bodyMesh.geometry.parameters.height || DEF_ENEMY_HEIGHT)/2 + headScale * 0.7; // Position head on top
 
         enemyGroup.add(bodyMesh); enemyGroup.add(headMesh);
         enemyGroup.position.set(enemyData.x, 0, enemyData.y); // Group at Y=0
@@ -189,7 +188,6 @@ const Renderer3D = (() => {
         const powerupGroup = new THREE.Group(); powerupGroup.name = `PowerupGroup_${powerupData.type}_${powerupData.id.substring(0,4)}`;
         const mat=(powerupMaterials[powerupData.type]||powerupMaterials.default).clone();
         let iconGeo;
-        // Select geometry based on type
         switch(powerupData.type) {
              case 'health': iconGeo = powerupHealthGeo; break;
              case 'gun_upgrade': iconGeo = powerupGunGeo; break;
@@ -201,15 +199,8 @@ const Renderer3D = (() => {
              case 'bonus_score': iconGeo = powerupScoreGeo; break;
              default: iconGeo = powerupBoxGeometry;
         }
-        const iconMesh = new THREE.Mesh(iconGeo, mat);
-        iconMesh.castShadow = true; iconMesh.receiveShadow = true;
-        iconMesh.position.y = POWERUP_Y_OFFSET; // Icon floats
-        iconMesh.rotation.x = Math.PI / 6; // Angle slightly forward
-        iconMesh.rotation.z = Math.PI / 6;
-        powerupGroup.add(iconMesh);
-        powerupGroup.position.set(powerupData.x, 0, powerupData.y); // Group base at Y=0
-        powerupGroup.userData.gameId=powerupData.id; powerupGroup.userData.isPowerup=true;
-        powerupGroup.userData.iconMesh = iconMesh;
+        const iconMesh = new THREE.Mesh(iconGeo, mat); iconMesh.castShadow = true; iconMesh.receiveShadow = true; iconMesh.position.y = POWERUP_Y_OFFSET; iconMesh.rotation.x = Math.PI / 6; iconMesh.rotation.z = Math.PI / 6;
+        powerupGroup.add(iconMesh); powerupGroup.position.set(powerupData.x, 0, powerupData.y); powerupGroup.userData.gameId=powerupData.id; powerupGroup.userData.isPowerup=true; powerupGroup.userData.iconMesh = iconMesh;
         return powerupGroup;
     }
 
@@ -222,41 +213,55 @@ const Renderer3D = (() => {
                 let obj = meshDict[id];
                 if (!obj) { obj = createFn(data); if (obj) { meshDict[id] = obj; scene.add(obj); } }
                 else {
-                    obj.position.set(data.x, 0, data.y); // Update group/mesh base position
+                    obj.position.set(data.x, 0, data.y);
                     const actualMesh = (obj instanceof THREE.Group) ? obj.userData.bodyMesh || obj.userData.iconMesh : obj;
                     if (!actualMesh || !actualMesh.material) continue;
 
-                    // Enemy Fading
-                    if (meshDict === enemyMeshes && data.health <= 0 && data.death_timestamp) { const fadeDuration = 0.4; const timeSinceDeath = (performance.now()/1000) - data.death_timestamp; const opacity = Math.max(0, 1.0 - (timeSinceDeath / fadeDuration)); actualMesh.material.opacity = opacity; obj.children.forEach(c => {if(c.material) c.material.opacity = opacity}); actualMesh.visible = opacity > 0.001; obj.children.forEach(c => {c.visible = opacity > 0.001});} // Fade all children too
-                    else if (!actualMesh.visible || (actualMesh.material.opacity < 1.0 && actualMesh.material.opacity > 0)) { actualMesh.material.opacity = 1.0; actualMesh.visible = true; obj.children.forEach(c => {if(c.material) c.material.opacity = 1.0; c.visible = true}); } // Reset visibility/opacity
-
-                    // Powerup Animation
+                    if (meshDict === enemyMeshes && data.health <= 0 && data.death_timestamp) { const fadeDuration = 0.4; const timeSinceDeath = (performance.now()/1000) - data.death_timestamp; const opacity = Math.max(0, 1.0 - (timeSinceDeath / fadeDuration)); actualMesh.material.opacity = opacity; obj.children.forEach(c => {if(c.material) c.material.opacity = opacity}); actualMesh.visible = opacity > 0.001; obj.children.forEach(c => {c.visible = opacity > 0.001});}
+                    else if (!actualMesh.visible || (actualMesh.material.opacity < 1.0 && actualMesh.material.opacity > 0)) { actualMesh.material.opacity = 1.0; actualMesh.visible = true; obj.children.forEach(c => {if(c.material) c.material.opacity = 1.0; c.visible = true}); }
                     if (obj.userData.isPowerup && obj.userData.iconMesh) { obj.userData.iconMesh.rotation.y += 0.02; obj.userData.iconMesh.position.y = POWERUP_Y_OFFSET + Math.sin(performance.now() * 0.002) * 3; }
-
-                    // Player Effects & Aiming
                     if (meshDict === playerMeshes && id === appState?.localPlayerId) {
                          const bodyMesh = actualMesh;
                          if (localEffects?.pushbackAnim?.active) { const pushbackProgress = Math.max(0,(localEffects.pushbackAnim.endTime-performance.now())/localEffects.pushbackAnim.duration); const intensity = Math.sin(pushbackProgress*Math.PI)*0.8; bodyMesh.material.emissive.setHex(0x66ccff); bodyMesh.material.emissiveIntensity=intensity; }
                          else if (bodyMesh.material.emissiveIntensity > 0) { bodyMesh.material.emissiveIntensity = 0; }
+                         // Check for snake bite effect
+                         const snakeEffect = data.effects?.snake_bite_slow;
+                         const isBitten = snakeEffect && performance.now() < snakeEffect.expires_at * 1000;
+                         if (isBitten && bodyMesh.material.emissiveIntensity <= 0) { // Apply poison glow if not already pushing back
+                             bodyMesh.material.emissive.setHex(0x00ff00);
+                             bodyMesh.material.emissiveIntensity = 0.4 + Math.sin(performance.now() * 0.005) * 0.3; // Pulsing green
+                         } else if (!localEffects?.pushbackAnim?.active) { // Turn off if not bitten and not pushing back
+                             bodyMesh.material.emissiveIntensity = 0;
+                         }
                          updatePlayerAiming(appState, obj); // Aim the group
+                    }
+                    // Enemy snake bite visual
+                    if (meshDict === enemyMeshes) {
+                         const snakeEffect = data.effects?.snake_bite_slow;
+                         const isBitten = snakeEffect && performance.now() < snakeEffect.expires_at * 1000;
+                         if (isBitten) {
+                             actualMesh.material.emissive.setHex(0x00cc00); // Green tint
+                             actualMesh.material.emissiveIntensity = 0.4;
+                         } else if (actualMesh.material.emissiveIntensity > 0) {
+                             actualMesh.material.emissiveIntensity = 0;
+                         }
                     }
                 }
             }
         }
-        // Remove & Dispose
-        for (const id in meshDict) { if (!activeIds.has(id)) { const objToRemove = meshDict[id]; if (objToRemove) { console.log(`Cleanup: Removing ${objToRemove.name || id}`); scene.remove(objToRemove); disposeObject3D(objToRemove); } delete meshDict[id]; } }
+        // Remove & Dispose - Log bullet removal specifically
+        for (const id in meshDict) { if (!activeIds.has(id)) { const objToRemove = meshDict[id]; if (objToRemove) { if (meshDict === bulletMeshes) console.log(`Cleanup: Removing bullet mesh ${id}`); else console.log(`Cleanup: Removing ${objToRemove.name || id}`); scene.remove(objToRemove); disposeObject3D(objToRemove); } delete meshDict[id]; } }
     }
     // Dispose Helper
-    function disposeObject3D(obj) { if (!obj) return; if (obj.geometry) obj.geometry.dispose(); if (obj.material) { if (Array.isArray(obj.material)) obj.material.forEach(m => m?.dispose()); else if(obj.material.dispose) obj.material.dispose(); } if (obj.texture) obj.texture.dispose(); while(obj.children.length > 0) { disposeObject3D(obj.children[0]); obj.remove(obj.children[0]); } }
-    // Get Y offset (Only needed for non-grouped meshes like bullets)
-    function getYOffset(entityData) { if (entityData.radius) return BULLET_Y_OFFSET; return 0; }
+    function disposeObject3D(obj) { if (!obj) return; if (obj.geometry) obj.geometry.dispose(); if (obj.material) { if (Array.isArray(obj.material)) obj.material.forEach(m => m?.dispose()); else if(obj.material.dispose) obj.material.dispose(); } if (obj.map && obj.map.dispose) obj.map.dispose(); /* Dispose texture maps */ while(obj.children.length > 0) { disposeObject3D(obj.children[0]); obj.remove(obj.children[0]); } }
+    // Get Y offset
+    function getYOffset(entityData, mesh) { /* Groups handle own Y, only needed for direct mesh pos */ if (entityData.radius) return BULLET_Y_OFFSET; return 0; }
     // Player Aiming
     function updatePlayerAiming(appState, playerObject) { if (!appState?.localPlayerId || !appState.mouseWorldPosition || !playerObject) return; const targetPos = appState.mouseWorldPosition; playerObject.lookAt(targetPos.x, 0, targetPos.z); }
 
     // --- Environment Update ---
     function updateEnvironment(isNight) {
-        const dayLightIntensity=1.0, nightLightIntensity=0.45; // Brighter night
-        const dayAmbientIntensity=0.6, nightAmbientIntensity=0.3; // Brighter ambient night
+        const dayLightIntensity=1.0, nightLightIntensity=0.45; const dayAmbientIntensity=0.6, nightAmbientIntensity=0.3;
         const dayDirColor=0xffffff, nightDirColor=0xc0d0ff; const dayAmbColor=0xffffff, nightAmbColor=0x556699;
         ambientLight.intensity=isNight?nightAmbientIntensity:dayAmbientIntensity; ambientLight.color.setHex(isNight?nightAmbColor:dayAmbColor);
         directionalLight.intensity=isNight?nightLightIntensity:dayLightIntensity; directionalLight.color.setHex(isNight?nightDirColor:dayDirColor);
@@ -265,21 +270,18 @@ const Renderer3D = (() => {
     }
 
     // --- Effect Updates ---
-    function updateMuzzleFlash(appState, flashState) {
-        if (!muzzleFlashLight || !appState?.localPlayerId) return; const playerGroup = playerMeshes[appState.localPlayerId]; if (!playerGroup || !playerGroup.userData.gunMesh) return; const now = performance.now();
-        if (flashState.active && now < flashState.endTime) {
-            muzzleFlashLight.intensity = 4.0 + Math.random() * 3.0; const offsetDistance = DEF_GUN_LENGTH * 0.7; const gunMesh = playerGroup.userData.gunMesh;
-            const worldPos = new THREE.Vector3(); const worldQuat = new THREE.Quaternion(); gunMesh.getWorldPosition(worldPos); gunMesh.getWorldQuaternion(worldQuat);
-            const forward = new THREE.Vector3(0,0,1).applyQuaternion(worldQuat); worldPos.addScaledVector(forward, offsetDistance);
-            muzzleFlashLight.position.copy(worldPos);
-        } else { muzzleFlashLight.intensity = 0; if (flashState.active) flashState.active = false; }
-    }
+    function updateMuzzleFlash(appState, flashState) { if (!muzzleFlashLight || !appState?.localPlayerId) return; const playerGroup = playerMeshes[appState.localPlayerId]; if (!playerGroup || !playerGroup.userData.gunMesh) return; const now = performance.now(); if (flashState.active && now < flashState.endTime) { muzzleFlashLight.intensity = 4.0 + Math.random() * 3.0; const offsetDistance = DEF_GUN_LENGTH * 0.6; const gunMesh = playerGroup.userData.gunMesh; const worldPos = new THREE.Vector3(); const worldQuat = new THREE.Quaternion(); gunMesh.getWorldPosition(worldPos); gunMesh.getWorldQuaternion(worldQuat); const forward = new THREE.Vector3(0,0,1).applyQuaternion(worldQuat); worldPos.addScaledVector(forward, offsetDistance); muzzleFlashLight.position.copy(worldPos); } else { muzzleFlashLight.intensity = 0; if (flashState.active) flashState.active = false; } }
     function updateHitSparks(activeSparkEffects, deltaTime) {
         if (!hitSparkParticles||!hitSparkGeometry) return; const positions=hitSparkGeometry.attributes.position.array; const colors=hitSparkGeometry.attributes.color.array; const alphas=hitSparkGeometry.attributes.alpha.array; let visibleSparks=false; let firstInactiveIndex=0;
         const now = performance.now();
-        for(const enemyId in activeSparkEffects){ const effectEndTime=activeSparkEffects[enemyId]; const enemyMesh=enemyMeshes[enemyId]; if(now < effectEndTime && enemyMesh){ const sparksToSpawn=4+Math.floor(Math.random()*5); const enemyPos=enemyMesh.position; const enemyYOffset = (enemyMesh.userData?.type === 'giant' ? GIANT_Y_OFFSET : ENEMY_Y_OFFSET); for(let i=0;i<sparksToSpawn;i++){ let foundSlot=false; for(let j=firstInactiveIndex; j < MAX_SPARKS; j++){ const p=sparkData[j]; if(p.life<=0){ p.position.copy(enemyPos); p.position.y=enemyYOffset * (0.2 + Math.random()*0.8); const angle=Math.random()*Math.PI*2; const speed=120+Math.random()*90; p.velocity.set(Math.cos(angle)*speed,(Math.random()-0.3)*speed*0.6,Math.sin(angle)*speed); p.color.setRGB(1,Math.random()*0.4,0); p.alpha=1.0; p.life=0.25+Math.random()*0.3; firstInactiveIndex=j+1; foundSlot=true; break;}} if (!foundSlot) break; } delete activeSparkEffects[enemyId]; } }
-        let aliveCount=0; for(let i=0;i<MAX_SPARKS;i++){ const p=sparkData[i]; if(p.life>0){ p.life-=deltaTime; if(p.life<=0){p.alpha=0; p.position.y = -1000; } else { p.position.addScaledVector(p.velocity,deltaTime); p.velocity.y-=250*deltaTime; p.alpha=Math.max(0, p.life / (0.25+0.3)); aliveCount++; } positions[i*3]=p.position.x; positions[i*3+1]=p.position.y; positions[i*3+2]=p.position.z; colors[i*3]=p.color.r; colors[i*3+1]=p.color.g; colors[i*3+2]=p.color.b; alphas[i]=p.alpha; } else { if(alphas[i]>0) alphas[i]=0; } }
-        if(aliveCount>0){ hitSparkGeometry.attributes.position.needsUpdate=true; hitSparkGeometry.attributes.color.needsUpdate=true; hitSparkGeometry.attributes.alpha.needsUpdate=true; visibleSparks=true; } hitSparkParticles.visible=visibleSparks;
+        // Activate new sparks
+        for(const enemyId in activeSparkEffects){ const effectEndTime=activeSparkEffects[enemyId]; const enemyMesh=enemyMeshes[enemyId]; if(now < effectEndTime && enemyMesh){ const sparksToSpawn=4+Math.floor(Math.random()*5); const enemyPos=enemyMesh.position; const enemyYOffset = (enemyMesh.userData?.type === 'giant' ? GIANT_Y_OFFSET : ENEMY_Y_OFFSET); for(let i=0;i<sparksToSpawn;i++){ let foundSlot=false; for(let j=firstInactiveIndex; j < MAX_SPARKS; j++){ const p=sparkData[j]; if(p.life<=0){ p.position.copy(enemyPos); p.position.y=enemyYOffset * (0.2 + Math.random()*0.8); const angle=Math.random()*Math.PI*2; const speed=120+Math.random()*90; p.velocity.set(Math.cos(angle)*speed,(Math.random()-0.3)*speed*0.6,Math.sin(angle)*speed); p.color.setRGB(1,Math.random()*0.4,0); p.alpha=1.0; p.life=SPARK_BASE_LIFE+Math.random()*SPARK_RAND_LIFE; firstInactiveIndex=j+1; foundSlot=true; break;}} if (!foundSlot) break; } delete activeSparkEffects[enemyId]; } }
+        // Update existing sparks
+        let aliveCount=0; for(let i=0;i<MAX_SPARKS;i++){ const p=sparkData[i]; if(p.life>0){ p.life-=deltaTime; if(p.life<=0){ p.alpha=0; p.position.y = -1000; // Move offscreen immediately when dead
+             alphas[i] = 0.0; } else { p.position.addScaledVector(p.velocity,deltaTime); p.velocity.y-=250*deltaTime; // Stronger gravity
+             p.alpha=Math.max(0, p.life / (SPARK_BASE_LIFE + SPARK_RAND_LIFE)); // Fade based on remaining life
+             aliveCount++; alphas[i]=p.alpha;} positions[i*3]=p.position.x; positions[i*3+1]=p.position.y; positions[i*3+2]=p.position.z; colors[i*3]=p.color.r; colors[i*3+1]=p.color.g; colors[i*3+2]=p.color.b; } else { if(alphas[i] > 0) alphas[i]=0; } } // Ensure alpha is 0 if life is 0
+        if(aliveCount>0){ hitSparkGeometry.attributes.position.needsUpdate=true; hitSparkGeometry.attributes.color.needsUpdate=true; hitSparkGeometry.attributes.alpha.needsUpdate=true; visibleSparks=true; } else { visibleSparks = false;} hitSparkParticles.visible=visibleSparks;
     }
     function updateAmmoCasings(activeCasings) {
         if (!ammoCasingMesh) return; const dummy=new THREE.Object3D(); let visibleCount=0;
@@ -325,17 +327,14 @@ const Renderer3D = (() => {
         camera.position.set( gameWidth / 2 + screenShakeOffset.x, 1000, gameHeight / 2 + screenShakeOffset.z ); camera.lookAt(gameWidth / 2 + screenShakeOffset.x, 0, gameHeight / 2 + screenShakeOffset.z );
 
         updateEnvironment(stateToRender.is_night); updateMuzzleFlash(appState, localEffects.muzzleFlash); updateHitSparks(localEffects.activeBloodSparkEffects, deltaTime); updateAmmoCasings(localEffects.activeAmmoCasings); updateWeatherParticles(appState, deltaTime); updateSnake(localEffects.snake); updateCampfire(stateToRender.campfire, deltaTime);
-        // Define Y position function for mesh updates (Groups are at Y=0, others calculated)
-        const getYPos = (data) => (data.radius ? BULLET_Y_OFFSET : 0); // Bullets need specific Y, groups are at 0
-        updateMeshes(stateToRender.players, playerMeshes, createPlayerMesh, (d)=>0, localEffects, appState);
-        updateMeshes(stateToRender.enemies, enemyMeshes, createEnemyMesh, (d)=>0, localEffects, appState);
-        updateMeshes(stateToRender.bullets, bulletMeshes, createBulletMesh, getYPos, localEffects, appState);
-        updateMeshes(stateToRender.powerups, powerupMeshes, createPowerupMesh, (d)=>0, localEffects, appState);
+        updateMeshes(stateToRender.players, playerMeshes, createPlayerMesh, (d) => 0, localEffects, appState);
+        updateMeshes(stateToRender.enemies, enemyMeshes, createEnemyMesh, (d) => 0, localEffects, appState);
+        updateMeshes(stateToRender.bullets, bulletMeshes, createBulletMesh, getYOffset, localEffects, appState);
+        updateMeshes(stateToRender.powerups, powerupMeshes, createPowerupMesh, (d) => 0, localEffects, appState);
 
-        const uiPositions = {}; const calculateUIPos = (meshDict, stateDict, yOffsetVal) => { for (const id in meshDict) { const obj = meshDict[id]; if (obj && stateDict?.[id] && obj.visible !== false) { const worldPos = obj.position.clone(); worldPos.y = yOffsetVal; const screenPos = getScreenPosition(worldPos, camera, renderer); uiPositions[id] = { screenX: screenPos.x, screenY: screenPos.y }; } } };
-        // Calculate UI positions based on the *visual height* of the models
-        calculateUIPos(playerMeshes, stateToRender.players, PLAYER_BODY_Y_OFFSET + DEF_PLAYER_HEAD_RADIUS*1.5); // Above player head
-        calculateUIPos(enemyMeshes, stateToRender.enemies, (d) => (d.type === 'giant' ? GIANT_Y_OFFSET : ENEMY_Y_OFFSET) + (d.type === 'giant' ? DEF_ENEMY_HEAD_RADIUS * DEF_GIANT_MULTIPLIER : DEF_ENEMY_HEAD_RADIUS)*1.5); // Above enemy head
+        const uiPositions = {}; const calculateUIPos = (meshDict, stateDict, yOffsetValFn) => { for (const id in meshDict) { const obj = meshDict[id]; if (obj && stateDict?.[id] && obj.visible !== false) { const actualMesh = (obj instanceof THREE.Group) ? obj.userData.bodyMesh || obj.userData.iconMesh : obj; if(!actualMesh) continue; const worldPos = obj.position.clone(); worldPos.y = yOffsetValFn(stateDict[id], actualMesh); const screenPos = getScreenPosition(worldPos, camera, renderer); uiPositions[id] = { screenX: screenPos.x, screenY: screenPos.y }; } } };
+        calculateUIPos(playerMeshes, stateToRender.players, (d,m) => PLAYER_BODY_Y_OFFSET + DEF_PLAYER_HEAD_RADIUS*1.5); // Use function for Y offset
+        calculateUIPos(enemyMeshes, stateToRender.enemies, (d,m) => (d.type === 'giant' ? GIANT_Y_OFFSET : ENEMY_Y_OFFSET) + (d.type === 'giant' ? DEF_ENEMY_HEAD_RADIUS * DEF_GIANT_MULTIPLIER : DEF_ENEMY_HEAD_RADIUS)*1.5);
         if (stateToRender.damage_texts) { for (const id in stateToRender.damage_texts) { const dt = stateToRender.damage_texts[id]; const worldPos = new THREE.Vector3(dt.x, PLAYER_BODY_Y_OFFSET, dt.y); const screenPos = getScreenPosition(worldPos, camera, renderer); uiPositions[id] = { screenX: screenPos.x, screenY: screenPos.y }; } }
         appState.uiPositions = uiPositions;
 
@@ -356,7 +355,7 @@ const Renderer3D = (() => {
         playerBodyGeometry.dispose(); headGeometry.dispose(); enemyChaserGeometry.dispose(); enemyShooterGeometry.dispose(); enemyGiantGeometry.dispose(); enemyGunGeometry.dispose(); bulletGeometry.dispose(); powerupBoxGeometry.dispose(); powerupSphereGeometry.dispose(); powerupConeGeometry.dispose(); powerupDiskGeometry.dispose(); powerupArmorGeo.dispose(); powerupShotgunGeo.dispose(); powerupSlugGeo.dispose(); powerupRapidGeo.dispose(); powerupScoreGeo.dispose(); logGeometry.dispose(); casingGeometry.dispose(); groundGeometryPlane.dispose(); gunGeometry.dispose();
         Object.values(powerupMaterials).forEach(m => m.dispose()); playerMaterialBase.dispose(); enemyChaserMaterialBase.dispose(); enemyShooterMaterialBase.dispose(); enemyGiantMaterialBase.dispose(); bulletPlayerMaterial.dispose(); bulletEnemyMaterial.dispose(); snakeMaterial.dispose(); logMaterial.dispose(); casingMaterial.dispose(); gunMaterial.dispose(); headMaterial.dispose();
         groundDayMaterial.dispose(); groundNightMaterial.dispose(); flameTexture.dispose();
-        if (renderer) { renderer.dispose(); if (renderer.domElement?.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement); renderer = null; }
+        if (renderer) { renderer.dispose(); renderer.forceContextLoss(); if (renderer.domElement?.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement); renderer = null; console.log("Renderer context lost and disposed.");} // Force context loss for good measure
         scene = null; camera = null; groundPlane = null; ambientLight = null; directionalLight = null; muzzleFlashLight = null; flameParticles = null; hitSparkParticles = null; rainParticles = null; dustParticles = null;
         Object.keys(playerMeshes).forEach(id => delete playerMeshes[id]); Object.keys(enemyMeshes).forEach(id => delete enemyMeshes[id]); Object.keys(bulletMeshes).forEach(id => delete bulletMeshes[id]); Object.keys(powerupMeshes).forEach(id => delete powerupMeshes[id]);
         sparkData.length = 0; rainData.length = 0; dustData.length = 0; flameData.length = 0;
