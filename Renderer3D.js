@@ -1,4 +1,4 @@
-// Renderer3D.js - FINAL COMPLETE VERSION (No Placeholders)
+// Renderer3D.js - FINAL COMPLETE VERSION
 import * as THREE from 'three';
 
 const Renderer3D = (() => {
@@ -35,9 +35,10 @@ const Renderer3D = (() => {
     const DEF_POWERUP_SIZE = 15; const DEF_SNAKE_SEGMENTS = 50;
     const DEF_SNAKE_RADIUS = 3; const DEF_LOG_RADIUS = 4; const DEF_LOG_LENGTH = 35;
     const DEF_CASING_RADIUS = 0.5; const DEF_CASING_LENGTH = 3;
+    const DEF_GUN_LENGTH = 20; const DEF_GUN_RADIUS = 1.5; // <<< DEFINED GUN RADIUS >>>
 
     // --- Materials ---
-    const playerMaterialBase = new THREE.MeshStandardMaterial({ color: 0xDC143C, roughness: 0.6, metalness: 0.2, name: 'PlayerMatBase' });
+    const playerMaterialBase = new THREE.MeshStandardMaterial({ color: 0xDC143C, roughness: 0.5, metalness: 0.3, name: 'PlayerMatBase' });
     const enemySharedMaterialProps = { roughness: 0.7, metalness: 0.1, transparent: true, opacity: 1.0 };
     const enemyChaserMaterialBase = new THREE.MeshStandardMaterial({ color: 0x18315f, ...enemySharedMaterialProps, name: 'EnemyChaserMatBase' });
     const enemyShooterMaterialBase = new THREE.MeshStandardMaterial({ color: 0x556B2F, ...enemySharedMaterialProps, name: 'EnemyShooterMatBase' });
@@ -45,7 +46,8 @@ const Renderer3D = (() => {
     const bulletPlayerMaterial = new THREE.MeshBasicMaterial({ color: 0xffed4a, name: 'BulletPlayerMat' });
     const bulletEnemyMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, name: 'BulletEnemyMat' });
     const powerupMaterials = {
-        default: new THREE.MeshStandardMaterial({ color: 0x888888, name: 'PowerupDefaultMat' }), health: new THREE.MeshStandardMaterial({ color: 0x81c784, name: 'PowerupHealthMat' }),
+        default: new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.6, metalness: 0.2, name: 'PowerupDefaultMat' }),
+        health: new THREE.MeshStandardMaterial({ color: 0x81c784, roughness: 0.6, metalness: 0.2, name: 'PowerupHealthMat' }),
         gun_upgrade: new THREE.MeshStandardMaterial({ color: 0x6a0dad, roughness: 0.6, metalness: 0.4, emissive: 0x110011, name: 'PowerupGunMat' }),
         speed_boost: new THREE.MeshStandardMaterial({ color: 0x3edef3, roughness: 0.4, metalness: 0.5, name: 'PowerupSpeedMat' }),
         armor: new THREE.MeshStandardMaterial({ color: 0x9e9e9e, roughness: 0.3, metalness: 0.7, name: 'PowerupArmorMat' }),
@@ -59,11 +61,11 @@ const Renderer3D = (() => {
     const snakeMaterial = new THREE.MeshStandardMaterial({ color: 0x261a0d, roughness: 0.4, metalness: 0.2, name: 'SnakeMat' });
     const logMaterial = new THREE.MeshStandardMaterial({ color: 0x5a3a1e, roughness: 0.9, name: 'LogMat' });
     const sparkMaterial = new THREE.PointsMaterial({ size: 9, vertexColors: true, transparent: true, sizeAttenuation: true, depthWrite: false, blending: THREE.AdditiveBlending, name: 'SparkMat' });
-    const rainMaterial = new THREE.PointsMaterial({ size: 12, color: 0xadc8ff, transparent: true, opacity: 0.5, sizeAttenuation: true, depthWrite: false, name: 'RainMat' }); // Slightly bigger rain
-    const dustMaterial = new THREE.PointsMaterial({ size: 45, color: 0xd2b48c, transparent: true, opacity: 0.1, sizeAttenuation: true, depthWrite: false, name: 'DustMat' }); // Opacity adjusted
+    const rainMaterial = new THREE.PointsMaterial({ size: 12, color: 0xadc8ff, transparent: true, opacity: 0.5, sizeAttenuation: true, depthWrite: false, name: 'RainMat' });
+    const dustMaterial = new THREE.PointsMaterial({ size: 45, color: 0xd2b48c, transparent: true, opacity: 0.1, sizeAttenuation: true, depthWrite: false, name: 'DustMat' });
     const casingMaterial = new THREE.MeshStandardMaterial({ color: 0xdaa520, roughness: 0.4, metalness: 0.6, name: 'CasingMat' });
     const flameTexture = createFlameTexture();
-    const flameMaterial = new THREE.PointsMaterial({ size: 15, vertexColors: true, map: flameTexture, transparent: true, sizeAttenuation: true, depthWrite: false, blending: THREE.AdditiveBlending, name: 'FlameMat' }); // Bigger flames
+    const flameMaterial = new THREE.PointsMaterial({ size: 15, vertexColors: true, map: flameTexture, transparent: true, sizeAttenuation: true, depthWrite: false, blending: THREE.AdditiveBlending, name: 'FlameMat' });
     const gunMaterial = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.5, metalness: 0.7, name: 'GunMat' });
 
     // --- Geometries ---
@@ -113,7 +115,6 @@ const Renderer3D = (() => {
         console.log("--- Renderer3D initialization complete ---"); return true;
     }
 
-    // --- Initialization Helpers ---
     function initSparkParticles() {
         hitSparkGeometry = new THREE.BufferGeometry(); hitSparkGeometry.name = "SparkGeo"; const positions = new Float32Array(MAX_SPARKS * 3); const colors = new Float32Array(MAX_SPARKS * 3); const alphas = new Float32Array(MAX_SPARKS); sparkData.length = 0;
         for(let i = 0; i < MAX_SPARKS; i++) { sparkData.push({ position: new THREE.Vector3(0,-1000,0), velocity: new THREE.Vector3(), color: new THREE.Color(0xff0000), alpha: 0.0, life: 0 }); alphas[i] = 0.0; positions[i*3+1] = -1000; }
@@ -152,11 +153,10 @@ const Renderer3D = (() => {
         const bodyMat = playerMaterialBase.clone(); bodyMat.name = `PlayerMat_${playerData.id.substring(0,4)}`;
         const bodyMesh = new THREE.Mesh(playerGeometry, bodyMat); bodyMesh.castShadow = true; bodyMesh.receiveShadow = true; bodyMesh.position.y = PLAYER_MESH_Y_OFFSET; bodyMesh.name = "PlayerBody";
         playerGroup.add(bodyMesh);
-        const gunMesh = new THREE.Mesh(gunGeometry, gunMaterial); // Gun material can be shared
-        gunMesh.position.set(0, PLAYER_MESH_Y_OFFSET * 0.7, DEF_PLAYER_WIDTH * 0.3); // Position gun in front center, slightly down
-        gunMesh.rotation.x = Math.PI / 2; // Point along Z axis of the group
-        gunMesh.castShadow = true; gunMesh.name = "PlayerGun";
-        playerGroup.add(gunMesh); // Add gun to the main group
+        const gunMesh = new THREE.Mesh(gunGeometry, gunMaterial);
+        gunMesh.position.set(0, PLAYER_MESH_Y_OFFSET * 0.7, DEF_PLAYER_WIDTH * 0.3); // Position relative to group center
+        gunMesh.rotation.x = Math.PI / 2; gunMesh.castShadow = true; gunMesh.name = "PlayerGun";
+        playerGroup.add(gunMesh);
         playerGroup.position.set(playerData.x, 0, playerData.y); playerGroup.userData.gameId = playerData.id; playerGroup.userData.bodyMesh = bodyMesh; playerGroup.userData.gunMesh = gunMesh;
         return playerGroup;
     }
@@ -165,21 +165,25 @@ const Renderer3D = (() => {
     function createPowerupMesh(powerupData){ const mat=(powerupMaterials[powerupData.type]||powerupMaterials.default).clone(); const m=new THREE.Mesh(powerupGeometry,mat); m.position.set(powerupData.x,POWERUP_MESH_Y_OFFSET,powerupData.y); m.castShadow=true; m.receiveShadow=true; m.userData.gameId=powerupData.id; m.userData.isPowerup=true; m.name = `Powerup_${powerupData.type}_${powerupData.id.substring(0,4)}`; return m; }
 
     // --- Entity Update & Disposal ---
-    function updateMeshes(state, meshDict, createFn, defaultYOffsetFn, localEffects, appState) {
+    function updateMeshes(state, meshDict, createFn, defaultYPosFn, localEffects, appState) { // YPosFn returns Y for direct mesh pos
         const activeIds = new Set();
         if (state) {
             for (const id in state) {
                 const data = state[id]; if (typeof data.x !== 'number' || typeof data.y !== 'number') continue; activeIds.add(id);
-                let obj = meshDict[id]; // Could be Mesh or Group
+                let obj = meshDict[id];
                 if (!obj) { obj = createFn(data); if (obj) { meshDict[id] = obj; scene.add(obj); } }
                 else {
-                    obj.position.set(data.x, 0, data.y); // Update group/mesh base position (Y=0)
-                    const actualMesh = (obj instanceof THREE.Group) ? obj.userData.bodyMesh : obj; // Get mesh for opacity/visibility
-                    if (!actualMesh) continue;
+                    const yPos = defaultYPosFn(data); // Calculate Y position for direct mesh placement
+                    if (obj instanceof THREE.Group) { obj.position.set(data.x, 0, data.y); } // Groups are at Y=0
+                    else { obj.position.set(data.x, yPos, data.y); } // Meshes are at calculated Y
+
+                    const actualMesh = (obj instanceof THREE.Group) ? obj.userData.bodyMesh : obj;
+                    if (!actualMesh || !actualMesh.material) continue; // Check material exists
 
                     if (meshDict === enemyMeshes && data.health <= 0 && data.death_timestamp) { const fadeDuration = 0.3; const timeSinceDeath = (performance.now()/1000) - data.death_timestamp; const opacity = Math.max(0, 1.0 - (timeSinceDeath / fadeDuration)); actualMesh.material.opacity = opacity; actualMesh.visible = opacity > 0.001; }
                     else if (!actualMesh.visible || (actualMesh.material.opacity < 1.0 && actualMesh.material.opacity > 0)) { actualMesh.material.opacity = 1.0; actualMesh.visible = true; }
-                    if (obj.userData.isPowerup) { obj.rotation.y += 0.01; obj.position.y = POWERUP_MESH_Y_OFFSET + Math.sin(performance.now() * 0.002) * 2; }
+                    if (obj.userData.isPowerup) { obj.rotation.y += 0.01; obj.position.y = POWERUP_MESH_Y_OFFSET + Math.sin(performance.now() * 0.002) * 2; } // Powerup bob uses its specific offset
+
                     if (meshDict === playerMeshes && id === appState?.localPlayerId) {
                          const bodyMesh = actualMesh;
                          if (localEffects?.pushbackAnim?.active) { const pushbackProgress = Math.max(0,(localEffects.pushbackAnim.endTime-performance.now())/localEffects.pushbackAnim.duration); const intensity = Math.sin(pushbackProgress*Math.PI)*0.6; bodyMesh.material.emissive.setHex(0x66ccff); bodyMesh.material.emissiveIntensity=intensity; }
@@ -192,13 +196,10 @@ const Renderer3D = (() => {
         for (const id in meshDict) { if (!activeIds.has(id)) { const objToRemove = meshDict[id]; if (objToRemove) { scene.remove(objToRemove); disposeObject3D(objToRemove); } delete meshDict[id]; } }
     }
     function disposeObject3D(obj) { if (!obj) return; if (obj.geometry) obj.geometry.dispose(); if (obj.material) { if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose()); else if(obj.material.dispose) obj.material.dispose(); } if (obj.texture) obj.texture.dispose(); while(obj.children.length > 0) { disposeObject3D(obj.children[0]); obj.remove(obj.children[0]); } }
-    function getYOffset(entityData) { /* Needs update if called directly, but updateMeshes sets Y=0 for groups */ return 0; } // Group base is at Y=0
-    function updatePlayerAiming(appState, playerObject) {
-        if (!appState?.localPlayerId || !appState.mouseWorldPosition || !playerObject) return;
-        const targetPos = appState.mouseWorldPosition;
-        // Use lookAt for the main player group, it will orient correctly in XZ plane
-        playerObject.lookAt(targetPos.x, playerObject.position.y, targetPos.z); // Keep Y the same
-    }
+    // Get Y offset FOR DIRECT MESH PLACEMENT (not groups)
+    function getYOffset(entityData) { if (entityData.type === 'giant') return GIANT_MESH_Y_OFFSET; if (entityData.radius) return BULLET_MESH_Y_OFFSET; if (entityData.size) return POWERUP_MESH_Y_OFFSET; if (entityData.height && entityData.width) { return playerMeshes[entityData.id] ? PLAYER_MESH_Y_OFFSET : ENEMY_MESH_Y_OFFSET;} return 5; }
+    // Update player aiming - rotates the main player group
+    function updatePlayerAiming(appState, playerObject) { if (!appState?.localPlayerId || !appState.mouseWorldPosition || !playerObject) return; const targetPos = appState.mouseWorldPosition; playerObject.lookAt(targetPos.x, 0, targetPos.z); } // LookAt works on the group's origin (Y=0)
 
     // --- Environment Update ---
     function updateEnvironment(isNight) {
@@ -215,16 +216,11 @@ const Renderer3D = (() => {
         if (!muzzleFlashLight || !appState?.localPlayerId) return; const playerGroup = playerMeshes[appState.localPlayerId]; if (!playerGroup || !playerGroup.userData.gunMesh) return;
         const now = performance.now();
         if (flashState.active && now < flashState.endTime) {
-            muzzleFlashLight.intensity = 3.0 + Math.random() * 2.0;
-            // Get world position of the gun mesh
-            const gunMesh = playerGroup.userData.gunMesh;
-            const worldPos = new THREE.Vector3();
-            gunMesh.getWorldPosition(worldPos); // Calculate world position of the gun
-            // Optional: Add offset along gun's forward direction
-            const forward = new THREE.Vector3(0,0,1);
-            forward.applyQuaternion(gunMesh.getWorldQuaternion(new THREE.Quaternion())); // Get world rotation
-            worldPos.addScaledVector(forward, DEF_GUN_LENGTH * 0.6); // Position near barrel end
-
+            muzzleFlashLight.intensity = 3.0 + Math.random() * 2.0; const offsetDistance = DEF_GUN_LENGTH * 0.6; // Offset from gun tip
+            const gunMesh = playerGroup.userData.gunMesh; const worldPos = new THREE.Vector3(); const worldQuat = new THREE.Quaternion();
+            gunMesh.getWorldPosition(worldPos); gunMesh.getWorldQuaternion(worldQuat);
+            const forward = new THREE.Vector3(0,0,1).applyQuaternion(worldQuat); // Gun points along local Z because of rotation
+            worldPos.addScaledVector(forward, offsetDistance);
             muzzleFlashLight.position.copy(worldPos);
         } else { muzzleFlashLight.intensity = 0; if (flashState.active) flashState.active = false; }
     }
@@ -279,10 +275,8 @@ const Renderer3D = (() => {
         camera.position.set( gameWidth / 2 + screenShakeOffset.x, 1000, gameHeight / 2 + screenShakeOffset.z ); camera.lookAt(gameWidth / 2 + screenShakeOffset.x, 0, gameHeight / 2 + screenShakeOffset.z );
 
         updateEnvironment(stateToRender.is_night); updateMuzzleFlash(appState, localEffects.muzzleFlash); updateHitSparks(localEffects.activeBloodSparkEffects, deltaTime); updateAmmoCasings(localEffects.activeAmmoCasings); updateWeatherParticles(appState, deltaTime); updateSnake(localEffects.snake); updateCampfire(stateToRender.campfire, deltaTime);
-        updateMeshes(stateToRender.players, playerMeshes, createPlayerMesh, (d) => 0, localEffects, appState); // Y offset handled by group
-        updateMeshes(stateToRender.enemies, enemyMeshes, createEnemyMesh, (d) => 0, localEffects, appState); // Y offset handled by mesh pos
-        updateMeshes(stateToRender.bullets, bulletMeshes, createBulletMesh, (d) => BULLET_MESH_Y_OFFSET, localEffects, appState); // Bullets need specific Y
-        updateMeshes(stateToRender.powerups, powerupMeshes, createPowerupMesh, (d) => POWERUP_MESH_Y_OFFSET, localEffects, appState); // Powerups need specific Y
+        updateMeshes(stateToRender.players, playerMeshes, createPlayerMesh, (d) => 0, localEffects, appState); updateMeshes(stateToRender.enemies, enemyMeshes, createEnemyMesh, (d) => 0, localEffects, appState); updateMeshes(stateToRender.bullets, bulletMeshes, createBulletMesh, getYOffset, localEffects, appState); updateMeshes(stateToRender.powerups, powerupMeshes, createPowerupMesh, getYOffset, localEffects, appState);
+        // updatePlayerAiming called within updateMeshes for player
 
         const uiPositions = {}; const calculateUIPos = (meshDict, stateDict, yOffsetFn) => { for (const id in meshDict) { const mesh = meshDict[id]; if (mesh && stateDict?.[id] && mesh.visible) { const worldPos = mesh.position.clone(); worldPos.y = yOffsetFn(stateDict[id]) * 1.1; const screenPos = getScreenPosition(worldPos, camera, renderer); uiPositions[id] = { screenX: screenPos.x, screenY: screenPos.y }; } } };
         calculateUIPos(playerMeshes, stateToRender.players, (d) => PLAYER_MESH_Y_OFFSET); calculateUIPos(enemyMeshes, stateToRender.enemies, (d) => d.type === 'giant' ? GIANT_MESH_Y_OFFSET : ENEMY_MESH_Y_OFFSET);
@@ -302,15 +296,11 @@ const Renderer3D = (() => {
         if(hitSparkGeometry)hitSparkGeometry.dispose(); if(rainGeometry)rainGeometry.dispose(); if(dustGeometry)dustGeometry.dispose(); if(flameGeometry)flameGeometry.dispose();
         if(sparkMaterial)sparkMaterial.dispose(); if(rainMaterial)rainMaterial.dispose(); if(dustMaterial)dustMaterial.dispose(); if(flameMaterial){flameMaterial.map?.dispose(); flameMaterial.dispose();}
         scene?.remove(ammoCasingMesh); ammoCasingMesh=null; scene?.remove(snakeMesh); if(snakeMesh?.geometry)snakeMesh.geometry.dispose(); snakeMesh=null; scene?.remove(campfireGroup); campfireGroup=null;
-        // Dispose scene children thoroughly
         while(scene?.children.length > 0){ const child = scene.children[0]; scene.remove(child); disposeObject3D(child); }
-        // Dispose cached geometries
-        playerGeometry.dispose(); enemyChaserGeometry.dispose(); enemyShooterGeometry.dispose(); enemyGiantGeometry.dispose(); bulletGeometry.dispose(); powerupGeometry.dispose(); logGeometry.dispose(); casingGeometry.dispose(); groundGeometryPlane.dispose();
-        // Dispose cached materials
-        Object.values(powerupMaterials).forEach(m => m.dispose()); playerMaterialBase.dispose(); enemyChaserMaterialBase.dispose(); enemyShooterMaterialBase.dispose(); enemyGiantMaterialBase.dispose(); bulletPlayerMaterial.dispose(); bulletEnemyMaterial.dispose(); snakeMaterial.dispose(); logMaterial.dispose(); casingMaterial.dispose(); groundDayMaterial.dispose(); groundNightMaterial.dispose(); flameTexture.dispose();
-        // Dispose renderer
+        playerGeometry.dispose(); enemyChaserGeometry.dispose(); enemyShooterGeometry.dispose(); enemyGiantGeometry.dispose(); bulletGeometry.dispose(); powerupGeometry.dispose(); logGeometry.dispose(); casingGeometry.dispose(); groundGeometryPlane.dispose(); gunGeometry.dispose();
+        Object.values(powerupMaterials).forEach(m => m.dispose()); playerMaterialBase.dispose(); enemyChaserMaterialBase.dispose(); enemyShooterMaterialBase.dispose(); enemyGiantMaterialBase.dispose(); bulletPlayerMaterial.dispose(); bulletEnemyMaterial.dispose(); snakeMaterial.dispose(); logMaterial.dispose(); casingMaterial.dispose(); gunMaterial.dispose();
+        groundDayMaterial.dispose(); groundNightMaterial.dispose(); flameTexture.dispose();
         if (renderer) { renderer.dispose(); if (renderer.domElement?.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement); renderer = null; }
-        // Nullify references
         scene = null; camera = null; groundPlane = null; ambientLight = null; directionalLight = null; muzzleFlashLight = null; flameParticles = null; hitSparkParticles = null; rainParticles = null; dustParticles = null;
         Object.keys(playerMeshes).forEach(id => delete playerMeshes[id]); Object.keys(enemyMeshes).forEach(id => delete enemyMeshes[id]); Object.keys(bulletMeshes).forEach(id => delete bulletMeshes[id]); Object.keys(powerupMeshes).forEach(id => delete powerupMeshes[id]);
         sparkData.length = 0; rainData.length = 0; dustData.length = 0; flameData.length = 0;
