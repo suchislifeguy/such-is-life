@@ -4,6 +4,14 @@
 
 import * as THREE from 'three';
 
+// --- Utility Functions ---
+/** Linearly interpolates between two values. */
+function lerp(start, end, amount) {
+    // Clamp amount to prevent overshooting
+    const t = Math.max(0, Math.min(1, amount));
+    return start + (end - start) * t;
+}
+
 // --- Constants ---
 const DEFAULT_GAME_WIDTH = 1600; // Default, will be updated from init/appState
 const DEFAULT_GAME_HEIGHT = 900;
@@ -1171,6 +1179,7 @@ function _updateCamera(deltaTime) {
 function _updateEnvironment(isNight, isRaining, isDustStorm) {
      if (!scene || !ambientLight || !directionalLight || !groundPlane) return;
 
+     // --- Target Values --- (Keep these as before)
      const dayAmbientIntensity = 0.7; const nightAmbientIntensity = 0.45;
      const dayDirIntensity = 1.2; const nightDirIntensity = 0.7;
      const dayAmbientColor = 0xffffff; const nightAmbientColor = 0x7080a0; // Cooler night ambient
@@ -1180,51 +1189,65 @@ function _updateEnvironment(isNight, isRaining, isDustStorm) {
      const nightFogColor = 0x04060a; const nightFogDensity = 0.0008; // Darker, denser night fog
      const dustFogColor = 0xb09070; const dustFogDensity = 0.0015; // Brownish, very dense dust
 
-     // Lerp values for smooth transitions
+     // --- Determine Targets based on State ---
      const targetAmbientIntensity = isNight ? nightAmbientIntensity : dayAmbientIntensity;
      const targetDirIntensity = isNight ? nightDirIntensity : dayDirIntensity;
-     const targetAmbientColor = isNight ? nightAmbientColor : dayAmbientColor;
-     const targetDirColor = isNight ? nightDirColor : dayDirColor;
+     _color.setHex(isNight ? nightAmbientColor : dayAmbientColor); // Use temp color object for target ambient
+     const targetAmbientColor = _color.clone();
+     _color.setHex(isNight ? nightDirColor : dayDirColor); // Use temp color object for target directional
+     const targetDirColor = _color.clone();
      const targetGroundMaterial = isNight ? sharedMaterials.groundNight : sharedMaterials.groundDay;
 
-     let targetFogDensity, targetFogColorHex;
+     let targetFogDensityValue, targetFogColorHex;
      if(isDustStorm) {
-         targetFogDensity = dustFogDensity;
+         targetFogDensityValue = dustFogDensity;
          targetFogColorHex = dustFogColor;
      } else if (isNight) {
-         targetFogDensity = nightFogDensity;
+         targetFogDensityValue = nightFogDensity;
          targetFogColorHex = nightFogColor;
      } else {
-         targetFogDensity = dayFogDensity;
+         targetFogDensityValue = dayFogDensity;
          targetFogColorHex = dayFogColor;
      }
+     _color.setHex(targetFogColorHex); // Use temp color object for target fog
+     const targetFogColor = _color.clone();
 
-     ambientLight.intensity = lerp(ambientLight.intensity, targetAmbientIntensity, 0.05);
-     directionalLight.intensity = lerp(directionalLight.intensity, targetDirIntensity, 0.05);
-     ambientLight.color.lerp(_color.setHex(targetAmbientColor), 0.05);
-     directionalLight.color.lerp(_color.setHex(targetDirColor), 0.05);
 
-     // Set ground material directly (no lerp needed for material swap)
+     // --- Apply Lerp ---
+     const lerpAlpha = 0.05; // Smoothing factor
+
+     // Use the scalar 'lerp' function for intensity
+     ambientLight.intensity = lerp(ambientLight.intensity, targetAmbientIntensity, lerpAlpha);
+     directionalLight.intensity = lerp(directionalLight.intensity, targetDirIntensity, lerpAlpha);
+
+     // Use THREE.Color.lerp() for colors
+     ambientLight.color.lerp(targetAmbientColor, lerpAlpha);
+     directionalLight.color.lerp(targetDirColor, lerpAlpha);
+
+     // Set ground material directly
      if (groundPlane.material !== targetGroundMaterial) {
          groundPlane.material = targetGroundMaterial;
      }
 
      // Update Fog
      if (!scene.fog) {
-         scene.fog = new THREE.FogExp2(targetFogColorHex, targetFogDensity);
+         scene.fog = new THREE.FogExp2(targetFogColor.getHex(), targetFogDensityValue);
      } else {
-         scene.fog.color.lerp(_color.setHex(targetFogColorHex), 0.05);
-         scene.fog.density = lerp(scene.fog.density, targetFogDensity, 0.05);
+         // Use THREE.Color.lerp() for fog color
+         scene.fog.color.lerp(targetFogColor, lerpAlpha);
+         // Use the scalar 'lerp' function for density
+         scene.fog.density = lerp(scene.fog.density, targetFogDensityValue, lerpAlpha);
      }
-     // Match background to fog
-     if(!scene.background) scene.background = new THREE.Color();
-     scene.background.lerp(_color.setHex(targetFogColorHex), 0.05);
 
-     // Update particle system visibility
+     // Match background to fog color using Color.lerp()
+     if(!scene.background || !(scene.background instanceof THREE.Color)) {
+          scene.background = new THREE.Color(); // Ensure background is a Color object
+     }
+     scene.background.lerp(targetFogColor, lerpAlpha); // Lerp towards the target fog color
+
+     // Update particle system visibility (Keep as before)
      if (rainSystem) rainSystem.lines.visible = isRaining;
      if (dustSystem) dustSystem.particles.visible = isDustStorm;
-
-     // Update campfire visibility/glow based on state (done in _updateCampfire)
 }
 
 function _updateMuzzleFlash(localEffects, playerGroup) {
