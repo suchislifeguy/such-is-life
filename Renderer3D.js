@@ -941,28 +941,25 @@ const Renderer3D = {
         console.log("--- Renderer3D initialization complete ---"); return true;
     },
 
-/** Renders the scene based on the provided game state. */
+    /** Renders the scene based on the provided game state. */
     renderScene: (stateToRender, appState, localEffects) => {
-        // Initial Guard Clause
         if (!renderer || !scene || !camera || !stateToRender || !appState || !localEffects || !clock) {
-            // console.warn("Renderer not ready or missing state for render."); // Optional warning
             return;
         }
-        const deltaTime = clock.getDelta(); // Time since last frame
+        const deltaTime = clock.getDelta();
 
-        // --- DEBUG LOGGING BLOCK ---
         console.log(`--- Frame Start ---`);
-        if (!renderer || !camera || !domContainer) { // Check domContainer too, used below
+        if (!renderer || !camera || !domContainer) {
             console.error("Missing core components (renderer, camera, or domContainer)!");
-            return; // Stop if core components are missing
+            return;
         }
         const currentDomWidth = domContainer.clientWidth;
         const currentDomHeight = domContainer.clientHeight;
-        const rendererSize = renderer.getSize(new THREE.Vector2()); // Use temp Vector2
+        const rendererSize = renderer.getSize(new THREE.Vector2());
 
         console.log(`DOM Size: ${currentDomWidth}x${currentDomHeight}`);
         console.log(`Renderer Size: ${rendererSize.x}x${rendererSize.y}`);
-        // Check camera aspect only if camera exists and dimensions are valid
+
         if (camera && currentDomWidth > 0 && currentDomHeight > 0) {
              console.log(`Camera Aspect: ${camera.aspect.toFixed(3)}`);
              console.log(`Expected Aspect: ${(currentDomWidth / currentDomHeight).toFixed(3)}`);
@@ -971,8 +968,6 @@ const Renderer3D = {
              console.log(`Expected Aspect: (N/A)`);
         }
 
-
-        // Log Viewport/Scissor (using a temp Vector4 for getViewport/getScissor)
         const viewport = new THREE.Vector4();
         renderer.getViewport(viewport);
         console.log(`Viewport: x=${viewport.x}, y=${viewport.y}, w=${viewport.z}, h=${viewport.w}`);
@@ -980,27 +975,21 @@ const Renderer3D = {
         renderer.getScissor(scissor);
         console.log(`Scissor: x=${scissor.x}, y=${scissor.y}, w=${scissor.z}, h=${scissor.w}`);
         console.log(`Scissor Test Enabled: ${renderer.getScissorTest()}`);
-        // --- END DEBUG LOGGING BLOCK ---
 
-        // --- Update game world size and camera aspect if changed from appState ---
         let dimensionsChanged = false;
         if (appState.canvasWidth && appState.canvasHeight && (gameWidth !== appState.canvasWidth || gameHeight !== appState.canvasHeight)) {
             gameWidth = appState.canvasWidth; gameHeight = appState.canvasHeight; dimensionsChanged = true;
-            cameraTargetPos.x = gameWidth / 2; cameraTargetPos.z = gameHeight / 2; // Recenter target
-            if (groundPlane) groundPlane.scale.set(gameWidth * GROUND_MARGIN, gameHeight * GROUND_MARGIN, 1); // Rescale ground
+            cameraTargetPos.x = gameWidth / 2; cameraTargetPos.z = gameHeight / 2;
+            if (groundPlane) groundPlane.scale.set(gameWidth * GROUND_MARGIN, gameHeight * GROUND_MARGIN, 1);
             console.log(`Logical dimensions updated: ${gameWidth}x${gameHeight}`);
         }
-        // --- Update Renderer and Camera based on DOM size ---
-        // This ensures the output matches the visual container size
-        const currentDomWidth = domContainer?.clientWidth ?? gameWidth;
-        const currentDomHeight = domContainer?.clientHeight ?? gameHeight;
-        if (renderer.domElement.width !== currentDomWidth || renderer.domElement.height !== currentDomHeight) {
+
+        // Use the already declared currentDomWidth/Height from the logging block
+        if (renderer.domElement.width !== currentDomWidth || renderer.domElement.height !== currentDomHeight || dimensionsChanged) {
              renderer.setSize(currentDomWidth, currentDomHeight);
              camera.aspect = currentDomWidth / currentDomHeight;
              camera.updateProjectionMatrix();
-             // console.log(`Renderer resized to DOM: ${currentDomWidth}x${currentDomHeight}`);
         }
-
 
         // --- Update Phase ---
         _updateCamera(deltaTime);
@@ -1008,17 +997,17 @@ const Renderer3D = {
         _syncSceneObjects(stateToRender.players, playerGroupMap, _createPlayerGroup, _updatePlayerGroup, (id) => id === appState.localPlayerId);
         _syncSceneObjects(stateToRender.enemies, enemyGroupMap, _createEnemyGroup, _updateEnemyGroup);
         _syncSceneObjects(stateToRender.powerups, powerupGroupMap, _createPowerupGroup, _updatePowerupGroup);
-        _updateInstancedMesh(playerBulletMesh, playerBulletMatrices, stateToRender.bullets, Y_OFFSET_BULLET, true); // Pass only bullets
-        _updateInstancedMesh(enemyBulletMesh, enemyBulletMatrices, stateToRender.bullets, Y_OFFSET_BULLET, true); // Pass only bullets
+        _updateInstancedMesh(playerBulletMesh, playerBulletMatrices, stateToRender.bullets, Y_OFFSET_BULLET, true);
+        _updateInstancedMesh(enemyBulletMesh, enemyBulletMatrices, stateToRender.bullets, Y_OFFSET_BULLET, true);
         _updateActiveCasings(deltaTime);
         _updateHitSparks(deltaTime);
         _updateRain(deltaTime);
         _updateDust(deltaTime);
         _updateCampfire(deltaTime);
-        _updateSnake(localEffects.snake); // Drive snake visual from local state
+        _updateSnake(localEffects.snake);
         _updateMuzzleFlash(localEffects, playerGroupMap[appState.localPlayerId]);
 
-        // Project UI Positions
+        // --- Project UI Positions ---
         const uiPositions = {};
         const projectEntity = (objMap, stateMap, yOffsetFn) => { for (const id in objMap) { const obj = objMap[id]; const data = stateMap?.[id]; if (obj?.visible && data) { const worldPos = obj.position.clone(); worldPos.y = yOffsetFn(data, obj); const screenPos = Renderer3D.projectToScreen(worldPos); if(screenPos) uiPositions[id] = screenPos; } } };
         const getPlayerHeadY = (d,g) => g.userData?.headMesh?.position.y + PLAYER_HEAD_RADIUS * 1.5 || PLAYER_TOTAL_HEIGHT; const getEnemyHeadY = (d,g) => g.userData?.headMesh?.position.y + (d.type==='giant' ? ENEMY_HEAD_RADIUS*ENEMY_GIANT_MULTIPLIER : ENEMY_HEAD_RADIUS)*1.2 || ENEMY_CHASER_HEIGHT; const getPowerupTopY = (d,g) => g.userData?.iconMesh?.position.y + POWERUP_BASE_SIZE * 0.5 || Y_OFFSET_POWERUP;
