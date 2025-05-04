@@ -1,7 +1,7 @@
-// main.js - FINAL CORRECTED VERSION
+// main.js - FINAL COMPLETE VERSION
 import Renderer3D from './Renderer3D.js';
 
-console.log("--- main.js: Starting execution Final Corrected ---");
+console.log("--- main.js: Starting execution Final Complete ---");
 
 // --- Constants ---
 const WEBSOCKET_URL = 'wss://such-is-life.glitch.me/ws';
@@ -33,6 +33,7 @@ const DOM = {
     cancelHostBtn: document.getElementById('cancelHostBtn'), joinGameSubmitBtn: document.getElementById('joinGameSubmitBtn'),
     sendChatBtn: document.getElementById('sendChatBtn'), leaveGameBtn: document.getElementById('leaveGameBtn'),
     gameOverBackBtn: document.getElementById('gameOverBackBtn'),
+    muteBtn: document.getElementById('muteBtn'), // Added Mute Button
 };
 
 // --- Global Client State ---
@@ -69,15 +70,34 @@ const damageTextElements = {}; const inactiveDamageTextElements = [];
 const healthBarElements = {}; const inactiveHealthBarElements = [];
 const speechBubbleElements = {}; const inactiveSpeechBubbleElements = [];
 
-// --- Sound Manager ---
+// --- Sound Manager (With Mute Functionality) ---
 const SoundManager = (() => {
     let audioContext = null; let loadedSounds = {};
     let soundFiles = { 'shoot': 'assets/sounds/shoot.mp3', 'damage': 'assets/sounds/damage.mp3' };
     let soundsLoading = 0; let soundsLoaded = 0; let isInitialized = false; let canPlaySound = false;
+    let isMuted = false; // Mute state
+
     function init() { if (isInitialized) { return canPlaySound; } isInitialized = true; try { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) { console.error("[SM] Web Audio API not supported."); canPlaySound = false; return false; } audioContext = new AC(); if (audioContext.state === 'suspended') { audioContext.resume().then(() => { canPlaySound = true; loadSounds(); }).catch(err => { console.error("[SM] Failed auto-resume:", err); canPlaySound = false; }); } else if (audioContext.state === 'running') { canPlaySound = true; loadSounds(); } else { canPlaySound = false; } } catch (e) { console.error("[SM] Error creating AudioContext:", e); audioContext = null; canPlaySound = false; return false; } return canPlaySound; }
     function loadSounds() { if (!audioContext) return; soundsLoading = Object.keys(soundFiles).length; soundsLoaded = 0; loadedSounds = {}; Object.entries(soundFiles).forEach(([name, path]) => { fetch(path).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status} for ${path}`); return r.arrayBuffer(); }).then(b => audioContext.decodeAudioData(b)).then(db => { loadedSounds[name] = db; soundsLoaded++; if (soundsLoaded === soundsLoading) console.log("[SM] Sounds loaded."); }).catch(e => { console.error(`[SM] Error load/decode '${name}':`, e); soundsLoaded++; if (soundsLoaded === soundsLoading) console.log("[SM] Sound loading finished (errors)."); }); }); }
-    function playSound(name, volume = 1.0) { if (!isInitialized || !canPlaySound || !audioContext || audioContext.state !== 'running') return; const buffer = loadedSounds[name]; if (!buffer) return; try { const source = audioContext.createBufferSource(); source.buffer = buffer; const gainNode = audioContext.createGain(); const clampedVolume = Math.max(0, Math.min(1, volume)); gainNode.gain.setValueAtTime(clampedVolume, audioContext.currentTime); source.connect(gainNode).connect(audioContext.destination); source.start(0); source.onended = () => { try { source.disconnect(); gainNode.disconnect(); } catch (e) {} }; } catch (e) { console.error(`[SM] Error playing '${name}':`, e); } }
-    return { init, playSound };
+    function playSound(name, volume = 1.0) {
+        if (isMuted) return; // Check if muted
+        if (!isInitialized || !canPlaySound || !audioContext || audioContext.state !== 'running') return;
+        const buffer = loadedSounds[name]; if (!buffer) return;
+        try { const source = audioContext.createBufferSource(); source.buffer = buffer; const gainNode = audioContext.createGain(); const clampedVolume = Math.max(0, Math.min(1, volume)); gainNode.gain.setValueAtTime(clampedVolume, audioContext.currentTime); source.connect(gainNode).connect(audioContext.destination); source.start(0); source.onended = () => { try { source.disconnect(); gainNode.disconnect(); } catch (e) {} }; } catch (e) { console.error(`[SM] Error playing '${name}':`, e); } }
+
+    function toggleMute() {
+        isMuted = !isMuted;
+        log(`[SM] Sound ${isMuted ? 'Muted' : 'Unmuted'}`);
+        if (DOM.muteBtn) { // Update button appearance
+            DOM.muteBtn.textContent = isMuted ? 'Unmute' : 'Mute';
+            DOM.muteBtn.classList.toggle('muted', isMuted);
+        }
+        return isMuted;
+    }
+
+    function getMuteState() { return isMuted; } // Optional: function to check state
+
+    return { init, playSound, toggleMute, getMuteState };
 })();
 
 // --- Logging Wrappers ---
@@ -148,6 +168,7 @@ const Game = (() => {
         if (showMenu) { appState.mode = 'menu'; UI.updateStatus(appState.isConnected ? "Connected." : "Disconnected."); UI.showSection('main-menu-section'); }
     }
 
+    // --- HTML Overlay Update Function ---
     function updateHtmlOverlays(stateToRender, appState) {
         if (!DOM.htmlOverlay || !stateToRender || !appState.uiPositions) return;
         const overlay = DOM.htmlOverlay; const now = performance.now();
@@ -171,7 +192,7 @@ const Game = (() => {
 
         // Speech Bubbles
         const playerSpeechBubbleBg = "rgba(0, 0, 0, 0.7)"; const playerSpeechBubbleColor = "#d0d8d7"; const enemySpeechBubbleBg = "rgba(70, 0, 0, 0.7)"; const enemySpeechBubbleColor = "#FFAAAA";
-        for (const id in allBubbles) { const bubbleData = allBubbles[id]; if (!activeBubbleIds.has(id)) continue; const posData = appState.uiPositions[id]; if (!posData) continue; let element = speechBubbleElements[id]; if (!element) { element = inactiveSpeechBubbleElements.pop() || document.createElement('div'); element.style.position='absolute'; element.style.padding='5px 8px'; element.style.borderRadius='5px'; element.style.fontSize='13px'; element.style.textAlign='center'; element.style.maxWidth='150px'; element.style.wordWrap='break-word'; element.className='overlay-element speech-bubble'; overlay.appendChild(element); speechBubbleElements[id] = element; } element.textContent = bubbleData.text; element.style.display = 'block'; const isPlayer = !!stateToRender.players[id]; element.style.backgroundColor = isPlayer ? playerSpeechBubbleBg : enemySpeechBubbleBg; element.style.color = isPlayer ? playerSpeechBubbleColor : enemySpeechBubbleColor; const healthBarExists = activeHealthBarIds.has(id); const armorVisible = healthBarExists && (players[id]?.armor > 0 || enemies[id]?.armor > 0); const baseOffsetY = -45; const healthBarTotalHeight = healthBarExists ? (healthBarHeight + (armorVisible ? armorBarHeight + barSpacing : 0) + barSpacing) : 0; const bubbleOffsetY = baseOffsetY - healthBarTotalHeight; element.style.left = `${posData.screenX}px`; element.style.top = `${posData.screenY + bubbleOffsetY}px`; element.style.transform = 'translateX(-50%)'; }
+        for (const id in allBubbles) { const bubbleData = allBubbles[id]; if (!activeBubbleIds.has(id)) continue; const posData = appState.uiPositions[id]; if (!posData) continue; let element = speechBubbleElements[id]; if (!element) { element = inactiveSpeechBubbleElements.pop() || document.createElement('div'); element.style.position='absolute'; element.style.padding='5px 8px'; element.style.borderRadius='5px'; element.style.fontSize='13px'; element.style.textAlign='center'; element.style.maxWidth='150px'; element.style.wordWrap='break-word'; element.className='overlay-element speech-bubble'; overlay.appendChild(element); speechBubbleElements[id] = element; } element.textContent = bubbleData.text; element.style.display = 'block'; const isPlayer = !!stateToRender.players[id]; element.style.backgroundColor = isPlayer ? playerSpeechBubbleBg : enemySpeechBubbleBg; element.style.color = isPlayer ? playerSpeechBubbleColor : enemySpeechBubbleColor; const healthBarExists = activeHealthBarIds.has(id); const entityData = players[id] || enemies[id]; const armorVisible = healthBarExists && (entityData?.armor > 0); const baseOffsetY = -45; const healthBarTotalHeight = healthBarExists ? (healthBarHeight + (armorVisible ? armorBarHeight + barSpacing : 0) + barSpacing) : 0; const bubbleOffsetY = baseOffsetY - healthBarTotalHeight; element.style.left = `${posData.screenX}px`; element.style.top = `${posData.screenY + bubbleOffsetY}px`; element.style.transform = 'translateX(-50%)'; }
         for (const id in speechBubbleElements) { if (!activeBubbleIds.has(id)) { const elementToPool = speechBubbleElements[id]; elementToPool.style.display = 'none'; inactiveSpeechBubbleElements.push(elementToPool); delete speechBubbleElements[id]; } }
     }
 
@@ -193,7 +214,7 @@ const Game = (() => {
         activeAmmoCasings.forEach(c => { c.vy += c.gravity * deltaTime; c.x += c.vx * deltaTime; c.y += c.vy * deltaTime; c.rotation += c.rotationSpeed * deltaTime; });
 
         if (appState.serverState?.status === 'active') {
-            if (appState.mode === 'singleplayer') { const pState = appState.serverState?.players?.[appState.localPlayerId]; if (pState && typeof pState.x === 'number') { appState.renderedPlayerPos.x = pState.x; appState.renderedPlayerPos.y = pState.y; }} // Added checks
+            if (appState.mode === 'singleplayer') { const pState = appState.serverState?.players?.[appState.localPlayerId]; if (pState && typeof pState.x === 'number') { appState.renderedPlayerPos.x = pState.x; appState.renderedPlayerPos.y = pState.y; }}
             else { updatePredictedPosition(deltaTime); reconcileWithServer(); }
         }
 
@@ -214,25 +235,28 @@ const Game = (() => {
 
     function startGameLoop() { if (appState.mode === 'menu' || appState.animationFrameId) return; if (!appState.serverState && appState.mode !== 'singleplayer') { log("Delaying loop: Waiting for state."); return; } Input.setup(); log("Starting game loop..."); appState.lastLoopTime = null; appState.animationFrameId = requestAnimationFrame(gameLoop); }
     function getInterpolatedState(renderTime) {
-        const INTERPOLATION_BUFFER_MS = 100; const serverState = appState.serverState; const lastServerState = appState.lastServerState;
-        if (!serverState || !lastServerState || !serverState.timestamp || !lastServerState.timestamp) return serverState;
-        const serverTime = serverState.timestamp * 1000; const lastServerTime = lastServerState.timestamp * 1000;
-        if (serverTime <= lastServerTime) return serverState;
-        const renderTargetTime = renderTime - INTERPOLATION_BUFFER_MS; const timeBetweenStates = serverTime - lastServerTime;
-        const timeSinceLastState = renderTargetTime - lastServerTime; let t = Math.max(0, Math.min(1, timeSinceLastState / timeBetweenStates));
-        let interpolatedState = JSON.parse(JSON.stringify(serverState));
-        if (interpolatedState.players) { for (const pId in interpolatedState.players) { const currentP = serverState.players[pId]; const lastP = lastServerState.players?.[pId]; if (pId === appState.localPlayerId && appState.mode !== 'singleplayer') { interpolatedState.players[pId].x = appState.renderedPlayerPos.x; interpolatedState.players[pId].y = appState.renderedPlayerPos.y; } else if (lastP && typeof currentP.x === 'number' && typeof lastP.x === 'number' && typeof currentP.y === 'number' && typeof lastP.y === 'number') { interpolatedState.players[pId].x = lerp(lastP.x, currentP.x, t); interpolatedState.players[pId].y = lerp(lastP.y, currentP.y, t); } } } // Added y check
-        if (interpolatedState.enemies) { for (const eId in interpolatedState.enemies) { const currentE = serverState.enemies[eId]; const lastE = lastServerState.enemies?.[eId]; if (lastE && typeof currentE.x === 'number' && typeof lastE.x === 'number' && typeof currentE.y === 'number' && typeof lastE.y === 'number' && currentE.health > 0) { interpolatedState.enemies[eId].x = lerp(lastE.x, currentE.x, t); interpolatedState.enemies[eId].y = lerp(lastE.y, currentE.y, t); } } } // Fixed typo & added y check
-        if (interpolatedState.bullets) { for (const bId in interpolatedState.bullets) { const currentB = serverState.bullets[bId]; const lastB = lastServerState.bullets?.[bId]; if (lastB && typeof currentB.x === 'number' && typeof lastB.x === 'number' && typeof currentB.y === 'number' && typeof lastB.y === 'number') { interpolatedState.bullets[bId].x = lerp(lastB.x, currentB.x, t); interpolatedState.bullets[bId].y = lerp(lastB.y, currentB.y, t); } } } // Added y check
-        interpolatedState.powerups = serverState.powerups; interpolatedState.damage_texts = serverState.damage_texts;
+        const INTERPOLATION_BUFFER_MS=100; const serverState=appState.serverState; const lastServerState=appState.lastServerState;
+        if (!serverState||!lastServerState||!serverState.timestamp||!lastServerState.timestamp) return serverState;
+        const serverTime=serverState.timestamp*1000; const lastServerTime=lastServerState.timestamp*1000;
+        if (serverTime<=lastServerTime) return serverState;
+        const renderTargetTime=renderTime-INTERPOLATION_BUFFER_MS; const timeBetweenStates=serverTime-lastServerTime;
+        const timeSinceLastState=renderTargetTime-lastServerTime; let t=Math.max(0,Math.min(1,timeSinceLastState/timeBetweenStates));
+        let interpolatedState=JSON.parse(JSON.stringify(serverState)); // Deep copy
+        if (interpolatedState.players){ for (const pId in interpolatedState.players){ const currentP=serverState.players[pId]; const lastP=lastServerState.players?.[pId]; if(pId===appState.localPlayerId&&appState.mode!=='singleplayer'){interpolatedState.players[pId].x=appState.renderedPlayerPos.x; interpolatedState.players[pId].y=appState.renderedPlayerPos.y;}else if(lastP&&typeof currentP.x==='number'&&typeof lastP.x==='number'&&typeof currentP.y==='number'&&typeof lastP.y==='number'){interpolatedState.players[pId].x=lerp(lastP.x,currentP.x,t); interpolatedState.players[pId].y=lerp(lastP.y,currentP.y,t);}}}
+        if (interpolatedState.enemies){ for (const eId in interpolatedState.enemies){ const currentE=serverState.enemies[eId]; const lastE=lastServerState.enemies?.[eId]; if(lastE&&typeof currentE.x==='number'&&typeof lastE.x==='number'&&typeof currentE.y==='number'&&typeof lastE.y==='number'&& currentE.health>0){interpolatedState.enemies[eId].x=lerp(lastE.x,currentE.x,t); interpolatedState.enemies[eId].y=lerp(lastE.y,currentE.y,t);}}} // Corrected the typo & added y check
+        if (interpolatedState.bullets){ for (const bId in interpolatedState.bullets){ const currentB=serverState.bullets[bId]; const lastB=lastServerState.bullets?.[bId]; if(lastB&&typeof currentB.x==='number'&&typeof lastB.x==='number'&&typeof currentB.y==='number'&&typeof lastB.y==='number'){interpolatedState.bullets[bId].x=lerp(lastB.x,currentB.x,t); interpolatedState.bullets[bId].y=lerp(lastB.y,currentB.y,t);}}}
+        interpolatedState.powerups=serverState.powerups; interpolatedState.damage_texts=serverState.damage_texts;
         return interpolatedState;
      }
     function cleanupLoop() { if (appState.animationFrameId) { cancelAnimationFrame(appState.animationFrameId); appState.animationFrameId = null; log("Game loop stopped."); } Input.cleanup(); appState.lastLoopTime = null; }
     function updatePredictedPosition(deltaTime) { if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return; const moveVector = Input.getMovementInputVector(); const playerState = appState.serverState.players[appState.localPlayerId]; const playerSpeed = playerState?.speed ?? PLAYER_DEFAULTS.base_speed; if (moveVector.dx !== 0 || moveVector.dy !== 0) { appState.predictedPlayerPos.x += moveVector.dx * playerSpeed * deltaTime; appState.predictedPlayerPos.y += moveVector.dy * playerSpeed * deltaTime; } const w_half = (playerState?.width ?? PLAYER_DEFAULTS.width) / 2; const h_half = (playerState?.height ?? PLAYER_DEFAULTS.height) / 2; appState.predictedPlayerPos.x = Math.max(w_half, Math.min(appState.canvasWidth - w_half, appState.predictedPlayerPos.x)); appState.predictedPlayerPos.y = Math.max(h_half, Math.min(appState.canvasHeight - h_half, appState.predictedPlayerPos.y)); }
     function reconcileWithServer() { if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return; const serverPos = appState.serverState.players[appState.localPlayerId]; if (typeof serverPos.x !== 'number' || typeof serverPos.y !== 'number') return; const predictedPos = appState.predictedPlayerPos; const renderedPos = appState.renderedPlayerPos; const dist = distance(predictedPos.x, predictedPos.y, serverPos.x, serverPos.y); const snapThreshold = parseFloat(getCssVar('--reconciliation-threshold')) || 35; const renderLerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.15; if (dist > snapThreshold) { predictedPos.x = serverPos.x; predictedPos.y = serverPos.y; renderedPos.x = serverPos.x; renderedPos.y = serverPos.y; } else { renderedPos.x = lerp(renderedPos.x, predictedPos.x, renderLerpFactor); renderedPos.y = lerp(renderedPos.y, predictedPos.y, renderLerpFactor); } }
 
-    function initListeners() { log("Initializing button listeners..."); if (DOM.singlePlayerBtn) DOM.singlePlayerBtn.onclick = () => { SoundManager.init(); startSinglePlayer(); }; const hostHandler = (maxPlayers) => { SoundManager.init(); hostMultiplayer(maxPlayers); }; if (DOM.hostGameBtn2) DOM.hostGameBtn2.onclick = () => hostHandler(2); if (DOM.hostGameBtn3) DOM.hostGameBtn3.onclick = () => hostHandler(3); if (DOM.hostGameBtn4) DOM.hostGameBtn4.onclick = () => hostHandler(4); if (DOM.joinGameSubmitBtn) DOM.joinGameSubmitBtn.onclick = () => { SoundManager.init(); joinMultiplayer(); }; if (DOM.multiplayerBtn) DOM.multiplayerBtn.onclick = () => UI.showSection('multiplayer-menu-section'); if (DOM.showJoinUIBtn) DOM.showJoinUIBtn.onclick = () => UI.showSection('join-code-section'); if (DOM.cancelHostBtn) DOM.cancelHostBtn.onclick = leaveGame; if (DOM.sendChatBtn) DOM.sendChatBtn.onclick = sendChatMessage; if (DOM.leaveGameBtn) DOM.leaveGameBtn.onclick = leaveGame; if (DOM.gameOverBackBtn) DOM.gameOverBackBtn.onclick = () => resetClientState(true); DOM.gameContainer.querySelectorAll('.back-button').forEach(btn => { const targetId = btn.dataset.target; if (targetId && (DOM[targetId] || document.getElementById(targetId))) { btn.onclick = (e) => { e.preventDefault(); UI.showSection(targetId); }; } else { log(`Warn: Back button missing or invalid data-target: ${targetId}`, btn); } }); log("Finished initializing button listeners."); }
+    function initListeners() { log("Initializing button listeners..."); if (DOM.singlePlayerBtn) DOM.singlePlayerBtn.onclick = () => { SoundManager.init(); startSinglePlayer(); }; const hostHandler = (maxPlayers) => { SoundManager.init(); hostMultiplayer(maxPlayers); }; if (DOM.hostGameBtn2) DOM.hostGameBtn2.onclick = () => hostHandler(2); if (DOM.hostGameBtn3) DOM.hostGameBtn3.onclick = () => hostHandler(3); if (DOM.hostGameBtn4) DOM.hostGameBtn4.onclick = () => hostHandler(4); if (DOM.joinGameSubmitBtn) DOM.joinGameSubmitBtn.onclick = () => { SoundManager.init(); joinMultiplayer(); }; if (DOM.multiplayerBtn) DOM.multiplayerBtn.onclick = () => UI.showSection('multiplayer-menu-section'); if (DOM.showJoinUIBtn) DOM.showJoinUIBtn.onclick = () => UI.showSection('join-code-section'); if (DOM.cancelHostBtn) DOM.cancelHostBtn.onclick = leaveGame; if (DOM.sendChatBtn) DOM.sendChatBtn.onclick = sendChatMessage; if (DOM.leaveGameBtn) DOM.leaveGameBtn.onclick = leaveGame; if (DOM.gameOverBackBtn) DOM.gameOverBackBtn.onclick = () => resetClientState(true);
+    if (DOM.muteBtn) { DOM.muteBtn.onclick = SoundManager.toggleMute; DOM.muteBtn.textContent = SoundManager.getMuteState() ? 'Unmute' : 'Mute'; DOM.muteBtn.classList.toggle('muted', SoundManager.getMuteState());} // Setup mute button listener and initial state
+    DOM.gameContainer.querySelectorAll('.back-button').forEach(btn => { const targetId = btn.dataset.target; if (targetId && (DOM[targetId] || document.getElementById(targetId))) { btn.onclick = (e) => { e.preventDefault(); UI.showSection(targetId); }; } else { log(`Warn: Back button missing or invalid data-target: ${targetId}`, btn); } }); log("Finished initializing button listeners."); }
 
+    // --- Export necessary functions from Game module ---
     return { startSinglePlayer, joinMultiplayer, hostMultiplayer, leaveGame, sendChatMessage, resetClientState, startGameLoop, cleanupLoop, getInterpolatedState, initListeners };
 })();
 
