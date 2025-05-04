@@ -333,16 +333,29 @@ function _updateCamera(deltaTime) {
     if (shakeMagnitude > 0 && clock.elapsedTime < shakeEndTime) { const timeRemaining = shakeEndTime - clock.elapsedTime; const decayFactor = Math.pow(Math.max(0, timeRemaining / (shakeEndTime - (clock.elapsedTime-deltaTime))), 2); const currentMag = shakeMagnitude * decayFactor; const shakeAngle = Math.random() * Math.PI * 2; screenShakeOffset.set(Math.cos(shakeAngle)*currentMag, (Math.random()-0.5)*currentMag*0.5, Math.sin(shakeAngle)*currentMag); camera.position.add(screenShakeOffset); } else shakeMagnitude = 0;
     _vector3.set(targetX, 0, targetZ); camera.lookAt(_vector3);
 }
+/** Updates environment lighting, fog, etc. */
 function _updateEnvironment(isNight, isRaining, isDustStorm) {
+     // Guard clause
      if (!scene || !ambientLight || !directionalLight || !groundPlane || !clock) return;
-     const dayAI=0.7, nightAI=0.45; const dayDI=1.2, nightDI=0.7; const dayAC=0xffffff, nightAC=0x7080a0; const dayDC=0xffffff, nightDC=0xa0b0ff; const dayFogC=0xc0d0e0, dayFogD=0.0003; const nightFogC=0x04060a, nightFogD=0.0008; const dustFogC=0xb09070, dustFogD=0.0015;
+
+     // Define target values (same as before)
+     const dayAI=0.7, nightAI=0.45; const dayDI=1.2, nightDI=0.7; const dayAC=0xffffff, nightAC=0x7080a0; const dayDC=0xffffff, nightDC=0xa0b0ff;
+     const dayFogC=0xc0d0e0, dayFogD=0.0003; const nightFogC=0x04060a, nightFogD=0.0008; const dustFogC=0xb09070, dustFogD=0.0015;
+
+     // Determine targets based on state (same as before)
      const targetAI=isNight?nightAI:dayAI; const targetDI=isNight?nightDI:dayDI; const targetAC=isNight?nightAC:dayAC; const targetDC=isNight?nightDC:dayDC; const targetGM=isNight?sharedMaterials.groundNight:sharedMaterials.groundDay;
      let targetFD, targetFC; if(isDustStorm){targetFD=dustFogD;targetFC=dustFogC;}else if(isNight){targetFD=nightFogD;targetFC=nightFogC;}else{targetFD=dayFogD;targetFC=dayFogC;}
-     const lerpA=0.05; ambientLight.intensity=lerp(ambientLight.intensity, targetAI, lerpA); directionalLight.intensity=lerp(directionalLight.intensity, targetDI, lerpA); ambientLight.color.lerp(_color.setHex(targetAC), lerpA); directionalLight.color.lerp(_color.setHex(targetDC), lerpA);
+
+     // Apply lerp (same as before)
+     const lerpA=0.05; ambientLight.intensity=lerp(ambientLight.intensity, targetAI, lerpA); directionalLight.intensity=lerp(directionalLight.intensity, targetDI, lerpA);
+     ambientLight.color.lerp(_color.setHex(targetAC), lerpA); directionalLight.color.lerp(_color.setHex(targetDC), lerpA);
      if (groundPlane.material !== targetGM) groundPlane.material = targetGM;
      if (!scene.fog) scene.fog = new THREE.FogExp2(targetFC, targetFD); else { scene.fog.color.lerp(_color.setHex(targetFC), lerpA); scene.fog.density = lerp(scene.fog.density, targetFD, lerpA); }
      if(!scene.background || !(scene.background instanceof THREE.Color)) scene.background = new THREE.Color(); scene.background.lerp(_color.setHex(targetFC), lerpA);
-     if (rainSystem) rainSystem.l.visible = isRaining; if (dustSystem) dustSystem.p.visible = isDustStorm;
+
+     // *** CORRECTED VISIBILITY SETTING ***
+     if (rainSystem?.lines) rainSystem.lines.visible = isRaining; // Use ?.lines
+     if (dustSystem?.particles) dustSystem.particles.visible = isDustStorm; // Use ?.particles
 }
 function _updateMuzzleFlash(localEffects, playerGroup) {
     if (!muzzleFlashLight || !clock) return; const flashState = localEffects?.muzzleFlash; const now = clock.elapsedTime * 1000;
