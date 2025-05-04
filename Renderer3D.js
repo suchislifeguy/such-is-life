@@ -941,10 +941,46 @@ const Renderer3D = {
         console.log("--- Renderer3D initialization complete ---"); return true;
     },
 
-    /** Renders the scene based on the provided game state. */
+/** Renders the scene based on the provided game state. */
     renderScene: (stateToRender, appState, localEffects) => {
-        if (!renderer || !scene || !camera || !stateToRender || !appState || !localEffects || !clock) return;
-        const deltaTime = clock.getDelta();
+        // Initial Guard Clause
+        if (!renderer || !scene || !camera || !stateToRender || !appState || !localEffects || !clock) {
+            // console.warn("Renderer not ready or missing state for render."); // Optional warning
+            return;
+        }
+        const deltaTime = clock.getDelta(); // Time since last frame
+
+        // --- DEBUG LOGGING BLOCK ---
+        console.log(`--- Frame Start ---`);
+        if (!renderer || !camera || !domContainer) { // Check domContainer too, used below
+            console.error("Missing core components (renderer, camera, or domContainer)!");
+            return; // Stop if core components are missing
+        }
+        const currentDomWidth = domContainer.clientWidth;
+        const currentDomHeight = domContainer.clientHeight;
+        const rendererSize = renderer.getSize(new THREE.Vector2()); // Use temp Vector2
+
+        console.log(`DOM Size: ${currentDomWidth}x${currentDomHeight}`);
+        console.log(`Renderer Size: ${rendererSize.x}x${rendererSize.y}`);
+        // Check camera aspect only if camera exists and dimensions are valid
+        if (camera && currentDomWidth > 0 && currentDomHeight > 0) {
+             console.log(`Camera Aspect: ${camera.aspect.toFixed(3)}`);
+             console.log(`Expected Aspect: ${(currentDomWidth / currentDomHeight).toFixed(3)}`);
+        } else {
+             console.log(`Camera Aspect: (Camera missing or invalid DOM dimensions)`);
+             console.log(`Expected Aspect: (N/A)`);
+        }
+
+
+        // Log Viewport/Scissor (using a temp Vector4 for getViewport/getScissor)
+        const viewport = new THREE.Vector4();
+        renderer.getViewport(viewport);
+        console.log(`Viewport: x=${viewport.x}, y=${viewport.y}, w=${viewport.z}, h=${viewport.w}`);
+        const scissor = new THREE.Vector4();
+        renderer.getScissor(scissor);
+        console.log(`Scissor: x=${scissor.x}, y=${scissor.y}, w=${scissor.z}, h=${scissor.w}`);
+        console.log(`Scissor Test Enabled: ${renderer.getScissorTest()}`);
+        // --- END DEBUG LOGGING BLOCK ---
 
         // --- Update game world size and camera aspect if changed from appState ---
         let dimensionsChanged = false;
