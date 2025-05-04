@@ -10,7 +10,7 @@ console.log("--- main.js v3.3: Initializing ---");
 
 // --- Constants ---
 const WEBSOCKET_URL = 'wss://such-is-life.glitch.me/ws';
-const SHOOT_COOLDOWN = 300;
+const SHOOT_COOLDOWN = 400;
 const RAPID_FIRE_COOLDOWN_MULTIPLIER = 0.4;
 const INPUT_SEND_INTERVAL = 33;
 const RECONNECT_DELAY = 3000;
@@ -24,8 +24,8 @@ const PUSHBACK_ANIM_DURATION = 250;
 const MUZZLE_FLASH_DURATION = 75;
 const RESIZE_DEBOUNCE_MS = 150;
 const FOOTSTEP_INTERVAL_MS = 350;
-const SHOOT_VOLUME = 0.6; // Adjusted volume
-const FOOTSTEP_VOLUME = 0.4; // Adjusted volume
+const SHOOT_VOLUME = 0.4; // Adjusted volume
+const FOOTSTEP_VOLUME = 0.3; // Adjusted volume
 const UI_CLICK_VOLUME = 0.7; // Adjusted volume
 
 // Player State Constants
@@ -350,7 +350,7 @@ const InputManager = (() => {
      }
     function handleMouseDown(event) { if (document.activeElement === DOM.chatInput) return; if (event.button === 0) isMouseDown = true; else if (event.button === 2) { isRightMouseDown = true; event.preventDefault(); triggerPushbackCheck(); } }
     function handleMouseUp(event) { if (event.button === 0) isMouseDown = false; if (event.button === 2) isRightMouseDown = false; }
-    function handleKeyDown(event) { if (document.activeElement === DOM.chatInput) return; const key = event.key.toLowerCase(); if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) { if (!keys[key]) keys[key] = true; event.preventDefault(); } if (key === ' ' && !keys[' ']) { keys[' '] = true; handleShooting(); event.preventDefault(); } if (key === 'e' && !keys['e']) { keys['e'] = true; triggerPushbackCheck(); event.preventDefault(); } }
+    function handleKeyDown(event) { if (document.activeElement === DOM.chatInput) return; const key = event.key.toLowerCase(); if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) { if (!keys[key]) keys[key] = true; event.preventDefault(); } if (key === ' ' && !keys[' ']) { keys[' '] = true; handleing(); event.preventDefault(); } if (key === 'e' && !keys['e']) { keys['e'] = true; triggerPushbackCheck(); event.preventDefault(); } }
     function handleKeyUp(event) { const key = event.key.toLowerCase(); if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'e'].includes(key)) keys[key] = false; }
     function handleChatEnter(event) { if (event.key === 'Enter') { event.preventDefault(); GameManager.sendChatMessage(); } }
     function getMovementInputVector() {
@@ -362,15 +362,15 @@ const InputManager = (() => {
     }
     function sendMovementInput() { if (appState.mode !== 'menu' && appState.serverState?.status === 'active' && appState.isConnected && appState.localPlayerId) { NetworkManager.sendMessage({ type: 'player_move', direction: getMovementInputVector() }); } }
     function triggerPushbackCheck() { if (appState.serverState?.status === 'active' && appState.isConnected && appState.localPlayerId) { GameManager.triggerLocalPushback(); } }
-    function handleShooting() {
+    function handleing() {
         if (!appState.isRendererReady || appState.serverState?.status !== 'active' || !appState.localPlayerId) return;
         const playerState = appState.serverState?.players?.[appState.localPlayerId]; if (!playerState || playerState.player_status !== PLAYER_STATUS_ALIVE) return;
-        const nowTimestamp = Date.now(); const currentAmmo = playerState?.active_ammo_type || 'standard'; const isRapidFire = currentAmmo === 'ammo_rapid_fire'; const cooldownMultiplier = isRapidFire ? RAPID_FIRE_COOLDOWN_MULTIPLIER : 1.0; const actualCooldown = SHOOT_COOLDOWN * cooldownMultiplier; if (nowTimestamp - lastShotTime < actualCooldown) return; lastShotTime = nowTimestamp;
+        const nowTimestamp = Date.now(); const currentAmmo = playerState?.active_ammo_type || 'standard'; const isRapidFire = currentAmmo === 'ammo_rapid_fire'; const cooldownMultiplier = isRapidFire ? RAPID_FIRE_COOLDOWN_MULTIPLIER : 1.0; const actualCooldown = _COOLDOWN * cooldownMultiplier; if (nowTimestamp - lastShotTime < actualCooldown) return; lastShotTime = nowTimestamp;
         const playerPredictX = appState.predictedPlayerPos.x; const playerPredictZ = appState.predictedPlayerPos.y; const targetWorldPos = appState.mouseWorldPosition;
         let aimDx = 0, aimDy = -1;
         if (targetWorldPos && typeof playerPredictX === 'number' && typeof playerPredictZ === 'number') { aimDx = targetWorldPos.x - playerPredictX; aimDy = targetWorldPos.z - playerPredictZ; const magSq = aimDx * aimDx + aimDy * aimDy; if (magSq > 0.01) { const mag = Math.sqrt(magSq); aimDx /= mag; aimDy /= mag; } else { aimDx = 0; aimDy = -1; } } appState.localPlayerAimState.lastAimDx = aimDx; appState.localPlayerAimState.lastAimDy = aimDy;
         localEffects.muzzleFlash.active = true; localEffects.muzzleFlash.endTime = performance.now() + MUZZLE_FLASH_DURATION; localEffects.muzzleFlash.aimDx = aimDx; localEffects.muzzleFlash.aimDy = aimDy;
-        SoundManager.playSound('shoot', SHOOT_VOLUME); // Adjusted volume
+        SoundManager.playSound('', _VOLUME); // Adjusted volume
         if (Renderer3D.spawnVisualAmmoCasing) { const spawnPos = new THREE.Vector3(playerPredictX, 0, playerPredictZ); const ejectVec = new THREE.Vector3(aimDx, 0, aimDy); Renderer3D.spawnVisualAmmoCasing(spawnPos, ejectVec); }
         NetworkManager.sendMessage({ type: 'player_shoot', target: { x: targetWorldPos.x, y: targetWorldPos.z } });
     }
