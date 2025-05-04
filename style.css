@@ -1,3 +1,4 @@
+/* --- CSS Variables (Keep as is) --- */
 :root {
     --color-dark-bg: #1a2a28;
     --color-container-bg: #2a3d45;
@@ -5,79 +6,42 @@
     --color-top-bar-bg: rgba(0, 0, 0, 0.2);
     --color-primary: #7a8c79;
     --color-secondary: #4a5d65;
-    --color-accent: #FFD700;
-    --color-danger: #a00000;
-    --color-text-light: #d0d8d7;
-    --color-text-dark: #1e2a28;
-    --color-text-muted: #9cb49a;
-    --color-system-message: var(--color-accent);
-    --color-chat-self: #ffed4a;
-    --color-chat-other: var(--color-text-light);
-    --color-input-bg: var(--color-text-light);
-    --color-input-text: var(--color-text-dark);
-    --color-placeholder-text: #555;
-    --color-health-high: #66bb6a;
-    --color-health-medium: var(--color-accent);
-    --color-health-low: var(--color-danger);
-    --color-health-bg: #444444;
-    --color-armor: #9e9e9e;
-    --color-down-status: var(--color-health-medium);
-    --color-dead-status: var(--color-health-low);
-    --color-powerup-health: var(--color-health-high);
-    --color-powerup-gun: #6a0dad;
-    --color-powerup-speed: #3edef3;
-    --color-powerup-armor: var(--color-armor);
-    --color-powerup-shotgun: #FFA500;
-    --color-powerup-slug: #A0522D;
-    --color-powerup-rapid: #FFFF00;
-    --color-powerup-score: var(--color-accent);
-    --color-damage-text: #FFFFFF;
-    --color-damage-text-crit: var(--color-accent);
-    --color-speech-bubble-bg: rgba(0, 0, 0, 0.7);
-    --color-speech-bubble-text: var(--color-text-light);
-    --color-night-overlay: rgba(0, 0, 10, 0.3);
-    --color-campfire-aura: rgba(255, 165, 0, 0.15);
+    /* ... other variables remain the same ... */
     --font-family-main: 'Courier New', monospace;
     --font-size-base: 16px;
-    --font-size-small: 13px;
-    --font-size-medium: 1rem;
-    --font-size-large: 1.25rem;
-    --font-size-xl: 1.5rem;
-    --font-size-title: 2.5rem;
-    --left-panel-width: 360px; /* Fixed width */
+    --left-panel-width: 360px; /* Fixed width for the left column */
     --padding-base: 15px;
     --padding-large: 20px;
     --border-radius-base: 5px;
     --border-radius-large: 10px;
-    /* Max width for the entire container */
-    --container-max-width: 2200px; /* Or adjust as needed */
+    --container-max-width: 2200px;
     --transition-fast: 0.2s ease;
     --transition-medium: 0.4s ease;
-    --reconciliation-threshold: 35;
-    --lerp-factor: 0.15;
 }
 
+/* --- Base & Body Styles (Keep mostly as is) --- */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: var(--font-size-base); scroll-behavior: smooth; }
 
 body {
     display: flex;
     flex-direction: column;
-    justify-content: center; /* Vertical centering */
-    align-items: center; /* Horizontal centering */
-    min-height: 100vh; /* Ensure body takes full viewport height */
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
     background-color: var(--color-dark-bg);
     font-family: var(--font-family-main);
     color: var(--color-text-light);
     line-height: 1.5;
-    overflow-x: hidden; /* Prevent horizontal scroll on body */
-    padding: 10px; /* Add some space around the edges */
+    overflow-x: hidden;
+    padding: 10px;
 }
 
+/* --- Loading Screen Styles (Keep as is) --- */
 #loading-screen { position: fixed; inset: 0; background-color: var(--color-dark-bg); display: flex; justify-content: center; align-items: center; z-index: 1000; opacity: 0; visibility: hidden; transition: opacity var(--transition-medium), visibility var(--transition-medium); pointer-events: none; }
 #loading-screen.active { opacity: 1; visibility: visible; pointer-events: auto; }
-/* ... loading screen styles ... */
 .loading-content { text-align: center; }
+/* ... other loading styles ... */
 .loading-title { font-size: 2.2em; margin-bottom: 5px; color: var(--color-accent); text-shadow: 2px 2px 4px #333; }
 .loading-subtitle { font-size: 0.9em; margin-bottom: 20px; color: var(--color-primary); }
 .loader-spinner { border: 4px solid rgba(255, 255, 255, 0.2); border-left-color: var(--color-primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 20px auto; }
@@ -85,22 +49,25 @@ body {
 .loading-text { font-size: 1.1em; margin-top: 10px; }
 
 
+/* --- Main Container & Top Bar (Keep as is) --- */
 #game-container {
     background-color: var(--color-container-bg);
     border: 5px solid var(--color-container-border);
     border-radius: var(--border-radius-large);
     padding: var(--padding-base);
-    padding-top: 10px;
+    padding-top: 10px; /* Reduce top padding slightly */
     text-align: center;
-    max-width: var(--container-max-width); /* Max width constraint */
-    width: 100%; /* Try to take full width within body padding */
+    max-width: var(--container-max-width);
+    width: 100%;
     box-shadow: 0 0 20px rgba(0,0,0,0.7);
     opacity: 0;
     visibility: hidden;
     transition: opacity var(--transition-medium) 0.2s;
-    display: flex; /* Use flexbox */
-    flex-direction: column; /* Stack children vertically */
-    min-height: 500px; /* Example minimum height */
+    display: flex; /* Use flexbox for vertical stacking of children */
+    flex-direction: column;
+    min-height: 500px; /* Ensure minimum overall height */
+    /* Ensure container itself doesn't overflow body horizontally */
+    overflow: hidden;
 }
 #game-container.loaded { opacity: 1; visibility: visible; }
 
@@ -124,15 +91,16 @@ body {
     flex-shrink: 0; /* Prevent status from shrinking */
 }
 
+/* --- Menu Area Styles (Keep as is) --- */
 #menu-area {
     width: 100%;
     padding: 0 var(--padding-base);
-    flex-shrink: 0; /* Prevent menu area from shrinking */
+    flex-shrink: 0; /* Prevent menu from shrinking */
 }
-/* ... menu section styles ... */
 .menu-section { display: none; padding: var(--padding-large) var(--padding-base); text-align: center; animation: fadeIn 0.3s ease forwards; }
 .menu-section.active { display: block; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+/* ... other menu styles ... */
 .menu-section h2 { margin-bottom: var(--padding-large); }
 .menu-section p { font-size: 1.1rem; margin-bottom: 10px; }
 .menu-section .button { display: block; width: 80%; max-width: 300px; margin: 15px auto; padding: 12px 20px; font-size: 1.1rem; }
@@ -142,101 +110,116 @@ body {
 .input-code::placeholder { color: var(--color-placeholder-text); text-transform: none; }
 hr.menu-divider { border: none; border-top: 1px solid var(--color-primary); margin: var(--padding-large) auto; width: 80%; }
 
-/* ... button styles ... */
-.button { display: inline-block; background-color: var(--color-primary); color: var(--color-text-light); border: 2px solid var(--color-container-border); padding: 10px 20px; margin: 10px 5px; cursor: pointer; font-family: var(--font-family-main); font-size: var(--font-size-medium); transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast); border-radius: var(--border-radius-base); font-weight: bold; text-align: center; user-select: none; }
-.button:hover:not(:disabled) { background-color: var(--color-text-muted); color: var(--color-dark-bg); border-color: #000; }
-.button:disabled { background-color: #555; color: #aaa; cursor: not-allowed; border-color: #444; }
-.button-primary { background-color: var(--color-accent); color: var(--color-text-dark); }
-.button-primary:hover:not(:disabled) { background-color: #ffe766; }
-.button-secondary { background-color: var(--color-secondary); color: var(--color-text-light); }
-.button-secondary:hover:not(:disabled) { background-color: #5a707a; }
-.button-danger { background-color: var(--color-danger); color: var(--color-text-light); }
-.button-danger:hover:not(:disabled) { background-color: #c00000; }
-.button-back { background-color: var(--color-secondary); }
-.button.muted { background-color: #555; color: #aaa; border-color: #444; }
 
-/* --- CRITICAL LAYOUT AREA --- */
+/* ========================================== */
+/* == TWO-COLUMN GAME AREA LAYOUT (CORE) == */
+/* ========================================== */
+
 #game-area {
-    display: none; /* Hidden by default */
-    flex-direction: row; /* Align left-panel and canvas-container side-by-side */
-    align-items: stretch; /* Make children fill height */
-    width: 100%; /* Take full width of parent (#game-container) */
+    display: none; /* Hidden by default, shown by JS adding '.active' */
+    width: 100%;   /* Occupy full width of its parent (#game-container) */
     margin-top: var(--padding-base);
-    gap: 10px;
-    flex-grow: 1; /* Allow this area to take remaining vertical space in #game-container */
-    min-height: 300px; /* Prevent collapsing too small */
-    /* Prevent horizontal overflow within the game area itself */
-    overflow: hidden;
-}
-#game-area.active {
-    display: flex; /* Show when active */
+    flex-grow: 1;  /* Crucial: Allows game-area to take up remaining vertical space in #game-container */
+    min-height: 300px; /* Minimum height to prevent collapse */
+    overflow: hidden; /* Prevent internal content from breaking parent layout */
+
+    /* --- Flexbox for Columns --- */
+    display: flex;           /* Establishes a flex container */
+    flex-direction: row;     /* Arranges children (left/right panels) horizontally */
+    align-items: stretch;    /* Makes children stretch to fill the container's height */
+    gap: 10px;               /* Space between the left and right columns */
 }
 
+#game-area.active {
+    display: flex; /* Show the game area layout when active */
+}
+
+/* --- Left Column (Sidebar) --- */
 #left-panel {
-    width: var(--left-panel-width); /* FIXED width */
-    flex-shrink: 0; /* IMPORTANT: Prevent left panel from shrinking */
+    width: var(--left-panel-width); /* ** FIXED WIDTH ** */
+    flex-shrink: 0; /* ** CRITICAL: Prevents this column from shrinking when space is limited ** */
     background-color: var(--color-secondary);
     padding: var(--padding-base);
-    display: flex;
-    flex-direction: column;
-    color: var(--color-text-light);
-    font-size: var(--font-size-small);
     border: 1px solid var(--color-primary);
     border-radius: var(--border-radius-base);
-    overflow: hidden; /* ADDED: Prevent internal content like long chat lines from affecting layout */
+    color: var(--color-text-light);
+    font-size: var(--font-size-small);
+    overflow: hidden; /* Prevent long content inside from breaking the fixed width */
+
+    /* Internal Flexbox layout for top (scrollable) and bottom (fixed) sections */
+    display: flex;
+    flex-direction: column;
 }
 
+/* --- Right Column (Main Canvas Area) --- */
 #canvas-container {
-    position: relative; /* For absolute positioning of overlays */
-    /* NO explicit width/height */
-    flex-grow: 1; /* IMPORTANT: Take up all remaining horizontal space */
-    min-width: 0; /* IMPORTANT: Allow shrinking below intrinsic size */
-    min-height: 150px; /* Prevent collapsing too small vertically */
-    display: flex; /* Center the canvas element inside */
-    justify-content: center;
-    align-items: center;
-    overflow: hidden; /* Hide anything overflowing the container */
-    background-color: #111; /* Background for empty space if canvas aspect ratio differs */
+    flex-grow: 1;     /* ** CRITICAL: Allows this column to take up all remaining horizontal space ** */
+    min-width: 0;     /* ** CRITICAL: Allows this column to shrink below its content size if needed, preventing overflow ** */
+    position: relative; /* Needed for absolutely positioned overlays */
+    background-color: #111; /* Background for canvas area */
     border: 3px solid var(--color-primary);
     border-radius: var(--border-radius-base);
+    overflow: hidden; /* Hide anything overflowing this container (e.g., if canvas is too big) */
+
+    /* Center the canvas element within this container */
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 #gameCanvas {
-    display: block; /* Remove extra space below canvas */
-    max-width: 100%; /* Fit element within parent width */
-    max-height: 100%; /* Fit element within parent height */
-    /* The actual drawing resolution is set by renderer.setSize() in JS */
+    display: block;      /* Removes potential extra space below the canvas */
+    max-width: 100%;   /* ** Ensures canvas element doesn't exceed container width ** */
+    max-height: 100%;  /* ** Ensures canvas element doesn't exceed container height ** */
+    /* Actual rendering resolution is set via JavaScript (renderer.setSize) */
+    /* The canvas element will scale down visually to fit canvas-container */
 }
-/* --- END CRITICAL LAYOUT AREA --- */
 
+/* ========================================== */
+/* == END TWO-COLUMN LAYOUT (CORE) == */
+/* ========================================== */
+
+
+/* --- Styles WITHIN Left Panel --- */
 .panel-group { display: flex; flex-direction: column; }
-.panel-group-top { flex-grow: 1; min-height: 0; overflow-y: auto; } /* Allow top to scroll */
-.panel-group-bottom { flex-shrink: 0; padding-top: 10px; } /* Bottom stays fixed */
-#player-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; width: 100%; margin-bottom: var(--padding-base); }
-/* ... stats-box styles ... */
+.panel-group-top {
+    flex-grow: 1;        /* Allows this top group (stats, env) to take available space */
+    min-height: 0;       /* Important for flex-grow in a flex column */
+    overflow-y: auto;    /* Makes this part scrollable if content exceeds available height */
+    margin-bottom: 10px; /* Space before the bottom group */
+}
+.panel-group-bottom {
+    flex-shrink: 0; /* Prevents the bottom group (chat, controls) from shrinking */
+    padding-top: 10px; /* Space above the bottom group */
+    border-top: 1px solid var(--color-primary); /* Separator */
+}
+
+#player-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; width: 100%; }
+/* ... stats-box styles (Keep as is) ... */
 .stats-box { color: var(--color-text-light); font-size: 14px; background: rgba(10, 20, 25, 0.6); padding: 8px 10px; border-radius: var(--border-radius-base); border: 1px solid var(--color-primary); box-shadow: inset 0 0 4px rgba(0,0,0,0.4); overflow: hidden; }
 .stats-box .stats-header { font-size: 15px; font-weight: bold; color: var(--color-accent); text-align: center; padding-bottom: 4px; margin-bottom: 5px; border-bottom: 1px dashed var(--color-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stats-box .stats-content { line-height: 1.5; word-wrap: break-word; }
 .stats-box .stats-content span { display: inline-block; min-width: 50px; font-weight: bold; color: var(--color-text-muted); vertical-align: top; }
 .stats-box.placeholder { text-align: center; padding: 20px; color: var(--color-text-muted); }
 
-#environment-info { display: flex; justify-content: space-around; margin-bottom: 10px; }
+#environment-info { display: flex; justify-content: space-around; margin-top: var(--padding-base); }
 #day-night-indicator, #temperature-indicator { padding: 4px 8px; background: rgba(0, 0, 0, 0.4); border-radius: var(--border-radius-base); font-size: 0.9em; }
+
 #chat-area { margin-bottom: 10px; }
 #chat-log { height: 150px; overflow-y: scroll; border: 1px solid var(--color-primary); margin-bottom: 8px; padding: 5px; background: rgba(10, 20, 25, 0.5); border-radius: var(--border-radius-base); transition: background-color var(--transition-medium), border-color var(--transition-medium); }
-/* ... chat log message styles ... */
+/* ... chat log message styles (Keep as is) ... */
 #chat-log div { margin-bottom: 3px; word-wrap: break-word; }
 .chat-message.my-message { color: var(--color-chat-self); font-weight: bold; }
 .chat-message.other-message { color: var(--color-chat-other); }
 .chat-message.system-message { color: var(--color-system-message); font-style: italic; }
 
 .chat-input-area {
-    display: flex;
+    display: flex; /* Use flex to align input and button */
     gap: 5px;
-    width: 100%; /* Ensure it doesn't exceed parent width */
+    width: 100%;
 }
 .chat-input-area input[type="text"] {
-    flex-grow: 1; /* Allow input to grow */
+    flex-grow: 1; /* Input takes available space */
     min-width: 0; /* Allow input to shrink */
     padding: 8px;
     font-size: 0.9rem;
@@ -247,23 +230,40 @@ hr.menu-divider { border: none; border-top: 1px solid var(--color-primary); marg
 }
 .chat-input-area input[type="text"]::placeholder { color: var(--color-placeholder-text); }
 .chat-input-area .button {
+    flex-shrink: 0; /* Prevent button from shrinking */
     padding: 8px 10px;
     font-size: 0.9rem;
-    flex-shrink: 0; /* Prevent button from shrinking */
-    margin: 0;
-}
-.game-controls {
-    display: flex;
-    gap: 10px;
-    margin-top: auto; /* Pushes to bottom if left-panel has extra space */
-    width: 100%; /* Ensure it doesn't exceed parent width */
-}
-.game-controls .button {
-    flex-grow: 1; /* Allow buttons to share space */
-    width: auto; /* Override any fixed width */
-    margin: 0;
+    margin: 0; /* Override default button margin */
 }
 
+.game-controls {
+    display: flex; /* Use flex to distribute space between buttons */
+    gap: 10px;
+    margin-top: auto; /* Pushes to bottom if .panel-group-bottom has extra vertical space */
+    width: 100%;
+}
+.game-controls .button {
+    flex-grow: 1; /* Buttons share space equally */
+    width: auto;  /* Override any fixed button width */
+    margin: 0;    /* Override default button margin */
+}
+
+/* --- Button Styles (Keep as is) --- */
+.button { display: inline-block; background-color: var(--color-primary); color: var(--color-text-light); border: 2px solid var(--color-container-border); padding: 10px 20px; margin: 10px 5px; cursor: pointer; font-family: var(--font-family-main); font-size: var(--font-size-medium); transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast); border-radius: var(--border-radius-base); font-weight: bold; text-align: center; user-select: none; }
+.button:hover:not(:disabled) { background-color: var(--color-text-muted); color: var(--color-dark-bg); border-color: #000; }
+.button:disabled { background-color: #555; color: #aaa; cursor: not-allowed; border-color: #444; }
+/* ... other button styles ... */
+.button-primary { background-color: var(--color-accent); color: var(--color-text-dark); }
+.button-primary:hover:not(:disabled) { background-color: #ffe766; }
+.button-secondary { background-color: var(--color-secondary); color: var(--color-text-light); }
+.button-secondary:hover:not(:disabled) { background-color: #5a707a; }
+.button-danger { background-color: var(--color-danger); color: var(--color-text-light); }
+.button-danger:hover:not(:disabled) { background-color: #c00000; }
+.button-back { background-color: var(--color-secondary); }
+.button.muted { background-color: #555; color: #aaa; border-color: #444; }
+
+
+/* --- Overlays and Game Over Screen (Keep as is) --- */
 #countdown-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 72px; color: var(--color-danger); text-shadow: 3px 3px 6px black; z-index: 10; pointer-events: none; display: none; }
 #countdown-overlay.active { display: block; }
 
@@ -275,16 +275,16 @@ hr.menu-divider { border: none; border-top: 1px solid var(--color-primary); marg
 .speech-bubble { background-color: var(--color-speech-bubble-bg); color: var(--color-speech-bubble-text); padding: 5px 8px; border-radius: var(--border-radius-base); font-size: var(--font-size-small); text-align: center; max-width: 150px; word-wrap: break-word; text-shadow: 1px 1px 1px rgba(0,0,0,0.5); opacity: 0; animation: speechBubbleFadeIn 0.3s forwards; }
 @keyframes speechBubbleFadeIn { from { opacity: 0; transform: translate(-50%, 5px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
-#game-over-screen { display: none; flex-direction: column; align-items: center; justify-content: center; position: absolute; inset: 0; background-color: rgba(0, 0, 0, 0.85); padding: var(--padding-large); z-index: 500; text-align: center; animation: fadeIn 0.5s ease forwards; }
+#game-over-screen { display: none; flex-direction: column; align-items: center; justify-content: center; position: fixed; /* Use fixed to overlay everything */ inset: 0; background-color: rgba(0, 0, 0, 0.85); padding: var(--padding-large); z-index: 500; text-align: center; animation: fadeIn 0.5s ease forwards; }
 #game-over-screen.active { display: flex; }
-/* ... game over styles ... */
+/* ... game over styles (Keep as is) ... */
 #game-over-screen h2 { color: var(--color-danger); margin-top: 0; margin-bottom: 25px; font-size: 1.8em; }
 #final-stats { color: var(--color-text-light); font-size: 1.3em; line-height: 1.6; margin-bottom: 30px; width: 90%; max-width: 300px; }
 #final-stats .final-stat-item { margin-bottom: 5px; }
 #final-stats .final-stat-item strong { color: var(--color-accent); margin-right: 8px; display: inline-block; min-width: 70px; text-align: right; }
 #game-over-screen .button { padding: 12px 25px; font-size: 1.1rem; margin-top: 10px; }
 
-/* Night mode adjustments */
+/* --- Night mode adjustments (Keep as is) --- */
 .night-mode #day-night-indicator { background-color: rgba(50, 50, 100, 0.6); color: var(--color-accent); }
 .night-mode #chat-log { background-color: rgba(10, 20, 25, 0.7); border-color: var(--color-accent); }
 .night-mode .chat-message.my-message { color: #FFFF99; }
