@@ -5,8 +5,12 @@
     <title>SUCH IS L1FE - Kelly Gang Survival</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="style.css">
+    <!-- Favicon links (optional, add your own) -->
+    <!-- <link rel="icon" href="/favicon.ico" sizes="any"> -->
+    <!-- <link rel="icon" href="/favicon.svg" type="image/svg+xml"> -->
 </head>
 <body>
+    <!-- Loading Screen -->
     <div id="loading-screen">
         <div style="text-align: center;">
             <div style="font-size: 2.2em; margin-bottom: 5px; color: var(--accent-gold); text-shadow: 2px 2px 4px #333;">KELLY GANG</div>
@@ -16,11 +20,12 @@
         </div>
     </div>
 
+    <!-- Main Game Container -->
     <div id="game-container">
         <div id="top-bar"><h1>SUCH IS LIFE</h1></div>
         <div id="game-status">Initializing...</div>
 
-        <!-- Menu Sections (No changes needed) -->
+        <!-- Menu Sections -->
         <div id="main-menu-section" class="menu-section">
             <h2>Main Menu</h2>
             <button id="singlePlayerBtn">Single Player</button>
@@ -34,7 +39,7 @@
             <button id="hostGameBtn4">Host 4 Player Game</button>
             <hr style="margin: 20px auto; width: 80%; border-color: var(--primary-color);">
             <button id="showJoinUIBtn">Join Game (Enter Code)</button>
-            <button class="back-button" onclick="UI.showSection('main-menu-section')">Back</button>
+            <button class="back-button" data-target="main-menu-section">Back</button>
         </div>
         <div id="host-wait-section" class="menu-section">
              <h2>Hosting Game</h2>
@@ -48,12 +53,12 @@
              <p>Enter the 6-character game code:</p>
              <input type="text" id="gameIdInput" placeholder="ABCDEF" maxlength="6">
              <button id="joinGameSubmitBtn">Join Game</button>
-             <button class="back-button" onclick="UI.showSection('multiplayer-menu-section')">Back</button>
+             <button class="back-button" data-target="multiplayer-menu-section">Back</button>
         </div>
 
         <!-- Game Area -->
         <div id="game-area">
-            <!-- Left Panel (No changes needed) -->
+            <!-- Left Panel -->
             <div id="left-panel">
                  <div class="left-panel-top-group">
                     <div id="player-stats-grid">Loading Stats...</div>
@@ -67,19 +72,18 @@
                     <button id="sendChatBtn">Send</button>
                  </div>
             </div>
-            <!-- Canvas Container -->
+            <!-- Canvas Container - Needs explicit size and positioning context -->
             <div id="canvas-container">
-                 <!-- Canvas will be injected here by THREE.js -->
+                 <!-- Canvas injected here by THREE.js -->
                  <div id="countdown"></div>
-                 <!-- NEW: HTML Overlay for UI Elements -->
+                 <!-- HTML Overlay for dynamic UI -->
                  <div id="html-overlay">
-                     <!-- Damage text, health bars, speech bubbles will be added here dynamically -->
+                     <!-- Damage text, health bars, speech bubbles added here by main.js -->
                  </div>
-                 <!-- End HTML Overlay -->
             </div>
         </div>
 
-        <!-- Game Over Screen (No changes needed) -->
+        <!-- Game Over Screen -->
         <div id="game-over-screen">
             <h2>Game Over, Mate!</h2>
             <div id="final-stats"></div>
