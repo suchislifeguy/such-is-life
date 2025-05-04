@@ -44,14 +44,13 @@
     --font-size-large: 1.25rem;
     --font-size-xl: 1.5rem;
     --font-size-title: 2.5rem;
-    --canvas-width: 1600px;
-    --canvas-height: 900px;
-    --left-panel-width: 360px;
+    --left-panel-width: 360px; /* Fixed width */
     --padding-base: 15px;
     --padding-large: 20px;
     --border-radius-base: 5px;
     --border-radius-large: 10px;
-    --container-max-width: calc(var(--canvas-width) + var(--left-panel-width) + 40px + 10px);
+    /* Max width for the entire container */
+    --container-max-width: 2200px; /* Or adjust as needed */
     --transition-fast: 0.2s ease;
     --transition-medium: 0.4s ease;
     --reconciliation-threshold: 35;
@@ -60,14 +59,20 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: var(--font-size-base); scroll-behavior: smooth; }
-body { display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; background-color: var(--color-dark-bg); font-family: var(--font-family-main); color: var(--color-text-light); line-height: 1.5; overflow-x: hidden; }
-h1, h2, h3 { line-height: 1.2; margin-bottom: 0.75em; }
-h1 { font-size: var(--font-size-title); text-shadow: 2px 2px 4px #000; }
-h2 { font-size: var(--font-size-xl); color: var(--color-accent); }
-p { margin-bottom: 1em; }
-a { color: var(--color-accent); text-decoration: none; }
-a:hover, a:focus { text-decoration: underline; }
-hr.menu-divider { border: none; border-top: 1px solid var(--color-primary); margin: var(--padding-large) auto; width: 80%; }
+
+body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center; /* Vertical centering */
+    align-items: center; /* Horizontal centering */
+    min-height: 100vh; /* Ensure body takes full viewport height */
+    background-color: var(--color-dark-bg);
+    font-family: var(--font-family-main);
+    color: var(--color-text-light);
+    line-height: 1.5;
+    overflow-x: hidden; /* Prevent horizontal scroll on body */
+    padding: 10px; /* Add some space around the edges */
+}
 
 #loading-screen { position: fixed; inset: 0; background-color: var(--color-dark-bg); display: flex; justify-content: center; align-items: center; z-index: 1000; opacity: 0; visibility: hidden; transition: opacity var(--transition-medium), visibility var(--transition-medium); pointer-events: none; }
 #loading-screen.active { opacity: 1; visibility: visible; pointer-events: auto; }
@@ -78,13 +83,52 @@ hr.menu-divider { border: none; border-top: 1px solid var(--color-primary); marg
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-text { font-size: 1.1em; margin-top: 10px; }
 
-#game-container { background-color: var(--color-container-bg); border: 5px solid var(--color-container-border); border-radius: var(--border-radius-large); padding: var(--padding-base); padding-top: 10px; text-align: center; max-width: var(--container-max-width); width: calc(100% - 40px); box-shadow: 0 0 20px rgba(0,0,0,0.7); opacity: 0; visibility: hidden; transition: opacity var(--transition-medium) 0.2s; }
+#game-container {
+    background-color: var(--color-container-bg);
+    border: 5px solid var(--color-container-border);
+    border-radius: var(--border-radius-large);
+    padding: var(--padding-base);
+    padding-top: 10px;
+    text-align: center;
+    max-width: var(--container-max-width); /* Max width constraint */
+    width: 100%; /* Try to take full width within body padding */
+    box-shadow: 0 0 20px rgba(0,0,0,0.7);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--transition-medium) 0.2s;
+    display: flex; /* Use flexbox */
+    flex-direction: column; /* Stack children vertically */
+    /* Height can be determined by content or screen size */
+    /* min-height might be needed if content is small */
+    min-height: 500px; /* Example minimum height */
+}
 #game-container.loaded { opacity: 1; visibility: visible; }
-#top-bar { padding: 5px 10px; margin-bottom: 10px; border-bottom: 2px solid var(--color-primary); background-color: var(--color-top-bar-bg); border-radius: var(--border-radius-base) var(--border-radius-base) 0 0; }
-#top-bar h1 { margin: 5px 0 10px 0; padding: 0; color: var(--color-text-light); }
-#game-status { min-height: 25px; color: var(--color-accent); font-weight: bold; margin-bottom: var(--padding-base); text-align: center; font-size: var(--font-size-medium); }
 
-#menu-area { width: 100%; padding: 0 var(--padding-base); }
+#top-bar {
+    padding: 5px 10px;
+    margin-bottom: 10px;
+    border-bottom: 2px solid var(--color-primary);
+    background-color: var(--color-top-bar-bg);
+    border-radius: var(--border-radius-base) var(--border-radius-base) 0 0;
+    flex-shrink: 0; /* Prevent top bar from shrinking */
+}
+#top-bar h1 { margin: 5px 0 10px 0; padding: 0; color: var(--color-text-light); }
+
+#game-status {
+    min-height: 25px;
+    color: var(--color-accent);
+    font-weight: bold;
+    margin-bottom: var(--padding-base);
+    text-align: center;
+    font-size: var(--font-size-medium);
+    flex-shrink: 0; /* Prevent status from shrinking */
+}
+
+#menu-area {
+    width: 100%;
+    padding: 0 var(--padding-base);
+    flex-shrink: 0; /* Prevent menu area from shrinking */
+}
 .menu-section { display: none; padding: var(--padding-large) var(--padding-base); text-align: center; animation: fadeIn 0.3s ease forwards; }
 .menu-section.active { display: block; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -108,12 +152,68 @@ hr.menu-divider { border: none; border-top: 1px solid var(--color-primary); marg
 .button-back { background-color: var(--color-secondary); }
 .button.muted { background-color: #555; color: #aaa; border-color: #444; }
 
-#game-area { display: none; flex-direction: row; align-items: stretch; width: 100%; margin-top: var(--padding-base); gap: 10px; }
-#game-area.active { display: flex; }
-#left-panel { width: var(--left-panel-width); flex-shrink: 0; background-color: var(--color-secondary); padding: var(--padding-base); display: flex; flex-direction: column; color: var(--color-text-light); font-size: var(--font-size-small); border: 1px solid var(--color-primary); border-radius: var(--border-radius-base); max-height: var(--canvas-height); overflow: hidden; }
+/* --- CRITICAL LAYOUT AREA --- */
+#game-area {
+    display: none; /* Hidden by default */
+    flex-direction: row; /* Align left-panel and canvas-container side-by-side */
+    align-items: stretch; /* Make children fill height */
+    width: 100%; /* Take full width of parent (#game-container) */
+    margin-top: var(--padding-base);
+    gap: 10px;
+    flex-grow: 1; /* Allow this area to take remaining vertical space in #game-container */
+    min-height: 300px; /* Prevent collapsing too small */
+    /* DEBUGGING */
+    /* background-color: rgba(255, 255, 0, 0.1); /* Light Yellow */
+}
+#game-area.active {
+    display: flex; /* Show when active */
+}
+
+#left-panel {
+    width: var(--left-panel-width); /* FIXED width */
+    flex-shrink: 0; /* IMPORTANT: Prevent left panel from shrinking */
+    background-color: var(--color-secondary);
+    padding: var(--padding-base);
+    display: flex;
+    flex-direction: column;
+    color: var(--color-text-light);
+    font-size: var(--font-size-small);
+    border: 1px solid var(--color-primary);
+    border-radius: var(--border-radius-base);
+    overflow: hidden; /* Hide overflow within panel */
+    /* DEBUGGING */
+    /* background-color: rgba(0, 255, 0, 0.1); /* Light Green */
+}
+
+#canvas-container {
+    position: relative; /* For absolute positioning of overlays */
+    /* REMOVED explicit width/height */
+    flex-grow: 1; /* IMPORTANT: Take up all remaining horizontal space */
+    min-width: 0; /* IMPORTANT: Allow shrinking below intrinsic size */
+    display: flex; /* Center the canvas element inside */
+    justify-content: center;
+    align-items: center;
+    overflow: hidden; /* Hide anything overflowing the container */
+    background-color: #111; /* Background for empty space if canvas aspect ratio differs */
+    border: 3px solid var(--color-primary);
+    border-radius: var(--border-radius-base);
+    /* DEBUGGING */
+    /* background-color: rgba(255, 0, 0, 0.1); /* Light Red */
+}
+
+#gameCanvas {
+    display: block; /* Remove extra space below canvas */
+    max-width: 100%; /* Fit element within parent width */
+    max-height: 100%; /* Fit element within parent height */
+    /* The actual drawing resolution is set by renderer.setSize() in JS */
+    /* DEBUGGING */
+    /* border: 1px dashed cyan; /* See canvas element boundary */
+}
+/* --- END CRITICAL LAYOUT AREA --- */
+
 .panel-group { display: flex; flex-direction: column; }
-.panel-group-top { flex-grow: 1; min-height: 0; overflow-y: auto; }
-.panel-group-bottom { flex-shrink: 0; padding-top: 10px; }
+.panel-group-top { flex-grow: 1; min-height: 0; overflow-y: auto; } /* Allow top to scroll */
+.panel-group-bottom { flex-shrink: 0; padding-top: 10px; } /* Bottom stays fixed */
 #player-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; width: 100%; margin-bottom: var(--padding-base); }
 .stats-box { color: var(--color-text-light); font-size: 14px; background: rgba(10, 20, 25, 0.6); padding: 8px 10px; border-radius: var(--border-radius-base); border: 1px solid var(--color-primary); box-shadow: inset 0 0 4px rgba(0,0,0,0.4); overflow: hidden; }
 .stats-box .stats-header { font-size: 15px; font-weight: bold; color: var(--color-accent); text-align: center; padding-bottom: 4px; margin-bottom: 5px; border-bottom: 1px dashed var(--color-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -138,32 +238,6 @@ hr.menu-divider { border: none; border-top: 1px solid var(--color-primary); marg
 .game-controls { display: flex; gap: 10px; margin-top: auto; }
 .game-controls .button { flex-grow: 1; width: auto; margin: 0; }
 
-#canvas-container {
-    position: relative;
--   width: var(--canvas-width);  /* REMOVE */
--   height: var(--canvas-height); /* REMOVE */
-    max-width: 100%;
-    flex-grow: 1;
-    display: flex; /* Keep flex if needed for centering canvas inside */
-    justify-content: center;
-    align-items: center;
-    overflow: hidden;
-    background-color: #111;
-    border: 3px solid var(--color-primary);
-    border-radius: var(--border-radius-base);
-}
-
-#gameCanvas {
-    display: block;
-    /* These ensure the canvas element scales within the container */
-    /* but respects its drawing buffer aspect ratio if set by JS */
-    max-width: 100%;
-    max-height: 100%;
--   object-fit: contain; /* Less relevant for canvas, max-width/height is better */
-+   /* Optional: Add background color to canvas element itself for debugging */
-+   /* background-color: rgba(255, 0, 0, 0.1); */
-}
-#gameCanvas { display: block; width: 100%; height: 100%; object-fit: contain; }
 #countdown-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 72px; color: var(--color-danger); text-shadow: 3px 3px 6px black; z-index: 10; pointer-events: none; display: none; }
 #countdown-overlay.active { display: block; }
 
