@@ -37,6 +37,15 @@ const Renderer3D = (() => {
     const GIANT_MULTIPLIER = 2.5; const BULLET_RADIUS = 4;
     const POWERUP_SIZE = 20; const SNAKE_SEGMENTS = 50; const SNAKE_RADIUS = 3;
     const IDLE_BOB_SPEED = 0.005; const IDLE_BOB_AMOUNT = 0.5;
+    
+    // --- Mesh Positioning Offsets ---
+    const PLAYER_MESH_Y_OFFSET = DEF_PLAYER_HEIGHT / 2;
+    const ENEMY_MESH_Y_OFFSET = DEF_ENEMY_HEIGHT / 2;
+    const GIANT_MESH_Y_OFFSET = (DEF_ENEMY_HEIGHT * DEF_GIANT_MULTIPLIER) / 2;
+    const BULLET_MESH_Y_OFFSET = DEF_BULLET_RADIUS;
+    const POWERUP_MESH_Y_OFFSET = DEF_POWERUP_SIZE / 2 + 1;
+    const CAMPFIRE_LOG_Y_OFFSET = 4; // Base Y position for logs within the group
+    const FLAME_PARTICLE_Y_OFFSET = 6; // <<< ADD THIS LINE HERE (or adjust value if needed)
 
     // --- Materials ---
     // Define base materials - clones will be used for parts to allow unique properties if needed
