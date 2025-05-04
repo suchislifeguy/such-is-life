@@ -1,7 +1,7 @@
 // Renderer3D.js
 // Handles 3D scene setup, rendering, object management, and visual effects.
 
-import * K THREE from 'three';
+import * as THREE from 'three';
 // #TODO: Future - Consider loading models (GLTFLoader) for Trees/Props
 
 // --- Constants ---
