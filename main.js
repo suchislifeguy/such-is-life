@@ -1,16 +1,16 @@
-// main.js v3.3 - FINAL
+// main.js v3.4 - FINAL
 // Client-side logic for Kelly Gang Survival
-// Fixes: Visuals not updating (added logging/checks), Footstep sound refinement,
-// Gunshot volume adjusted, ui_click loading issue addressed.
+// Fixes: handleShooting ReferenceErrors by adding guard clauses.
+// Keeps previous fixes: Correct import, WS URL, aiming, sounds, clamping.
 
 import * as THREE from 'three';
 import Renderer3D from './Renderer3D.js';
 
-console.log("--- main.js v3.3: Initializing ---");
+console.log("--- main.js v3.4: Initializing ---");
 
 // --- Constants ---
 const WEBSOCKET_URL = 'wss://such-is-life.glitch.me/ws';
-const SHOOT_COOLDOWN = 400;
+const SHOOT_COOLDOWN = 500;
 const RAPID_FIRE_COOLDOWN_MULTIPLIER = 0.4;
 const INPUT_SEND_INTERVAL = 33;
 const RECONNECT_DELAY = 3000;
@@ -24,9 +24,9 @@ const PUSHBACK_ANIM_DURATION = 250;
 const MUZZLE_FLASH_DURATION = 75;
 const RESIZE_DEBOUNCE_MS = 150;
 const FOOTSTEP_INTERVAL_MS = 350;
-const SHOOT_VOLUME = 0.4; // Adjusted volume
-const FOOTSTEP_VOLUME = 0.3; // Adjusted volume
-const UI_CLICK_VOLUME = 0.7; // Adjusted volume
+const SHOOT_VOLUME = 0.4;
+const FOOTSTEP_VOLUME = 0.4;
+const UI_CLICK_VOLUME = 0.7;
 
 // Player State Constants
 const PLAYER_STATUS_ALIVE = 'alive';
@@ -119,80 +119,15 @@ let lastLoopTime = 0;
 let resizeHandler = null;
 let lastFootstepTime = 0;
 
-// --- Sound Manager Module --- (Loads all planned sounds)
+// --- Sound Manager Module ---
 const SoundManager = (() => {
     let audioContext = null; let gainNode = null; let loadedSounds = {};
-    let soundFiles = {
-        'shoot': 'assets/sounds/shoot.mp3',
-        'damage': 'assets/sounds/damage.mp3',
-        'powerup': 'assets/sounds/powerup.mp3',
-        'death': 'assets/sounds/death.mp3',
-        'enemy_hit': 'assets/sounds/enemy_hit.mp3',
-        'enemy_death': 'assets/sounds/enemy_death.mp3',
-        'ui_click': 'assets/sounds/ui_click.mp3',
-        'footstep': 'assets/sounds/footstep.mp3',
-    };
+    let soundFiles = { 'shoot': 'assets/sounds/shoot.mp3', 'damage': 'assets/sounds/damage.mp3', 'powerup': 'assets/sounds/powerup.mp3', 'death': 'assets/sounds/death.mp3', 'enemy_hit': 'assets/sounds/enemy_hit.mp3', 'enemy_death': 'assets/sounds/enemy_death.mp3', 'ui_click': 'assets/sounds/ui_click.mp3', 'footstep': 'assets/sounds/footstep.mp3', };
     let isInitialized = false; let canPlaySound = false; let isMuted = false;
-    function init() {
-        if (isInitialized) return; isInitialized = true;
-        try {
-            const AC = window.AudioContext || window.webkitAudioContext; if (!AC) { error("[SM] Web Audio API not supported."); return; }
-            audioContext = new AC(); gainNode = audioContext.createGain(); gainNode.connect(audioContext.destination);
-            const resumeAudio = () => {
-                if (audioContext.state === 'suspended') {
-                    audioContext.resume().then(() => {
-                        log("[SM] Audio Resumed.");
-                        canPlaySound = true;
-                        loadSounds(); // Load sounds AFTER context is running
-                    }).catch(e => error("[SM] Resume failed:", e));
-                }
-                // Remove listeners after first interaction
-                document.removeEventListener('click', resumeAudio);
-                document.removeEventListener('keydown', resumeAudio);
-            };
-            if (audioContext.state === 'suspended') {
-                log("[SM] Audio suspended. Waiting for user interaction.");
-                document.addEventListener('click', resumeAudio, { once: true });
-                document.addEventListener('keydown', resumeAudio, { once: true });
-            } else if (audioContext.state === 'running') {
-                canPlaySound = true;
-                loadSounds(); // Load immediately if already running
-            }
-        } catch (e) { error("[SM] Init error:", e); }
-     }
-    function loadSounds() {
-        if (!audioContext || !canPlaySound) return;
-        log("[SM] Loading sounds...");
-        const promises = Object.entries(soundFiles).map(([name, path]) =>
-            fetch(path).then(r => r.ok ? r.arrayBuffer() : Promise.reject(`HTTP ${r.status} loading ${path}`))
-                .then(b => audioContext.decodeAudioData(b))
-                .then(db => { loadedSounds[name] = db; })
-                .catch(e => { error(`[SM] Load/Decode '${name}' (${path}) error:`, e); })
-        ); Promise.allSettled(promises).then(() => log("[SM] Sound loading finished."));
-    }
-    function playSound(name, volume = 1.0) {
-        if (!canPlaySound || !audioContext || !gainNode || audioContext.state !== 'running') {
-            // console.warn(`[SM] Cannot play sound '${name}', audio not ready.`);
-            return;
-        }
-        const buffer = loadedSounds[name];
-        if (!buffer) {
-            // console.warn(`[SM] Sound not loaded or decoded: ${name}`);
-             return;
-        }
-        if (isMuted && name !== 'ui_click') return; // Allow UI clicks always
-        try {
-            const source = audioContext.createBufferSource(); source.buffer = buffer;
-            const soundGain = audioContext.createGain(); soundGain.gain.setValueAtTime(Math.max(0, Math.min(1, volume)), audioContext.currentTime);
-            source.connect(soundGain).connect(gainNode);
-            source.start(0); source.onended = () => { try { source.disconnect(); soundGain.disconnect(); } catch(e){} };
-        } catch (e) { error(`[SM] Play '${name}' error:`, e); }
-    }
-    function toggleMute() {
-         isMuted = !isMuted; if (gainNode) gainNode.gain.setValueAtTime(isMuted ? 0 : 1, audioContext?.currentTime || 0);
-         log(`[SM] Sound ${isMuted ? 'Muted' : 'Unmuted'}`);
-         if (DOM.muteBtn) { DOM.muteBtn.textContent = isMuted ? 'Unmute' : 'Mute'; DOM.muteBtn.setAttribute('aria-pressed', isMuted); DOM.muteBtn.classList.toggle('muted', isMuted); }
-     }
+    function init() { if (isInitialized) return; isInitialized = true; try { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) { error("[SM] Web Audio API not supported."); return; } audioContext = new AC(); gainNode = audioContext.createGain(); gainNode.connect(audioContext.destination); const resumeAudio = () => { if (audioContext.state === 'suspended') { audioContext.resume().then(() => { log("[SM] Audio Resumed."); canPlaySound = true; loadSounds(); }).catch(e => error("[SM] Resume failed:", e)); } document.removeEventListener('click', resumeAudio); document.removeEventListener('keydown', resumeAudio); }; if (audioContext.state === 'suspended') { log("[SM] Audio suspended. Waiting for user interaction."); document.addEventListener('click', resumeAudio, { once: true }); document.addEventListener('keydown', resumeAudio, { once: true }); } else if (audioContext.state === 'running') { canPlaySound = true; loadSounds(); } } catch (e) { error("[SM] Init error:", e); } }
+    function loadSounds() { if (!audioContext || !canPlaySound) return; log("[SM] Loading sounds..."); const promises = Object.entries(soundFiles).map(([name, path]) => fetch(path).then(r => r.ok ? r.arrayBuffer() : Promise.reject(`HTTP ${r.status} loading ${path}`)).then(b => audioContext.decodeAudioData(b)).then(db => { loadedSounds[name] = db; }).catch(e => { error(`[SM] Load/Decode '${name}' (${path}) error:`, e); })); Promise.allSettled(promises).then(() => log("[SM] Sound loading finished.")); }
+    function playSound(name, volume = 1.0) { if (!canPlaySound || !audioContext || !gainNode || audioContext.state !== 'running') return; const buffer = loadedSounds[name]; if (!buffer) { console.warn(`[SM] Sound not loaded or decoded: ${name}`); return; } if (isMuted && name !== 'ui_click') return; try { const source = audioContext.createBufferSource(); source.buffer = buffer; const soundGain = audioContext.createGain(); soundGain.gain.setValueAtTime(Math.max(0, Math.min(1, volume)), audioContext.currentTime); source.connect(soundGain).connect(gainNode); source.start(0); source.onended = () => { try { source.disconnect(); soundGain.disconnect(); } catch(e){} }; } catch (e) { error(`[SM] Play '${name}' error:`, e); } }
+    function toggleMute() { isMuted = !isMuted; if (gainNode) gainNode.gain.setValueAtTime(isMuted ? 0 : 1, audioContext?.currentTime || 0); log(`[SM] Sound ${isMuted ? 'Muted' : 'Unmuted'}`); if (DOM.muteBtn) { DOM.muteBtn.textContent = isMuted ? 'Unmute' : 'Mute'; DOM.muteBtn.setAttribute('aria-pressed', isMuted); DOM.muteBtn.classList.toggle('muted', isMuted); } }
     function getMuteState() { return isMuted; }
     return { init, playSound, toggleMute, getMuteState };
 })();
@@ -200,124 +135,23 @@ const SoundManager = (() => {
 // --- UI Manager Module ---
 const UIManager = (() => {
     const allMenuSections = [ DOM.mainMenuSection, DOM.multiplayerMenuSection, DOM.hostWaitSection, DOM.joinCodeSection ];
-    function showSection(sectionId) {
-        DOM.menuArea?.classList.add('hidden');
-        allMenuSections.forEach(s => s?.classList.remove('active'));
-        DOM.gameArea?.classList.remove('active');
-        DOM.gameOverScreen?.classList.remove('active');
-        const sectionToShow = document.getElementById(sectionId);
-        if (sectionToShow) {
-            sectionToShow.classList.add('active');
-            if (sectionToShow.closest('#menu-area')) { DOM.menuArea?.classList.remove('hidden'); }
-        } else { error(`UI: Section not found: ${sectionId}`); }
-    }
-    function updateStatus(message, isError = false) {
-        if (!DOM.gameStatus) return;
-        DOM.gameStatus.textContent = message;
-        DOM.gameStatus.style.color = isError ? (getCssVar('--color-danger') || 'red') : (getCssVar('--color-accent') || 'yellow');
-    }
-    function updateHUD(serverState) {
-         if (!DOM.playerStatsGrid || !serverState?.players || !appState.localPlayerId) { if(DOM.playerStatsGrid) DOM.playerStatsGrid.innerHTML = ''; return; }
-         const players = serverState.players; const localId = appState.localPlayerId; DOM.playerStatsGrid.innerHTML = '';
-         const sortedPlayerIds = Object.keys(players).sort((a, b) => { if (a === localId) return -1; if (b === localId) return 1; return a.localeCompare(b); });
-         sortedPlayerIds.forEach(pId => {
-             const pData = players[pId]; if (!pData) return;
-             const isSelf = (pId === localId); const header = isSelf ? "YOU" : `P:${pId.substring(0, 4)}`; const status = pData.player_status || PLAYER_STATUS_ALIVE; let healthDisplay;
-             if (status === PLAYER_STATUS_DOWN) healthDisplay = `<span style='color: var(--color-down-status);'>DOWN</span>`;
-             else if (status === PLAYER_STATUS_DEAD || pData.health <= 0) healthDisplay = `<span style='color: var(--color-dead-status);'>DEAD</span>`;
-             else { const hp = pData.health ?? 0; let color = 'var(--color-health-high)'; if (hp < 66) color = 'var(--color-health-medium)'; if (hp < 33) color = 'var(--color-health-low)'; healthDisplay = `<span style='color:${color};'>${hp.toFixed(0)}</span>`; }
-             const armor = pData.armor ?? 0; let armorDisplay = Math.round(armor); if(armor > 0) armorDisplay = `<span style='color: var(--color-armor);'>${armorDisplay}</span>`;
-             const box = document.createElement('div'); box.className = 'stats-box';
-             box.innerHTML = `<div class="stats-header">${header}</div><div class="stats-content"><span>HP:</span> ${healthDisplay}<br><span>Armor:</span> ${armorDisplay}<br><span>Gun:</span> ${pData.gun ?? 1}<br><span>Speed:</span> ${pData.speed ?? '-'}<br><span>Kills:</span> ${pData.kills ?? 0}<br><span>Score:</span> ${pData.score ?? 0}</div>`;
-             DOM.playerStatsGrid.appendChild(box);
-         });
-     }
-    function addChatMessage(senderId, message, isSystem = false) {
-        if (!DOM.chatLog) return;
-        const div = document.createElement('div'); const isSelf = senderId === appState.localPlayerId; let senderName = 'System';
-        if (!isSystem) { senderName = isSelf ? 'You' : `P:${senderId ? senderId.substring(0, 4) : '???'}`; }
-        div.classList.add('chat-message', isSystem ? 'system-message' : (isSelf ? 'my-message' : 'other-message'));
-        div.textContent = isSystem ? message : `${senderName}: ${message}`; DOM.chatLog.appendChild(div); DOM.chatLog.scrollTop = DOM.chatLog.scrollHeight;
-     }
-    function updateCountdown(serverState) {
-        if (!DOM.countdownDiv) return;
-        const isCountdown = serverState?.status === 'countdown' && serverState?.countdown >= 0;
-        if (isCountdown) { DOM.countdownDiv.textContent = Math.ceil(serverState.countdown); DOM.countdownDiv.classList.add('active'); }
-        else { DOM.countdownDiv.classList.remove('active'); }
-    }
-    function updateEnvironmentDisplay(serverState) {
-        if (!DOM.dayNightIndicator || !DOM.temperatureIndicator || !DOM.gameContainer) return;
-        if (serverState?.status === 'active' || serverState?.status === 'countdown') {
-            const isNight = serverState.is_night ?? false; appState.isNight = isNight;
-            DOM.dayNightIndicator.textContent = isNight ? 'Night' : 'Day'; DOM.dayNightIndicator.style.display = 'block';
-            DOM.gameContainer.classList.toggle('night-mode', isNight);
-            appState.currentTemp = serverState.current_temperature ?? 18.0; appState.isRaining = serverState.is_raining ?? false; appState.isDustStorm = serverState.is_dust_storm ?? false;
-            DOM.temperatureIndicator.textContent = `${appState.currentTemp.toFixed(0)}°C`; DOM.temperatureIndicator.style.display = 'block';
-            DOM.gameContainer.classList.toggle('raining', appState.isRaining); DOM.gameContainer.classList.toggle('dust-storm', appState.isDustStorm);
-        } else { DOM.dayNightIndicator.style.display = 'none'; DOM.temperatureIndicator.style.display = 'none'; DOM.gameContainer.classList.remove('night-mode', 'raining', 'dust-storm'); appState.isNight = false; appState.isRaining = false; appState.isDustStorm = false; }
-    }
-    function showGameOver(finalState) {
-        if (!DOM.finalStatsDiv || !DOM.gameOverScreen) return;
-        const player = finalState?.players?.[appState.localPlayerId]; let statsHtml = "---";
-        if (player) { statsHtml = `<div class="final-stat-item"><strong>Score:</strong> ${player.score ?? 0}</div><div class="final-stat-item"><strong>Kills:</strong> ${player.kills ?? 0}</div>`; }
-        DOM.finalStatsDiv.innerHTML = statsHtml; log("UI: Showing game over screen."); showSection('game-over-screen');
-    }
-    function updateHtmlOverlays() {
-        if (!DOM.htmlOverlay || !appState.serverState || !appState.uiPositions) return;
-        const overlay = DOM.htmlOverlay; const now = performance.now(); const pools = overlayElementPools; const state = appState.serverState; const uiPos = appState.uiPositions;
-        const activeElements = { damageText: new Set(), speechBubble: new Set() };
-        const getElement = (poolName, id, className) => { const pool = pools[poolName]; let el = pool.elements[id]; if (!el) { el = pool.inactive.pop(); if (!el) { el = document.createElement('div'); overlay.appendChild(el); } else { el.style.display = 'block'; } pool.elements[id] = el; el.className = className; } return el; };
-        const releaseElement = (poolName, id) => { const pool = pools[poolName]; const el = pool.elements[id]; if (el) { el.style.display = 'none'; el.textContent = ''; el.className = ''; pool.inactive.push(el); delete pool.elements[id]; } };
-        if (state.damage_texts) { for (const id in state.damage_texts) { const dtData = state.damage_texts[id]; const posData = uiPos[id]; if (!posData) continue; activeElements.damageText.add(id); const element = getElement('damageText', id, 'overlay-element damage-text-overlay'); element.textContent = dtData.text; element.classList.toggle('crit', dtData.is_crit || false); const lifeTime = (dtData.lifetime || 0.75) * 1000; const spawnTime = dtData.spawn_time * 1000; const elapsed = now - spawnTime; const progress = Math.min(1, elapsed / lifeTime); const verticalOffset = -(progress * 50); element.style.left = `${posData.screenX}px`; element.style.top = `${posData.screenY + verticalOffset}px`; element.style.opacity = Math.max(0, 1.0 - (progress * 0.9)).toFixed(2); } }
-        for (const id in pools.damageText.elements) { if (!activeElements.damageText.has(id)) releaseElement('damageText', id); }
-        const currentBubbles = {}; if (state.players) { Object.entries(state.players).forEach(([id, pData]) => { if (pData?.speechBubble) currentBubbles[id] = { ...pData.speechBubble, source: 'player' }; }); } if (state.enemy_speaker_id && state.enemy_speech_text) { currentBubbles[state.enemy_speaker_id] = { text: state.enemy_speech_text, endTime: now + ENEMY_SPEECH_BUBBLE_DURATION_MS, source: 'enemy'}; }
-        for(const id in currentBubbles) { const bubbleData = currentBubbles[id]; const posData = uiPos[id]; if (!posData) continue; if (bubbleData.source === 'player' && bubbleData.endTime && now > bubbleData.endTime) continue; activeElements.speechBubble.add(id); const element = getElement('speechBubble', id, 'overlay-element speech-bubble'); element.textContent = bubbleData.text.substring(0, 50); const yOffset = -60; element.style.left = `${posData.screenX}px`; element.style.top = `${posData.screenY + yOffset}px`; element.style.opacity = 1.0; }
-        for (const id in pools.speechBubble.elements) { if (!activeElements.speechBubble.has(id)) releaseElement('speechBubble', id); }
-    }
+    function showSection(sectionId) { DOM.menuArea?.classList.add('hidden'); allMenuSections.forEach(s => s?.classList.remove('active')); DOM.gameArea?.classList.remove('active'); DOM.gameOverScreen?.classList.remove('active'); const sectionToShow = document.getElementById(sectionId); if (sectionToShow) { sectionToShow.classList.add('active'); if (sectionToShow.closest('#menu-area')) { DOM.menuArea?.classList.remove('hidden'); } } else { error(`UI: Section not found: ${sectionId}`); } }
+    function updateStatus(message, isError = false) { if (!DOM.gameStatus) return; DOM.gameStatus.textContent = message; DOM.gameStatus.style.color = isError ? (getCssVar('--color-danger') || 'red') : (getCssVar('--color-accent') || 'yellow'); }
+    function updateHUD(serverState) { if (!DOM.playerStatsGrid || !serverState?.players || !appState.localPlayerId) { if(DOM.playerStatsGrid) DOM.playerStatsGrid.innerHTML = ''; return; } const players = serverState.players; const localId = appState.localPlayerId; DOM.playerStatsGrid.innerHTML = ''; const sortedPlayerIds = Object.keys(players).sort((a, b) => { if (a === localId) return -1; if (b === localId) return 1; return a.localeCompare(b); }); sortedPlayerIds.forEach(pId => { const pData = players[pId]; if (!pData) return; const isSelf = (pId === localId); const header = isSelf ? "YOU" : `P:${pId.substring(0, 4)}`; const status = pData.player_status || PLAYER_STATUS_ALIVE; let healthDisplay; if (status === PLAYER_STATUS_DOWN) healthDisplay = `<span style='color: var(--color-down-status);'>DOWN</span>`; else if (status === PLAYER_STATUS_DEAD || pData.health <= 0) healthDisplay = `<span style='color: var(--color-dead-status);'>DEAD</span>`; else { const hp = pData.health ?? 0; let color = 'var(--color-health-high)'; if (hp < 66) color = 'var(--color-health-medium)'; if (hp < 33) color = 'var(--color-health-low)'; healthDisplay = `<span style='color:${color};'>${hp.toFixed(0)}</span>`; } const armor = pData.armor ?? 0; let armorDisplay = Math.round(armor); if(armor > 0) armorDisplay = `<span style='color: var(--color-armor);'>${armorDisplay}</span>`; const box = document.createElement('div'); box.className = 'stats-box'; box.innerHTML = `<div class="stats-header">${header}</div><div class="stats-content"><span>HP:</span> ${healthDisplay}<br><span>Armor:</span> ${armorDisplay}<br><span>Gun:</span> ${pData.gun ?? 1}<br><span>Speed:</span> ${pData.speed ?? '-'}<br><span>Kills:</span> ${pData.kills ?? 0}<br><span>Score:</span> ${pData.score ?? 0}</div>`; DOM.playerStatsGrid.appendChild(box); }); }
+    function addChatMessage(senderId, message, isSystem = false) { if (!DOM.chatLog) return; const div = document.createElement('div'); const isSelf = senderId === appState.localPlayerId; let senderName = 'System'; if (!isSystem) { senderName = isSelf ? 'You' : `P:${senderId ? senderId.substring(0, 4) : '???'}`; } div.classList.add('chat-message', isSystem ? 'system-message' : (isSelf ? 'my-message' : 'other-message')); div.textContent = isSystem ? message : `${senderName}: ${message}`; DOM.chatLog.appendChild(div); DOM.chatLog.scrollTop = DOM.chatLog.scrollHeight; }
+    function updateCountdown(serverState) { if (!DOM.countdownDiv) return; const isCountdown = serverState?.status === 'countdown' && serverState?.countdown >= 0; if (isCountdown) { DOM.countdownDiv.textContent = Math.ceil(serverState.countdown); DOM.countdownDiv.classList.add('active'); } else { DOM.countdownDiv.classList.remove('active'); } }
+    function updateEnvironmentDisplay(serverState) { if (!DOM.dayNightIndicator || !DOM.temperatureIndicator || !DOM.gameContainer) return; if (serverState?.status === 'active' || serverState?.status === 'countdown') { const isNight = serverState.is_night ?? false; appState.isNight = isNight; DOM.dayNightIndicator.textContent = isNight ? 'Night' : 'Day'; DOM.dayNightIndicator.style.display = 'block'; DOM.gameContainer.classList.toggle('night-mode', isNight); appState.currentTemp = serverState.current_temperature ?? 18.0; appState.isRaining = serverState.is_raining ?? false; appState.isDustStorm = serverState.is_dust_storm ?? false; DOM.temperatureIndicator.textContent = `${appState.currentTemp.toFixed(0)}°C`; DOM.temperatureIndicator.style.display = 'block'; DOM.gameContainer.classList.toggle('raining', appState.isRaining); DOM.gameContainer.classList.toggle('dust-storm', appState.isDustStorm); } else { DOM.dayNightIndicator.style.display = 'none'; DOM.temperatureIndicator.style.display = 'none'; DOM.gameContainer.classList.remove('night-mode', 'raining', 'dust-storm'); appState.isNight = false; appState.isRaining = false; appState.isDustStorm = false; } }
+    function showGameOver(finalState) { if (!DOM.finalStatsDiv || !DOM.gameOverScreen) return; const player = finalState?.players?.[appState.localPlayerId]; let statsHtml = "---"; if (player) { statsHtml = `<div class="final-stat-item"><strong>Score:</strong> ${player.score ?? 0}</div><div class="final-stat-item"><strong>Kills:</strong> ${player.kills ?? 0}</div>`; } DOM.finalStatsDiv.innerHTML = statsHtml; log("UI: Showing game over screen."); showSection('game-over-screen'); }
+    function updateHtmlOverlays() { if (!DOM.htmlOverlay || !appState.serverState || !appState.uiPositions) return; const overlay = DOM.htmlOverlay; const now = performance.now(); const pools = overlayElementPools; const state = appState.serverState; const uiPos = appState.uiPositions; const activeElements = { damageText: new Set(), speechBubble: new Set() }; const getElement = (poolName, id, className) => { const pool = pools[poolName]; let el = pool.elements[id]; if (!el) { el = pool.inactive.pop(); if (!el) { el = document.createElement('div'); overlay.appendChild(el); } else { el.style.display = 'block'; } pool.elements[id] = el; el.className = className; } return el; }; const releaseElement = (poolName, id) => { const pool = pools[poolName]; const el = pool.elements[id]; if (el) { el.style.display = 'none'; el.textContent = ''; el.className = ''; pool.inactive.push(el); delete pool.elements[id]; } }; if (state.damage_texts) { for (const id in state.damage_texts) { const dtData = state.damage_texts[id]; const posData = uiPos[id]; if (!posData) continue; activeElements.damageText.add(id); const element = getElement('damageText', id, 'overlay-element damage-text-overlay'); element.textContent = dtData.text; element.classList.toggle('crit', dtData.is_crit || false); const lifeTime = (dtData.lifetime || 0.75) * 1000; const spawnTime = dtData.spawn_time * 1000; const elapsed = now - spawnTime; const progress = Math.min(1, elapsed / lifeTime); const verticalOffset = -(progress * 50); element.style.left = `${posData.screenX}px`; element.style.top = `${posData.screenY + verticalOffset}px`; element.style.opacity = Math.max(0, 1.0 - (progress * 0.9)).toFixed(2); } } for (const id in pools.damageText.elements) { if (!activeElements.damageText.has(id)) releaseElement('damageText', id); } const currentBubbles = {}; if (state.players) { Object.entries(state.players).forEach(([id, pData]) => { if (pData?.speechBubble) currentBubbles[id] = { ...pData.speechBubble, source: 'player' }; }); } if (state.enemy_speaker_id && state.enemy_speech_text) { currentBubbles[state.enemy_speaker_id] = { text: state.enemy_speech_text, endTime: now + ENEMY_SPEECH_BUBBLE_DURATION_MS, source: 'enemy'}; } for(const id in currentBubbles) { const bubbleData = currentBubbles[id]; const posData = uiPos[id]; if (!posData) continue; if (bubbleData.source === 'player' && bubbleData.endTime && now > bubbleData.endTime) continue; activeElements.speechBubble.add(id); const element = getElement('speechBubble', id, 'overlay-element speech-bubble'); element.textContent = bubbleData.text.substring(0, 50); const yOffset = -60; element.style.left = `${posData.screenX}px`; element.style.top = `${posData.screenY + yOffset}px`; element.style.opacity = 1.0; } for (const id in pools.speechBubble.elements) { if (!activeElements.speechBubble.has(id)) releaseElement('speechBubble', id); } }
     return { showSection, updateStatus, updateHUD, addChatMessage, updateCountdown, updateEnvironmentDisplay, showGameOver, updateHtmlOverlays };
 })();
 
 // --- Network Manager Module ---
 const NetworkManager = (() => {
-    function connect(onOpenCallback) {
-        if (socket && socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING) { if (socket.readyState === WebSocket.OPEN && onOpenCallback) onOpenCallback(); return; }
-        clearTimeout(reconnectTimer); UIManager.updateStatus('Connecting...'); log("WS connect:", WEBSOCKET_URL);
-        try { socket = new WebSocket(WEBSOCKET_URL); } catch (err) { error("WS creation failed:", err); UIManager.updateStatus('Connection failed.', true); return; }
-        socket.onopen = () => { log('WS open.'); appState.isConnected = true; DOM.loadingScreen?.classList.remove('active'); DOM.gameContainer?.classList.add('loaded'); UIManager.updateStatus('Connected.'); if (!appState.localPlayerId) UIManager.showSection('main-menu-section'); if (onOpenCallback) onOpenCallback(); };
-        socket.onmessage = handleServerMessage;
-        socket.onerror = (event) => { error('WS Error:', event); };
-        socket.onclose = (event) => {
-            error(`WS Closed: Code=${event.code}, Reason='${event.reason || 'N/A'}'`);
-            const wasConnected = appState.isConnected; appState.isConnected = false; socket = null;
-            GameManager.cleanupLoop();
-            if (appState.mode !== 'menu') GameManager.resetClientState(false);
-            if (event.code === 1000 || event.code === 1001 || event.code === 1005) { UIManager.updateStatus('Disconnected.'); UIManager.showSection('main-menu-section'); }
-            else if (wasConnected) { UIManager.updateStatus('Connection lost. Retrying...', true); scheduleReconnect(); }
-            else { UIManager.updateStatus('Connection failed.', true); UIManager.showSection('main-menu-section'); }
-        };
-    }
-    function scheduleReconnect() {
-        clearTimeout(reconnectTimer);
-        log(`Reconnect attempt in ${RECONNECT_DELAY}ms`);
-        reconnectTimer = setTimeout(() => {
-            log("Attempting reconnect...");
-            connect(() => { UIManager.updateStatus('Reconnected.'); UIManager.showSection('main-menu-section'); });
-        }, RECONNECT_DELAY);
-    }
-    function sendMessage(payload) {
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            try { socket.send(JSON.stringify(payload)); } catch (err) { error("Send error:", err, payload); }
-        }
-    }
-    function closeConnection(code = 1000, reason = "User action") {
-        clearTimeout(reconnectTimer);
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            log(`Closing WS connection: ${reason} (${code})`);
-            socket.close(code, reason);
-        }
-        socket = null;
-        appState.isConnected = false;
-    }
+    function connect(onOpenCallback) { if (socket && socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING) { if (socket.readyState === WebSocket.OPEN && onOpenCallback) onOpenCallback(); return; } clearTimeout(reconnectTimer); UIManager.updateStatus('Connecting...'); log("WS connect:", WEBSOCKET_URL); try { socket = new WebSocket(WEBSOCKET_URL); } catch (err) { error("WS creation failed:", err); UIManager.updateStatus('Connection failed.', true); return; } socket.onopen = () => { log('WS open.'); appState.isConnected = true; DOM.loadingScreen?.classList.remove('active'); DOM.gameContainer?.classList.add('loaded'); UIManager.updateStatus('Connected.'); if (!appState.localPlayerId) UIManager.showSection('main-menu-section'); if (onOpenCallback) onOpenCallback(); }; socket.onmessage = handleServerMessage; socket.onerror = (event) => { error('WS Error:', event); }; socket.onclose = (event) => { error(`WS Closed: Code=${event.code}, Reason='${event.reason || 'N/A'}'`); const wasConnected = appState.isConnected; appState.isConnected = false; socket = null; GameManager.cleanupLoop(); if (appState.mode !== 'menu') GameManager.resetClientState(false); if (event.code === 1000 || event.code === 1001 || event.code === 1005) { UIManager.updateStatus('Disconnected.'); UIManager.showSection('main-menu-section'); } else if (wasConnected) { UIManager.updateStatus('Connection lost. Retrying...', true); scheduleReconnect(); } else { UIManager.updateStatus('Connection failed.', true); UIManager.showSection('main-menu-section'); } }; }
+    function scheduleReconnect() { clearTimeout(reconnectTimer); log(`Reconnect attempt in ${RECONNECT_DELAY}ms`); reconnectTimer = setTimeout(() => { log("Attempting reconnect..."); connect(() => { UIManager.updateStatus('Reconnected.'); UIManager.showSection('main-menu-section'); }); }, RECONNECT_DELAY); }
+    function sendMessage(payload) { if (socket && socket.readyState === WebSocket.OPEN) { try { socket.send(JSON.stringify(payload)); } catch (err) { error("Send error:", err, payload); } } }
+    function closeConnection(code = 1000, reason = "User action") { clearTimeout(reconnectTimer); if (socket && socket.readyState === WebSocket.OPEN) { log(`Closing WS connection: ${reason} (${code})`); socket.close(code, reason); } socket = null; appState.isConnected = false; }
     return { connect, sendMessage, closeConnection };
 })();
 
@@ -326,58 +160,40 @@ const InputManager = (() => {
     let keys = {}; let lastShotTime = 0; let inputInterval = null; let mouseScreenPos = { x: 0, y: 0 }; let isMouseDown = false; let isRightMouseDown = false;
     const raycaster = new THREE.Raycaster(); const mouseNDC = new THREE.Vector2();
     function preventContextMenu(event) { if (DOM.canvasContainer?.contains(event.target)) event.preventDefault(); }
-    function setup() {
-        cleanup(); log("Input: Setting up listeners...");
-        document.addEventListener('keydown', handleKeyDown); document.addEventListener('keyup', handleKeyUp);
-        DOM.chatInput?.addEventListener('keydown', handleChatEnter); DOM.canvasContainer?.addEventListener('mousemove', handleMouseMove);
-        DOM.canvasContainer?.addEventListener('mousedown', handleMouseDown); DOM.canvasContainer?.addEventListener('contextmenu', preventContextMenu);
-        document.addEventListener('mouseup', handleMouseUp); inputInterval = setInterval(sendMovementInput, INPUT_SEND_INTERVAL);
-    }
-    function cleanup() {
-        log("Input: Cleaning up listeners...");
-        document.removeEventListener('keydown', handleKeyDown); document.removeEventListener('keyup', handleKeyUp);
-        DOM.chatInput?.removeEventListener('keydown', handleChatEnter); DOM.canvasContainer?.removeEventListener('mousemove', handleMouseMove);
-        DOM.canvasContainer?.removeEventListener('mousedown', handleMouseDown); DOM.canvasContainer?.removeEventListener('contextmenu', preventContextMenu);
-        document.removeEventListener('mouseup', handleMouseUp); clearInterval(inputInterval); inputInterval = null;
-        keys = {}; isMouseDown = false; isRightMouseDown = false; mouseScreenPos = { x: 0, y: 0 };
-    }
-    function handleMouseMove(event) {
-        if (!DOM.canvasContainer || !appState.isRendererReady || !Renderer3D.getCamera || !Renderer3D.getGroundPlane || !appState.isGameLoopRunning) return;
-        const rect = DOM.canvasContainer.getBoundingClientRect(); const canvasX = event.clientX - rect.left; const canvasY = event.clientY - rect.top; mouseScreenPos.x = canvasX; mouseScreenPos.y = canvasY;
-        mouseNDC.x = (canvasX / rect.width) * 2 - 1; mouseNDC.y = -(canvasY / rect.height) * 2 + 1;
-        const camera = Renderer3D.getCamera(); const groundPlane = Renderer3D.getGroundPlane();
-        if (camera && groundPlane) { try { raycaster.setFromCamera(mouseNDC, camera); const intersects = raycaster.intersectObject(groundPlane); if (intersects.length > 0) appState.mouseWorldPosition.copy(intersects[0].point); } catch (e) { error("Input: Raycasting error:", e); } }
-     }
+    function setup() { cleanup(); log("Input: Setting up listeners..."); document.addEventListener('keydown', handleKeyDown); document.addEventListener('keyup', handleKeyUp); DOM.chatInput?.addEventListener('keydown', handleChatEnter); DOM.canvasContainer?.addEventListener('mousemove', handleMouseMove); DOM.canvasContainer?.addEventListener('mousedown', handleMouseDown); DOM.canvasContainer?.addEventListener('contextmenu', preventContextMenu); document.addEventListener('mouseup', handleMouseUp); inputInterval = setInterval(sendMovementInput, INPUT_SEND_INTERVAL); }
+    function cleanup() { log("Input: Cleaning up listeners..."); document.removeEventListener('keydown', handleKeyDown); document.removeEventListener('keyup', handleKeyUp); DOM.chatInput?.removeEventListener('keydown', handleChatEnter); DOM.canvasContainer?.removeEventListener('mousemove', handleMouseMove); DOM.canvasContainer?.removeEventListener('mousedown', handleMouseDown); DOM.canvasContainer?.removeEventListener('contextmenu', preventContextMenu); document.removeEventListener('mouseup', handleMouseUp); clearInterval(inputInterval); inputInterval = null; keys = {}; isMouseDown = false; isRightMouseDown = false; mouseScreenPos = { x: 0, y: 0 }; }
+    function handleMouseMove(event) { if (!DOM.canvasContainer || !appState.isRendererReady || !Renderer3D.getCamera || !Renderer3D.getGroundPlane || !appState.isGameLoopRunning) return; const rect = DOM.canvasContainer.getBoundingClientRect(); const canvasX = event.clientX - rect.left; const canvasY = event.clientY - rect.top; mouseScreenPos.x = canvasX; mouseScreenPos.y = canvasY; mouseNDC.x = (canvasX / rect.width) * 2 - 1; mouseNDC.y = -(canvasY / rect.height) * 2 + 1; const camera = Renderer3D.getCamera(); const groundPlane = Renderer3D.getGroundPlane(); if (camera && groundPlane) { try { raycaster.setFromCamera(mouseNDC, camera); const intersects = raycaster.intersectObject(groundPlane); if (intersects.length > 0) appState.mouseWorldPosition.copy(intersects[0].point); } catch (e) { error("Input: Raycasting error:", e); } } }
     function handleMouseDown(event) { if (document.activeElement === DOM.chatInput) return; if (event.button === 0) isMouseDown = true; else if (event.button === 2) { isRightMouseDown = true; event.preventDefault(); triggerPushbackCheck(); } }
     function handleMouseUp(event) { if (event.button === 0) isMouseDown = false; if (event.button === 2) isRightMouseDown = false; }
-    function handleKeyDown(event) { if (document.activeElement === DOM.chatInput) return; const key = event.key.toLowerCase(); if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) { if (!keys[key]) keys[key] = true; event.preventDefault(); } if (key === ' ' && !keys[' ']) { keys[' '] = true; handleing(); event.preventDefault(); } if (key === 'e' && !keys['e']) { keys['e'] = true; triggerPushbackCheck(); event.preventDefault(); } }
+    function handleKeyDown(event) { if (document.activeElement === DOM.chatInput) return; const key = event.key.toLowerCase(); if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) { if (!keys[key]) keys[key] = true; event.preventDefault(); } if (key === ' ' && !keys[' ']) { keys[' '] = true; handleShooting(); event.preventDefault(); } if (key === 'e' && !keys['e']) { keys['e'] = true; triggerPushbackCheck(); event.preventDefault(); } }
     function handleKeyUp(event) { const key = event.key.toLowerCase(); if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'e'].includes(key)) keys[key] = false; }
     function handleChatEnter(event) { if (event.key === 'Enter') { event.preventDefault(); GameManager.sendChatMessage(); } }
-    function getMovementInputVector() {
-        let dx = 0, dy = 0;
-        if (keys['w'] || keys['arrowup']) dy -= 1; if (keys['s'] || keys['arrowdown']) dy += 1;
-        if (keys['a'] || keys['arrowleft']) dx -= 1; if (keys['d'] || keys['arrowright']) dx += 1;
-        if (dx !== 0 && dy !== 0) { const factor = Math.SQRT1_2; dx *= factor; dy *= factor; }
-        return { dx, dy };
-    }
+    function getMovementInputVector() { let dx = 0, dy = 0; if (keys['w'] || keys['arrowup']) dy -= 1; if (keys['s'] || keys['arrowdown']) dy += 1; if (keys['a'] || keys['arrowleft']) dx -= 1; if (keys['d'] || keys['arrowright']) dx += 1; if (dx !== 0 && dy !== 0) { const factor = Math.SQRT1_2; dx *= factor; dy *= factor; } return { dx, dy }; }
     function sendMovementInput() { if (appState.mode !== 'menu' && appState.serverState?.status === 'active' && appState.isConnected && appState.localPlayerId) { NetworkManager.sendMessage({ type: 'player_move', direction: getMovementInputVector() }); } }
     function triggerPushbackCheck() { if (appState.serverState?.status === 'active' && appState.isConnected && appState.localPlayerId) { GameManager.triggerLocalPushback(); } }
-    function handleing() {
-        if (!appState.isRendererReady || appState.serverState?.status !== 'active' || !appState.localPlayerId) return;
-        const playerState = appState.serverState?.players?.[appState.localPlayerId]; if (!playerState || playerState.player_status !== PLAYER_STATUS_ALIVE) return;
-        const nowTimestamp = Date.now(); const currentAmmo = playerState?.active_ammo_type || 'standard'; const isRapidFire = currentAmmo === 'ammo_rapid_fire'; const cooldownMultiplier = isRapidFire ? RAPID_FIRE_COOLDOWN_MULTIPLIER : 1.0; const actualCooldown = _COOLDOWN * cooldownMultiplier; if (nowTimestamp - lastShotTime < actualCooldown) return; lastShotTime = nowTimestamp;
+    // Defined within IIFE, accessible to update via closure
+    function handleShooting() {
+        // *** FIX: Added guard clauses ***
+        if (!appState.serverState || !appState.localPlayerId) { /* console.warn("handleShooting: No server state or player ID"); */ return; }
+        if (!appState.isRendererReady || appState.serverState?.status !== 'active') { /* console.warn("handleShooting: Not active or renderer not ready"); */ return; }
+        const playerState = appState.serverState?.players?.[appState.localPlayerId];
+        if (!playerState || playerState.player_status !== PLAYER_STATUS_ALIVE) { /* console.warn("handleShooting: Player not alive"); */ return; }
+        // *** End FIX ***
+
+        const nowTimestamp = Date.now(); const currentAmmo = playerState?.active_ammo_type || 'standard'; const isRapidFire = currentAmmo === 'ammo_rapid_fire'; const cooldownMultiplier = isRapidFire ? RAPID_FIRE_COOLDOWN_MULTIPLIER : 1.0;
+        const actualCooldown = SHOOT_COOLDOWN * cooldownMultiplier; // Uses correct constant
+        if (nowTimestamp - lastShotTime < actualCooldown) return; lastShotTime = nowTimestamp;
         const playerPredictX = appState.predictedPlayerPos.x; const playerPredictZ = appState.predictedPlayerPos.y; const targetWorldPos = appState.mouseWorldPosition;
         let aimDx = 0, aimDy = -1;
         if (targetWorldPos && typeof playerPredictX === 'number' && typeof playerPredictZ === 'number') { aimDx = targetWorldPos.x - playerPredictX; aimDy = targetWorldPos.z - playerPredictZ; const magSq = aimDx * aimDx + aimDy * aimDy; if (magSq > 0.01) { const mag = Math.sqrt(magSq); aimDx /= mag; aimDy /= mag; } else { aimDx = 0; aimDy = -1; } } appState.localPlayerAimState.lastAimDx = aimDx; appState.localPlayerAimState.lastAimDy = aimDy;
         localEffects.muzzleFlash.active = true; localEffects.muzzleFlash.endTime = performance.now() + MUZZLE_FLASH_DURATION; localEffects.muzzleFlash.aimDx = aimDx; localEffects.muzzleFlash.aimDy = aimDy;
-        SoundManager.playSound('', _VOLUME); // Adjusted volume
+        SoundManager.playSound('shoot', SHOOT_VOLUME);
         if (Renderer3D.spawnVisualAmmoCasing) { const spawnPos = new THREE.Vector3(playerPredictX, 0, playerPredictZ); const ejectVec = new THREE.Vector3(aimDx, 0, aimDy); Renderer3D.spawnVisualAmmoCasing(spawnPos, ejectVec); }
         NetworkManager.sendMessage({ type: 'player_shoot', target: { x: targetWorldPos.x, y: targetWorldPos.z } });
     }
     function update(deltaTime) {
-         if (keys[' ']) handleShooting();
-         if (isMouseDown) handleShooting();
-         // Footstep Sound Logic
+         if (keys[' ']) handleShooting(); // Now calls corrected internal function
+         if (isMouseDown) handleShooting(); // Now calls corrected internal function
          const isMoving = (keys['w'] || keys['a'] || keys['s'] || keys['d'] || keys['arrowup'] || keys['arrowdown'] || keys['arrowleft'] || keys['arrowright']);
          const player = appState.serverState?.players?.[appState.localPlayerId];
          if (isMoving && player?.player_status === PLAYER_STATUS_ALIVE) { // Check status
@@ -388,20 +204,21 @@ const InputManager = (() => {
              }
          }
     }
+    // Return public methods
     return { setup, cleanup, update, getMovementInputVector };
 })();
 
 // --- Game Manager Module ---
 const GameManager = (() => {
     let isInitialized = false;
-    function initListeners() { // Added ui_click sounds back
+    function initListeners() { // ui_click sounds re-added (except initial start)
         if (isInitialized) return; log("Game: Initializing listeners...");
-        DOM.singlePlayerBtn?.addEventListener('click', () => { SoundManager.init(); /* SoundManager.playSound('ui_click', UI_CLICK_VOLUME); */ startSinglePlayer(); }); // Removed sound from initial click
+        DOM.singlePlayerBtn?.addEventListener('click', () => { SoundManager.init(); /* No sound here */ startSinglePlayer(); });
         DOM.multiplayerBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); UIManager.showSection('multiplayer-menu-section'); });
-        const hostHandler = (maxP) => { SoundManager.init(); /* SoundManager.playSound('ui_click', UI_CLICK_VOLUME); */ hostMultiplayer(maxP); }; // Removed sound from initial click
+        const hostHandler = (maxP) => { SoundManager.init(); /* No sound here */ hostMultiplayer(maxP); };
         DOM.hostGameBtn2?.addEventListener('click', () => hostHandler(2)); DOM.hostGameBtn3?.addEventListener('click', () => hostHandler(3)); DOM.hostGameBtn4?.addEventListener('click', () => hostHandler(4));
         DOM.showJoinUIBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); UIManager.showSection('join-code-section'); });
-        DOM.joinGameSubmitBtn?.addEventListener('click', () => { SoundManager.init(); /* SoundManager.playSound('ui_click', UI_CLICK_VOLUME); */ joinMultiplayer(); }); // Removed sound from initial click
+        DOM.joinGameSubmitBtn?.addEventListener('click', () => { SoundManager.init(); /* No sound here */ joinMultiplayer(); });
         DOM.cancelHostBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); leaveGame(); });
         DOM.sendChatBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); sendChatMessage(); });
         DOM.leaveGameBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); leaveGame(); });
@@ -446,12 +263,12 @@ const GameManager = (() => {
         interpolatedState.snake_state = localEffects.snake;
         return interpolatedState;
      }
-    function updatePredictedPosition(deltaTime) { // Uses appState.localPlayerRadius
+    function updatePredictedPosition(deltaTime) {
         if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return;
         const playerState = appState.serverState.players[appState.localPlayerId]; if (playerState.player_status !== PLAYER_STATUS_ALIVE) return;
         const moveVector = InputManager.getMovementInputVector(); const playerSpeed = playerState?.speed ?? (appState.worldWidth / 10);
         if (moveVector.dx !== 0 || moveVector.dy !== 0) { appState.predictedPlayerPos.x += moveVector.dx * playerSpeed * deltaTime; appState.predictedPlayerPos.y += moveVector.dy * playerSpeed * deltaTime; }
-        const radius = appState.localPlayerRadius; // Use stored radius
+        const radius = appState.localPlayerRadius; // Use state radius
         appState.predictedPlayerPos.x = Math.max(radius, Math.min(appState.worldWidth - radius, appState.predictedPlayerPos.x));
         appState.predictedPlayerPos.y = Math.max(radius, Math.min(appState.worldHeight - radius, appState.predictedPlayerPos.y));
     }
@@ -465,28 +282,11 @@ const GameManager = (() => {
     function gameLoop(currentTime) {
         if (!appState.isGameLoopRunning) { cleanupLoop(); return; }
         const now = performance.now(); if (lastLoopTime === null) lastLoopTime = now; const deltaTime = Math.min(0.1, (now - lastLoopTime) / 1000); lastLoopTime = now;
-        // Log delta time to check loop timing
-        // console.log("DeltaTime:", deltaTime.toFixed(4));
-
         InputManager.update(deltaTime); // Includes footstep logic
         if (localEffects.pushbackAnim.active && now >= localEffects.pushbackAnim.endTime) localEffects.pushbackAnim.active = false; if (localEffects.muzzleFlash.active && now >= localEffects.muzzleFlash.endTime) localEffects.muzzleFlash.active = false;
         if (appState.serverState?.status === 'active') { updatePredictedPosition(deltaTime); reconcileWithServer(); }
         const stateToRender = getInterpolatedState(now);
-
-        // Log if stateToRender seems static (for debugging frozen visuals)
-        // if (stateToRender && appState.localPlayerId && stateToRender.players?.[appState.localPlayerId]) {
-        //     console.log("Rendering player X:", stateToRender.players[appState.localPlayerId].x.toFixed(1));
-        // } else if (stateToRender) {
-        //      console.log("Rendering state timestamp:", stateToRender.timestamp);
-        // }
-
-
-        if (stateToRender && appState.isRendererReady && Renderer3D.renderScene) {
-            Renderer3D.renderScene(stateToRender, appState, localEffects); // Call the render function
-        } else if (appState.mode !== 'menu') {
-             // log("Skipping render - State or Renderer not ready.");
-        }
-
+        if (stateToRender && appState.isRendererReady && Renderer3D.renderScene) { Renderer3D.renderScene(stateToRender, appState, localEffects); }
         if (stateToRender && appState.mode !== 'menu') { UIManager.updateHtmlOverlays(); }
         if (appState.isGameLoopRunning) { appState.animationFrameId = requestAnimationFrame(gameLoop); } else { cleanupLoop(); }
     }
@@ -495,21 +295,21 @@ const GameManager = (() => {
         appState.lastServerState = null; appState.serverState = state; appState.localPlayerId = localId; appState.currentGameId = gameId; appState.maxPlayersInGame = maxPlayers;
         appState.worldWidth = state?.world_width || DEFAULT_WORLD_WIDTH; appState.worldHeight = state?.world_height || DEFAULT_WORLD_HEIGHT;
         const initialPlayer = state?.players?.[localId];
-        appState.localPlayerRadius = initialPlayer?.radius || DEFAULT_PLAYER_RADIUS; // Get radius
+        appState.localPlayerRadius = initialPlayer?.radius || DEFAULT_PLAYER_RADIUS; // Store radius
         const startX = initialPlayer?.x ?? appState.worldWidth / 2; const startY = initialPlayer?.y ?? appState.worldHeight / 2;
         appState.predictedPlayerPos = { x: startX, y: startY }; appState.renderedPlayerPos = { x: startX, y: startY }; appState.localPlayerAimState = { lastAimDx: 0, lastAimDy: -1 };
-        if (!appState.isRendererReady && DOM.canvasContainer) { log(`Game: Initializing Renderer with world size ${appState.worldWidth}x${appState.worldHeight}`); appState.isRendererReady = Renderer3D.init(DOM.canvasContainer, appState.worldWidth, appState.worldHeight); if (!appState.isRendererReady) { error("Renderer initialization failed in setInitialGameState!"); UIManager.updateStatus("Renderer Error!", true); } }
+        if (!appState.isRendererReady && DOM.canvasContainer) { log(`Game: Initializing Renderer with world size ${appState.worldWidth}x${appState.worldHeight}`); appState.isRendererReady = Renderer3D.init(DOM.canvasContainer); if (!appState.isRendererReady) { error("Renderer initialization failed in setInitialGameState!"); UIManager.updateStatus("Renderer Error!", true); } } // Renderer uses dynamic size now
     }
     function updateServerState(newState) {
         appState.lastServerState = appState.serverState; appState.serverState = newState; appState.lastStateReceiveTime = performance.now();
-        if (newState?.world_width && newState?.world_height && (appState.worldWidth !== newState.world_width || appState.worldHeight !== newState.world_height)) { log(`World dimensions updated mid-game: ${newState.world_width}x${newState.world_height}`); appState.worldWidth = newState.world_width; appState.worldHeight = newState.world_height; }
+        // Note: No longer updating worldWidth/Height here, renderer handles dynamically
         if (newState?.players?.[appState.localPlayerId]?.radius) { appState.localPlayerRadius = newState.players[appState.localPlayerId].radius; } // Update radius
         if(newState.snake_state) { localEffects.snake = newState.snake_state; } else { localEffects.snake.active = false; localEffects.snake.segments = []; }
     }
     function updateHostWaitUI(state) { const currentP = Object.keys(state?.players || {}).length; const maxP = appState.maxPlayersInGame || '?'; if (DOM.waitingMessage) DOM.waitingMessage.textContent = `Waiting... (${currentP}/${maxP} Players)`; }
     function handlePlayerChat(senderId, message) { UIManager.addChatMessage(senderId, message, false); }
     function handleEnemyChat(speakerId, message) { if (speakerId && message) UIManager.addChatMessage(speakerId, `(${message})`, true); }
-    function handleDamageFeedback(newState) { // Sounds re-added
+    function handleDamageFeedback(newState) { // Includes re-added sounds
          const localId = appState.localPlayerId; if (!localId || !appState.lastServerState) return;
          const prevP = appState.lastServerState?.players?.[localId]; const currP = newState?.players?.[localId];
          if (prevP && currP && typeof currP.health === 'number' && typeof prevP.health === 'number' && currP.health < prevP.health) { const dmg = prevP.health - currP.health; const mag = Math.min(18, 5 + dmg * 0.2); if (Renderer3D.triggerShake) Renderer3D.triggerShake(mag, 250); SoundManager.playSound('damage', 0.8); }
@@ -523,40 +323,26 @@ const GameManager = (() => {
 
 // --- WebSocket Message Handler ---
 function handleServerMessage(event) {
-    let data;
-    try { data = JSON.parse(event.data); }
-    catch (err) { error("Failed parse WS message:", err, event.data); return; }
-
-    // Add temporary logging for received messages
-    // console.log("Received WS message:", data.type, data);
+    let data; try { data = JSON.parse(event.data); } catch (err) { error("Failed parse WS message:", err, event.data); return; }
+    // log(`<<< Received WS message Type: ${data?.type || 'UNKNOWN'}`); // Keep for debug if needed
 
     try {
         switch (data.type) {
             case 'game_created': case 'game_joined': case 'sp_game_started':
-                log(`Received '${data.type}'`);
-                if (!data.initial_state || !data.player_id || !data.game_id) { error(`'${data.type}' message missing critical data!`, data); return; }
-                GameManager.resetClientState(false);
-                GameManager.setInitialGameState(data.initial_state, data.player_id, data.game_id, data.max_players || data.initial_state?.max_players || 1);
+                log(`Received '${data.type}'`); if (!data.initial_state || !data.player_id || !data.game_id) { error(`'${data.type}' message missing critical data!`, data); return; }
+                GameManager.resetClientState(false); GameManager.setInitialGameState(data.initial_state, data.player_id, data.game_id, data.max_players || data.initial_state?.max_players || 1);
                 if (data.type === 'game_created') { if (DOM.gameCodeDisplay) DOM.gameCodeDisplay.textContent = appState.currentGameId || 'ERROR'; UIManager.updateStatus(`Hosted Game: ${appState.currentGameId}`); GameManager.updateHostWaitUI(appState.serverState); UIManager.showSection('host-wait-section'); }
                 else { const joinMsg = data.type === 'game_joined' ? `Joined ${appState.currentGameId}` : "Single Player Started!"; UIManager.updateStatus(joinMsg); UIManager.showSection('game-area'); if (appState.serverState) { UIManager.updateHUD(appState.serverState); UIManager.updateCountdown(appState.serverState); UIManager.updateEnvironmentDisplay(appState.serverState); } if (appState.isRendererReady) GameManager.startGameLoop(); else error("Cannot start game loop - Renderer not ready!"); }
                 break;
             case 'game_state':
-                // log("Received game_state"); // Confirm state messages arrive
-                if (appState.mode === 'menu' || !appState.localPlayerId || !appState.isRendererReady || !data.state) {
-                    // log("Ignoring game_state (conditions not met)");
-                    return;
-                }
-                const previousStatus = appState.serverState?.status;
-                GameManager.updateServerState(data.state); const newState = appState.serverState;
+                if (appState.mode === 'menu' || !appState.localPlayerId || !appState.isRendererReady || !data.state) return;
+                const previousStatus = appState.serverState?.status; GameManager.updateServerState(data.state); const newState = appState.serverState;
                 if (newState.status !== previousStatus) { log(`Game Status Change: ${previousStatus || 'N/A'} -> ${newState.status}`); if ((newState.status === 'countdown' || newState.status === 'active') && previousStatus !== 'active' && previousStatus !== 'countdown') { UIManager.updateStatus(newState.status === 'countdown' ? "Get Ready..." : "Active!"); UIManager.showSection('game-area'); if (!appState.isGameLoopRunning) GameManager.startGameLoop(); } else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host' && previousStatus !== 'waiting') { UIManager.updateStatus("Waiting for players..."); UIManager.showSection('host-wait-section'); GameManager.updateHostWaitUI(newState); GameManager.cleanupLoop(); } else if (newState.status === 'finished' && previousStatus !== 'finished') { log("Game Over via 'finished' status."); UIManager.updateStatus("Game Over!"); UIManager.showGameOver(newState); SoundManager.playSound('death'); GameManager.cleanupLoop(); } }
                 if (appState.isGameLoopRunning && (newState.status === 'countdown' || newState.status === 'active')) { UIManager.updateHUD(newState); UIManager.updateCountdown(newState); UIManager.updateEnvironmentDisplay(newState); } else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') { GameManager.updateHostWaitUI(newState); }
-                GameManager.handleEnemyChat(newState.enemy_speaker_id, newState.enemy_speech_text);
-                GameManager.handleDamageFeedback(newState);
+                GameManager.handleEnemyChat(newState.enemy_speaker_id, newState.enemy_speech_text); GameManager.handleDamageFeedback(newState);
                 break;
             case 'game_over_notification':
-                log("Received 'game_over_notification'");
-                if (data.final_state) { appState.serverState = data.final_state; UIManager.updateStatus("Game Over!"); UIManager.showGameOver(data.final_state); SoundManager.playSound('death');}
-                else { error("Game over notification missing final_state."); UIManager.showGameOver(null); }
+                log("Received 'game_over_notification'"); if (data.final_state) { appState.serverState = data.final_state; UIManager.updateStatus("Game Over!"); UIManager.showGameOver(data.final_state); SoundManager.playSound('death');} else { error("Game over notification missing final_state."); UIManager.showGameOver(null); }
                 GameManager.cleanupLoop(); break;
             case 'chat_message': if(data.sender_id && data.message) GameManager.handlePlayerChat(data.sender_id, data.message); break;
             case 'error':
