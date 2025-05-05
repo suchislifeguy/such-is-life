@@ -1,6 +1,4 @@
 
-**`Renderer3D.js` (v4.0 - Final)**
-
 import * as THREE from 'three';
 
 // --- Constants ---
