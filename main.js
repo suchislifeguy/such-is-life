@@ -1,4 +1,4 @@
-// main.js - Client Application Logic
+// main.js - Client Application Logic v4.1 (DOM Fix)
 
 import * as THREE from 'three'; // Required for Vector3, Raycaster etc.
 import Renderer3D from './Renderer3D.js';
@@ -39,49 +39,8 @@ function log(...args) { console.log("[Client]", ...args); }
 function error(...args) { console.error("[Client]", ...args); }
 
 // --- DOM Element Cache ---
-// Cache frequently accessed DOM elements for performance
-const DOM = {
-    loadingScreen: document.getElementById('loading-screen'),
-    gameContainer: document.getElementById('game-container'),
-    topBar: document.getElementById('top-bar'),
-    gameStatus: document.getElementById('game-status'),
-    menuArea: document.getElementById('menu-area'),
-    mainMenuSection: document.getElementById('main-menu-section'),
-    multiplayerMenuSection: document.getElementById('multiplayer-menu-section'),
-    hostWaitSection: document.getElementById('host-wait-section'),
-    joinCodeSection: document.getElementById('join-code-section'),
-    gameArea: document.getElementById('game-area'),
-    statsPanel: document.getElementById('stats-panel'),
-    playerStatsGrid: document.getElementById('player-stats-grid'),
-    environmentInfo: document.getElementById('environment-info'),
-    dayNightIndicator: document.getElementById('day-night-indicator'),
-    temperatureIndicator: document.getElementById('temperature-indicator'),
-    gameControls: document.querySelector('#stats-panel .game-controls'),
-    muteBtn: document.getElementById('muteBtn'),
-    leaveGameBtn: document.getElementById('leaveGameBtn'),
-    canvasContainer: document.getElementById('canvas-container'),
-    countdownDiv: document.getElementById('countdown-overlay'),
-    htmlOverlay: document.getElementById('html-overlay'),
-    chatPanel: document.getElementById('chat-panel'),
-    chatLog: document.getElementById('chat-log'),
-    chatInput: document.getElementById('chatInput'),
-    sendChatBtn: document.getElementById('sendChatBtn'),
-    gameOverScreen: document.getElementById('game-over-screen'),
-    finalStatsDiv: document.getElementById('final-stats'),
-    singlePlayerBtn: document.getElementById('singlePlayerBtn'),
-    multiplayerBtn: document.getElementById('multiplayerBtn'),
-    hostGameBtn2: document.getElementById('hostGameBtn2'),
-    hostGameBtn3: document.getElementById('hostGameBtn3'),
-    hostGameBtn4: document.getElementById('hostGameBtn4'),
-    showJoinUIBtn: document.getElementById('showJoinUIBtn'),
-    cancelHostBtn: document.getElementById('cancelHostBtn'),
-    gameCodeDisplay: document.getElementById('game-code-display'),
-    waitingMessage: document.getElementById('waiting-message'),
-    gameIdInput: document.getElementById('gameIdInput'),
-    joinGameSubmitBtn: document.getElementById('joinGameSubmitBtn'),
-    gameOverBackBtn: document.getElementById('gameOverBackBtn'),
-    backButtons: document.querySelectorAll('.button-back'),
-};
+// **DECLARED HERE, POPULATED INSIDE DOMContentLoaded**
+let DOM = {};
 
 // --- Application State ---
 // Holds all client-side state information
@@ -230,7 +189,7 @@ const SoundManager = (() => {
         isMuted = !isMuted;
         if (gainNode) gainNode.gain.setValueAtTime(isMuted ? 0 : 1, audioContext?.currentTime || 0); // Set main gain
         log(`[SM] Sound ${isMuted ? 'Muted' : 'Unmuted'}`);
-        // Update mute button UI
+        // Update mute button UI (Check if DOM.muteBtn exists first)
         if (DOM.muteBtn) {
             DOM.muteBtn.textContent = isMuted ? 'Unmute' : 'Mute';
             DOM.muteBtn.setAttribute('aria-pressed', isMuted);
@@ -247,10 +206,14 @@ const SoundManager = (() => {
 // === UI Manager Module ===
 const UIManager = (() => {
     // List of all menu sections for easy hiding/showing
-    const allMenuSections = [
-        DOM.mainMenuSection, DOM.multiplayerMenuSection,
-        DOM.hostWaitSection, DOM.joinCodeSection
-    ];
+    let allMenuSections = []; // Populated in init
+
+    function init() { // Call this after DOM is populated
+         allMenuSections = [
+            DOM.mainMenuSection, DOM.multiplayerMenuSection,
+            DOM.hostWaitSection, DOM.joinCodeSection
+        ];
+    }
 
     // Show a specific UI section (menu, game area, game over)
     function showSection(sectionId) {
@@ -260,7 +223,7 @@ const UIManager = (() => {
         DOM.gameArea?.classList.remove('active');
         DOM.gameOverScreen?.classList.remove('active');
 
-        const sectionToShow = document.getElementById(sectionId);
+        const sectionToShow = DOM[sectionId] || document.getElementById(sectionId); // Use cached DOM if available
         if (sectionToShow) {
             sectionToShow.classList.add('active');
             // If the section is part of the menu area, make the menu area visible
@@ -333,6 +296,8 @@ const UIManager = (() => {
             // Build HTML for the stat box
             const box = document.createElement('div');
             box.className = 'stats-box';
+            // Include active ammo type display
+            const ammoTypeDisplay = (pData.active_ammo_type === 'standard' ? 'Std' : pData.active_ammo_type?.split('_').pop().toUpperCase()) || 'Std';
             box.innerHTML = `
                 <div class="stats-header">${header}</div>
                 <div class="stats-content">
@@ -340,7 +305,7 @@ const UIManager = (() => {
                     <span>Armor:</span> ${armorDisplay}<br>
                     <span>Gun:</span> ${pData.gun ?? 1}<br>
                     <span>Speed:</span> ${pData.speed ? pData.speed.toFixed(0) : '-'}<br>
-                    <span>Ammo:</span> ${pData.active_ammo_type ?? 'Std'}<br>
+                    <span>Ammo:</span> ${ammoTypeDisplay}<br>
                     <span>Kills:</span> ${pData.kills ?? 0}<br>
                     <span>Score:</span> ${pData.score ?? 0}
                 </div>
@@ -425,7 +390,7 @@ const UIManager = (() => {
         }
         DOM.finalStatsDiv.innerHTML = statsHtml;
         log("UI: Showing game over screen.");
-        showSection('game-over-screen'); // Show the game over section
+        showSection('gameOverScreen'); // Show the game over section
     }
 
     // Update HTML overlays (damage text, speech bubbles) based on screen positions
@@ -544,6 +509,7 @@ const UIManager = (() => {
 
     // Public methods exposed by the UIManager module
     return {
+        init, // Expose init function
         showSection, updateStatus, updateHUD, addChatMessage,
         updateCountdown, updateEnvironmentDisplay, showGameOver, updateHtmlOverlays
     };
@@ -578,7 +544,7 @@ const NetworkManager = (() => {
             DOM.gameContainer?.classList.add('loaded'); // Show game container
             UIManager.updateStatus('Connected.');
             // If not yet associated with a player, show the main menu
-            if (!appState.localPlayerId) UIManager.showSection('main-menu-section');
+            if (!appState.localPlayerId) UIManager.showSection('mainMenuSection');
             if (onOpenCallback) onOpenCallback(); // Execute callback if provided
         };
 
@@ -602,13 +568,13 @@ const NetworkManager = (() => {
             // Handle different close codes
             if (event.code === 1000 || event.code === 1001 || event.code === 1005) { // Normal closure or going away
                 UIManager.updateStatus('Disconnected.');
-                UIManager.showSection('main-menu-section'); // Go back to main menu
+                UIManager.showSection('mainMenuSection'); // Go back to main menu
             } else if (wasConnected) { // Unexpected closure while connected
                 UIManager.updateStatus('Connection lost. Retrying...', true);
                 scheduleReconnect(); // Attempt to reconnect
             } else { // Failed to connect initially
                 UIManager.updateStatus('Connection failed.', true);
-                UIManager.showSection('main-menu-section');
+                UIManager.showSection('mainMenuSection');
             }
         };
     }
@@ -622,7 +588,7 @@ const NetworkManager = (() => {
             // Connect again, on successful reconnect, show main menu
             connect(() => {
                 UIManager.updateStatus('Reconnected.');
-                UIManager.showSection('main-menu-section');
+                UIManager.showSection('mainMenuSection');
             });
         }, RECONNECT_DELAY);
     }
@@ -671,6 +637,7 @@ const InputManager = (() => {
 
     // Prevent browser context menu over the game canvas
     function preventContextMenu(event) {
+        // Check DOM.canvasContainer exists before accessing contains
         if (DOM.canvasContainer?.contains(event.target)) {
             event.preventDefault();
         }
@@ -682,6 +649,7 @@ const InputManager = (() => {
         log("Input: Setting up listeners...");
         document.addEventListener('keydown', handleKeyDown);
         document.addEventListener('keyup', handleKeyUp);
+        // Check DOM elements exist before adding listeners
         DOM.chatInput?.addEventListener('keydown', handleChatEnter); // Enter key in chat input
         DOM.canvasContainer?.addEventListener('mousemove', handleMouseMove);
         DOM.canvasContainer?.addEventListener('mousedown', handleMouseDown);
@@ -932,14 +900,14 @@ const GameManager = (() => {
 
         // --- Main Menu Buttons ---
         DOM.singlePlayerBtn?.addEventListener('click', () => { SoundManager.init(); startSinglePlayer(); });
-        DOM.multiplayerBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); UIManager.showSection('multiplayer-menu-section'); });
+        DOM.multiplayerBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); UIManager.showSection('multiplayerMenuSection'); });
 
         // --- Multiplayer Menu Buttons ---
         const hostHandler = (maxP) => { SoundManager.init(); hostMultiplayer(maxP); };
         DOM.hostGameBtn2?.addEventListener('click', () => hostHandler(2));
         DOM.hostGameBtn3?.addEventListener('click', () => hostHandler(3));
         DOM.hostGameBtn4?.addEventListener('click', () => hostHandler(4));
-        DOM.showJoinUIBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); UIManager.showSection('join-code-section'); });
+        DOM.showJoinUIBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); UIManager.showSection('joinCodeSection'); });
 
         // --- Join Game ---
         DOM.joinGameSubmitBtn?.addEventListener('click', () => { SoundManager.init(); joinMultiplayer(); });
@@ -955,7 +923,9 @@ const GameManager = (() => {
         // Generic handler for buttons with data-target attribute
         DOM.backButtons.forEach(btn => {
             const targetId = btn.dataset.target;
-            if (targetId && document.getElementById(targetId)) {
+            // Use cached DOM reference if available
+            const targetElement = DOM[targetId.replace(/-([a-z])/g, g => g[1].toUpperCase())] || document.getElementById(targetId);
+            if (targetId && targetElement) {
                 btn.addEventListener('click', (e) => {
                     e.preventDefault();
                     SoundManager.playSound('ui_click', UI_CLICK_VOLUME);
@@ -1063,9 +1033,10 @@ const GameManager = (() => {
             uiPositions: {}, currentTemp: 18.0, isRaining: false, isDustStorm: false, isNight: false,
         };
         // Reset local effects
-        localEffects = { muzzleFlash: { active: false }, pushbackAnim: { active: false }, snake: { active: false } };
+        localEffects = { muzzleFlash: { active: false, endTime: 0, aimDx: 0, aimDy: 0 }, pushbackAnim: { active: false, endTime: 0, duration: PUSHBACK_ANIM_DURATION }, snake: { active: false, segments: [] } };
 
-        // Reset UI elements
+
+        // Reset UI elements (check if they exist in DOM cache first)
         if(DOM.chatLog) DOM.chatLog.innerHTML = '';
         if(DOM.gameCodeDisplay) DOM.gameCodeDisplay.textContent = '------';
         if(DOM.waitingMessage) DOM.waitingMessage.textContent = '';
@@ -1079,7 +1050,7 @@ const GameManager = (() => {
         // Show appropriate UI section
         if (showMenu) {
             UIManager.updateStatus(currentIsConnected ? "Connected." : "Disconnected.");
-            UIManager.showSection('main-menu-section');
+            UIManager.showSection('mainMenuSection');
         } else {
             UIManager.updateStatus("Initializing..."); // Status shown before connection established
         }
@@ -1403,8 +1374,9 @@ const GameManager = (() => {
         if (currP?.trigger_snake_bite_shake_this_tick && Renderer3D.triggerShake) {
             log("Triggering snake bite shake effect.");
             // Use constants defined on server if available, else client defaults
-            const shakeMag = newState.snake_state?.shake_magnitude || 20.0;
-            const shakeDur = newState.snake_state?.shake_duration_ms || 400.0;
+            // Constants are not currently sent in snake_state, using client defaults
+            const shakeMag = 20.0; // SNAKE_BITE_SHAKE_MAGNITUDE
+            const shakeDur = 400.0; // SNAKE_BITE_SHAKE_DURATION_MS
             Renderer3D.triggerShake(shakeMag, shakeDur);
             // Play snake bite sound? SoundManager.playSound('snake_bite');
         }
@@ -1491,11 +1463,11 @@ function handleServerMessage(event) {
                     if (DOM.gameCodeDisplay) DOM.gameCodeDisplay.textContent = appState.currentGameId || 'ERROR';
                     UIManager.updateStatus(`Hosted Game: ${appState.currentGameId}`);
                     GameManager.updateHostWaitUI(appState.serverState); // Update player count
-                    UIManager.showSection('host-wait-section');
+                    UIManager.showSection('hostWaitSection');
                 } else { // game_joined or sp_game_started
                     const joinMsg = data.type === 'game_joined' ? `Joined ${appState.currentGameId}` : "Single Player Started!";
                     UIManager.updateStatus(joinMsg);
-                    UIManager.showSection('game-area'); // Show the main game UI
+                    UIManager.showSection('gameArea'); // Show the main game UI
                     // Update HUD elements immediately with initial state
                     if (appState.serverState) {
                         UIManager.updateHUD(appState.serverState);
@@ -1523,12 +1495,12 @@ function handleServerMessage(event) {
                     if ((newState.status === 'countdown' || newState.status === 'active') && previousStatus !== 'active' && previousStatus !== 'countdown') {
                         // Transitioning into countdown or active play
                         UIManager.updateStatus(newState.status === 'countdown' ? "Get Ready..." : "Active!");
-                        UIManager.showSection('game-area'); // Ensure game area is visible
+                        UIManager.showSection('gameArea'); // Ensure game area is visible
                         if (!appState.isGameLoopRunning) GameManager.startGameLoop(); // Start loop if not running
                     } else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host' && previousStatus !== 'waiting') {
                         // Host transitioning back to waiting (e.g., player left during countdown)
                         UIManager.updateStatus("Waiting for players...");
-                        UIManager.showSection('host-wait-section');
+                        UIManager.showSection('hostWaitSection');
                         GameManager.updateHostWaitUI(newState);
                         GameManager.cleanupLoop(); // Stop game loop while waiting
                     } else if (newState.status === 'finished' && previousStatus !== 'finished') {
@@ -1588,7 +1560,7 @@ function handleServerMessage(event) {
                      data.message.includes('full') || data.message.includes('finished'));
                 const isHostError = appState.mode === 'multiplayer-host' && data.message && data.message.includes('creation failed');
                 if (isJoinError) { // If join failed, go back to join UI
-                    UIManager.showSection('join-code-section');
+                    UIManager.showSection('joinCodeSection');
                     appState.mode = 'menu'; // Reset mode
                 } else if (isHostError || (data.message && data.message.includes('Please create or join'))) {
                     // If host failed or generic error, go back to main menu
@@ -1611,24 +1583,71 @@ function handleServerMessage(event) {
 document.addEventListener('DOMContentLoaded', () => {
     log("DOM loaded. Initializing client...");
 
+    // --- **FIX:** Populate DOM Cache AFTER DOM is loaded ---
+    DOM = {
+        loadingScreen: document.getElementById('loading-screen'),
+        gameContainer: document.getElementById('game-container'),
+        topBar: document.getElementById('top-bar'),
+        gameStatus: document.getElementById('game-status'),
+        menuArea: document.getElementById('menu-area'),
+        mainMenuSection: document.getElementById('main-menu-section'),
+        multiplayerMenuSection: document.getElementById('multiplayer-menu-section'),
+        hostWaitSection: document.getElementById('host-wait-section'),
+        joinCodeSection: document.getElementById('join-code-section'),
+        gameArea: document.getElementById('game-area'),
+        statsPanel: document.getElementById('stats-panel'),
+        playerStatsGrid: document.getElementById('player-stats-grid'),
+        environmentInfo: document.getElementById('environment-info'),
+        dayNightIndicator: document.getElementById('day-night-indicator'),
+        temperatureIndicator: document.getElementById('temperature-indicator'),
+        gameControls: document.querySelector('#stats-panel .game-controls'),
+        muteBtn: document.getElementById('muteBtn'),
+        leaveGameBtn: document.getElementById('leaveGameBtn'),
+        canvasContainer: document.getElementById('canvas-container'),
+        countdownDiv: document.getElementById('countdown-overlay'),
+        htmlOverlay: document.getElementById('html-overlay'),
+        chatPanel: document.getElementById('chat-panel'),
+        chatLog: document.getElementById('chat-log'),
+        chatInput: document.getElementById('chatInput'),
+        sendChatBtn: document.getElementById('sendChatBtn'),
+        gameOverScreen: document.getElementById('game-over-screen'),
+        finalStatsDiv: document.getElementById('final-stats'),
+        singlePlayerBtn: document.getElementById('singlePlayerBtn'),
+        multiplayerBtn: document.getElementById('multiplayerBtn'),
+        hostGameBtn2: document.getElementById('hostGameBtn2'),
+        hostGameBtn3: document.getElementById('hostGameBtn3'),
+        hostGameBtn4: document.getElementById('hostGameBtn4'),
+        showJoinUIBtn: document.getElementById('showJoinUIBtn'),
+        cancelHostBtn: document.getElementById('cancelHostBtn'),
+        gameCodeDisplay: document.getElementById('game-code-display'),
+        waitingMessage: document.getElementById('waiting-message'),
+        gameIdInput: document.getElementById('gameIdInput'),
+        joinGameSubmitBtn: document.getElementById('joinGameSubmitBtn'),
+        gameOverBackBtn: document.getElementById('gameOverBackBtn'),
+        // Query all back buttons after the main DOM structure is known
+        backButtons: document.querySelectorAll('.button-back'),
+    };
+    // --- End DOM Cache Population ---
+
+
     // Check for essential UI elements
     const essentialIds = ['gameContainer', 'loadingScreen', 'canvasContainer', 'htmlOverlay', 'mainMenuSection', 'gameArea', 'menuArea'];
     let missingElement = false;
     essentialIds.forEach(id => {
-        const element = document.getElementById(id);
-        if (!element) {
+        // Convert kebab-case to camelCase for checking the DOM object
+        const camelCaseId = id.replace(/-([a-z])/g, g => g[1].toUpperCase());
+        if (!DOM[camelCaseId]) {
             error(`CRITICAL: Essential DOM element missing: #${id}`);
             missingElement = true;
-        } else {
-            // Assign to DOM cache if found (handles cases where querySelector was used too)
-            const camelCaseId = id.replace(/-([a-z])/g, g => g[1].toUpperCase()); // Convert kebab-case to camelCase
-            if (!DOM[camelCaseId]) DOM[camelCaseId] = element;
         }
     });
     if (missingElement) {
         document.body.innerHTML = "<p style='color:red; font-size: 1.2em; text-align: center; padding: 2em;'>Error: Critical UI elements missing. Cannot start game. Check console.</p>";
         return;
     }
+
+    // Initialize UI Manager now that DOM is ready
+    UIManager.init();
 
     // Setup UI listeners
     try {
@@ -1647,8 +1666,8 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('resize', resizeHandler);
 
     // Show loading screen and attempt initial connection
-    UIManager.showSection('loading-screen');
-    DOM.loadingScreen?.classList.add('active');
+    UIManager.showSection('loadingScreen'); // Use UIManager to show sections
+    DOM.loadingScreen?.classList.add('active'); // Keep direct class manipulation for loading screen
     DOM.gameContainer?.classList.remove('loaded');
     UIManager.updateStatus("Initializing Connection...");
     NetworkManager.connect(() => {
