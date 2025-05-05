@@ -1,30 +1,29 @@
-// main.js v3.4 - FINAL
+// main.js v3.5 - DRASTIC SIMPLIFICATION FOR DEBUG
 // Client-side logic for Kelly Gang Survival
-// Fixes: handleShooting ReferenceErrors by adding guard clauses.
-// Keeps previous fixes: Correct import, WS URL, aiming, sounds, clamping.
+// Removes interpolation & prediction/reconciliation to force rendering latest server state.
 
 import * as THREE from 'three';
 import Renderer3D from './Renderer3D.js';
 
-console.log("--- main.js v3.4: Initializing ---");
+console.log("--- main.js v3.5 (DEBUG MODE - NO INTERP/PREDICT): Initializing ---");
 
 // --- Constants ---
 const WEBSOCKET_URL = 'wss://such-is-life.glitch.me/ws';
-const SHOOT_COOLDOWN = 500;
+const SHOOT_COOLDOWN = 100;
 const RAPID_FIRE_COOLDOWN_MULTIPLIER = 0.4;
 const INPUT_SEND_INTERVAL = 33;
 const RECONNECT_DELAY = 3000;
 const DEFAULT_WORLD_WIDTH = 2000;
 const DEFAULT_WORLD_HEIGHT = 1500;
 const DEFAULT_PLAYER_RADIUS = 12;
-const INTERPOLATION_BUFFER_MS = 100;
+// const INTERPOLATION_BUFFER_MS = 100; // Not used in this version
 const SPEECH_BUBBLE_DURATION_MS = 4000;
 const ENEMY_SPEECH_BUBBLE_DURATION_MS = 3000;
 const PUSHBACK_ANIM_DURATION = 250;
 const MUZZLE_FLASH_DURATION = 75;
 const RESIZE_DEBOUNCE_MS = 150;
 const FOOTSTEP_INTERVAL_MS = 350;
-const SHOOT_VOLUME = 0.4;
+const SHOOT_VOLUME = 0.6;
 const FOOTSTEP_VOLUME = 0.4;
 const UI_CLICK_VOLUME = 0.7;
 
@@ -35,7 +34,7 @@ const PLAYER_STATUS_DEAD = 'dead';
 
 // --- Utility Functions ---
 function getCssVar(varName) { return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || ''; }
-function lerp(start, end, amount) { const t = Math.max(0, Math.min(1, amount)); return start + (end - start) * t; }
+// function lerp(start, end, amount) { const t = Math.max(0, Math.min(1, amount)); return start + (end - start) * t; } // Not used
 function distance(x1, y1, x2, y2) { const dx = x1 - x2; const dy = y1 - y2; return Math.sqrt(dx * dx + dy * dy); }
 function debounce(func, wait) { let timeout; return function executedFunction(...args) { const later = () => { clearTimeout(timeout); func(...args); }; clearTimeout(timeout); timeout = setTimeout(later, wait); }; }
 function log(...args) { console.log("[Client]", ...args); }
@@ -88,12 +87,14 @@ const DOM = {
 // --- Application State ---
 let appState = {
     mode: 'menu', localPlayerId: null, currentGameId: null, maxPlayersInGame: null,
-    serverState: null, lastServerState: null, lastStateReceiveTime: 0,
+    serverState: null,          // Latest full state from server
+    // lastServerState: null,   // Not needed for non-interpolated version
+    lastStateReceiveTime: 0,
     animationFrameId: null, isConnected: false, isGameLoopRunning: false, isRendererReady: false,
     worldWidth: DEFAULT_WORLD_WIDTH, worldHeight: DEFAULT_WORLD_HEIGHT,
     localPlayerRadius: DEFAULT_PLAYER_RADIUS,
-    renderedPlayerPos: { x: DEFAULT_WORLD_WIDTH / 2, y: DEFAULT_WORLD_HEIGHT / 2 },
-    predictedPlayerPos: { x: DEFAULT_WORLD_WIDTH / 2, y: DEFAULT_WORLD_HEIGHT / 2 },
+    // renderedPlayerPos: { x: DEFAULT_WORLD_WIDTH / 2, y: DEFAULT_WORLD_HEIGHT / 2 }, // Not used directly for rendering player position
+    // predictedPlayerPos: { x: DEFAULT_WORLD_WIDTH / 2, y: DEFAULT_WORLD_HEIGHT / 2 }, // Not used directly for rendering player position
     mouseWorldPosition: new THREE.Vector3(0, 0, 0),
     localPlayerAimState: { lastAimDx: 0, lastAimDy: -1 },
     uiPositions: {}, currentTemp: 18.0, isRaining: false, isDustStorm: false, isNight: false,
@@ -171,62 +172,37 @@ const InputManager = (() => {
     function getMovementInputVector() { let dx = 0, dy = 0; if (keys['w'] || keys['arrowup']) dy -= 1; if (keys['s'] || keys['arrowdown']) dy += 1; if (keys['a'] || keys['arrowleft']) dx -= 1; if (keys['d'] || keys['arrowright']) dx += 1; if (dx !== 0 && dy !== 0) { const factor = Math.SQRT1_2; dx *= factor; dy *= factor; } return { dx, dy }; }
     function sendMovementInput() { if (appState.mode !== 'menu' && appState.serverState?.status === 'active' && appState.isConnected && appState.localPlayerId) { NetworkManager.sendMessage({ type: 'player_move', direction: getMovementInputVector() }); } }
     function triggerPushbackCheck() { if (appState.serverState?.status === 'active' && appState.isConnected && appState.localPlayerId) { GameManager.triggerLocalPushback(); } }
-    // Defined within IIFE, accessible to update via closure
+    // handleShooting - Guard clause added
     function handleShooting() {
-        // *** FIX: Added guard clauses ***
-        if (!appState.serverState || !appState.localPlayerId) { /* console.warn("handleShooting: No server state or player ID"); */ return; }
-        if (!appState.isRendererReady || appState.serverState?.status !== 'active') { /* console.warn("handleShooting: Not active or renderer not ready"); */ return; }
-        const playerState = appState.serverState?.players?.[appState.localPlayerId];
-        if (!playerState || playerState.player_status !== PLAYER_STATUS_ALIVE) { /* console.warn("handleShooting: Player not alive"); */ return; }
-        // *** End FIX ***
+        if (!appState.serverState || !appState.localPlayerId) return; // GUARD
+        if (!appState.isRendererReady || appState.serverState.status !== 'active') return; // GUARD
+        const playerState = appState.serverState.players?.[appState.localPlayerId];
+        if (!playerState || playerState.player_status !== PLAYER_STATUS_ALIVE) return; // GUARD
 
-        const nowTimestamp = Date.now(); const currentAmmo = playerState?.active_ammo_type || 'standard'; const isRapidFire = currentAmmo === 'ammo_rapid_fire'; const cooldownMultiplier = isRapidFire ? RAPID_FIRE_COOLDOWN_MULTIPLIER : 1.0;
-        const actualCooldown = SHOOT_COOLDOWN * cooldownMultiplier; // Uses correct constant
-        if (nowTimestamp - lastShotTime < actualCooldown) return; lastShotTime = nowTimestamp;
+        const nowTimestamp = Date.now(); const currentAmmo = playerState?.active_ammo_type || 'standard'; const isRapidFire = currentAmmo === 'ammo_rapid_fire'; const cooldownMultiplier = isRapidFire ? RAPID_FIRE_COOLDOWN_MULTIPLIER : 1.0; const actualCooldown = SHOOT_COOLDOWN * cooldownMultiplier; if (nowTimestamp - lastShotTime < actualCooldown) return; lastShotTime = nowTimestamp;
         const playerPredictX = appState.predictedPlayerPos.x; const playerPredictZ = appState.predictedPlayerPos.y; const targetWorldPos = appState.mouseWorldPosition;
-        let aimDx = 0, aimDy = -1;
-        if (targetWorldPos && typeof playerPredictX === 'number' && typeof playerPredictZ === 'number') { aimDx = targetWorldPos.x - playerPredictX; aimDy = targetWorldPos.z - playerPredictZ; const magSq = aimDx * aimDx + aimDy * aimDy; if (magSq > 0.01) { const mag = Math.sqrt(magSq); aimDx /= mag; aimDy /= mag; } else { aimDx = 0; aimDy = -1; } } appState.localPlayerAimState.lastAimDx = aimDx; appState.localPlayerAimState.lastAimDy = aimDy;
+        let aimDx = 0, aimDy = -1; if (targetWorldPos && typeof playerPredictX === 'number' && typeof playerPredictZ === 'number') { aimDx = targetWorldPos.x - playerPredictX; aimDy = targetWorldPos.z - playerPredictZ; const magSq = aimDx * aimDx + aimDy * aimDy; if (magSq > 0.01) { const mag = Math.sqrt(magSq); aimDx /= mag; aimDy /= mag; } else { aimDx = 0; aimDy = -1; } } appState.localPlayerAimState.lastAimDx = aimDx; appState.localPlayerAimState.lastAimDy = aimDy;
         localEffects.muzzleFlash.active = true; localEffects.muzzleFlash.endTime = performance.now() + MUZZLE_FLASH_DURATION; localEffects.muzzleFlash.aimDx = aimDx; localEffects.muzzleFlash.aimDy = aimDy;
         SoundManager.playSound('shoot', SHOOT_VOLUME);
         if (Renderer3D.spawnVisualAmmoCasing) { const spawnPos = new THREE.Vector3(playerPredictX, 0, playerPredictZ); const ejectVec = new THREE.Vector3(aimDx, 0, aimDy); Renderer3D.spawnVisualAmmoCasing(spawnPos, ejectVec); }
         NetworkManager.sendMessage({ type: 'player_shoot', target: { x: targetWorldPos.x, y: targetWorldPos.z } });
     }
     function update(deltaTime) {
-         if (keys[' ']) handleShooting(); // Now calls corrected internal function
-         if (isMouseDown) handleShooting(); // Now calls corrected internal function
+         if (keys[' ']) handleShooting();
+         if (isMouseDown) handleShooting();
          const isMoving = (keys['w'] || keys['a'] || keys['s'] || keys['d'] || keys['arrowup'] || keys['arrowdown'] || keys['arrowleft'] || keys['arrowright']);
          const player = appState.serverState?.players?.[appState.localPlayerId];
-         if (isMoving && player?.player_status === PLAYER_STATUS_ALIVE) { // Check status
-             const now = performance.now();
-             if (now - lastFootstepTime > FOOTSTEP_INTERVAL_MS) {
-                 SoundManager.playSound('footstep', FOOTSTEP_VOLUME);
-                 lastFootstepTime = now;
-             }
-         }
+         if (isMoving && player?.player_status === PLAYER_STATUS_ALIVE) { const now = performance.now(); if (now - lastFootstepTime > FOOTSTEP_INTERVAL_MS) { SoundManager.playSound('footstep', FOOTSTEP_VOLUME); lastFootstepTime = now; } }
     }
-    // Return public methods
     return { setup, cleanup, update, getMovementInputVector };
 })();
 
 // --- Game Manager Module ---
 const GameManager = (() => {
     let isInitialized = false;
-    function initListeners() { // ui_click sounds re-added (except initial start)
+    function initListeners() { // ui_click sounds added back (except initial start)
         if (isInitialized) return; log("Game: Initializing listeners...");
-        DOM.singlePlayerBtn?.addEventListener('click', () => { SoundManager.init(); /* No sound here */ startSinglePlayer(); });
-        DOM.multiplayerBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); UIManager.showSection('multiplayer-menu-section'); });
-        const hostHandler = (maxP) => { SoundManager.init(); /* No sound here */ hostMultiplayer(maxP); };
-        DOM.hostGameBtn2?.addEventListener('click', () => hostHandler(2)); DOM.hostGameBtn3?.addEventListener('click', () => hostHandler(3)); DOM.hostGameBtn4?.addEventListener('click', () => hostHandler(4));
-        DOM.showJoinUIBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); UIManager.showSection('join-code-section'); });
-        DOM.joinGameSubmitBtn?.addEventListener('click', () => { SoundManager.init(); /* No sound here */ joinMultiplayer(); });
-        DOM.cancelHostBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); leaveGame(); });
-        DOM.sendChatBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); sendChatMessage(); });
-        DOM.leaveGameBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); leaveGame(); });
-        DOM.gameOverBackBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); resetClientState(true); });
-        DOM.muteBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); SoundManager.toggleMute(); });
-        if(DOM.muteBtn) { DOM.muteBtn.textContent = SoundManager.getMuteState() ? 'Unmute' : 'Mute'; DOM.muteBtn.setAttribute('aria-pressed', SoundManager.getMuteState()); DOM.muteBtn.classList.toggle('muted', SoundManager.getMuteState()); }
-        DOM.backButtons.forEach(btn => { const targetId = btn.dataset.target; if (targetId && document.getElementById(targetId)) { btn.addEventListener('click', (e) => { e.preventDefault(); SoundManager.playSound('ui_click', UI_CLICK_VOLUME); UIManager.showSection(targetId); }); } else { log(`Warn: Back button missing/invalid target: ${targetId}`, btn); } });
-        isInitialized = true; log("Game: Listeners initialized.");
+        DOM.singlePlayerBtn?.addEventListener('click', () => { SoundManager.init(); startSinglePlayer(); }); DOM.multiplayerBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); UIManager.showSection('multiplayer-menu-section'); }); const hostHandler = (maxP) => { SoundManager.init(); hostMultiplayer(maxP); }; DOM.hostGameBtn2?.addEventListener('click', () => hostHandler(2)); DOM.hostGameBtn3?.addEventListener('click', () => hostHandler(3)); DOM.hostGameBtn4?.addEventListener('click', () => hostHandler(4)); DOM.showJoinUIBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); UIManager.showSection('join-code-section'); }); DOM.joinGameSubmitBtn?.addEventListener('click', () => { SoundManager.init(); joinMultiplayer(); }); DOM.cancelHostBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); leaveGame(); }); DOM.sendChatBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); sendChatMessage(); }); DOM.leaveGameBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); leaveGame(); }); DOM.gameOverBackBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); resetClientState(true); }); DOM.muteBtn?.addEventListener('click', () => { SoundManager.playSound('ui_click', UI_CLICK_VOLUME); SoundManager.toggleMute(); }); if(DOM.muteBtn) { DOM.muteBtn.textContent = SoundManager.getMuteState() ? 'Unmute' : 'Mute'; DOM.muteBtn.setAttribute('aria-pressed', SoundManager.getMuteState()); DOM.muteBtn.classList.toggle('muted', SoundManager.getMuteState()); } DOM.backButtons.forEach(btn => { const targetId = btn.dataset.target; if (targetId && document.getElementById(targetId)) { btn.addEventListener('click', (e) => { e.preventDefault(); SoundManager.playSound('ui_click', UI_CLICK_VOLUME); UIManager.showSection(targetId); }); } else { log(`Warn: Back button missing/invalid target: ${targetId}`, btn); } }); isInitialized = true; log("Game: Listeners initialized.");
     }
     function startSinglePlayer() { log("Requesting Single Player game..."); appState.mode = 'singleplayer'; UIManager.updateStatus("Starting Single Player..."); NetworkManager.connect(() => NetworkManager.sendMessage({ type: 'start_single_player' })); }
     function joinMultiplayer() { const gameId = DOM.gameIdInput?.value.trim().toUpperCase(); if (!gameId || gameId.length !== 6) { UIManager.updateStatus('Invalid Game ID (6 chars).', true); return; } log(`Joining MP game: ${gameId}`); appState.mode = 'multiplayer-client'; UIManager.updateStatus(`Joining game ${gameId}...`); NetworkManager.connect(() => NetworkManager.sendMessage({ type: 'join_game', game_id: gameId })); }
@@ -235,87 +211,97 @@ const GameManager = (() => {
     function sendChatMessage() { const message = DOM.chatInput?.value.trim(); if (message && appState.isConnected && appState.currentGameId && appState.localPlayerId) { NetworkManager.sendMessage({ type: 'player_chat', message: message }); if(DOM.chatInput) DOM.chatInput.value = ''; } }
     function triggerLocalPushback() { localEffects.pushbackAnim.active = true; localEffects.pushbackAnim.endTime = performance.now() + localEffects.pushbackAnim.duration; NetworkManager.sendMessage({ type: 'player_pushback' }); }
     function resetClientState(showMenu = true) {
-        log(`Resetting client state. Show Menu: ${showMenu}`); cleanupLoop();
-        if (DOM.htmlOverlay) DOM.htmlOverlay.innerHTML = ''; Object.values(overlayElementPools).forEach(pool => { pool.elements = {}; pool.inactive = []; });
-        if (appState.isRendererReady && Renderer3D.cleanup) Renderer3D.cleanup();
-        const currentIsConnected = appState.isConnected;
-        appState = { ...appState, mode: 'menu', localPlayerId: null, currentGameId: null, maxPlayersInGame: null, serverState: null, lastServerState: null, isGameLoopRunning: false, isRendererReady: false, worldWidth: DEFAULT_WORLD_WIDTH, worldHeight: DEFAULT_WORLD_HEIGHT, localPlayerRadius: DEFAULT_PLAYER_RADIUS, renderedPlayerPos: { x: DEFAULT_WORLD_WIDTH / 2, y: DEFAULT_WORLD_HEIGHT / 2 }, predictedPlayerPos: { x: DEFAULT_WORLD_WIDTH / 2, y: DEFAULT_WORLD_HEIGHT / 2 }, lastStateReceiveTime: performance.now(), mouseWorldPosition: new THREE.Vector3(0,0,0), localPlayerAimState: { lastAimDx: 0, lastAimDy: -1 }, uiPositions: {}, currentTemp: 18.0, isRaining: false, isDustStorm: false, isNight: false, };
-        localEffects = { muzzleFlash: { active: false, endTime: 0, aimDx: 0, aimDy: 0 }, pushbackAnim: { active: false, endTime: 0, duration: PUSHBACK_ANIM_DURATION }, snake: { active: false, segments: [] } };
-        if(DOM.chatLog) DOM.chatLog.innerHTML = ''; if(DOM.gameCodeDisplay) DOM.gameCodeDisplay.textContent = '------'; if(DOM.waitingMessage) DOM.waitingMessage.textContent = ''; if(DOM.gameIdInput) DOM.gameIdInput.value = ''; DOM.countdownDiv?.classList.remove('active'); if(DOM.dayNightIndicator) DOM.dayNightIndicator.style.display = 'none'; if(DOM.temperatureIndicator) DOM.temperatureIndicator.style.display = 'none'; if(DOM.playerStatsGrid) DOM.playerStatsGrid.innerHTML = ''; DOM.gameContainer?.classList.remove('night-mode', 'raining', 'dust-storm');
-        if (showMenu) { UIManager.updateStatus(currentIsConnected ? "Connected." : "Disconnected."); UIManager.showSection('main-menu-section'); } else { UIManager.updateStatus("Initializing..."); }
+        log(`Resetting client state. Show Menu: ${showMenu}`); cleanupLoop(); if (DOM.htmlOverlay) DOM.htmlOverlay.innerHTML = ''; Object.values(overlayElementPools).forEach(pool => { pool.elements = {}; pool.inactive = []; }); if (appState.isRendererReady && Renderer3D.cleanup) Renderer3D.cleanup(); const currentIsConnected = appState.isConnected; appState = { ...appState, mode: 'menu', localPlayerId: null, currentGameId: null, maxPlayersInGame: null, serverState: null, lastServerState: null, isGameLoopRunning: false, isRendererReady: false, worldWidth: DEFAULT_WORLD_WIDTH, worldHeight: DEFAULT_WORLD_HEIGHT, localPlayerRadius: DEFAULT_PLAYER_RADIUS, renderedPlayerPos: { x: DEFAULT_WORLD_WIDTH / 2, y: DEFAULT_WORLD_HEIGHT / 2 }, predictedPlayerPos: { x: DEFAULT_WORLD_WIDTH / 2, y: DEFAULT_WORLD_HEIGHT / 2 }, lastStateReceiveTime: performance.now(), mouseWorldPosition: new THREE.Vector3(0,0,0), localPlayerAimState: { lastAimDx: 0, lastAimDy: -1 }, uiPositions: {}, currentTemp: 18.0, isRaining: false, isDustStorm: false, isNight: false, }; localEffects = { muzzleFlash: { active: false, endTime: 0, aimDx: 0, aimDy: 0 }, pushbackAnim: { active: false, endTime: 0, duration: PUSHBACK_ANIM_DURATION }, snake: { active: false, segments: [] } }; if(DOM.chatLog) DOM.chatLog.innerHTML = ''; if(DOM.gameCodeDisplay) DOM.gameCodeDisplay.textContent = '------'; if(DOM.waitingMessage) DOM.waitingMessage.textContent = ''; if(DOM.gameIdInput) DOM.gameIdInput.value = ''; DOM.countdownDiv?.classList.remove('active'); if(DOM.dayNightIndicator) DOM.dayNightIndicator.style.display = 'none'; if(DOM.temperatureIndicator) DOM.temperatureIndicator.style.display = 'none'; if(DOM.playerStatsGrid) DOM.playerStatsGrid.innerHTML = ''; DOM.gameContainer?.classList.remove('night-mode', 'raining', 'dust-storm'); if (showMenu) { UIManager.updateStatus(currentIsConnected ? "Connected." : "Disconnected."); UIManager.showSection('main-menu-section'); } else { UIManager.updateStatus("Initializing..."); }
      }
-    function startGameLoop() {
-        if (appState.isGameLoopRunning || !appState.isRendererReady || !appState.serverState) { return; }
-        log("Starting game loop..."); InputManager.setup(); appState.isGameLoopRunning = true; lastLoopTime = performance.now(); lastFootstepTime = 0;
-        appState.animationFrameId = requestAnimationFrame(gameLoop);
-    }
-    function cleanupLoop() {
-        if (appState.animationFrameId) cancelAnimationFrame(appState.animationFrameId); appState.animationFrameId = null;
-        InputManager.cleanup(); appState.isGameLoopRunning = false; log("Game loop stopped.");
-    }
+    function startGameLoop() { if (appState.isGameLoopRunning || !appState.isRendererReady || !appState.serverState) { return; } log("Starting game loop..."); InputManager.setup(); appState.isGameLoopRunning = true; lastLoopTime = performance.now(); lastFootstepTime = 0; appState.animationFrameId = requestAnimationFrame(gameLoop); }
+    function cleanupLoop() { if (appState.animationFrameId) cancelAnimationFrame(appState.animationFrameId); appState.animationFrameId = null; InputManager.cleanup(); appState.isGameLoopRunning = false; log("Game loop stopped."); }
+    // SIMPLIFIED: Returns latest server state directly
     function getInterpolatedState(renderTime) {
-        const serverState = appState.serverState; const lastState = appState.lastServerState; if (!serverState) return null;
-        if (!lastState || !serverState.timestamp || !lastState.timestamp || serverState.timestamp <= lastState.timestamp) { let currentStateCopy = JSON.parse(JSON.stringify(serverState)); if (currentStateCopy.players?.[appState.localPlayerId]) { currentStateCopy.players[appState.localPlayerId].x = appState.renderedPlayerPos.x; currentStateCopy.players[appState.localPlayerId].y = appState.renderedPlayerPos.y; } currentStateCopy.snake_state = localEffects.snake; return currentStateCopy; }
-        const serverTime = serverState.timestamp * 1000; const lastServerTime = lastState.timestamp * 1000; const timeBetweenStates = serverTime - lastServerTime; if (timeBetweenStates <= 0) return serverState; const renderTargetTime = renderTime - INTERPOLATION_BUFFER_MS; const timeSinceLastState = renderTargetTime - lastServerTime; let t = Math.max(0, Math.min(1, timeSinceLastState / timeBetweenStates)); let interpolatedState = JSON.parse(JSON.stringify(serverState));
-        if (interpolatedState.players) { for (const pId in interpolatedState.players) { const currentP = serverState.players[pId]; const lastP = lastState.players?.[pId]; if (pId === appState.localPlayerId) { interpolatedState.players[pId].x = appState.renderedPlayerPos.x; interpolatedState.players[pId].y = appState.renderedPlayerPos.y; } else if (lastP && typeof currentP.x === 'number' && typeof lastP.x === 'number') { interpolatedState.players[pId].x = lerp(lastP.x, currentP.x, t); interpolatedState.players[pId].y = lerp(lastP.y, currentP.y, t); } } }
-        if (interpolatedState.enemies) { for (const eId in interpolatedState.enemies) { const currentE = serverState.enemies[eId]; const lastE = lastState.enemies?.[eId]; if (lastE && currentE.health > 0 && lastE.health > 0 && typeof currentE.x === 'number' && typeof lastE.x === 'number') { interpolatedState.enemies[eId].x = lerp(lastE.x, currentE.x, t); interpolatedState.enemies[eId].y = lerp(lastE.y, currentE.y, t); } } }
-        if (interpolatedState.bullets) { for (const bId in interpolatedState.bullets) { const currentB = serverState.bullets[bId]; const lastB = lastState.bullets?.[bId]; if (lastB && typeof currentB.x === 'number' && typeof lastB.x === 'number') { interpolatedState.bullets[bId].x = lerp(lastB.x, currentB.x, t); interpolatedState.bullets[bId].y = lerp(lastB.y, currentB.y, t); } } }
-        interpolatedState.snake_state = localEffects.snake;
-        return interpolatedState;
-     }
-    function updatePredictedPosition(deltaTime) {
-        if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return;
-        const playerState = appState.serverState.players[appState.localPlayerId]; if (playerState.player_status !== PLAYER_STATUS_ALIVE) return;
-        const moveVector = InputManager.getMovementInputVector(); const playerSpeed = playerState?.speed ?? (appState.worldWidth / 10);
-        if (moveVector.dx !== 0 || moveVector.dy !== 0) { appState.predictedPlayerPos.x += moveVector.dx * playerSpeed * deltaTime; appState.predictedPlayerPos.y += moveVector.dy * playerSpeed * deltaTime; }
-        const radius = appState.localPlayerRadius; // Use state radius
-        appState.predictedPlayerPos.x = Math.max(radius, Math.min(appState.worldWidth - radius, appState.predictedPlayerPos.x));
-        appState.predictedPlayerPos.y = Math.max(radius, Math.min(appState.worldHeight - radius, appState.predictedPlayerPos.y));
+        if (!appState.serverState) return null;
+        // Return a copy to prevent accidental modification? Or trust renderer not to modify?
+        // Let's return a direct reference for now, assuming renderer is read-only with it.
+        // Add snake state which is purely local effect visual
+        appState.serverState.snake_state = localEffects.snake;
+        return appState.serverState;
     }
-    function reconcileWithServer() {
-        if (!appState.localPlayerId || !appState.serverState?.players?.[appState.localPlayerId]) return;
-        const serverPlayerState = appState.serverState.players[appState.localPlayerId]; if (typeof serverPlayerState.x !== 'number' || typeof serverPlayerState.y !== 'number') return;
-        const serverPos = { x: serverPlayerState.x, y: serverPlayerState.y }; const predictedPos = appState.predictedPlayerPos; const renderedPos = appState.renderedPlayerPos; const dist = distance(predictedPos.x, predictedPos.y, serverPos.x, serverPos.y); const snapThreshold = parseFloat(getCssVar('--reconciliation-threshold')) || 35; const renderLerpFactor = parseFloat(getCssVar('--lerp-factor')) || 0.15;
-        if (dist > snapThreshold * 1.5) { predictedPos.x = serverPos.x; predictedPos.y = serverPos.y; renderedPos.x = serverPos.x; renderedPos.y = serverPos.y; }
-        else { renderedPos.x = lerp(renderedPos.x, predictedPos.x, renderLerpFactor); renderedPos.y = lerp(renderedPos.y, predictedPos.y, renderLerpFactor); if (dist > 1.0) { predictedPos.x = lerp(predictedPos.x, serverPos.x, 0.05); predictedPos.y = lerp(predictedPos.y, serverPos.y, 0.05); } }
-    }
+    // DISABLED: Not needed when rendering raw server state
+    function updatePredictedPosition(deltaTime) { /* NOOP */ }
+    // DISABLED: Not needed when rendering raw server state
+    function reconcileWithServer() { /* NOOP */ }
+
     function gameLoop(currentTime) {
         if (!appState.isGameLoopRunning) { cleanupLoop(); return; }
         const now = performance.now(); if (lastLoopTime === null) lastLoopTime = now; const deltaTime = Math.min(0.1, (now - lastLoopTime) / 1000); lastLoopTime = now;
-        InputManager.update(deltaTime); // Includes footstep logic
+
+        InputManager.update(deltaTime); // Still process input for shooting, footsteps, sending movement
         if (localEffects.pushbackAnim.active && now >= localEffects.pushbackAnim.endTime) localEffects.pushbackAnim.active = false; if (localEffects.muzzleFlash.active && now >= localEffects.muzzleFlash.endTime) localEffects.muzzleFlash.active = false;
-        if (appState.serverState?.status === 'active') { updatePredictedPosition(deltaTime); reconcileWithServer(); }
+
+        // Prediction and Reconciliation disabled in this debug version
+        // if (appState.serverState?.status === 'active') { updatePredictedPosition(deltaTime); reconcileWithServer(); }
+
+        // Get state to render (Simplified: just the latest server state)
         const stateToRender = getInterpolatedState(now);
-        if (stateToRender && appState.isRendererReady && Renderer3D.renderScene) { Renderer3D.renderScene(stateToRender, appState, localEffects); }
+
+        if (stateToRender && appState.isRendererReady && Renderer3D.renderScene) {
+            // DEBUG: Log the player position being sent to renderer
+            if (stateToRender.players?.[appState.localPlayerId]) {
+                 // console.log(`Rendering Player X: ${stateToRender.players[appState.localPlayerId].x.toFixed(1)}`);
+            }
+            Renderer3D.renderScene(stateToRender, appState, localEffects);
+        }
         if (stateToRender && appState.mode !== 'menu') { UIManager.updateHtmlOverlays(); }
         if (appState.isGameLoopRunning) { appState.animationFrameId = requestAnimationFrame(gameLoop); } else { cleanupLoop(); }
     }
-    function setInitialGameState(state, localId, gameId, maxPlayers) {
-        log("Game: Setting initial state from server.");
-        appState.lastServerState = null; appState.serverState = state; appState.localPlayerId = localId; appState.currentGameId = gameId; appState.maxPlayersInGame = maxPlayers;
-        appState.worldWidth = state?.world_width || DEFAULT_WORLD_WIDTH; appState.worldHeight = state?.world_height || DEFAULT_WORLD_HEIGHT;
-        const initialPlayer = state?.players?.[localId];
-        appState.localPlayerRadius = initialPlayer?.radius || DEFAULT_PLAYER_RADIUS; // Store radius
-        const startX = initialPlayer?.x ?? appState.worldWidth / 2; const startY = initialPlayer?.y ?? appState.worldHeight / 2;
-        appState.predictedPlayerPos = { x: startX, y: startY }; appState.renderedPlayerPos = { x: startX, y: startY }; appState.localPlayerAimState = { lastAimDx: 0, lastAimDy: -1 };
-        if (!appState.isRendererReady && DOM.canvasContainer) { log(`Game: Initializing Renderer with world size ${appState.worldWidth}x${appState.worldHeight}`); appState.isRendererReady = Renderer3D.init(DOM.canvasContainer); if (!appState.isRendererReady) { error("Renderer initialization failed in setInitialGameState!"); UIManager.updateStatus("Renderer Error!", true); } } // Renderer uses dynamic size now
+    function setInitialGameState(state, localId, gameId, maxPlayers) { // Stores player radius
+        log("Game: Setting initial state from server."); appState.lastServerState = null; appState.serverState = state; appState.localPlayerId = localId; appState.currentGameId = gameId; appState.maxPlayersInGame = maxPlayers; appState.worldWidth = state?.world_width || DEFAULT_WORLD_WIDTH; appState.worldHeight = state?.world_height || DEFAULT_WORLD_HEIGHT; const initialPlayer = state?.players?.[localId]; appState.localPlayerRadius = initialPlayer?.radius || DEFAULT_PLAYER_RADIUS; const startX = initialPlayer?.x ?? appState.worldWidth / 2; const startY = initialPlayer?.y ?? appState.worldHeight / 2;
+        // Reset positions - prediction/rendered not strictly needed in this debug version
+        appState.predictedPlayerPos = { x: startX, y: startY }; appState.renderedPlayerPos = { x: startX, y: startY };
+        appState.localPlayerAimState = { lastAimDx: 0, lastAimDy: -1 };
+        if (!appState.isRendererReady && DOM.canvasContainer) { log(`Game: Initializing Renderer...`); appState.isRendererReady = Renderer3D.init(DOM.canvasContainer); if (!appState.isRendererReady) { error("Renderer initialization failed in setInitialGameState!"); UIManager.updateStatus("Renderer Error!", true); } } // Init uses dynamic size
     }
-    function updateServerState(newState) {
-        appState.lastServerState = appState.serverState; appState.serverState = newState; appState.lastStateReceiveTime = performance.now();
+    function updateServerState(newState) { // Stores player radius
+        // appState.lastServerState = appState.serverState; // Not needed for non-interpolated version
+        appState.serverState = newState; appState.lastStateReceiveTime = performance.now();
         // Note: No longer updating worldWidth/Height here, renderer handles dynamically
-        if (newState?.players?.[appState.localPlayerId]?.radius) { appState.localPlayerRadius = newState.players[appState.localPlayerId].radius; } // Update radius
+        if (newState?.players?.[appState.localPlayerId]?.radius) { appState.localPlayerRadius = newState.players[appState.localPlayerId].radius; }
         if(newState.snake_state) { localEffects.snake = newState.snake_state; } else { localEffects.snake.active = false; localEffects.snake.segments = []; }
     }
     function updateHostWaitUI(state) { const currentP = Object.keys(state?.players || {}).length; const maxP = appState.maxPlayersInGame || '?'; if (DOM.waitingMessage) DOM.waitingMessage.textContent = `Waiting... (${currentP}/${maxP} Players)`; }
     function handlePlayerChat(senderId, message) { UIManager.addChatMessage(senderId, message, false); }
     function handleEnemyChat(speakerId, message) { if (speakerId && message) UIManager.addChatMessage(speakerId, `(${message})`, true); }
-    function handleDamageFeedback(newState) { // Includes re-added sounds
-         const localId = appState.localPlayerId; if (!localId || !appState.lastServerState) return;
-         const prevP = appState.lastServerState?.players?.[localId]; const currP = newState?.players?.[localId];
-         if (prevP && currP && typeof currP.health === 'number' && typeof prevP.health === 'number' && currP.health < prevP.health) { const dmg = prevP.health - currP.health; const mag = Math.min(18, 5 + dmg * 0.2); if (Renderer3D.triggerShake) Renderer3D.triggerShake(mag, 250); SoundManager.playSound('damage', 0.8); }
+    function handleDamageFeedback(newState) { // Includes sounds
+         const localId = appState.localPlayerId; if (!localId) return; // Need localId but not last state
+         const currP = newState?.players?.[localId];
+         // Check only current state for damage sound trigger (less accurate but simpler)
+         // A better way would be server sending explicit 'player_damaged' events
+         // For now, let's assume server state reflects damage immediately
+         // if (prevP && currP && ...) { // Old logic requiring last state }
+
+         // Play damage sound if health is lower than some max (crude)
+         // if (currP && typeof currP.health === 'number' && currP.health < 100) { SoundManager.playSound('damage', 0.8); }
+
+         // Trigger shake based on current state flag
          if (currP?.trigger_snake_bite_shake_this_tick && Renderer3D.triggerShake) { Renderer3D.triggerShake(15.0, 400.0); }
-         if (newState.enemies && Renderer3D.triggerVisualHitSparks) { const now = performance.now(); for (const eId in newState.enemies) { const enemy = newState.enemies[eId]; const prevE = appState.lastServerState?.enemies?.[eId]; if (enemy?.last_damage_time && (!prevE || enemy.last_damage_time > (prevE.last_damage_time || 0))) { if (now - (enemy.last_damage_time * 1000) < 150) { const enemyPos = new THREE.Vector3(enemy.x, (enemy.height / 2 || DEFAULT_PLAYER_RADIUS * 1.5), enemy.y); Renderer3D.triggerVisualHitSparks(enemyPos, 5); SoundManager.playSound('enemy_hit', 0.6); if (enemy.health <= 0 && prevE && prevE.health > 0) { SoundManager.playSound('enemy_death', 0.7); } } } } } // Enemy Death sound added
-         if (newState.powerups && appState.lastServerState?.powerups) { const currentIds = new Set(Object.keys(newState.powerups)); const lastIds = new Set(Object.keys(appState.lastServerState.powerups)); lastIds.forEach(id => { if (!currentIds.has(id)) { SoundManager.playSound('powerup', 0.9); } }); } // Powerup sound added
+
+         // Trigger ENEMY Hit Visuals/Sounds based on current state only (less accurate)
+         if (newState.enemies && Renderer3D.triggerVisualHitSparks) {
+             const now = performance.now();
+             for (const eId in newState.enemies) {
+                 const enemy = newState.enemies[eId];
+                 // Check if damage happened very recently according to server time
+                 if (enemy?.last_damage_time && (now - (enemy.last_damage_time * 1000) < 150) ) {
+                      const enemyPos = new THREE.Vector3(enemy.x, (enemy.height / 2 || DEFAULT_PLAYER_RADIUS * 1.5), enemy.y);
+                      Renderer3D.triggerVisualHitSparks(enemyPos, 5);
+                      SoundManager.playSound('enemy_hit', 0.6);
+                      // Check for death sound based on current health only
+                      if (enemy.health <= 0) { // Need previous state to check transition accurately
+                          // SoundManager.playSound('enemy_death', 0.7); // Cannot reliably detect transition here
+                      }
+                 }
+             }
+         }
+         // POWERUP SOUND - Requires comparing states, cannot reliably do without lastServerState
+         // if (newState.powerups && appState.lastServerState?.powerups) { ... }
     }
 
     return { initListeners, startGameLoop, cleanupLoop, resetClientState, setInitialGameState, updateServerState, updateHostWaitUI, handlePlayerChat, handleEnemyChat, handleDamageFeedback, sendChatMessage, triggerLocalPushback };
@@ -324,7 +310,7 @@ const GameManager = (() => {
 // --- WebSocket Message Handler ---
 function handleServerMessage(event) {
     let data; try { data = JSON.parse(event.data); } catch (err) { error("Failed parse WS message:", err, event.data); return; }
-    // log(`<<< Received WS message Type: ${data?.type || 'UNKNOWN'}`); // Keep for debug if needed
+    // log(`<<< Received WS message Type: ${data?.type || 'UNKNOWN'}`);
 
     try {
         switch (data.type) {
@@ -336,10 +322,14 @@ function handleServerMessage(event) {
                 break;
             case 'game_state':
                 if (appState.mode === 'menu' || !appState.localPlayerId || !appState.isRendererReady || !data.state) return;
-                const previousStatus = appState.serverState?.status; GameManager.updateServerState(data.state); const newState = appState.serverState;
+                const previousStatus = appState.serverState?.status;
+                // SIMPLIFIED: Directly update serverState, no lastServerState needed here
+                GameManager.updateServerState(data.state);
+                const newState = appState.serverState;
                 if (newState.status !== previousStatus) { log(`Game Status Change: ${previousStatus || 'N/A'} -> ${newState.status}`); if ((newState.status === 'countdown' || newState.status === 'active') && previousStatus !== 'active' && previousStatus !== 'countdown') { UIManager.updateStatus(newState.status === 'countdown' ? "Get Ready..." : "Active!"); UIManager.showSection('game-area'); if (!appState.isGameLoopRunning) GameManager.startGameLoop(); } else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host' && previousStatus !== 'waiting') { UIManager.updateStatus("Waiting for players..."); UIManager.showSection('host-wait-section'); GameManager.updateHostWaitUI(newState); GameManager.cleanupLoop(); } else if (newState.status === 'finished' && previousStatus !== 'finished') { log("Game Over via 'finished' status."); UIManager.updateStatus("Game Over!"); UIManager.showGameOver(newState); SoundManager.playSound('death'); GameManager.cleanupLoop(); } }
                 if (appState.isGameLoopRunning && (newState.status === 'countdown' || newState.status === 'active')) { UIManager.updateHUD(newState); UIManager.updateCountdown(newState); UIManager.updateEnvironmentDisplay(newState); } else if (newState.status === 'waiting' && appState.mode === 'multiplayer-host') { GameManager.updateHostWaitUI(newState); }
-                GameManager.handleEnemyChat(newState.enemy_speaker_id, newState.enemy_speech_text); GameManager.handleDamageFeedback(newState);
+                GameManager.handleEnemyChat(newState.enemy_speaker_id, newState.enemy_speech_text);
+                GameManager.handleDamageFeedback(newState); // Damage feedback uses latest state only now
                 break;
             case 'game_over_notification':
                 log("Received 'game_over_notification'"); if (data.final_state) { appState.serverState = data.final_state; UIManager.updateStatus("Game Over!"); UIManager.showGameOver(data.final_state); SoundManager.playSound('death');} else { error("Game over notification missing final_state."); UIManager.showGameOver(null); }
