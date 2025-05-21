@@ -1,5 +1,3 @@
-// renderer.js (Revised, Cleaner Comments, Snake Removed, Fixes Applied)
-
 const Renderer = (() => {
   console.log("--- Renderer.js: Initializing ---");
 
@@ -1227,5 +1225,3 @@ const Renderer = (() => {
     // Expose other necessary functions if main.js needs them directly.
   };
 })();
-
-// console.log("--- Renderer.js: Executed. Renderer object defined?", typeof Renderer); // For debugging
