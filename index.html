@@ -2,162 +2,96 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SUCH IS L1FE - Kelly Gang Survival</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Such is Life - The Kelly Gang</title>
     <link rel="stylesheet" href="style.css">
-    <!-- <link rel="icon" type="image/x-icon" href="/favicon.ico"> -->
-
-    <!-- ======================================= -->
-    <!-- == CORRECTED IMPORT MAP FOR THREE.JS == -->
-    <!-- Ensures JS modules can load correctly -->
-    <!-- ======================================= -->
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://cdn.jsdelivr.net/npm/three@0.166.1/build/three.module.js",
-                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.166.1/examples/jsm/"
-            }
-        }
-    </script>
-    <!-- ======================================= -->
-    <!-- == END IMPORT MAP                    == -->
-    <!-- ======================================= -->
-
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤠</text></svg>">
 </head>
 <body>
-    <!-- Loading Screen: Shown initially -->
     <div id="loading-screen" class="active">
-        <div class="loading-content">
-            <h1 class="loading-title">KELLY GANG</h1>
-            <p class="loading-subtitle">AUSTRALIA, 1878</p>
-            <div class="loader-spinner"></div>
-            <p class="loading-text">Loading... Such is Life.</p> <!-- Loading text is okay here as it's temporary -->
+        <div class="spinner"></div>
+        <p>Loading Game...</p>
+    </div>
+
+    <div id="game-container">
+        <div id="top-bar">
+            <h1>Such is Life: The Kelly Gang</h1>
+            <div id="game-status">Connecting...</div>
+        </div>
+
+        <div id="menu-area">
+            <section id="main-menu-section" class="menu-section active">
+                <h2>Main Menu</h2>
+                <button id="singlePlayerBtn" class="button-primary">Single Player</button>
+                <button id="multiplayerBtn" class="button-primary">Multiplayer</button>
+            </section>
+
+            <section id="multiplayer-menu-section" class="menu-section">
+                <h2>Multiplayer</h2>
+                <p>Host a new game:</p>
+                <div class="button-group">
+                    <button id="hostGameBtn2" class="button-secondary" data-players="2">2 Players</button>
+                    <button id="hostGameBtn3" class="button-secondary" data-players="3">3 Players</button>
+                    <button id="hostGameBtn4" class="button-secondary" data-players="4">4 Players</button>
+                </div>
+                <hr>
+                <p>Or join an existing game:</p>
+                <button id="showJoinUIBtn" class="button-secondary">Join Game</button>
+                <button class="button-back" data-target="main-menu-section">Back to Main Menu</button>
+            </section>
+
+            <section id="host-wait-section" class="menu-section">
+                <h2>Hosting Game</h2>
+                <p>Game ID: <strong id="game-code-display">------</strong></p>
+                <p id="waiting-message">Waiting for players...</p>
+                <button id="cancelHostBtn" class="button-danger">Cancel Game</button>
+            </section>
+
+            <section id="join-code-section" class="menu-section">
+                <h2>Join Game</h2>
+                <input type="text" id="gameIdInput" placeholder="Enter Game ID (6 chars)" maxlength="6">
+                <button id="joinGameSubmitBtn" class="button-primary">Join</button>
+                <button class="button-back" data-target="multiplayer-menu-section">Back to Multiplayer</button>
+            </section>
+        </div>
+
+        <div id="game-area">
+            <div id="stats-panel">
+                <div id="player-stats-grid">
+                </div>
+                <div id="environment-info">
+                    <span id="day-night-indicator">Day</span> | <span id="temperature-indicator">20°C</span>
+                </div>
+                <div class="game-controls">
+                    <button id="muteBtn" aria-pressed="false">Mute</button>
+                    <button id="leaveGameBtn" class="button-danger">Leave Game</button>
+                </div>
+            </div>
+
+            <div id="canvas-container">
+            </div>
+            <div id="countdown-overlay"></div>
+        </div>
+
+        <div id="chat-panel">
+            <div id="chat-log"></div>
+            <div class="chat-input-area">
+                <input type="text" id="chatInput" placeholder="Type message...">
+                <button id="sendChatBtn">Send</button>
+            </div>
+        </div>
+
+        <div id="game-over-screen" class="overlay-screen">
+            <div class="overlay-content">
+                <h2>Game Over!</h2>
+                <div id="final-stats">
+                </div>
+                <button id="gameOverBackBtn" class="button-primary">Back to Menu</button>
+            </div>
         </div>
     </div>
 
-    <!-- Main Game Container -->
-    <div id="game-container">
-        <!-- Top Header Bar -->
-        <header id="top-bar">
-             <h1>SUCH IS LIFE</h1>
-        </header>
-
-        <!-- Status Message Area: Updated by JS -->
-        <div id="game-status" role="status" aria-live="polite"></div>
-
-        <!-- Menu Area: Hidden when game is active -->
-        <main id="menu-area">
-            <!-- Main Menu Section -->
-            <section id="main-menu-section" class="menu-section active">
-                <h2>Main Menu</h2>
-                <button id="singlePlayerBtn" class="button button-primary">Single Player</button>
-                <button id="multiplayerBtn" class="button button-primary">Multiplayer</button>
-            </section>
-
-            <!-- Multiplayer Options Section -->
-            <section id="multiplayer-menu-section" class="menu-section">
-                <h2>Multiplayer</h2>
-                <p>Choose number of players:</p>
-                <button id="hostGameBtn2" class="button">Host 2 Player Game</button>
-                <button id="hostGameBtn3" class="button">Host 3 Player Game</button>
-                <button id="hostGameBtn4" class="button">Host 4 Player Game</button>
-                <hr class="menu-divider">
-                <button id="showJoinUIBtn" class="button">Join Game (Enter Code)</button>
-                <button class="button button-back" data-target="main-menu-section">Back</button>
-            </section>
-
-            <!-- Host Waiting Screen -->
-            <section id="host-wait-section" class="menu-section">
-                <h2>Hosting Game</h2>
-                <p>Share this code with your mate:</p>
-                <!-- Game code displayed here by JS -->
-                <div id="game-code-display" class="code-display" aria-live="polite">------</div>
-                <!-- Waiting message updated by JS -->
-                <p id="waiting-message"></p>
-                <button id="cancelHostBtn" class="button button-danger">Cancel Hosting</button>
-            </section>
-
-            <!-- Join Game Screen -->
-            <section id="join-code-section" class="menu-section">
-                <h2>Join Game</h2>
-                <p>Enter the 6-character game code:</p>
-                <input type="text" id="gameIdInput" class="input-code" placeholder="ABCDEF" maxlength="6" aria-label="Game Code Input">
-                <button id="joinGameSubmitBtn" class="button button-primary">Join Game</button>
-                <button class="button button-back" data-target="multiplayer-menu-section">Back</button>
-            </section>
-        </main>
-
-        <!-- Active Game Area (3 Columns): Hidden until game starts -->
-        <div id="game-area">
-
-            <!-- Left Column: Stats, Environment, Game Controls -->
-            <aside id="stats-panel" class="game-column" aria-labelledby="stats-heading">
-                <h2 id="stats-heading" class="visually-hidden">Player Status and Game Controls</h2>
-                <!-- Scrollable area for stats -->
-                <div class="panel-content-scrollable">
-                    <!-- Player stats grid: Populated entirely by JavaScript -->
-                    <div id="player-stats-grid" aria-live="polite"></div>
-                    <!-- Environment info: Updated by JavaScript -->
-                    <div id="environment-info" aria-live="polite">
-                      <div id="day-night-indicator">Day</div> <!-- Default value, updated by JS -->
-                      <div id="temperature-indicator">--°C</div> <!-- Default value, updated by JS -->
-                    </div>
-                </div>
-                <!-- Game Controls Footer -->
-                <div class="game-controls panel-section-footer" role="toolbar" aria-label="Game Actions">
-                    <button id="muteBtn" class="button button-secondary" aria-pressed="false">Mute</button>
-                    <button id="leaveGameBtn" class="button button-danger">Leave Game</button>
-                </div>
-            </aside>
-
-            <!-- Middle Column: Game Canvas -->
-            <div id="canvas-container" class="game-column" role="application" aria-label="Main Game View">
-                <canvas id="gameCanvas">
-                    Your browser does not support the HTML5 canvas element.
-                </canvas>
-                 <!-- Countdown overlay: Populated by JS -->
-                <div id="countdown-overlay" aria-live="assertive"></div>
-                 <!-- HTML overlay for damage numbers etc.: Populated by JS -->
-                <div id="html-overlay" aria-hidden="true"></div>
-            </div>
-
-            <!-- Right Column: Chat -->
-            <aside id="chat-panel" class="game-column" aria-labelledby="chat-heading">
-                 <h2 id="chat-heading" class="visually-hidden">Chat</h2>
-                 <div class="panel-content-fixed">
-                     <!-- Chat Area -->
-                     <div id="chat-area">
-                         <!-- Chat log: Messages added by JavaScript -->
-                         <div id="chat-log" role="log" aria-live="polite">
-                            <!-- Minimal starting content, or leave empty -->
-                            <!-- <div class="system-message">Chat connected.</div> -->
-                         </div>
-                         <!-- Chat Input -->
-                         <div class="chat-input-area" role="form" aria-labelledby="chat-input-label">
-                             <label id="chat-input-label" for="chatInput" class="visually-hidden">Chat Message</label>
-                             <input type="text" id="chatInput" placeholder="Say somethin', mate..." maxlength="100">
-                             <button id="sendChatBtn" class="button">Send</button>
-                         </div>
-                     </div>
-                 </div>
-            </aside>
-
-        </div> <!-- End game-area -->
-
-        <!-- Game Over Screen: Hidden until game ends -->
-        <div id="game-over-screen" role="dialog" aria-modal="true" aria-labelledby="game-over-heading">
-            <h2 id="game-over-heading">Game Over, Mate!</h2>
-            <!-- Final stats: Populated by JavaScript -->
-            <div id="final-stats"></div>
-            <button id="gameOverBackBtn" class="button button-primary">Back to Menu</button>
-        </div>
-
-    </div> <!-- End game-container -->
-
-    <!-- JavaScript Modules -->
-    <!-- NOTE: These MUST be loaded AFTER the importmap -->
-    <script type="module" src="Renderer3D.js"></script>
+    <script src="renderer.js"></script>
     <script type="module" src="main.js"></script>
-
 </body>
 </html>
